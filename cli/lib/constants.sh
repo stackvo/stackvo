@@ -34,6 +34,7 @@ readonly CONST_PORT_ACTIVEMQ=8161
 readonly CONST_PATH_TEMPLATES="core/templates"
 readonly CONST_PATH_GENERATED="generated"
 readonly CONST_PATH_GENERATED_CONFIGS="generated/configs"
+readonly CONST_PATH_GENERATED_PROJECTS="generated/projects"
 readonly CONST_PATH_TRAEFIK_CONFIG="generated/traefik"
 readonly CONST_PATH_TRAEFIK_DYNAMIC="generated/traefik/dynamic"
 readonly CONST_PATH_CERTS="generated/certs"

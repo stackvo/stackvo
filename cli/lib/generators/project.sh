@@ -89,14 +89,20 @@ generate_projects() {
         local web_server=$(echo "$config" | grep "^WEB_SERVER=" | cut -d= -f2)
         local project_domain=$(echo "$config" | grep "^DOMAIN=" | cut -d= -f2)
         local document_root=$(echo "$config" | grep "^DOCUMENT_ROOT=" | cut -d= -f2)
+        local extensions=$(echo "$config" | grep "^EXTENSIONS=" | cut -d= -f2-)
         
         # Calculate host paths for volume mounts
         local host_project_path="${HOST_ROOT_DIR}/projects/${project_name}"
         local host_logs_path="${HOST_ROOT_DIR}/logs/projects/${project_name}"
         local host_generated_configs_dir="${HOST_ROOT_DIR}/generated/configs"
+        local host_generated_projects_dir="${HOST_ROOT_DIR}/generated/projects"
+        
+        # Generate Dockerfile for PHP container with extensions
+        local project_dockerfile_dir="$GENERATED_DIR/projects/${project_name}"
+        generate_php_dockerfile "$project_name" "$php_version" "$extensions" "$project_dockerfile_dir"
         
         # Generate PHP container
-        generate_php_container "$project_name" "$project_path" "$php_version" "$host_project_path" "$host_logs_path" >> "$output"
+        generate_php_container "$project_name" "$project_path" "$php_version" "$host_project_path" "$host_logs_path" "$host_generated_projects_dir" >> "$output"
         
         # Generate web server container
         generate_web_container "$project_name" "$project_path" "$web_server" "$php_version" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" >> "$output"
@@ -131,9 +137,17 @@ parse_project_config() {
     local project_domain=$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$project_json")
     local document_root=$(sed -n 's/.*"document_root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$project_json")
     
+    # Parse extensions array from JSON (extract values between brackets, remove quotes and commas)
+    local extensions=$(sed -n 's/.*"extensions"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' "$project_json" | tr -d '",' | tr -s ' ')
+    
     # Default document_root to "public" if not specified
     if [ -z "$document_root" ]; then
         document_root="public"
+    fi
+    
+    # Default extensions if not specified
+    if [ -z "$extensions" ]; then
+        extensions="pdo pdo_mysql mysqli gd curl zip mbstring"
     fi
     
     # Validate and set defaults for missing values
@@ -157,10 +171,137 @@ parse_project_config() {
     echo "WEB_SERVER=$web_server"
     echo "DOMAIN=$project_domain"
     echo "DOCUMENT_ROOT=$document_root"
+    echo "EXTENSIONS=$extensions"
+}
+
+##
+# Generate PHP Dockerfile with extensions
+#
+# Args:
+#   $1 - Project name
+#   $2 - PHP version
+#   $3 - Extensions (space-separated list)
+#   $4 - Project directory path in generated/projects/
+##
+generate_php_dockerfile() {
+    local project_name=$1
+    local php_version=$2
+    local extensions=$3
+    local project_dir=$4
+    
+    # Load PHP extensions library
+    source "$SCRIPT_DIR/../lib/php-extensions.sh"
+    
+    # Create project directory
+    mkdir -p "$project_dir"
+    local dockerfile="$project_dir/Dockerfile"
+    
+    # Collect dependencies and configure commands
+    local apt_packages=""
+    local configure_commands=""
+    local docker_ext_install=""
+    local pecl_install=""
+    
+    for ext in $extensions; do
+        # Get system packages
+        local packages=$(get_extension_packages "$ext")
+        if [ -n "$packages" ]; then
+            apt_packages="$apt_packages $packages"
+        fi
+        
+        # Get configure command
+        local configure=$(get_extension_configure "$ext")
+        if [ -n "$configure" ]; then
+            configure_commands="$configure_commands\nRUN $configure"
+        fi
+        
+        # PECL or docker-php-ext-install?
+        if is_pecl_extension "$ext"; then
+            pecl_install="$pecl_install $ext"
+        else
+            docker_ext_install="$docker_ext_install $ext"
+        fi
+    done
+    
+    # Remove duplicate packages
+    apt_packages=$(echo "$apt_packages" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+    
+    # Generate Dockerfile
+    cat > "$dockerfile" <<EOF
+# Auto-generated Dockerfile for $project_name
+# PHP Version: $php_version
+# Extensions: $extensions
+FROM php:${php_version}-fpm
+
+EOF
+    
+    # Install system dependencies
+    if [ -n "$apt_packages" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+    $apt_packages \\
+    && rm -rf /var/lib/apt/lists/*
+
+EOF
+    fi
+    
+    # Add configure commands
+    if [ -n "$configure_commands" ]; then
+        echo -e "$configure_commands" >> "$dockerfile"
+        echo "" >> "$dockerfile"
+    fi
+    
+    # Install PHP extensions
+    if [ -n "$docker_ext_install" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install PHP extensions
+RUN docker-php-ext-install$docker_ext_install
+
+EOF
+    fi
+    
+    # Install PECL extensions
+    if [ -n "$pecl_install" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install PECL extensions
+RUN pecl install$pecl_install \\
+    && docker-php-ext-enable$pecl_install
+
+EOF
+    fi
+    
+    # Install default development tools
+    local default_tools=${PHP_DEFAULT_TOOLS:-""}
+    if [ -n "$default_tools" ]; then
+        cat >> "$dockerfile" <<EOF
+
+# Install Development Tools
+EOF
+        
+        local composer_version=${PHP_TOOL_COMPOSER_VERSION:-latest}
+        local nodejs_version=${PHP_TOOL_NODEJS_VERSION:-20}
+        
+        for tool in $(echo "$default_tools" | tr ',' ' '); do
+            local install_cmd=$(get_tool_install_commands "$tool" "$composer_version" "$nodejs_version")
+            if [ -n "$install_cmd" ]; then
+                echo "$install_cmd" >> "$dockerfile"
+                echo "" >> "$dockerfile"
+            fi
+        done
+    fi
+    
+    cat >> "$dockerfile" <<EOF
+WORKDIR /var/www/html
+EOF
+    
+    
+    log_info "$project_name için Dockerfile oluşturuldu: $dockerfile"
 }
 
 ##
 # Generate PHP container configuration
+
 #
 # Args:
 #   $1 - Project name
@@ -169,16 +310,21 @@ parse_project_config() {
 #   $4 - Host project path (for volume mounts)
 #   $5 - Host logs path (for volume mounts)
 ##
+##
 generate_php_container() {
     local project_name=$1
     local project_path=$2
     local php_version=$3
     local host_project_path=$4
     local host_logs_path=$5
+    local host_generated_projects_dir=$6
     
     cat <<EOF
   ${project_name}-php:
-    image: "php:${php_version:-$CONST_DEFAULT_PHP_VERSION}-fpm"
+    build:
+      context: ${host_generated_projects_dir}/${project_name}
+      dockerfile: Dockerfile
+    image: stackvo-${project_name}-php:${php_version}
     container_name: "stackvo-${project_name}-php"
     restart: unless-stopped
     
@@ -240,11 +386,8 @@ generate_web_container() {
         caddy)
             generate_caddy_container "$project_name" "$project_path" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir"
             ;;
-        ferron)
-            generate_ferron_container "$project_name" "$project_path" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir"
-            ;;
         *)
-            log_warn "Unknown web server: $web_server, using nginx"
+            log_warn "Bilinmeyen web server: $web_server, nginx kullanılıyor"
             generate_nginx_container "$project_name" "$project_path" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir"
             ;;
     esac
@@ -454,72 +597,3 @@ $caddy_config_mount
 EOF
 }
 
-##
-# Generate Ferron container configuration
-#
-# Args:
-#   $1 - Project name
-#   $2 - Project path (container path)
-#   $3 - Project domain
-#   $4 - Document root
-#   $5 - Host project path (for volume mounts)
-#   $6 - Host logs path (for volume mounts)
-#   $7 - Host generated configs dir (for volume mounts)
-##
-generate_ferron_container() {
-    local project_name=$1
-    local project_path=$2
-    local project_domain=$3
-    local document_root=$4
-    local host_project_path=$5
-    local host_logs_path=$6
-    local host_generated_configs_dir=$7
-    
-    # Determine ferron config path
-    local ferron_config_mount=""
-    if [ -f "$project_path/.stackvo/ferron.yaml" ]; then
-        ferron_config_mount="      - ${host_project_path}/.stackvo/ferron.yaml:/etc/ferron/conf.d/default.yaml:ro"
-    elif [ -f "$project_path/ferron.yaml" ]; then
-        ferron_config_mount="      - ${host_project_path}/ferron.yaml:/etc/ferron/conf.d/default.yaml:ro"
-    elif [ -f "$project_path/.stackvo/ferron.conf" ]; then
-        ferron_config_mount="      - ${host_project_path}/.stackvo/ferron.conf:/etc/ferron/conf.d/default.yaml:ro"
-    elif [ -f "$project_path/ferron.conf" ]; then
-        ferron_config_mount="      - ${host_project_path}/ferron.conf:/etc/ferron/conf.d/default.yaml:ro"
-    else
-        # Use default template
-        mkdir -p "$GENERATED_CONFIGS_DIR"
-        local template_file="$ROOT_DIR/core/templates/servers/ferron/ferron.yaml"
-        local generated_config="$GENERATED_CONFIGS_DIR/${project_name}-ferron.yaml"
-        
-        sed -e "s/{{PROJECT_NAME}}/${project_name}/g" \
-            -e "s|{{DOCUMENT_ROOT}}|${document_root}|g" \
-            "$template_file" > "$generated_config"
-        ferron_config_mount="      - ${host_generated_configs_dir}/${project_name}-ferron.yaml:/etc/ferron/conf.d/default.yaml:ro"
-    fi
-    
-    cat <<EOF
-  ${project_name}-web:
-    image: "ferronserver/ferron:latest"
-    container_name: "stackvo-${project_name}-web"
-    restart: unless-stopped
-    
-    volumes:
-      - ${host_project_path}:/var/www/html
-      - ${host_logs_path}:/var/log/ferron
-$ferron_config_mount
-    
-    networks:
-      - ${DOCKER_DEFAULT_NETWORK:-stackvo-net}
-    
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${project_name}.rule=Host(\`${project_domain}\`)"
-      - "traefik.http.routers.${project_name}.entrypoints=websecure"
-      - "traefik.http.routers.${project_name}.tls=true"
-      - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
-    
-    depends_on:
-      - ${project_name}-php
-
-EOF
-}
