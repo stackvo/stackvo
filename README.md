@@ -11,11 +11,6 @@
 
 [🇹🇷 Türkçe](README_TR.md)
 
----
-
-deneme
-
-<div align="center">
 </div>
 
 ---
