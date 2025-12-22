@@ -4,16 +4,23 @@
 
 **Modern LAMP ve MEAN Stack'leri Sunan Docker Tabanlı Yerel Geliştirme Ortamı**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
-[![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
-[![Bash](https://img.shields.io/badge/Bash-3.x+-4EAA25?logo=gnubash)](https://www.gnu.org/software/bash/)
-[![Traefik](https://img.shields.io/badge/Traefik-Reverse_Proxy-24A1C1?logo=traefikproxy)](https://traefik.io/)
+![Status](https://img.shields.io/badge/status-active-success.svg)
+![Release](https://img.shields.io/github/v/release/stackvo/stackvo)
+![GitHub Issues](https://img.shields.io/github/issues/stackvo/stackvo)
+![GitHub Closed Issues](https://img.shields.io/github/issues-closed/stackvo/stackvo)
+![GitHub Pull Requests](https://img.shields.io/github/issues-pr/stackvo/stackvo)
+![GitHub Contributors](https://img.shields.io/github/contributors/stackvo/stackvo)
+![Security](https://img.shields.io/badge/security-policy-success?logo=security&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-[🇬🇧 English](README.md)
+![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker&logoColor=white)
+![Bash](https://img.shields.io/badge/Bash-3.x+-4EAA25?logo=gnubash&logoColor=white)
+![Traefik](https://img.shields.io/badge/Traefik-Reverse_Proxy-24A1C1?logo=traefikproxy&logoColor=white)
+
+[🇬🇧 English](README.md) |
+[🇹🇷 Türkçe](README_TR.md)
 
 </div>
-
----
 
 ## 📖 Hakkında
 
