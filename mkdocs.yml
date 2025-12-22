@@ -1,0 +1,374 @@
+# Project information
+site_name: StackVo
+site_description: Modern LAMP ve MEAN stack'leri sunan Docker tabanlı yerel geliştirme ortamı. 40+ servis, multi-language desteği, Traefik reverse proxy
+site_author: StackVo Team
+site_url: https://stackvo.github.io/stackvo/
+
+# Repository
+repo_name: stackvo/stackvo
+repo_url: https://github.com/stackvo/stackvo
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2025 StackVo Team
+
+
+# Use .html URLs instead of directory URLs for better GitHub Pages compatibility
+use_directory_urls: false
+# Configuration
+theme:
+  name: material
+  language: tr
+  custom_dir: docs/overrides
+
+  # Color palette
+  palette:
+    # Dark mode (default)
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Aydınlık moda geç
+
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Karanlık moda geç
+
+  # Font
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+  # Favicon only (no logo, site name will be displayed)
+  favicon: assets/favicon.png
+
+  # Features
+  features:
+    # Navigation
+    # - navigation.instant # Disabled: Not compatible with i18n language switcher
+    # - navigation.instant.prefetch # Disabled: Requires navigation.instant
+    # - navigation.instant.progress # Disabled: Requires navigation.instant
+    - navigation.tracking # Anchor tracking
+    - navigation.tabs # Top-level tabs
+    - navigation.tabs.sticky # Sticky tabs
+    - navigation.sections # Section index pages
+    - navigation.expand # Expand navigation by default
+    - navigation.path # Breadcrumbs
+    - navigation.indexes # Section index pages
+    - navigation.top # Back to top button
+    - navigation.footer # Footer navigation
+
+    # Table of contents
+    - toc.follow # TOC follows scroll
+    # - toc.integrate # Disabled: TOC will show on the right sidebar
+
+    # Search
+    - search.suggest # Search suggestions
+    - search.highlight # Highlight search terms
+    - search.share # Share search results
+
+    # Header
+    # - header.autohide # Disabled: Header will always be visible
+
+    # Content
+    - content.code.copy # Copy code button
+    - content.code.select # Select code button
+    - content.code.annotate # Code annotations
+    - content.tabs.link # Link content tabs
+    - content.tooltips # Improved tooltips
+    - content.action.edit # Edit button
+    - content.action.view # View source button
+
+  # Icon
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+# Plugins
+plugins:
+  - search:
+      lang:
+        - tr
+        - en
+
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+          nav_translations:
+            Ana Sayfa: Home
+            Başlangıç: Getting Started
+            Giriş: Introduction
+            Gereksinimler: Requirements
+            Hızlı Başlangıç: Quick Start
+            Kurulum: Installation
+            Yapılandırma: Configuration
+            Genel Yapılandırma: Global Configuration
+            Proje Yapılandırması: Project Configuration
+            Özel Yapılandırmalar: Custom Configurations
+            Konseptler: Concepts
+            Mimari: Architecture
+            Generator: Generator
+            Ağ: Network
+            Traefik: Traefik
+            Kılavuzlar: Guides
+            CLI Kullanımı: CLI Usage
+            Proje Yönetimi: Project Management
+            Servis Yapılandırması: Service Configuration
+            Web UI Kullanımı: Web UI Usage
+            Öğrenme: Learn
+            Eğitimler: Tutorials
+            En İyi Uygulamalar: Best Practices
+            Örnekler: Examples
+            Referanslar: References
+            CLI Komutları: CLI Commands
+            Servisler: Services
+            Tools: Tools
+            Değişiklikler: Changelog
+            Topluluk: Community
+            Katkıda Bulunma: Contributing
+            SSS: FAQ
+            Sorun Giderme: Troubleshooting
+            Destek: Support
+        - locale: tr
+          name: Türkçe
+          build: true
+          nav_translations:
+            Ana Sayfa: Ana Sayfa
+            Başlangıç: Başlangıç
+            Giriş: Giriş
+            Gereksinimler: Gereksinimler
+            Hızlı Başlangıç: Hızlı Başlangıç
+            Kurulum: Kurulum
+            Yapılandırma: Yapılandırma
+            Genel Yapılandırma: Genel Yapılandırma
+            Proje Yapılandırması: Proje Yapılandırması
+            Özel Yapılandırmalar: Özel Yapılandırmalar
+            Konseptler: Konseptler
+            Mimari: Mimari
+            Generator: Generator
+            Ağ: Ağ
+            Traefik: Traefik
+            Kılavuzlar: Kılavuzlar
+            CLI Kullanımı: CLI Kullanımı
+            Proje Yönetimi: Proje Yönetimi
+            Servis Yapılandırması: Servis Yapılandırması
+            Web UI Kullanımı: Web UI Kullanımı
+            Öğrenme: Öğrenme
+            Eğitimler: Eğitimler
+            En İyi Uygulamalar: En İyi Uygulamalar
+            Örnekler: Örnekler
+            Referanslar: Referanslar
+            CLI Komutları: CLI Komutları
+            Servisler: Servisler
+            Araçlar: Araçlar
+            Değişiklikler: Değişiklikler
+            Topluluk: Topluluk
+            Katkıda Bulunma: Katkıda Bulunma
+            SSS: SSS
+            Sorun Giderme: Sorun Giderme
+            Destek: Destek
+
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+      cache_safe: true
+
+# Extensions
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Bu bölüme bağlantı
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+      clickable_checkbox: true
+  - pymdownx.tilde
+
+# Extra
+extra:
+  # Social links
+  # Language selector
+  alternate:
+    - name: English
+      link: /stackvo/
+      lang: en
+    - name: Türkçe
+      link: /stackvo/tr/
+      lang: tr
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/stackvo/stackvo
+      name: GitHub'da Stackvo
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/u/stackvo
+      name: Docker Hub
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/stackvo
+      name: Twitter'da takip edin
+    - icon: fontawesome/brands/linkedin
+      link: https://linkedin.com/company/stackvo
+      name: LinkedIn
+
+  # Analytics
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX
+    feedback:
+      title: Bu sayfa yardımcı oldu mu?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: Bu sayfa yardımcı oldu
+          data: 1
+          note: >-
+            Geri bildiriminiz için teşekkürler!
+        - icon: material/emoticon-sad-outline
+          name: Bu sayfa iyileştirilebilir
+          data: 0
+          note: >-
+            Geri bildiriminiz için teşekkürler! Lütfen GitHub'da issue açarak
+            nasıl iyileştirebileceğimizi bildirin.
+
+  # Consent
+  consent:
+    title: Çerez onayı
+    description: >-
+      Deneyiminizi iyileştirmek ve site trafiğini analiz etmek için çerezler kullanıyoruz.
+      Çerezleri kabul ederek, gizlilik politikamızı kabul etmiş olursunuz.
+    actions:
+      - accept
+      - reject
+      - manage
+
+  # Tags
+  tags:
+    Başlangıç: getting-started
+    Konfigürasyon: configuration
+    CLI: cli
+    API: api
+    Servisler: services
+
+# Extra CSS
+extra_css:
+  - assets/stylesheets/extra.css
+
+# Extra JavaScript
+extra_javascript:
+  - assets/javascripts/extra.js
+  - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js
+  - assets/javascripts/tablesort.js
+
+# Navigation
+nav:
+  - Ana Sayfa: index.md
+
+  - Başlangıç:
+      - started/index.md
+      - Giriş: started/introduction.md
+      - Gereksinimler: started/requirements.md
+      - Hızlı Başlangıç: started/quick-start.md
+
+  - Kurulum:
+      - installation/index.md
+      - Linux: installation/linux.md
+      - macOS: installation/macos.md
+      - Windows: installation/windows.md
+
+  - Yapılandırma:
+      - configuration/index.md
+      - Genel Yapılandırma: configuration/global.md
+      - Proje Yapılandırması: configuration/project.md
+      - Özel Yapılandırmalar: configuration/custom.md
+
+  - Konseptler:
+      - concepts/index.md
+      - Mimari: concepts/architecture.md
+      - Generator: concepts/generator.md
+      - Ağ: concepts/network.md
+      - Traefik: concepts/traefik.md
+
+  - Kılavuzlar:
+      - guides/index.md
+      - CLI Kullanımı: guides/cli.md
+      - Proje Yönetimi: guides/projects.md
+      - Servis Yapılandırması: guides/services.md
+      - Web UI Kullanımı: guides/web-ui.md
+
+  - Öğrenme:
+      - learn/index.md
+      - Eğitimler: learn/tutorials.md
+      - En İyi Uygulamalar: learn/best-practices.md
+      - Örnekler: learn/examples.md
+
+  - Referanslar:
+      - references/index.md
+      - CLI Komutları: references/cli.md
+      - Yapılandırma: references/configuration.md
+      - Servisler: references/services.md
+      - Araçlar: references/tools.md
+
+  - Değişiklikler: changelog.md
+
+  - Topluluk:
+      - community/index.md
+      - Katkıda Bulunma: community/contributing.md
+      - SSS: community/faq.md
+      - Sorun Giderme: community/troubleshooting.md
+      - Destek: community/support.md

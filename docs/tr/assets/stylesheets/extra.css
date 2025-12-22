@@ -1,0 +1,17 @@
+/* Grid Cards - Force 3 columns layout */
+.md-typeset .grid.cards {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 76.1875em) {
+  .md-typeset .grid.cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media screen and (max-width: 44.9375em) {
+  .md-typeset .grid.cards {
+    grid-template-columns: 1fr !important;
+  }
+}

@@ -1,0 +1,44 @@
+/**
+ * Stackvo Documentation - Extra CSS
+ * Custom styles for enhanced documentation appearance
+ */
+
+/* Custom styles for Stackvo documentation */
+:root {
+  --stackvo-primary: #5e72e4;
+  --stackvo-secondary: #8965e0;
+}
+
+/* Add any custom CSS styles here */
+/* For example: custom card styles, animations, etc. */
+
+/* Sortable table styles */
+table.sortable th {
+  cursor: pointer;
+  user-select: none;
+}
+
+table.sortable th:hover {
+  background-color: var(--md-default-fg-color--lightest);
+}
+
+table.sortable th::after {
+  content: "";
+  display: inline-block;
+  margin-left: 0.5em;
+  width: 0;
+  height: 0;
+  opacity: 0.3;
+}
+
+table.sortable th.asc::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 4px solid currentColor;
+}
+
+table.sortable th.desc::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid currentColor;
+}

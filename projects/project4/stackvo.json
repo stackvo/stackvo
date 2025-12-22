@@ -1,0 +1,10 @@
+{
+  "name": "project4",
+  "domain": "project4.loc",
+  "php": {
+    "version": "8.1",
+    "extensions": ["pdo", "pdo_mysql", "mysqli", "gd", "curl", "zip", "mbstring"]
+  },
+  "webserver": "nginx",
+  "document_root": "public"
+}

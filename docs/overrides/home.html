@@ -1,0 +1,170 @@
+<!-- Custom HTML site displayed as the Home chapter -->
+
+{% extends "main.html" %}
+{% block tabs %}
+{{ super() }}
+
+<style>
+  .md-main {
+    flex-grow: 0
+  }
+
+  .md-main__inner {
+    display: flex;
+    height: 100%;
+  }
+
+  .tx-container {
+    padding-top: 1rem;
+    background: linear-gradient(to bottom, var(--md-primary-fg-color), hsl(0deg 0% 100%) 99%, var(--md-default-bg-color) 99%);
+  }
+
+  [data-md-color-scheme="slate"] .tx-container {
+    background:
+      linear-gradient(
+        to bottom,
+        var(--md-primary-fg-color),
+        hsla(var(--md-hue), 15%, 14%, 1) 99%,
+        var(--md-default-bg-color) 99%
+      )
+  }
+
+  .tx-hero {
+    color: var(--md-primary-bg-color);
+    justify-content: center;
+    margin-top: 5rem;
+  }
+
+  .tx-hero h1 {
+    margin-bottom: 1rem;
+    color: currentColor;
+    font-weight: 700
+  }
+
+  .tx-hero__content {
+    padding-bottom: 1rem;
+    margin: 0 auto;
+  }
+
+  .tx-hero__image {
+    width: 70rem;
+    order: 1;
+  }
+
+  .tx-hero .md-button {
+    margin-top: .5rem;
+    margin-right: .5rem;
+    color: var(--md-primary-bg-color)
+  }
+
+  .tx-hero .md-button--primary {
+    background-color: var(--md-primary-bg-color);
+    color: hsla(280deg, 37%, 48%, 1);
+    border-color: var(--md-primary-bg-color)
+  }
+
+  .tx-hero .md-button:focus,
+  .tx-hero .md-button:hover {
+    background-color: var(--md-accent-fg-color);
+    color: var(--md-default-bg-color);
+    border-color: var(--md-accent-fg-color)
+  }
+
+  @media screen and (max-width: 30em) {
+    .tx-hero h1 {
+      font-size: 1.4rem
+    }
+  }
+
+  @media screen and (min-width: 60em) {
+    .md-sidebar--secondary {
+      display: none
+    }
+
+    .tx-hero {
+      display: flex;
+      align-items: start;
+      justify-content: start;
+    }
+
+    .tx-hero__content {
+      max-width: 28rem;
+      margin-top: 3.5rem;
+      margin-bottom: 3.5rem;
+      margin-left: 0rem;
+      margin-right: 4.0rem;
+      align-items: center;
+    }
+  }
+
+  @media screen and (min-width: 76.25em) {
+    .md-sidebar--primary {
+      display: none
+    }
+
+    .tx-hero__content {
+      max-width: 32rem;
+    }
+  }
+</style>
+
+<!-- Hero for landing page -->
+<section class="tx-container">
+  <div class="md-grid md-typeset">
+    <div class="tx-hero">
+
+      <!-- Hero image -->
+      <div class="tx-hero__image">
+        <img
+          src="assets/images/illustration.png"
+          alt=""
+          width="1659"
+          height="1200"
+          draggable="false"
+        >
+      </div>
+
+      <!-- Hero content -->
+      <div class="tx-hero__content">
+        {% if config.theme.language == 'en' or page.canonical_url and '/en/' in page.canonical_url %}
+          <h1>Docker environment manager for local development</h1>
+          <p>A Docker environment offering modern LAMP and MEAN stacks for local development. 40+ services, multi-language support, Traefik reverse proxy</p>
+          <a
+            href="{{ 'started/introduction/' | url }}"
+            title="Quick Start"
+            class="md-button md-button--primary"
+          >
+            Quick Start
+          </a>
+          <a
+            href="{{ 'installation/' | url }}"
+            title="Installation"
+            class="md-button"
+          >
+            Installation
+          </a>
+        {% else %}
+          <h1>Yerel geliştirme için Docker ortam yöneticisi</h1>
+          <p>Modern LAMP ve MEAN stack'leri sunan Docker tabanlı yerel geliştirme ortamı. 40+ servis, multi-language desteği, Traefik reverse proxy</p>
+          <a
+            href="{{ 'started/introduction/' | url }}"
+            title="Hızlı Başlangıç"
+            class="md-button md-button--primary"
+          >
+            Hızlı Başlangıç
+          </a>
+          <a
+            href="{{ 'installation/' | url }}"
+            title="Kurulum"
+            class="md-button"
+          >
+            Kurulum
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block content %}{% endblock %}
+{% block footer %}{% endblock %}

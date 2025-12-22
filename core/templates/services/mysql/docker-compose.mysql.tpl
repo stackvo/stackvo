@@ -1,0 +1,35 @@
+###################################################################
+# STACKVO MYSQL / MARIADB / PERCONA COMPOSE TEMPLATE
+###################################################################
+
+services:
+  mysql:
+    image: "mysql:{{ SERVICE_MYSQL_VERSION }}"
+    container_name: "stackvo-mysql"
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ SERVICE_MYSQL_ROOT_PASSWORD | default('root') }}"
+      MYSQL_DATABASE: "{{ SERVICE_MYSQL_DATABASE | default('stackvo') }}"
+      MYSQL_USER: "{{ SERVICE_MYSQL_USER | default('stackvo') }}"
+      MYSQL_PASSWORD: "{{ SERVICE_MYSQL_PASSWORD | default('stackvo') }}"
+
+    volumes:
+      - stackvo-mysql-data:/var/lib/mysql
+      - ./core/generated-configs/mysql.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
+      - ./logs/mysql:/var/log/mysql
+
+    command: >
+      mysqld
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+
+ports:
+- "{{ HOST_PORT_MYSQL | default('3306') }}:3306"
+
+networks:
+- "{{ DOCKER_DEFAULT_NETWORK }}"
+
+volumes:
+  stackvo-mysql-data:

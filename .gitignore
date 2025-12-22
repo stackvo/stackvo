@@ -1,0 +1,53 @@
+###################################################################
+# STACKVO .gitignore
+# Generated files that should not be committed to git
+###################################################################
+
+# All generated files (root level)
+generated/
+
+# Docker volumes and data
+volumes/
+data/
+
+# Environment-specific files (optional - uncomment if needed)
+# .env
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cache
+.ui/cache/
+.ui/logs/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# venv files
+venv/
+
+# Environment files
+.env
+
+# Project-specific data (optional - uncomment if you want to ignore project files)
+# projects/*/
+# !projects/.gitkeep
+
+# MkDocs build output
+site/
+
