@@ -192,12 +192,18 @@ try {
 
         // Check if container is running
         $containerRunning = false;
+        $containerExists = false;  // Track if container exists at all
 
         $containerOutput = [];
         $containerReturnCode = 0;
         exec(sprintf('docker inspect -f "{{.State.Running}}" %s 2>/dev/null', escapeshellarg($containerName)), $containerOutput, $containerReturnCode);
-        if ($containerReturnCode === 0 && isset($containerOutput[0]) && $containerOutput[0] === 'true') {
-            $containerRunning = true;
+
+        if ($containerReturnCode === 0) {
+            // Container exists
+            $containerExists = true;
+            if (isset($containerOutput[0]) && $containerOutput[0] === 'true') {
+                $containerRunning = true;
+            }
         }
 
         // Project is running if container is running
@@ -255,6 +261,7 @@ try {
             'webserver' => $config['webserver'] ?? null,
             'document_root' => $config['document_root'] ?? null,
             'running' => $running,
+            'container_exists' => $containerExists,  // NEW: Track if container exists
             'ports' => $ports,
             'logs' => $logs,
             'configuration' => $configuration,
@@ -262,7 +269,8 @@ try {
             'containers' => [
                 'main' => array_merge([
                     'name' => $containerName,  // stackvo-project1
-                    'running' => $containerRunning
+                    'running' => $containerRunning,
+                    'exists' => $containerExists  // NEW: Also in containers array
                 ], $containerPorts)
             ],
             'error' => null

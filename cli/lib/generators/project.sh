@@ -447,8 +447,8 @@ server {
 }
 NGINXCONF
 
-    # Replace placeholder with actual document root
-    sed -i "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/nginx.conf"
+    # Replace placeholder with actual document root (cross-platform compatible)
+    sed "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/nginx.conf" > "$project_dir/nginx.conf.tmp" && mv "$project_dir/nginx.conf.tmp" "$project_dir/nginx.conf"
     
     # Generate Supervisord config dynamically
     cat > "$project_dir/supervisord.conf" <<'SUPERVISORCONF'
@@ -619,8 +619,8 @@ EOF
 }
 CADDYCONF
 
-    # Replace placeholder with actual document root
-    sed -i "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/Caddyfile"
+    # Replace placeholder with actual document root (cross-platform compatible)
+    sed "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/Caddyfile" > "$project_dir/Caddyfile.tmp" && mv "$project_dir/Caddyfile.tmp" "$project_dir/Caddyfile"
     
     # Generate Supervisord config dynamically
     cat > "$project_dir/supervisord.conf" <<'SUPERVISORCONF'

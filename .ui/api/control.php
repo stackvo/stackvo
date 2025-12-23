@@ -41,8 +41,8 @@ class ControlApi extends ApiBase
         $action = $input['action'];
 
         // Validate action
-        if (!in_array($action, ['start', 'stop', 'restart'])) {
-            jsonError('Invalid action. Must be start, stop, or restart', 400);
+        if (!in_array($action, ['start', 'stop', 'restart', 'build'])) {
+            jsonError('Invalid action. Must be start, stop, restart, or build', 400);
             exit;
         }
 
@@ -63,31 +63,98 @@ class ControlApi extends ApiBase
         }
 
         // Execute docker command
-        $command = $this->buildDockerCommand($action, [$containerName]);
+        // Build action uses docker compose, others use docker directly
+        if ($action === 'build') {
+            // Build action: docker compose up -d --build {projectName}
+            $composeFile = '/app/generated/docker-compose.projects.yml';
+            $projectName = str_replace('stackvo-', '', $containerName);
 
-        $output = [];
-        $returnCode = 0;
-        exec($command, $output, $returnCode);
+            // Wait for Dockerfile to be available (volume mount synchronization)
+            $dockerfilePath = '/app/generated/projects/' . $projectName . '/Dockerfile';
+            $maxWait = 3000000; // 3 seconds max
+            $waited = 0;
+            $interval = 200000; // 200ms
 
-        // Log Docker command execution
-        Logger::logDockerCommand($command, $returnCode, $output);
+            while (!file_exists($dockerfilePath) && $waited < $maxWait) {
+                clearstatcache(true, $dockerfilePath);
+                usleep($interval);
+                $waited += $interval;
+            }
 
-        if ($returnCode === 0) {
-            Logger::info("Service {$action} successful", ['service' => $service]);
+            if (!file_exists($dockerfilePath)) {
+                Logger::warn('Dockerfile not found after waiting', [
+                    'project' => $projectName,
+                    'path' => $dockerfilePath,
+                    'waited_ms' => $waited / 1000
+                ]);
 
-            $this->sendSuccess([
-                'message' => ucfirst($action) . ' command executed successfully',
-                'service' => $service,
-                'action' => $action
-            ]);
+                jsonError('Dockerfile not ready yet. Please try again in a few seconds.', 500);
+                exit;
+            }
+
+            $command = sprintf(
+                'docker compose -p stackvo -f %s up -d --build %s 2>&1',
+                escapeshellarg($composeFile),
+                escapeshellarg($projectName)
+            );
+
+            $output = [];
+            $returnCode = 0;
+            exec($command, $output, $returnCode);
+
+            // Log Docker command execution
+            Logger::logDockerCommand($command, $returnCode, $output);
+
+            if ($returnCode === 0) {
+                Logger::info('Container built and started', [
+                    'project' => $projectName,
+                    'container' => $containerName
+                ]);
+
+                $this->sendSuccess([
+                    'message' => "Container {$containerName} built and started successfully",
+                    'service' => $service,
+                    'action' => $action,
+                    'output' => implode("\n", $output)
+                ]);
+            } else {
+                Logger::error('Container build failed', [
+                    'project' => $projectName,
+                    'container' => $containerName,
+                    'return_code' => $returnCode,
+                    'output' => implode("\n", $output)
+                ]);
+
+                jsonError('Failed to build container: ' . implode("\n", $output), 500);
+            }
         } else {
-            Logger::error("Service {$action} failed", [
-                'service' => $service,
-                'action' => $action,
-                'error' => implode("\n", $output)
-            ]);
+            // Normal actions: start, stop, restart
+            $command = $this->buildDockerCommand($action, [$containerName]);
 
-            jsonError('Failed to execute command: ' . implode("\n", $output), 500);
+            $output = [];
+            $returnCode = 0;
+            exec($command, $output, $returnCode);
+
+            // Log Docker command execution
+            Logger::logDockerCommand($command, $returnCode, $output);
+
+            if ($returnCode === 0) {
+                Logger::info("Service {$action} successful", ['service' => $service]);
+
+                $this->sendSuccess([
+                    'message' => ucfirst($action) . ' command executed successfully',
+                    'service' => $service,
+                    'action' => $action
+                ]);
+            } else {
+                Logger::error("Service {$action} failed", [
+                    'service' => $service,
+                    'action' => $action,
+                    'error' => implode("\n", $output)
+                ]);
+
+                jsonError('Failed to execute command: ' . implode("\n", $output), 500);
+            }
         }
     }
 

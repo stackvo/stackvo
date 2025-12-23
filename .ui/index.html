@@ -791,10 +791,43 @@
                         </template>
 
                         <template v-slot:item.control="{ item }">
-                          <v-btn v-if="!item.error && item.running" block size="small" color="error" variant="tonal" @click="controlProjectContainer(item.name, 'stop')" :loading="item.loading">
+                          <!-- Container yok - Build & Start -->
+                          <v-btn 
+                            v-if="!item.error && !item.container_exists" 
+                            block 
+                            size="small" 
+                            color="primary" 
+                            variant="tonal" 
+                            @click="controlProjectContainer(item.name, 'build')" 
+                            :loading="item.loading"
+                          >
+                            <v-icon start>mdi-hammer-wrench</v-icon>
+                            Build & Start
+                          </v-btn>
+                          
+                          <!-- Container var ve çalışıyor - Stop -->
+                          <v-btn 
+                            v-if="!item.error && item.container_exists && item.running" 
+                            block 
+                            size="small" 
+                            color="error" 
+                            variant="tonal" 
+                            @click="controlProjectContainer(item.name, 'stop')" 
+                            :loading="item.loading"
+                          >
                             <v-icon>mdi-stop</v-icon>
                           </v-btn>
-                          <v-btn v-if="!item.error && !item.running" block size="small" color="success" variant="tonal" @click="controlProjectContainer(item.name, 'start')" :loading="item.loading">
+                          
+                          <!-- Container var ama durmuş - Start -->
+                          <v-btn 
+                            v-if="!item.error && item.container_exists && !item.running" 
+                            block 
+                            size="small" 
+                            color="success" 
+                            variant="tonal" 
+                            @click="controlProjectContainer(item.name, 'start')" 
+                            :loading="item.loading"
+                          >
                             <v-icon>mdi-play</v-icon>
                           </v-btn>
                         </template>
@@ -802,6 +835,20 @@
                         <template v-slot:item.restart="{ item }">
                           <v-btn v-if="!item.error && item.running" block size="small" color="warning" variant="tonal" @click="controlProjectContainer(item.name, 'restart')" :loading="item.loading">
                             <v-icon>mdi-restart</v-icon>
+                          </v-btn>
+                        </template>
+
+                        <template v-slot:item.terminal="{ item }">
+                          <v-btn 
+                            v-if="!item.error && item.running" 
+                            block 
+                            size="small" 
+                            color="info" 
+                            variant="tonal" 
+                            @click="openProjectTerminal(item.name)" 
+                            :loading="item.terminalLoading"
+                          >
+                            <v-icon>mdi-console</v-icon>
                           </v-btn>
                         </template>
 
@@ -1407,6 +1454,7 @@
                         { title: "Configuration", key: "configuration", sortable: true, align: "center", width: "100" },
                         { title: "Stop/Start", key: "control", sortable: false, align: "center", width: "100" },
                         { title: "Restart", key: "restart", sortable: false, align: "center", width: "100" },
+                        { title: "Terminal", key: "terminal", sortable: false, align: "center", width: "100" },
                         { title: "Open", key: "open", sortable: false, align: "center", width: "100" },
                         { title: "Delete", key: "delete", sortable: false, align: "center", width: "100" },
                     ],
@@ -1710,16 +1758,20 @@
               const data = await response.json();
 
               if (data.success) {
-                this.snackbar.text = `Project ${projectName} ${action}ed successfully`;
+                // Build action için özel mesaj
+                const actionText = action === 'build' ? 'built and started' : action + 'ed';
+                this.snackbar.text = `Project ${projectName} ${actionText} successfully`;
                 this.snackbar.color = "success";
                 this.snackbar.show = true;
 
                 // Reload projects to update status
+                // Build action daha uzun sürebilir, 2 saniye bekle
+                const delay = action === 'build' ? 2000 : 1000;
                 setTimeout(() => {
                   this.loadProjects();
-                }, 1000);
+                }, delay);
               } else {
-                this.snackbar.text = `Failed to ${action} project ${projectName}`;
+                this.snackbar.text = data.message || `Failed to ${action} project ${projectName}`;
                 this.snackbar.color = "error";
                 this.snackbar.show = true;
               }
@@ -1731,6 +1783,46 @@
             } finally {
               if (project) {
                 project.loading = false;
+              }
+            }
+          },
+          async openProjectTerminal(projectName) {
+            // Find project and set loading state
+            const project = this.projects.find((p) => p.name === projectName);
+            if (project) {
+              project.terminalLoading = true;
+            }
+
+            try {
+              const containerName = 'stackvo-' + projectName;
+              
+              const response = await fetch("/api/terminal.php", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ container: containerName }),
+              });
+
+              const data = await response.json();
+
+              if (data.success) {
+                this.snackbar.text = `Terminal opened for ${projectName}`;
+                this.snackbar.color = "success";
+                this.snackbar.show = true;
+              } else {
+                this.snackbar.text = data.message || `Failed to open terminal for ${projectName}`;
+                this.snackbar.color = "error";
+                this.snackbar.show = true;
+              }
+            } catch (error) {
+              console.error("Error opening terminal:", error);
+              this.snackbar.text = "Error: " + error.message;
+              this.snackbar.color = "error";
+              this.snackbar.show = true;
+            } finally {
+              if (project) {
+                project.terminalLoading = false;
               }
             }
           },

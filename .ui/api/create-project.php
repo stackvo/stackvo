@@ -156,25 +156,25 @@ try {
     // Run generator to update docker-compose.projects.yml
     $generatorSuccess = false;
     $generatorMessage = '';
-    
+
     try {
         // Check if exec is available
         $disabledFunctions = explode(',', ini_get('disable_functions'));
         $disabledFunctions = array_map('trim', $disabledFunctions);
-        
+
         if (in_array('exec', $disabledFunctions)) {
             Logger::warn('exec() function is disabled, skipping generator');
             $generatorMessage = 'exec() function is disabled. Please run: ./stackvo generate projects';
         } else {
             Logger::info('Running generator to update docker-compose configuration');
-            
+
             // Detect if running in container (check for /app directory)
             $containerBaseDir = '/app';
             $isContainer = file_exists($containerBaseDir . '/cli/commands/generate.sh');
             $actualBaseDir = $isContainer ? $containerBaseDir : $baseDir;
-            
+
             $generatorScript = $actualBaseDir . '/cli/commands/generate.sh';
-            
+
             // Check if generator script exists
             if (!file_exists($generatorScript)) {
                 Logger::warn('Generator script not found', ['path' => $generatorScript, 'is_container' => $isContainer]);
@@ -184,7 +184,7 @@ try {
                 $bashCheck = [];
                 $bashReturnCode = 0;
                 @exec('bash --version 2>&1', $bashCheck, $bashReturnCode);
-                
+
                 if ($bashReturnCode !== 0) {
                     // Bash not found - this means container needs rebuild
                     Logger::error('Bash not found in container', [
@@ -196,20 +196,20 @@ try {
                     // Bash is available, proceed with generation
                     $shell = 'bash';
                     $generatorCommand = "cd " . escapeshellarg($actualBaseDir) . " && " . $shell . " " . escapeshellarg($generatorScript) . " projects 2>&1";
-                    
+
                     Logger::info('Executing generator', [
                         'command' => $generatorCommand,
                         'is_container' => $isContainer,
                         'base_dir' => $actualBaseDir
                     ]);
-                    
+
                     $generatorOutput = [];
                     $generatorReturnCode = 0;
                     @exec($generatorCommand, $generatorOutput, $generatorReturnCode);
-                    
+
                     $generatorSuccess = ($generatorReturnCode === 0);
                     $generatorMessage = implode("\n", $generatorOutput);
-                    
+
                     if ($generatorSuccess) {
                         Logger::info('Generator executed successfully', ['output' => $generatorMessage]);
                     } else {
@@ -231,70 +231,77 @@ try {
     if ($generatorSuccess) {
         try {
             Logger::info('Deploying project containers');
-            
-            // Simplified deployment: use docker build + docker run directly
-            // This bypasses permission issues with docker-compose
-            $projectDockerfile = $actualBaseDir . '/generated/projects/' . $projectName;
-            $projectPath = $actualBaseDir . '/projects/' . $projectName;
-            $containerName = 'stackvo-' . $projectName;
-            $imageName = 'stackvo-' . $projectName . ':latest';
-            $network = 'stackvo-net';
-            
-            // Step 1: Build the image
-            $buildCommand = "docker build -t " . escapeshellarg($imageName) . 
-                          " " . escapeshellarg($projectDockerfile) . " 2>&1";
-            
-            $buildOutput = [];
-            $buildReturnCode = 0;
-            @exec($buildCommand, $buildOutput, $buildReturnCode);
-            
-            if ($buildReturnCode !== 0) {
-                Logger::warn('Docker build failed', [
-                    'project' => $projectName,
-                    'return_code' => $buildReturnCode,
-                    'output' => implode("\n", $buildOutput)
-                ]);
-                $generatorMessage .= "\nWarning: Docker build failed. Run './cli/stackvo.sh up' manually.";
+
+            // Use docker compose to build and start the container
+            // IMPORTANT: Use HOST paths, not container paths!
+            // Even though we're running inside a container, docker compose
+            // needs host paths because it talks to Docker daemon on the host
+
+            // Detect if running in container
+            $isContainer = file_exists('/app/cli/commands/generate.sh');
+
+            if ($isContainer) {
+                // We're in container - use container path for compose file
+                // The compose file is mounted at /app, so use /app path
+                $composeFile = '/app/generated/docker-compose.projects.yml';
             } else {
-                Logger::info('Docker build successful', ['project' => $projectName]);
-                
-                // Step 2: Stop and remove existing container if exists
-                @exec("docker stop " . escapeshellarg($containerName) . " 2>&1", $stopOutput);
-                @exec("docker rm " . escapeshellarg($containerName) . " 2>&1", $rmOutput);
-                
-                // Step 3: Run the container
-                $runCommand = "docker run -d " .
-                            "--name " . escapeshellarg($containerName) . " " .
-                            "--network " . escapeshellarg($network) . " " .
-                            "--restart unless-stopped " .
-                            "-v " . escapeshellarg($projectPath) . ":/var/www/html " .
-                            "-l 'com.docker.compose.project=stackvo' " .
-                            "-l 'com.docker.compose.service=" . $projectName . "' " .
-                            "-l 'traefik.enable=true' " .
-                            "-l 'traefik.http.routers." . $projectName . ".rule=Host(`" . $domain . "`)' " .
-                            "-l 'traefik.http.routers." . $projectName . ".entrypoints=websecure' " .
-                            "-l 'traefik.http.routers." . $projectName . ".tls=true' " .
-                            "-l 'traefik.http.services." . $projectName . ".loadbalancer.server.port=80' " .
-                            escapeshellarg($imageName) . " 2>&1";
-                
-                $runOutput = [];
-                $runReturnCode = 0;
-                @exec($runCommand, $runOutput, $runReturnCode);
-                
-                if ($runReturnCode === 0) {
-                    Logger::info('Container started successfully', [
-                        'project' => $projectName,
-                        'container' => $containerName
-                    ]);
-                    $generatorMessage .= "\nProject container built and started successfully";
-                } else {
-                    Logger::warn('Container start failed', [
-                        'project' => $projectName,
-                        'return_code' => $runReturnCode,
-                        'output' => implode("\n", $runOutput)
-                    ]);
-                    $generatorMessage .= "\nWarning: Container build succeeded but start failed. Run './cli/stackvo.sh up' manually.";
+                // We're on host - use normal paths
+                $composeFile = $baseDir . '/generated/docker-compose.projects.yml';
+            }
+
+            // Deploy using docker compose up -d (build if needed, start container)
+            // Use -p stackvo to set project name (otherwise it uses directory name "generated")
+            $deployCommand = "docker compose -p stackvo -f " . escapeshellarg($composeFile) .
+                " up -d --build " . escapeshellarg($projectName) . " 2>&1";
+
+            Logger::info('Executing deployment', [
+                'command' => $deployCommand,
+                'project' => $projectName,
+                'is_container' => $isContainer,
+                'compose_file' => $composeFile
+            ]);
+
+            // Wait for volume mount synchronization
+            // Check if Dockerfile exists on host (for container-created files)
+            if ($isContainer) {
+                $dockerfilePath = '/app/generated/projects/' . $projectName . '/Dockerfile';
+                $maxWait = 3000000; // 3 seconds max
+                $waited = 0;
+                $interval = 100000; // 100ms
+
+                while (!file_exists($dockerfilePath) && $waited < $maxWait) {
+                    clearstatcache(true, $dockerfilePath);
+                    usleep($interval);
+                    $waited += $interval;
                 }
+
+                if (!file_exists($dockerfilePath)) {
+                    Logger::warn('Dockerfile not found after waiting', [
+                        'project' => $projectName,
+                        'path' => $dockerfilePath,
+                        'waited_ms' => $waited / 1000
+                    ]);
+                }
+            }
+
+            $deployOutput = [];
+            $deployReturnCode = 0;
+            @exec($deployCommand, $deployOutput, $deployReturnCode);
+
+            if ($deployReturnCode === 0) {
+                Logger::info('Container deployed successfully', [
+                    'project' => $projectName,
+                    'container' => 'stackvo-' . $projectName,
+                    'output' => implode("\n", $deployOutput)
+                ]);
+                $generatorMessage .= "\nProject container deployed successfully";
+            } else {
+                Logger::warn('Container deployment failed', [
+                    'project' => $projectName,
+                    'return_code' => $deployReturnCode,
+                    'output' => implode("\n", $deployOutput)
+                ]);
+                $generatorMessage .= "\nWarning: Container deployment failed. Run './cli/stackvo.sh up' manually.";
             }
         } catch (Exception $deployException) {
             Logger::error('Project deployment exception', [
@@ -302,6 +309,8 @@ try {
             ]);
         }
     }
+
+
 
     // Log success
     $duration = microtime(true) - $startTime;
