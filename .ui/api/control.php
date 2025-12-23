@@ -53,12 +53,12 @@ class ControlApi extends ApiBase
         }
 
         // Build container name
-        // All containers have 'stackvo-' prefix
-        if (strpos($service, 'project') === 0) {
-            // Project container (e.g., project1-web, project1-php)
-            $containerName = 'stackvo-' . $service;
+        // Check if service name already has 'stackvo-' prefix
+        if (strpos($service, 'stackvo-') === 0) {
+            // Already has prefix (e.g., stackvo-project1, stackvo-mysql)
+            $containerName = $service;
         } else {
-            // Stackvo service (e.g., mysql, redis)
+            // Add prefix (e.g., mysql -> stackvo-mysql, project1 -> stackvo-project1)
             $containerName = 'stackvo-' . $service;
         }
 

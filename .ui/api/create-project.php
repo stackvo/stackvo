@@ -227,34 +227,74 @@ try {
         ]);
         $generatorMessage = 'Generator execution failed: ' . $genException->getMessage();
     }
-    
     // If generator was successful, deploy the project containers
     if ($generatorSuccess) {
         try {
             Logger::info('Deploying project containers');
             
-            // Use docker-compose to create and start the project containers
-            // Important: Use --project-name to ensure containers are in 'stackvo' group, not 'generated'
-            $composeFile = $actualBaseDir . '/generated/docker-compose.projects.yml';
-            $deployCommand = "docker compose -f " . escapeshellarg($composeFile) . " -p stackvo up -d " . escapeshellarg($projectName . '-php') . " " . escapeshellarg($projectName . '-web') . " 2>&1";
+            // Simplified deployment: use docker build + docker run directly
+            // This bypasses permission issues with docker-compose
+            $projectDockerfile = $actualBaseDir . '/generated/projects/' . $projectName;
+            $projectPath = $actualBaseDir . '/projects/' . $projectName;
+            $containerName = 'stackvo-' . $projectName;
+            $imageName = 'stackvo-' . $projectName . ':latest';
+            $network = 'stackvo-net';
             
-            $deployOutput = [];
-            $deployReturnCode = 0;
-            @exec($deployCommand, $deployOutput, $deployReturnCode);
+            // Step 1: Build the image
+            $buildCommand = "docker build -t " . escapeshellarg($imageName) . 
+                          " " . escapeshellarg($projectDockerfile) . " 2>&1";
             
-            if ($deployReturnCode === 0) {
-                Logger::info('Project containers deployed successfully', [
+            $buildOutput = [];
+            $buildReturnCode = 0;
+            @exec($buildCommand, $buildOutput, $buildReturnCode);
+            
+            if ($buildReturnCode !== 0) {
+                Logger::warn('Docker build failed', [
                     'project' => $projectName,
-                    'output' => implode("\n", $deployOutput)
+                    'return_code' => $buildReturnCode,
+                    'output' => implode("\n", $buildOutput)
                 ]);
-                $generatorMessage .= "\nProject containers deployed and started successfully";
+                $generatorMessage .= "\nWarning: Docker build failed. Run './cli/stackvo.sh up' manually.";
             } else {
-                Logger::warn('Project container deployment failed', [
-                    'project' => $projectName,
-                    'return_code' => $deployReturnCode,
-                    'output' => implode("\n", $deployOutput)
-                ]);
-                $generatorMessage .= "\nWarning: Containers created but deployment failed. Run 'docker-compose up -d' manually.";
+                Logger::info('Docker build successful', ['project' => $projectName]);
+                
+                // Step 2: Stop and remove existing container if exists
+                @exec("docker stop " . escapeshellarg($containerName) . " 2>&1", $stopOutput);
+                @exec("docker rm " . escapeshellarg($containerName) . " 2>&1", $rmOutput);
+                
+                // Step 3: Run the container
+                $runCommand = "docker run -d " .
+                            "--name " . escapeshellarg($containerName) . " " .
+                            "--network " . escapeshellarg($network) . " " .
+                            "--restart unless-stopped " .
+                            "-v " . escapeshellarg($projectPath) . ":/var/www/html " .
+                            "-l 'com.docker.compose.project=stackvo' " .
+                            "-l 'com.docker.compose.service=" . $projectName . "' " .
+                            "-l 'traefik.enable=true' " .
+                            "-l 'traefik.http.routers." . $projectName . ".rule=Host(`" . $domain . "`)' " .
+                            "-l 'traefik.http.routers." . $projectName . ".entrypoints=websecure' " .
+                            "-l 'traefik.http.routers." . $projectName . ".tls=true' " .
+                            "-l 'traefik.http.services." . $projectName . ".loadbalancer.server.port=80' " .
+                            escapeshellarg($imageName) . " 2>&1";
+                
+                $runOutput = [];
+                $runReturnCode = 0;
+                @exec($runCommand, $runOutput, $runReturnCode);
+                
+                if ($runReturnCode === 0) {
+                    Logger::info('Container started successfully', [
+                        'project' => $projectName,
+                        'container' => $containerName
+                    ]);
+                    $generatorMessage .= "\nProject container built and started successfully";
+                } else {
+                    Logger::warn('Container start failed', [
+                        'project' => $projectName,
+                        'return_code' => $runReturnCode,
+                        'output' => implode("\n", $runOutput)
+                    ]);
+                    $generatorMessage .= "\nWarning: Container build succeeded but start failed. Run './cli/stackvo.sh up' manually.";
+                }
             }
         } catch (Exception $deployException) {
             Logger::error('Project deployment exception', [

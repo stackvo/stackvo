@@ -1695,33 +1695,21 @@
             }
 
             try {
-              // Control both web and PHP containers
-              const webContainer = projectName + '-web';
-              const phpContainer = projectName + '-php';
+              // Single container architecture: stackvo-{projectName}
+              const containerName = 'stackvo-' + projectName;
               
-              // Control web container
-              const webResponse = await fetch("/api/control.php", {
+              // Control project container
+              const response = await fetch("/api/control.php", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ service: webContainer, action: action }),
+                body: JSON.stringify({ service: containerName, action: action }),
               });
 
-              const webData = await webResponse.json();
-              
-              // Control PHP container
-              const phpResponse = await fetch("/api/control.php", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ service: phpContainer, action: action }),
-              });
+              const data = await response.json();
 
-              const phpData = await phpResponse.json();
-
-              if (webData.success && phpData.success) {
+              if (data.success) {
                 this.snackbar.text = `Project ${projectName} ${action}ed successfully`;
                 this.snackbar.color = "success";
                 this.snackbar.show = true;
