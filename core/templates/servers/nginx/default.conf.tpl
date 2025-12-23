@@ -2,7 +2,11 @@ server {
     listen 80;
     server_name _;
     
-    root /var/www/html/public;
+    # Explicit log paths
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+    
+    root /var/www/html/{{DOCUMENT_ROOT}};
     index index.php index.html;
 
     location / {
@@ -10,7 +14,7 @@ server {
     }
 
     location ~ \.php$ {
-        fastcgi_pass {{PROJECT_NAME}}-php:9000;
+        fastcgi_pass 127.0.0.1:9000;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;

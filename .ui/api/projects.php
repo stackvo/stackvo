@@ -185,32 +185,23 @@ try {
             continue;
         }
 
-        // Check container status for this project
+        // Check container status for this project (single container)
         $projectName = $config['name'] ?? $dir;
         $containerPrefix = Config::get('container_prefix'); // stackvo-
-        $webContainer = $containerPrefix . $projectName . '-web';
-        $phpContainer = $containerPrefix . $projectName . '-php';
+        $containerName = $containerPrefix . $projectName; // stackvo-project1
 
-        // Check if containers are running
-        $webRunning = false;
-        $phpRunning = false;
+        // Check if container is running
+        $containerRunning = false;
 
-        $webOutput = [];
-        $webReturnCode = 0;
-        exec(sprintf('docker inspect -f "{{.State.Running}}" %s 2>/dev/null', escapeshellarg($webContainer)), $webOutput, $webReturnCode);
-        if ($webReturnCode === 0 && isset($webOutput[0]) && $webOutput[0] === 'true') {
-            $webRunning = true;
+        $containerOutput = [];
+        $containerReturnCode = 0;
+        exec(sprintf('docker inspect -f "{{.State.Running}}" %s 2>/dev/null', escapeshellarg($containerName)), $containerOutput, $containerReturnCode);
+        if ($containerReturnCode === 0 && isset($containerOutput[0]) && $containerOutput[0] === 'true') {
+            $containerRunning = true;
         }
 
-        $phpOutput = [];
-        $phpReturnCode = 0;
-        exec(sprintf('docker inspect -f "{{.State.Running}}" %s 2>/dev/null', escapeshellarg($phpContainer)), $phpOutput, $phpReturnCode);
-        if ($phpReturnCode === 0 && isset($phpOutput[0]) && $phpOutput[0] === 'true') {
-            $phpRunning = true;
-        }
-
-        // Project is considered running if both containers are running
-        $running = $webRunning && $phpRunning;
+        // Project is running if container is running
+        $running = $containerRunning;
 
         // Check if domain is configured in DNS/hosts
         $domain = $config['domain'] ?? null;
@@ -226,14 +217,10 @@ try {
             'primary' => $domain ? ($sslEnabled ? 'https://' . $domain : 'http://' . $domain) : null
         ];
 
-        // Get port mappings for containers
-        $webPorts = [];
-        $phpPorts = [];
-        if ($webRunning) {
-            $webPorts = getContainerPorts($webContainer);
-        }
-        if ($phpRunning) {
-            $phpPorts = getContainerPorts($phpContainer);
+        // Get port mappings for container
+        $containerPorts = [];
+        if ($containerRunning) {
+            $containerPorts = getContainerPorts($containerName);
         }
 
         // Get project logs
@@ -243,8 +230,8 @@ try {
         // Get project configuration info
         $configuration = getProjectConfiguration($projectPath, $webserver);
 
-        // Merge port information from web container to main ports object
-        $ports = $webRunning ? $webPorts : [];
+        // Use container port information
+        $ports = $containerRunning ? $containerPorts : [];
 
         // Build project path info
         $projectPathInfo = [
@@ -273,14 +260,10 @@ try {
             'configuration' => $configuration,
             'project_path' => $projectPathInfo,
             'containers' => [
-                'web' => array_merge([
-                    'name' => $webContainer,  // stackvo-project1-web
-                    'running' => $webRunning
-                ], $webPorts),
-                'php' => array_merge([
-                    'name' => $phpContainer,  // stackvo-project1-php
-                    'running' => $phpRunning
-                ], $phpPorts)
+                'main' => array_merge([
+                    'name' => $containerName,  // stackvo-project1
+                    'running' => $containerRunning
+                ], $containerPorts)
             ],
             'error' => null
         ];

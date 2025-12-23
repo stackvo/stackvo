@@ -1,8 +1,8 @@
 :80 {
     root * /var/www/html/{{DOCUMENT_ROOT}}
     
-    # Enable PHP-FPM
-    php_fastcgi {{PROJECT_NAME}}-php:9000
+    # Enable PHP-FPM (localhost - same container)
+    php_fastcgi 127.0.0.1:9000
     
     # Enable file server
     file_server

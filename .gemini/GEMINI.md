@@ -105,9 +105,9 @@ git push origin main
 ### Dizin Yapısı
 
 ```
-stackored/
+stackvo/
 ├── cli/                    # Bash CLI sistemi
-│   ├── stackored.sh       # Ana CLI giriş noktası
+│   ├── stackvo.sh       # Ana CLI giriş noktası
 │   ├── commands/          # Komut implementasyonları
 │   ├── lib/               # Paylaşılan kütüphaneler
 │   │   ├── generators/    # Generator modülleri
@@ -130,7 +130,7 @@ stackored/
 │       ├── .stackvo/    # Özel konfigürasyonlar (opsiyonel)
 │       └── public/        # Document root
 ├── generated/             # Otomatik oluşturulan dosyalar
-│   ├── stackored.yml
+│   ├── stackvo.yml
 │   ├── docker-compose.dynamic.yml
 │   ├── docker-compose.projects.yml
 │   ├── configs/
@@ -378,11 +378,11 @@ setInterval(loadProjects, 10000); // 10 saniye - Projects
 function toggleTheme() {
   const newTheme = theme.global.current.value.dark ? "light" : "dark";
   theme.global.name.value = newTheme;
-  localStorage.setItem("stackored-theme", newTheme);
+  localStorage.setItem("stackvo-theme", newTheme);
 }
 
 // Sayfa yüklendiğinde
-const savedTheme = localStorage.getItem("stackored-theme") || "dark";
+const savedTheme = localStorage.getItem("stackvo-theme") || "dark";
 theme.global.name.value = savedTheme;
 ```
 
@@ -394,35 +394,35 @@ theme.global.name.value = savedTheme;
 
 ```bash
 # Pattern
-stackored-{service}              # Servisler için
-stackored-{project}-{type}       # Projeler için
+stackvo-{service}              # Servisler için
+stackvo-{project}-{type}       # Projeler için
 
 # Örnekler
-stackored-mysql
-stackored-postgres
-stackored-project1-web
-stackored-project1-php
-stackored-traefik
-stackored-tools
+stackvo-mysql
+stackvo-postgres
+stackvo-project1-web
+stackvo-project1-php
+stackvo-traefik
+stackvo-tools
 ```
 
 ### 2. **Network İsimleri**
 
 ```bash
 # Tek network kullan
-stackored-net  # Tüm container'lar bu network'te
+stackvo-net  # Tüm container'lar bu network'te
 ```
 
 ### 3. **Volume İsimleri**
 
 ```bash
 # Pattern
-stackored-{service}-data
+stackvo-{service}-data
 
 # Örnekler
-stackored-mysql-data
-stackored-postgres-data
-stackored-redis-data
+stackvo-mysql-data
+stackvo-postgres-data
+stackvo-redis-data
 ```
 
 ### 4. **Domain İsimleri**
@@ -432,10 +432,10 @@ stackored-redis-data
 {service}.{TLD_SUFFIX}    # Servisler için
 {project}.{TLD_SUFFIX}    # Projeler için (veya custom domain)
 
-# Örnekler (TLD_SUFFIX=stackored.loc)
-traefik.stackored.loc
-adminer.stackored.loc
-rabbitmq.stackored.loc
+# Örnekler (TLD_SUFFIX=stackvo.loc)
+traefik.stackvo.loc
+adminer.stackvo.loc
+rabbitmq.stackvo.loc
 project1.loc              # Custom domain
 ```
 
@@ -470,7 +470,7 @@ docker-compose.{service}.tpl
 {service}.conf.tpl
 
 # Generated dosyalar
-stackored.yml
+stackvo.yml
 docker-compose.dynamic.yml
 docker-compose.projects.yml
 
@@ -590,14 +590,14 @@ touch core/templates/services/{service-name}/docker-compose.{service-name}.tpl
 services:
   { service-name }:
     image: "{service-image}:{{ SERVICE_{UPPERCASE}_VERSION }}"
-    container_name: "stackored-{service-name}"
+    container_name: "stackvo-{service-name}"
     restart: unless-stopped
 
     environment:
       ENV_VAR: "{{ SERVICE_{UPPERCASE}_ENV_VAR | default('default-value') }}"
 
     volumes:
-      - stackored-{service-name}-data:/data/path
+      - stackvo-{service-name}-data:/data/path
       - ./logs/{service-name}:/var/log/{service-name}
 
     ports:
@@ -607,7 +607,7 @@ services:
       - "{{ DOCKER_DEFAULT_NETWORK }}"
 
 volumes:
-  stackored-{service-name}-data:
+  stackvo-{service-name}-data:
 ```
 
 ### 3. **`.env` Değişkenleri Ekle**
@@ -688,7 +688,7 @@ generate_{webserver}_container() {
     cat <<EOF
   ${project_name}-web:
     image: "{webserver-image}:latest"
-    container_name: "stackored-${project_name}-web"
+    container_name: "stackvo-${project_name}-web"
     restart: unless-stopped
 
     volumes:
@@ -697,7 +697,7 @@ generate_{webserver}_container() {
 $config_mount
 
     networks:
-      - ${DOCKER_DEFAULT_NETWORK:-stackored-net}
+      - ${DOCKER_DEFAULT_NETWORK:-stackvo-net}
 
     labels:
       - "traefik.enable=true"
@@ -857,16 +857,16 @@ console.error("Error loading services:", error);
 
 ```bash
 # Container loglarını izle
-docker logs -f stackored-{service}
+docker logs -f stackvo-{service}
 
 # Container içine gir
-docker exec -it stackored-{service} bash
+docker exec -it stackvo-{service} bash
 
 # Network kontrolü
-docker network inspect stackored-net
+docker network inspect stackvo-net
 
 # Volume kontrolü
-docker volume inspect stackored-{service}-data
+docker volume inspect stackvo-{service}-data
 ```
 
 ---
@@ -996,13 +996,13 @@ Yeni özellik eklendiğinde README.md'yi güncelle:
 
 ```bash
 # Test et
-./cli/stackored.sh generate
+./cli/stackvo.sh generate
 
 # Oluşturulan dosyaları kontrol et
 ls -la generated/
 
 # Syntax kontrolü
-docker compose -f generated/stackored.yml config
+docker compose -f generated/stackvo.yml config
 docker compose -f generated/docker-compose.dynamic.yml config
 docker compose -f generated/docker-compose.projects.yml config
 ```
@@ -1036,7 +1036,7 @@ console.log(projects.value);
 
 1. **Her zaman `.env` dosyasını kontrol et** - Tüm konfigürasyon buradan
 2. **Template syntax'ını doğru kullan** - `{{ VAR }}` veya `{{ VAR | default('value') }}`
-3. **Naming convention'lara uy** - `stackored-{service}`, `SERVICE_{UPPERCASE}_ENABLE`
+3. **Naming convention'lara uy** - `stackvo-{service}`, `SERVICE_{UPPERCASE}_ENABLE`
 4. **Log fonksiyonlarını kullan** - `log_info`, `log_success`, `log_warn`, `log_error`
 5. **Bash 3.x uyumluluğunu koru** - macOS için kritik
 6. **Cache kullan** - Docker API çağrıları pahalı
@@ -1049,8 +1049,8 @@ console.log(projects.value);
 
 1. **Bash 4+ özellikleri kullanma** - Associative arrays, mapfile
 2. **Hardcoded değerler kullanma** - Her şey `.env`'den gelmeli
-3. **Farklı network'ler oluşturma** - Tek network: `stackored-net`
-4. **Container isimlerini değiştirme** - Pattern: `stackored-{service}`
+3. **Farklı network'ler oluşturma** - Tek network: `stackvo-net`
+4. **Container isimlerini değiştirme** - Pattern: `stackvo-{service}`
 5. **Template syntax'ını bozma** - `{{ VAR }}` formatını koru
 6. **Cache'siz Docker API çağrısı yapma** - Performans sorunu
 7. **CORS header'larını unutma** - API çalışmaz
@@ -1066,19 +1066,19 @@ console.log(projects.value);
 
 ```bash
 # Generator çalıştır
-./cli/stackored.sh generate
+./cli/stackvo.sh generate
 
 # Servisleri başlat
-./cli/stackored.sh up
+./cli/stackvo.sh up
 
 # Servisleri durdur
-./cli/stackored.sh down
+./cli/stackvo.sh down
 
 # Logları izle
-./cli/stackored.sh logs
+./cli/stackvo.sh logs
 
 # Durum kontrolü
-./cli/stackored.sh ps
+./cli/stackvo.sh ps
 ```
 
 ### Sık Kullanılan Dosya Yolları
@@ -1139,7 +1139,7 @@ POST /api/delete-project.php
 ### Proje Dokümantasyonu
 
 - README.md - Ana dokümantasyon (1480 satır)
-- stackored_analysis.md - Detaylı kod analizi
+- stackvo_analysis.md - Detaylı kod analizi
 
 ---
 

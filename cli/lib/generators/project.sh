@@ -97,15 +97,12 @@ generate_projects() {
         local host_generated_configs_dir="${HOST_ROOT_DIR}/generated/configs"
         local host_generated_projects_dir="${HOST_ROOT_DIR}/generated/projects"
         
-        # Generate Dockerfile for PHP container with extensions
+        # Generate Dockerfile for single container (web server + PHP)
         local project_dockerfile_dir="$GENERATED_DIR/projects/${project_name}"
-        generate_php_dockerfile "$project_name" "$php_version" "$extensions" "$project_dockerfile_dir"
+        generate_single_dockerfile "$project_name" "$web_server" "$php_version" "$extensions" "$project_dockerfile_dir" "$document_root"
         
-        # Generate PHP container
-        generate_php_container "$project_name" "$project_path" "$php_version" "$host_project_path" "$host_logs_path" "$host_generated_projects_dir" >> "$output"
-        
-        # Generate web server container
-        generate_web_container "$project_name" "$project_path" "$web_server" "$php_version" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" >> "$output"
+        # Generate single container (web server + PHP combined)
+        generate_single_container "$project_name" "$project_path" "$web_server" "$php_version" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir" >> "$output"
     done
     
     # Add network definition at the end
@@ -175,19 +172,23 @@ parse_project_config() {
 }
 
 ##
-# Generate PHP Dockerfile with extensions
+# Generate Single Container Dockerfile (Web Server + PHP)
 #
 # Args:
 #   $1 - Project name
-#   $2 - PHP version
-#   $3 - Extensions (space-separated list)
-#   $4 - Project directory path in generated/projects/
+#   $2 - Web server (nginx/apache/caddy)
+#   $3 - PHP version
+#   $4 - Extensions (space-separated list)
+#   $5 - Project directory path in generated/projects/
+#   $6 - Document root
 ##
-generate_php_dockerfile() {
+generate_single_dockerfile() {
     local project_name=$1
-    local php_version=$2
-    local extensions=$3
-    local project_dir=$4
+    local web_server=$2
+    local php_version=$3
+    local extensions=$4
+    local project_dir=$5
+    local document_root=$6
     
     # Load PHP extensions library
     source "$SCRIPT_DIR/../lib/php-extensions.sh"
@@ -212,7 +213,7 @@ generate_php_dockerfile() {
         # Get configure command
         local configure=$(get_extension_configure "$ext")
         if [ -n "$configure" ]; then
-            configure_commands="$configure_commands\nRUN $configure"
+            configure_commands="$configure_commands\\nRUN $configure"
         fi
         
         # PECL or docker-php-ext-install?
@@ -226,12 +227,48 @@ generate_php_dockerfile() {
     # Remove duplicate packages
     apt_packages=$(echo "$apt_packages" | tr ' ' '\n' | sort -u | tr '\n' ' ')
     
-    # Generate Dockerfile
+    # Generate Dockerfile based on web server
+    case "$web_server" in
+        apache)
+            generate_apache_dockerfile "$dockerfile" "$php_version" "$apt_packages" "$configure_commands" "$docker_ext_install" "$pecl_install" "$project_name"
+            ;;
+        nginx)
+            generate_nginx_dockerfile "$dockerfile" "$php_version" "$apt_packages" "$configure_commands" "$docker_ext_install" "$pecl_install" "$project_name" "$project_dir" "$document_root"
+            ;;
+        caddy)
+            generate_caddy_dockerfile "$dockerfile" "$php_version" "$apt_packages" "$configure_commands" "$docker_ext_install" "$pecl_install" "$project_name" "$project_dir" "$document_root"
+            ;;
+        *)
+            log_warn "Bilinmeyen web server: $web_server, nginx kullanılıyor"
+            generate_nginx_dockerfile "$dockerfile" "$php_version" "$apt_packages" "$configure_commands" "$docker_ext_install" "$pecl_install" "$project_name" "$project_dir" "$document_root"
+            ;;
+    esac
+    
+    log_info "$project_name için Dockerfile oluşturuldu: $dockerfile"
+}
+
+##
+# Generate Apache Dockerfile (Apache + mod_php)
+##
+generate_apache_dockerfile() {
+    local dockerfile=$1
+    local php_version=$2
+    local apt_packages=$3
+    local configure_commands=$4
+    local docker_ext_install=$5
+    local pecl_install=$6
+    local project_name=$7
+    
+    # Get default tools
+    local default_tools=${PHP_DEFAULT_TOOLS:-""}
+    local composer_version=${PHP_TOOL_COMPOSER_VERSION:-latest}
+    local nodejs_version=${PHP_TOOL_NODEJS_VERSION:-20}
+    
     cat > "$dockerfile" <<EOF
 # Auto-generated Dockerfile for $project_name
+# Web Server: Apache + mod_php
 # PHP Version: $php_version
-# Extensions: $extensions
-FROM php:${php_version}-fpm
+FROM php:${php_version}-apache
 
 EOF
     
@@ -271,17 +308,12 @@ RUN pecl install$pecl_install \\
 EOF
     fi
     
-    # Install default development tools
-    local default_tools=${PHP_DEFAULT_TOOLS:-""}
+    # Install development tools
     if [ -n "$default_tools" ]; then
         cat >> "$dockerfile" <<EOF
 
 # Install Development Tools
 EOF
-        
-        local composer_version=${PHP_TOOL_COMPOSER_VERSION:-latest}
-        local nodejs_version=${PHP_TOOL_NODEJS_VERSION:-20}
-        
         for tool in $(echo "$default_tools" | tr ',' ' '); do
             local install_cmd=$(get_tool_install_commands "$tool" "$composer_version" "$nodejs_version")
             if [ -n "$install_cmd" ]; then
@@ -291,68 +323,361 @@ EOF
         done
     fi
     
+    # Enable Apache modules
     cat >> "$dockerfile" <<EOF
+
+# Enable Apache modules
+RUN a2enmod rewrite
+
 WORKDIR /var/www/html
 EOF
-    
-    
-    log_info "$project_name için Dockerfile oluşturuldu: $dockerfile"
 }
 
 ##
-# Generate PHP container configuration
+# Generate Nginx Dockerfile (Nginx + PHP-FPM + Supervisord)
+##
+generate_nginx_dockerfile() {
+    local dockerfile=$1
+    local php_version=$2
+    local apt_packages=$3
+    local configure_commands=$4
+    local docker_ext_install=$5
+    local pecl_install=$6
+    local project_name=$7
+    local project_dir=$8
+    local document_root=$9
+    
+    # Get default tools
+    local default_tools=${PHP_DEFAULT_TOOLS:-""}
+    local composer_version=${PHP_TOOL_COMPOSER_VERSION:-latest}
+    local nodejs_version=${PHP_TOOL_NODEJS_VERSION:-20}
+    
+    cat > "$dockerfile" <<EOF
+# Auto-generated Dockerfile for $project_name
+# Web Server: Nginx + PHP-FPM
+# PHP Version: $php_version
+FROM php:${php_version}-fpm
 
-#
-# Args:
-#   $1 - Project name
-#   $2 - Project path (container path)
-#   $3 - PHP version
-#   $4 - Host project path (for volume mounts)
-#   $5 - Host logs path (for volume mounts)
-##
-##
-generate_php_container() {
-    local project_name=$1
-    local project_path=$2
-    local php_version=$3
-    local host_project_path=$4
-    local host_logs_path=$5
-    local host_generated_projects_dir=$6
-    
-    cat <<EOF
-  ${project_name}-php:
-    build:
-      context: ${host_generated_projects_dir}/${project_name}
-      dockerfile: Dockerfile
-    image: stackvo-${project_name}-php:${php_version}
-    container_name: "stackvo-${project_name}-php"
-    restart: unless-stopped
-    
-    volumes:
-      - ${host_project_path}:/var/www/html
-      - ${host_logs_path}:/var/log/${project_name}
-EOF
-    
-    # Add custom PHP config if exists
-    if [ -f "$project_path/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_PHP_INI" ]; then
-        echo "      - ${project_path}/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_PHP_INI:/usr/local/etc/php/conf.d/custom.ini:ro"
-    fi
-    
-    # Add custom PHP-FPM config if exists
-    if [ -f "$project_path/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_PHP_FPM" ]; then
-        echo "      - ${project_path}/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_PHP_FPM:/usr/local/etc/php-fpm.d/zz-custom.conf:ro"
-    fi
-    
-    cat <<EOF
-    
-    networks:
-      - ${DOCKER_DEFAULT_NETWORK:-$CONST_DEFAULT_NETWORK}
+# Install Nginx and Supervisord
+RUN apt-get update && apt-get install -y \\
+    nginx \\
+    supervisor \\
+    && rm -rf /var/lib/apt/lists/*
 
 EOF
+    
+    # Install system dependencies
+    if [ -n "$apt_packages" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+    $apt_packages \\
+    && rm -rf /var/lib/apt/lists/*
+
+EOF
+    fi
+    
+    # Add configure commands
+    if [ -n "$configure_commands" ]; then
+        echo -e "$configure_commands" >> "$dockerfile"
+        echo "" >> "$dockerfile"
+    fi
+    
+    # Install PHP extensions
+    if [ -n "$docker_ext_install" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install PHP extensions
+RUN docker-php-ext-install$docker_ext_install
+
+EOF
+    fi
+    
+    # Install PECL extensions
+    if [ -n "$pecl_install" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install PECL extensions
+RUN pecl install$pecl_install \\
+    && docker-php-ext-enable$pecl_install
+
+EOF
+    fi
+    
+    # Install development tools
+    if [ -n "$default_tools" ]; then
+        cat >> "$dockerfile" <<EOF
+
+# Install Development Tools
+EOF
+        for tool in $(echo "$default_tools" | tr ',' ' '); do
+            local install_cmd=$(get_tool_install_commands "$tool" "$composer_version" "$nodejs_version")
+            if [ -n "$install_cmd" ]; then
+                echo "$install_cmd" >> "$dockerfile"
+                echo "" >> "$dockerfile"
+            fi
+        done
+    fi
+    
+    # Generate Nginx config dynamically
+    cat > "$project_dir/nginx.conf" <<'NGINXCONF'
+server {
+    listen 80;
+    server_name _;
+    
+    # Explicit log paths
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+    
+    root /var/www/html/DOCUMENT_ROOT_PLACEHOLDER;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+NGINXCONF
+
+    # Replace placeholder with actual document root
+    sed -i "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/nginx.conf"
+    
+    # Generate Supervisord config dynamically
+    cat > "$project_dir/supervisord.conf" <<'SUPERVISORCONF'
+[supervisord]
+nodaemon=true
+user=root
+logfile=/var/log/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:php-fpm]
+command=/usr/local/sbin/php-fpm -F
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+
+[program:nginx]
+command=/usr/sbin/nginx -g 'daemon off;'
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+SUPERVISORCONF
+    
+    cat >> "$dockerfile" <<'DOCKEREOF'
+
+# Configure PHP-FPM to listen on TCP port 127.0.0.1:9000
+RUN sed -i 's|listen = .*|listen = 127.0.0.1:9000|' /usr/local/etc/php-fpm.d/www.conf
+
+# Remove 'main' log format reference from Nginx config
+RUN sed -i 's/ main;/;/' /etc/nginx/nginx.conf
+
+# Disable default Nginx site (it conflicts with our config)
+RUN rm -f /etc/nginx/sites-enabled/default
+
+# Copy Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy Supervisord configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create entrypoint script to ensure log directories exist at runtime
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'mkdir -p /var/log/nginx /var/log/php-fpm' >> /entrypoint.sh && \
+    echo 'touch /var/log/nginx/access.log /var/log/nginx/error.log' >> /entrypoint.sh && \
+    echo 'chmod 666 /var/log/nginx/*.log' >> /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+WORKDIR /var/www/html
+
+# Use entrypoint to create log directories before starting supervisord
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+DOCKEREOF
 }
 
 ##
-# Generate web server container configuration
+# Generate Caddy Dockerfile (Caddy + PHP-FPM + Supervisord)
+##
+generate_caddy_dockerfile() {
+    local dockerfile=$1
+    local php_version=$2
+    local apt_packages=$3
+    local configure_commands=$4
+    local docker_ext_install=$5
+    local pecl_install=$6
+    local project_name=$7
+    local project_dir=$8
+    local document_root=$9
+    
+    # Get default tools
+    local default_tools=${PHP_DEFAULT_TOOLS:-""}
+    local composer_version=${PHP_TOOL_COMPOSER_VERSION:-latest}
+    local nodejs_version=${PHP_TOOL_NODEJS_VERSION:-20}
+    
+    cat > "$dockerfile" <<EOF
+# Auto-generated Dockerfile for $project_name
+# Web Server: Caddy + PHP-FPM
+# PHP Version: $php_version
+FROM php:${php_version}-fpm
+
+# Install Caddy and Supervisord
+RUN apt-get update && apt-get install -y \\
+    debian-keyring \\
+    debian-archive-keyring \\
+    apt-transport-https \\
+    curl \\
+    supervisor \\
+    && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \\
+    && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list \\
+    && apt-get update && apt-get install -y caddy \\
+    && rm -rf /var/lib/apt/lists/*
+
+EOF
+    
+    # Install system dependencies
+    if [ -n "$apt_packages" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+    $apt_packages \\
+    && rm -rf /var/lib/apt/lists/*
+
+EOF
+    fi
+    
+    # Add configure commands
+    if [ -n "$configure_commands" ]; then
+        echo -e "$configure_commands" >> "$dockerfile"
+        echo "" >> "$dockerfile"
+    fi
+    
+    # Install PHP extensions
+    if [ -n "$docker_ext_install" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install PHP extensions
+RUN docker-php-ext-install$docker_ext_install
+
+EOF
+    fi
+    
+    # Install PECL extensions
+    if [ -n "$pecl_install" ]; then
+        cat >> "$dockerfile" <<EOF
+# Install PECL extensions
+RUN pecl install$pecl_install \\
+    && docker-php-ext-enable$pecl_install
+
+EOF
+    fi
+    
+    # Install development tools
+    if [ -n "$default_tools" ]; then
+        cat >> "$dockerfile" <<EOF
+
+# Install Development Tools
+EOF
+        for tool in $(echo "$default_tools" | tr ',' ' '); do
+            local install_cmd=$(get_tool_install_commands "$tool" "$composer_version" "$nodejs_version")
+            if [ -n "$install_cmd" ]; then
+                echo "$install_cmd" >> "$dockerfile"
+                echo "" >> "$dockerfile"
+            fi
+        done
+    fi
+    
+    # Generate Caddyfile dynamically
+    cat > "$project_dir/Caddyfile" <<'CADDYCONF'
+:80 {
+    root * /var/www/html/DOCUMENT_ROOT_PLACEHOLDER
+    
+    # Enable PHP-FPM (localhost - same container)
+    php_fastcgi 127.0.0.1:9000
+    
+    # Enable file server
+    file_server
+    
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}
+CADDYCONF
+
+    # Replace placeholder with actual document root
+    sed -i "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/Caddyfile"
+    
+    # Generate Supervisord config dynamically
+    cat > "$project_dir/supervisord.conf" <<'SUPERVISORCONF'
+[supervisord]
+nodaemon=true
+user=root
+logfile=/var/log/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:php-fpm]
+command=/usr/local/sbin/php-fpm -F
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+
+[program:caddy]
+command=/usr/bin/caddy run --config /etc/caddy/Caddyfile
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+SUPERVISORCONF
+    
+    cat >> "$dockerfile" <<'DOCKEREOF'
+
+# Configure PHP-FPM to listen on TCP port 127.0.0.1:9000
+RUN sed -i 's|listen = .*|listen = 127.0.0.1:9000|' /usr/local/etc/php-fpm.d/www.conf
+
+# Copy Caddyfile
+COPY Caddyfile /etc/caddy/Caddyfile
+
+# Copy Supervisord configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create entrypoint script to ensure log directories exist at runtime
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'mkdir -p /var/log/caddy /var/log/php-fpm' >> /entrypoint.sh && \
+    echo 'touch /var/log/caddy/access.log /var/log/caddy/error.log' >> /entrypoint.sh && \
+    echo 'chmod 666 /var/log/caddy/*.log' >> /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+WORKDIR /var/www/html
+
+# Use entrypoint to create log directories before starting supervisord
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+DOCKEREOF
+}
+
+##
+# Generate Single Container (Web Server + PHP combined)
 #
 # Args:
 #   $1 - Project name
@@ -364,8 +689,9 @@ EOF
 #   $7 - Host project path (for volume mounts)
 #   $8 - Host logs path (for volume mounts)
 #   $9 - Host generated configs dir (for volume mounts)
+#   $10 - Host generated projects dir (for volume mounts)
 ##
-generate_web_container() {
+generate_single_container() {
     local project_name=$1
     local project_path=$2
     local web_server=$3
@@ -375,105 +701,36 @@ generate_web_container() {
     local host_project_path=$7
     local host_logs_path=$8
     local host_generated_configs_dir=$9
+    local host_generated_projects_dir=${10}
     
     case "$web_server" in
-        nginx|"$CONST_DEFAULT_WEBSERVER")
-            generate_nginx_container "$project_name" "$project_path" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir"
-            ;;
         apache)
-            generate_apache_container "$project_name" "$project_path" "$php_version" "$project_domain" "$host_project_path" "$host_logs_path"
+            generate_apache_single_container "$project_name" "$project_path" "$php_version" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_projects_dir"
+            ;;
+        nginx)
+            generate_nginx_single_container "$project_name" "$project_path" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir"
             ;;
         caddy)
-            generate_caddy_container "$project_name" "$project_path" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir"
+            generate_caddy_single_container "$project_name" "$project_path" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir"
             ;;
         *)
             log_warn "Bilinmeyen web server: $web_server, nginx kullanılıyor"
-            generate_nginx_container "$project_name" "$project_path" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir"
+            generate_nginx_single_container "$project_name" "$project_path" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir"
             ;;
     esac
 }
 
 ##
-# Generate Nginx container configuration
-#
-# Args:
-#   $1 - Project name
-#   $2 - Project path (container path)
-#   $3 - Project domain
-#   $4 - Host project path (for volume mounts)
-#   $5 - Host logs path (for volume mounts)
-#   $6 - Host generated configs dir (for volume mounts)
+# Generate Apache Single Container
 ##
-generate_nginx_container() {
-    local project_name=$1
-    local project_path=$2
-    local project_domain=$3
-    local host_project_path=$4
-    local host_logs_path=$5
-    local host_generated_configs_dir=$6
-    
-    # Determine nginx config path
-    local nginx_config_mount=""
-    if [ -f "$project_path/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_NGINX" ]; then
-        nginx_config_mount="      - ${host_project_path}/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_NGINX:/etc/nginx/conf.d/default.conf:ro"
-    elif [ -f "$project_path/$CONST_CONFIG_NGINX" ]; then
-        nginx_config_mount="      - ${host_project_path}/$CONST_CONFIG_NGINX:/etc/nginx/conf.d/default.conf:ro"
-    else
-        # Use default template - generate in core/generated/configs/
-        mkdir -p "$GENERATED_CONFIGS_DIR"
-        local template_file="$ROOT_DIR/$CONST_PATH_TEMPLATES/servers/nginx/default.conf"
-        local generated_config="$GENERATED_CONFIGS_DIR/${project_name}-nginx.conf"
-        
-        # Generate config from template
-        sed "s/{{PROJECT_NAME}}/${project_name}/g" "$template_file" > "$generated_config"
-        nginx_config_mount="      - ${host_generated_configs_dir}/${project_name}-nginx.conf:/etc/nginx/conf.d/default.conf:ro"
-    fi
-    
-    cat <<EOF
-  ${project_name}-web:
-    image: "$CONST_IMAGE_NGINX"
-    container_name: "stackvo-${project_name}-web"
-    restart: unless-stopped
-    
-    volumes:
-      - ${host_project_path}:/var/www/html
-      - ${host_logs_path}:/var/log/nginx
-$nginx_config_mount
-    
-    networks:
-      - ${DOCKER_DEFAULT_NETWORK:-stackvo-net}
-    
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${project_name}.rule=Host(\`${project_domain}\`)"
-      - "traefik.http.routers.${project_name}.entrypoints=websecure"
-      - "traefik.http.routers.${project_name}.tls=true"
-      - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
-    
-    depends_on:
-      - ${project_name}-php
-
-EOF
-}
-
-##
-# Generate Apache container configuration
-#
-# Args:
-#   $1 - Project name
-#   $2 - Project path (container path)
-#   $3 - PHP version
-#   $4 - Project domain
-#   $5 - Host project path (for volume mounts)
-#   $6 - Host logs path (for volume mounts)
-##
-generate_apache_container() {
+generate_apache_single_container() {
     local project_name=$1
     local project_path=$2
     local php_version=$3
     local project_domain=$4
     local host_project_path=$5
     local host_logs_path=$6
+    local host_generated_projects_dir=$7
     
     # Determine apache config path
     local apache_config_mount=""
@@ -491,9 +748,12 @@ generate_apache_container() {
     fi
     
     cat <<EOF
-  ${project_name}-web:
-    image: "php:${php_version:-8.2}-apache"
-    container_name: "stackvo-${project_name}-web"
+  ${project_name}:
+    build:
+      context: ${host_generated_projects_dir}/${project_name}
+      dockerfile: Dockerfile
+    image: stackvo-${project_name}:${php_version}
+    container_name: "stackvo-${project_name}"
     restart: unless-stopped
     
     volumes:
@@ -501,20 +761,6 @@ generate_apache_container() {
       - ${host_logs_path}:/var/log/apache2
 $apache_config_mount
     
-EOF
-    
-    # If no custom config, add command to set DocumentRoot
-    if [ -z "$apache_config_mount" ]; then
-        cat <<EOF
-    command: >
-      bash -c "sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf &&
-               sed -i '/\<VirtualHost/a\    \<Directory /var/www/html/public\>\n        Options Indexes FollowSymLinks\n        AllowOverride All\n        Require all granted\n    \</Directory\>' /etc/apache2/sites-available/000-default.conf &&
-               apache2-foreground"
-    
-EOF
-    fi
-    
-    cat <<EOF
     networks:
       - ${DOCKER_DEFAULT_NETWORK:-stackvo-net}
     
@@ -524,26 +770,67 @@ EOF
       - "traefik.http.routers.${project_name}.entrypoints=websecure"
       - "traefik.http.routers.${project_name}.tls=true"
       - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
-    
-    depends_on:
-      - ${project_name}-php
 
 EOF
 }
 
 ##
-# Generate Caddy container configuration
-#
-# Args:
-#   $1 - Project name
-#   $2 - Project path (container path)
-#   $3 - Project domain
-#   $4 - Document root
-#   $5 - Host project path (for volume mounts)
-#   $6 - Host logs path (for volume mounts)
-#   $7 - Host generated configs dir (for volume mounts)
+# Generate Nginx Single Container
 ##
-generate_caddy_container() {
+generate_nginx_single_container() {
+    local project_name=$1
+    local project_path=$2
+    local project_domain=$3
+    local host_project_path=$4
+    local host_logs_path=$5
+    local host_generated_configs_dir=$6
+    local host_generated_projects_dir=$7
+    
+    # Nginx config is already generated in generate_nginx_dockerfile()
+    # and copied into the container via Dockerfile COPY command
+    # No need to mount it separately
+    local nginx_config_mount=""
+    if [ -f "$project_path/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_NGINX" ]; then
+        # User has custom nginx config in .stackvo/
+        nginx_config_mount="      - ${host_project_path}/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_NGINX:/etc/nginx/conf.d/default.conf:ro"
+    elif [ -f "$project_path/$CONST_CONFIG_NGINX" ]; then
+        # User has custom nginx config in project root
+        nginx_config_mount="      - ${host_project_path}/$CONST_CONFIG_NGINX:/etc/nginx/conf.d/default.conf:ro"
+    fi
+    # If no custom config, the dynamically generated one from Dockerfile will be used
+    
+    
+    cat <<EOF
+  ${project_name}:
+    build:
+      context: ${host_generated_projects_dir}/${project_name}
+      dockerfile: Dockerfile
+    image: stackvo-${project_name}:latest
+    container_name: "stackvo-${project_name}"
+    restart: unless-stopped
+    
+    volumes:
+      - ${host_project_path}:/var/www/html
+      - ${host_logs_path}:/var/log
+$nginx_config_mount
+    
+    networks:
+      - ${DOCKER_DEFAULT_NETWORK:-stackvo-net}
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${project_name}.rule=Host(\`${project_domain}\`)"
+      - "traefik.http.routers.${project_name}.entrypoints=websecure"
+      - "traefik.http.routers.${project_name}.tls=true"
+      - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
+
+EOF
+}
+
+##
+# Generate Caddy Single Container
+##
+generate_caddy_single_container() {
     local project_name=$1
     local project_path=$2
     local project_domain=$3
@@ -551,34 +838,34 @@ generate_caddy_container() {
     local host_project_path=$5
     local host_logs_path=$6
     local host_generated_configs_dir=$7
+    local host_generated_projects_dir=$8
     
-    # Determine caddy config path
+    # Caddyfile is already generated in generate_caddy_dockerfile()
+    # and copied into the container via Dockerfile COPY command
+    # No need to mount it separately
     local caddy_config_mount=""
     if [ -f "$project_path/.stackvo/Caddyfile" ]; then
+        # User has custom Caddyfile in .stackvo/
         caddy_config_mount="      - ${host_project_path}/.stackvo/Caddyfile:/etc/caddy/Caddyfile:ro"
     elif [ -f "$project_path/Caddyfile" ]; then
+        # User has custom Caddyfile in project root
         caddy_config_mount="      - ${host_project_path}/Caddyfile:/etc/caddy/Caddyfile:ro"
-    else
-        # Use default template
-        mkdir -p "$GENERATED_CONFIGS_DIR"
-        local template_file="$ROOT_DIR/core/templates/servers/caddy/Caddyfile"
-        local generated_config="$GENERATED_CONFIGS_DIR/${project_name}-caddy.conf"
-        
-        sed -e "s/{{PROJECT_NAME}}/${project_name}/g" \
-            -e "s|{{DOCUMENT_ROOT}}|${document_root}|g" \
-            "$template_file" > "$generated_config"
-        caddy_config_mount="      - ${host_generated_configs_dir}/${project_name}-caddy.conf:/etc/caddy/Caddyfile:ro"
     fi
+    # If no custom config, the dynamically generated one from Dockerfile will be used
+    
     
     cat <<EOF
-  ${project_name}-web:
-    image: "caddy:latest"
-    container_name: "stackvo-${project_name}-web"
+  ${project_name}:
+    build:
+      context: ${host_generated_projects_dir}/${project_name}
+      dockerfile: Dockerfile
+    image: stackvo-${project_name}:latest
+    container_name: "stackvo-${project_name}"
     restart: unless-stopped
     
     volumes:
       - ${host_project_path}:/var/www/html
-      - ${host_logs_path}:/var/log/caddy
+      - ${host_logs_path}:/var/log
 $caddy_config_mount
     
     networks:
@@ -590,9 +877,6 @@ $caddy_config_mount
       - "traefik.http.routers.${project_name}.entrypoints=websecure"
       - "traefik.http.routers.${project_name}.tls=true"
       - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
-    
-    depends_on:
-      - ${project_name}-php
 
 EOF
 }
