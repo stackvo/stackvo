@@ -1795,29 +1795,56 @@
 
             try {
               const containerName = 'stackvo-' + projectName;
+              const dockerCommand = `docker exec -it ${containerName} bash`;
               
-              const response = await fetch("/api/terminal.php", {
+              // İstemci tarafında OS tespiti (WSL için önemli!)
+              const userAgent = navigator.userAgent.toLowerCase();
+              let clientOS = 'linux'; // default
+              
+              if (userAgent.indexOf('win') !== -1) {
+                clientOS = 'windows';
+              } else if (userAgent.indexOf('mac') !== -1) {
+                clientOS = 'macos';
+              }
+              
+              console.log('🖥️ Client OS:', clientOS);
+              console.log('📝 Container:', containerName);
+              
+              // Node.js backend'e istek at (port 3001)
+              const response = await fetch("http://localhost:3001/api/terminal", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ container: containerName }),
+                body: JSON.stringify({ 
+                  container: containerName,
+                  clientOS: clientOS  // İstemci OS'ini gönder
+                }),
               });
 
               const data = await response.json();
 
               if (data.success) {
-                this.snackbar.text = `Terminal opened for ${projectName}`;
+                this.snackbar.text = `✅ Terminal açıldı: ${projectName}`;
                 this.snackbar.color = "success";
                 this.snackbar.show = true;
               } else {
-                this.snackbar.text = data.message || `Failed to open terminal for ${projectName}`;
-                this.snackbar.color = "error";
-                this.snackbar.show = true;
+                // Terminal açılamadıysa, komutu clipboard'a kopyala
+                try {
+                  await navigator.clipboard.writeText(dockerCommand);
+                  this.snackbar.text = `📋 Terminal emülatörü bulunamadı!\nKomut kopyalandı, terminalinize yapıştırın:\n${dockerCommand}`;
+                  this.snackbar.color = "warning";
+                  this.snackbar.show = true;
+                } catch (clipboardError) {
+                  // Clipboard da çalışmazsa, komutu göster
+                  this.snackbar.text = `⚠️ Bu komutu terminalinize kopyalayın:\n${dockerCommand}`;
+                  this.snackbar.color = "warning";
+                  this.snackbar.show = true;
+                }
               }
             } catch (error) {
               console.error("Error opening terminal:", error);
-              this.snackbar.text = "Error: " + error.message;
+              this.snackbar.text = "⚠️ Backend bağlantı hatası. Node.js server çalışıyor mu?";
               this.snackbar.color = "error";
               this.snackbar.show = true;
             } finally {
