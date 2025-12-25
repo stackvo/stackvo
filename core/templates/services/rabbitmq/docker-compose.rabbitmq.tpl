@@ -15,7 +15,7 @@ services:
 
     volumes:
       - stackvo-rabbitmq-data:/var/lib/rabbitmq
-      - ./logs/rabbitmq:/var/log/rabbitmq
+      - stackvo-rabbitmq-logs:/var/log/rabbitmq
 
     ports:
       - "{{ HOST_PORT_RABBITMQ | default('5672') }}:5672"
@@ -26,3 +26,4 @@ services:
 
 volumes:
   stackvo-rabbitmq-data:
+  stackvo-rabbitmq-logs:

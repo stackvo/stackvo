@@ -22,7 +22,7 @@ services:
     volumes:
       - stackvo-sonarqube-data:/opt/sonarqube/data
       - stackvo-sonarqube-extensions:/opt/sonarqube/extensions
-      - ./logs/sonarqube:/opt/sonarqube/logs
+      - ../logs/sonarqube:/opt/sonarqube/logs
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

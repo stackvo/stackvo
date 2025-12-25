@@ -14,7 +14,7 @@ services:
     volumes:
       - ./core/templates/monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - stackvo-logstash-data:/usr/share/logstash/data
-      - ./logs/logstash:/usr/share/logstash/logs
+      - ../logs/logstash:/usr/share/logstash/logs
 
     ports:
       - "{{ HOST_PORT_LOGSTASH_TCP | default('5001') }}:5000/tcp"

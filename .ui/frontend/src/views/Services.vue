@@ -445,8 +445,6 @@ async function enableService(serviceName) {
   loadingServices.value[serviceName] = 'enable';
   try {
     await servicesStore.enableService(serviceName);
-    // Reload services to update table
-    await servicesStore.loadServices();
   } catch (error) {
     console.error('Failed to enable service:', error);
   } finally {
@@ -461,8 +459,6 @@ async function disableService(serviceName) {
   loadingServices.value[serviceName] = 'disable';
   try {
     await servicesStore.disableService(serviceName);
-    // Reload services to update table
-    await servicesStore.loadServices();
   } catch (error) {
     console.error('Failed to disable service:', error);
   } finally {

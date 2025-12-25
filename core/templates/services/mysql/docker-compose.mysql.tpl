@@ -16,8 +16,8 @@ services:
 
     volumes:
       - stackvo-mysql-data:/var/lib/mysql
-      - ./core/generated-configs/mysql.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
-      - ./logs/mysql:/var/log/mysql
+      - ./generated/configs/mysql.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
+      - ../logs/mysql:/var/log/mysql
 
     command: >
       mysqld

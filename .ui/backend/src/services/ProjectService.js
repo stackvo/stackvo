@@ -36,7 +36,8 @@ class ProjectService {
       throw new Error('Invalid project name. Only alphanumeric, dash, and underscore allowed');
     }
 
-    const projectsDir = path.join(process.cwd(), '..', '..', 'projects');
+    // Use PROJECTS_DIR environment variable or fallback to relative path
+    const projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '..', '..', 'projects');
     const projectPath = path.join(projectsDir, name);
 
     // Check if project already exists
@@ -154,7 +155,8 @@ class ProjectService {
       );
 
       // 5. Run generate command
-      const rootDir = path.join(process.cwd(), '..', '..');
+      // Use STACKVO_ROOT environment variable or fallback to relative path
+      const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), '..', '..');
       console.log(`Running: ./cli/stackvo.sh generate projects in ${rootDir}`);
       
       const { stdout, stderr } = await execAsync(
@@ -203,7 +205,8 @@ class ProjectService {
    * @returns {Promise<Object>} Build result
    */
   async buildProject(projectName) {
-    const projectsDir = path.join(process.cwd(), '..', '..', 'projects');
+    // Use PROJECTS_DIR environment variable or fallback to relative path
+    const projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '..', '..', 'projects');
     const projectPath = path.join(projectsDir, projectName);
 
     // Check if project exists
@@ -233,7 +236,8 @@ class ProjectService {
    * @returns {Promise<Object>} Deletion result
    */
   async deleteProject(projectName) {
-    const projectsDir = path.join(process.cwd(), '..', '..', 'projects');
+    // Use PROJECTS_DIR environment variable or fallback to relative path
+    const projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '..', '..', 'projects');
     const projectPath = path.join(projectsDir, projectName);
 
     // Check if project exists
@@ -283,7 +287,8 @@ class ProjectService {
       console.log(`Project directory deleted: ${projectPath}`);
 
       // 3. Regenerate docker-compose.projects.yml
-      const rootDir = path.join(process.cwd(), '..', '..');
+      // Use STACKVO_ROOT environment variable or fallback to relative path
+      const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), '..', '..');
       console.log(`Running: ./cli/stackvo.sh generate projects in ${rootDir}`);
       
       const { stdout, stderr } = await execAsync(

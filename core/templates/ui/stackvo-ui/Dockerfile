@@ -11,8 +11,8 @@ WORKDIR /app/frontend
 # Copy frontend package files
 COPY .ui/frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (use npm install as package-lock.json may not exist)
+RUN npm install --production=false
 
 # Copy frontend source
 COPY .ui/frontend/ ./
@@ -31,8 +31,8 @@ WORKDIR /app/backend
 # Copy backend package files
 COPY .ui/backend/package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Install production dependencies only (use npm install as package-lock.json may not exist)
+RUN npm install --only=production
 
 # Copy backend source
 COPY .ui/backend/ ./
@@ -40,8 +40,8 @@ COPY .ui/backend/ ./
 # Stage 3: Final Nginx + Node.js runtime
 FROM node:20-alpine
 
-# Install nginx, Docker CLI, and bash
-RUN apk add --no-cache nginx docker-cli docker-cli-compose bash
+# Install nginx, Docker CLI, bash, perl, and gettext for template processing
+RUN apk add --no-cache nginx docker-cli docker-cli-compose bash perl gettext
 
 # Create necessary directories
 RUN mkdir -p /var/log/nginx /usr/share/nginx/html /opt/backend

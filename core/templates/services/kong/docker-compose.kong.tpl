@@ -19,7 +19,7 @@ services:
 
     volumes:
       - ./core/templates/appserver/kong/kong.yml:/kong/declarative/kong.yml:ro
-      - ./logs/kong:/usr/local/kong/logs
+      - ../logs/kong:/usr/local/kong/logs
 
     ports:
       - "{{ HOST_PORT_KONG_PROXY | default('8000') }}:8000"

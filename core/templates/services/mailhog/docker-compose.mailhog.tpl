@@ -13,7 +13,7 @@ services:
       - "{{ HOST_PORT_MAILHOG_UI | default('8025') }}:8025"
 
     volumes:
-      - ./logs/mailhog:/var/log/mailhog
+      - ../logs/mailhog:/var/log/mailhog
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

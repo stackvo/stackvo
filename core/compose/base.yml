@@ -44,4 +44,4 @@ services:
 networks:
   stackvo-net:
     name: stackvo-net
-    driver: bridge
+    external: true

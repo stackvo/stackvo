@@ -1,143 +1,160 @@
-import Docker from 'dockerode';
-import NodeCache from 'node-cache';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import Docker from "dockerode";
+import NodeCache from "node-cache";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
 class DockerService {
   constructor() {
-    this.docker = new Docker({ socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock' });
-    this.cache = new NodeCache({ stdTTL: parseInt(process.env.CACHE_TTL) || 5 });
+    this.docker = new Docker({
+      socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock",
+    });
+    this.cache = new NodeCache({
+      stdTTL: parseInt(process.env.CACHE_TTL) || 5,
+    });
   }
 
   /**
    * List all Stackvo services (from .env SERVICE_ prefix)
    */
   async listServices() {
-    const cacheKey = 'services';
+    const cacheKey = "services";
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    
+    const fs = await import("fs/promises");
+    const path = await import("path");
+
     // Read .env file to get all SERVICE_ definitions
-    const envPath = path.join(process.cwd(), '..', '..', '.env');
-    const envContent = await fs.readFile(envPath, 'utf-8');
-    
+    // Use STACKVO_ROOT environment variable or fallback to relative path
+    const stackvoRoot = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
+    const envPath = path.join(stackvoRoot, ".env");
+    const envContent = await fs.readFile(envPath, "utf-8");
+
     // Parse SERVICE_*_ENABLE lines
     const serviceRegex = /SERVICE_([A-Z0-9_]+)_ENABLE=(true|false)/g;
     const matches = [...envContent.matchAll(serviceRegex)];
-    
+
     // Parse SERVICE_*_URL lines
     const urlRegex = /SERVICE_([A-Z0-9_]+)_URL=(.+)/g;
     const urlMatches = [...envContent.matchAll(urlRegex)];
     const serviceUrls = {};
-    urlMatches.forEach(match => {
-      const serviceName = match[1].toLowerCase().replace(/_/g, '-');
+    urlMatches.forEach((match) => {
+      const serviceName = match[1].toLowerCase().replace(/_/g, "-");
       let url = match[2].trim();
-      
+
       // If URL doesn't start with http/https, assume it's just the service name
       // and construct full URL: https://{serviceName}.stackvo.loc
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = `https://${url}.stackvo.loc`;
       }
-      
+
       serviceUrls[serviceName] = url;
     });
-    
+
     // Parse all SERVICE_* variables for credentials
     // Use non-greedy match for service name to correctly parse SERVICE_ACTIVEMQ_ADMIN_USER
     const allServiceVarsRegex = /SERVICE_([A-Z0-9]+?)_([A-Z0-9_]+)=(.+)/g;
     const allMatches = [...envContent.matchAll(allServiceVarsRegex)];
     const serviceCredentials = {};
-    
-    allMatches.forEach(match => {
-      const serviceName = match[1].toLowerCase().replace(/_/g, '-');
+
+    allMatches.forEach((match) => {
+      const serviceName = match[1].toLowerCase().replace(/_/g, "-");
       const key = match[2]; // e.g., ROOT_PASSWORD, USER, DATABASE, ADMIN_USER, HOST_PORT_UI
       const value = match[3].trim();
-      
+
       // Skip only ENABLE, VERSION, URL (these are not credentials)
-      if (key === 'ENABLE' || key === 'VERSION' || key === 'URL') {
+      if (key === "ENABLE" || key === "VERSION" || key === "URL") {
         return;
       }
-      
+
       if (!serviceCredentials[serviceName]) {
         serviceCredentials[serviceName] = {};
       }
-      
+
       serviceCredentials[serviceName][key] = value;
     });
-    
+
     // Get all containers
     const containers = await this.docker.listContainers({ all: true });
-    
+
     // Read /etc/hosts to check DNS configuration
-    let hostsContent = '';
+    let hostsContent = "";
     try {
-      hostsContent = await fs.readFile('/etc/hosts', 'utf-8');
+      hostsContent = await fs.readFile("/etc/hosts", "utf-8");
     } catch (error) {
-      console.warn('Could not read /etc/hosts:', error.message);
+      console.warn("Could not read /etc/hosts:", error.message);
     }
-    
+
     // Build services list from .env with async port formatting
-    const servicesPromises = matches.map(async match => {
-      const serviceName = match[1].toLowerCase().replace(/_/g, '-');
-      const enabled = match[2] === 'true';
+    const servicesPromises = matches.map(async (match) => {
+      const serviceName = match[1].toLowerCase().replace(/_/g, "-");
+      const enabled = match[2] === "true";
       const containerName = `stackvo-${serviceName}`;
       const url = serviceUrls[serviceName] || null;
-      
+
       // Check if domain is in /etc/hosts
       let dns_configured = false;
       if (url && hostsContent) {
-        const domain = url.replace('https://', '').replace('http://', '').split('/')[0];
+        const domain = url
+          .replace("https://", "")
+          .replace("http://", "")
+          .split("/")[0];
         dns_configured = hostsContent.includes(domain);
       }
-      
+
       // Find corresponding container
-      const container = containers.find(c => 
-        c.Names[0] === `/${containerName}` || c.Names[0].includes(containerName)
+      const container = containers.find(
+        (c) =>
+          c.Names[0] === `/${containerName}` ||
+          c.Names[0].includes(containerName)
       );
-      
+
       // Get detailed port info if container exists and is running
       let ports = { ports: {}, ip_address: null, network: null, gateway: null };
-      if (container && container.State === 'running') {
+      if (container && container.State === "running") {
         ports = await this.getDetailedPorts(container.Id);
       }
-      
+
       // Get version from .env if container doesn't exist
-      let imageVersion = '-';
+      let imageVersion = "-";
       if (container) {
         imageVersion = container.Image;
       } else {
         // Read version from .env
-        const versionKey = `SERVICE_${serviceName.toUpperCase().replace(/-/g, '_')}_VERSION`;
-        const versionMatch = envContent.match(new RegExp(`^${versionKey}=(.+)$`, 'm'));
+        const versionKey = `SERVICE_${serviceName
+          .toUpperCase()
+          .replace(/-/g, "_")}_VERSION`;
+        const versionMatch = envContent.match(
+          new RegExp(`^${versionKey}=(.+)$`, "m")
+        );
         if (versionMatch) {
           // Get service name for image (e.g., redis, mysql, etc.)
-          const baseServiceName = serviceName.replace('stackvo-', '');
+          const baseServiceName = serviceName.replace("stackvo-", "");
           imageVersion = `${baseServiceName}:${versionMatch[1]}`;
         }
       }
-      
+
       return {
         name: serviceName,
         containerName: containerName,
         enabled: enabled,
         url: url,
-        domain: url ? url.replace('https://', '').replace('http://', '').split('/')[0] : null,
+        domain: url
+          ? url.replace("https://", "").replace("http://", "").split("/")[0]
+          : null,
         dns_configured: dns_configured,
-        status: container ? container.State : 'not created',
-        running: container ? container.State === 'running' : false,
+        status: container ? container.State : "not created",
+        running: container ? container.State === "running" : false,
         ports: ports,
         image: imageVersion,
         created: container ? container.Created : null,
         id: container ? container.Id : null,
-        credentials: serviceCredentials[serviceName] || {}
+        credentials: serviceCredentials[serviceName] || {},
       };
     });
-    
+
     const services = await Promise.all(servicesPromises);
 
     // Sort services: Running first, then Enabled, then Disabled
@@ -145,11 +162,11 @@ class DockerService {
       // Running services first
       if (a.running && !b.running) return -1;
       if (!a.running && b.running) return 1;
-      
+
       // Then enabled services
       if (a.enabled && !b.enabled) return -1;
       if (!a.enabled && b.enabled) return 1;
-      
+
       // Finally sort by name
       return a.name.localeCompare(b.name);
     });
@@ -162,95 +179,108 @@ class DockerService {
    * List all Stackvo tools
    */
   async listTools() {
-    const cacheKey = 'tools_list';
+    const cacheKey = "tools_list";
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    
+    const fs = await import("fs/promises");
+    const path = await import("path");
+
     // Read .env file to get all TOOLS_ definitions
-    const envPath = path.join(process.cwd(), '..', '..', '.env');
-    const envContent = await fs.readFile(envPath, 'utf-8');
-    
+    // Use STACKVO_ROOT environment variable or fallback to relative path
+    const stackvoRoot = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
+    const envPath = path.join(stackvoRoot, ".env");
+    const envContent = await fs.readFile(envPath, "utf-8");
+
     // Parse TOOLS_*_ENABLE lines (only lines starting with TOOLS_)
     const toolRegex = /^TOOLS_([A-Z0-9_]+)_ENABLE=(true|false)/gm;
     const matches = [...envContent.matchAll(toolRegex)];
-    
+
     // Parse TOOLS_*_URL lines
     const urlRegex = /^TOOLS_([A-Z0-9_]+)_URL=(.+)/gm;
     const urlMatches = [...envContent.matchAll(urlRegex)];
     const toolUrls = {};
-    urlMatches.forEach(match => {
-      const toolName = match[1].toLowerCase().replace(/_/g, '-');
+    urlMatches.forEach((match) => {
+      const toolName = match[1].toLowerCase().replace(/_/g, "-");
       let url = match[2].trim();
-      
+
       // If URL doesn't start with http/https, construct full URL
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = `https://${url}.stackvo.loc`;
       }
-      
+
       toolUrls[toolName] = url;
     });
-    
+
     // Parse TOOLS_*_VERSION lines
     const versionRegex = /^TOOLS_([A-Z0-9_]+)_VERSION=(.+)/gm;
     const versionMatches = [...envContent.matchAll(versionRegex)];
     const toolVersions = {};
-    versionMatches.forEach(match => {
-      const toolName = match[1].toLowerCase().replace(/_/g, '-');
+    versionMatches.forEach((match) => {
+      const toolName = match[1].toLowerCase().replace(/_/g, "-");
       toolVersions[toolName] = match[2].trim();
     });
-    
+
     // Get all containers
     const containers = await this.docker.listContainers({ all: true });
-    
+
     // Check /etc/hosts for DNS configuration
-    let hostsContent = '';
+    let hostsContent = "";
     try {
-      hostsContent = await fs.readFile('/etc/hosts', 'utf-8');
+      hostsContent = await fs.readFile("/etc/hosts", "utf-8");
     } catch (error) {
       // Ignore if can't read /etc/hosts
     }
-    
-    const tools = await Promise.all(matches.map(async match => {
-      const toolName = match[1].toLowerCase().replace(/_/g, '-');
-      const enabled = match[2] === 'true';
-      const containerName = `stackvo-${toolName}`;
-      const url = toolUrls[toolName] || null;
-      const domain = url ? url.replace('https://', '').replace('http://', '').split('/')[0] : null;
-      
-      // Check if domain is in /etc/hosts
-      const dns_configured = domain ? hostsContent.includes(domain) : false;
-      
-      // Find container
-      const container = containers.find(c => 
-        c.Names.some(name => name === `/${containerName}` || name === containerName)
-      );
-      
-      // Get detailed port info if container exists and is running
-      let ports = { ports: {}, ip_address: null, network: null, gateway: null };
-      if (container && container.State === 'running') {
-        ports = await this.getDetailedPorts(container.Id);
-      }
-      
-      return {
-        name: toolName,
-        containerName: containerName,
-        enabled: enabled,
-        version: toolVersions[toolName] || 'latest',
-        url: url,
-        domain: domain,
-        dns_configured: dns_configured,
-        status: container ? container.State : 'not created',
-        running: container ? container.State === 'running' : false,
-        ports: ports,
-        image: container ? container.Image : '-',
-        created: container ? container.Created : null,
-        id: container ? container.Id : null
-      };
-    }));
-    
+
+    const tools = await Promise.all(
+      matches.map(async (match) => {
+        const toolName = match[1].toLowerCase().replace(/_/g, "-");
+        const enabled = match[2] === "true";
+        const containerName = `stackvo-${toolName}`;
+        const url = toolUrls[toolName] || null;
+        const domain = url
+          ? url.replace("https://", "").replace("http://", "").split("/")[0]
+          : null;
+
+        // Check if domain is in /etc/hosts
+        const dns_configured = domain ? hostsContent.includes(domain) : false;
+
+        // Find container
+        const container = containers.find((c) =>
+          c.Names.some(
+            (name) => name === `/${containerName}` || name === containerName
+          )
+        );
+
+        // Get detailed port info if container exists and is running
+        let ports = {
+          ports: {},
+          ip_address: null,
+          network: null,
+          gateway: null,
+        };
+        if (container && container.State === "running") {
+          ports = await this.getDetailedPorts(container.Id);
+        }
+
+        return {
+          name: toolName,
+          containerName: containerName,
+          enabled: enabled,
+          version: toolVersions[toolName] || "latest",
+          url: url,
+          domain: domain,
+          dns_configured: dns_configured,
+          status: container ? container.State : "not created",
+          running: container ? container.State === "running" : false,
+          ports: ports,
+          image: container ? container.Image : "-",
+          created: container ? container.Created : null,
+          id: container ? container.Id : null,
+        };
+      })
+    );
+
     // Sort: Running first, then Enabled, then Disabled
     tools.sort((a, b) => {
       if (a.running && !b.running) return -1;
@@ -268,32 +298,39 @@ class DockerService {
    * List all Stackvo projects
    */
   async listProjects() {
-    const cacheKey = 'projects';
+    const cacheKey = "projects";
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    
-    // Get project directories - backend runs in .ui/backend, projects are 2 levels up
-    const projectsDir = path.join(process.cwd(), '..', '..', 'projects');
+    const fs = await import("fs/promises");
+    const path = await import("path");
+
+    // Get projects directory from environment variable or fallback to relative path
+    // PROJECTS_DIR is set in docker-compose.yml to /app/projects
+    const projectsDir =
+      process.env.PROJECTS_DIR ||
+      path.join(process.cwd(), "..", "..", "projects");
     let projectDirs = [];
-    
+
     try {
       projectDirs = await fs.readdir(projectsDir);
     } catch (error) {
-      console.error('Projects directory not found:', projectsDir, error.message);
+      console.error(
+        "Projects directory not found:",
+        projectsDir,
+        error.message
+      );
       return [];
     }
 
     // Get all containers
     const containers = await this.docker.listContainers({ all: true });
-    
+
     const projects = [];
 
     for (const dir of projectDirs) {
       const projectDirPath = path.join(projectsDir, dir);
-      
+
       // Check if it's a directory
       try {
         const stat = await fs.stat(projectDirPath);
@@ -303,11 +340,11 @@ class DockerService {
       }
 
       // Read stackvo.json
-      const configPath = path.join(projectDirPath, 'stackvo.json');
+      const configPath = path.join(projectDirPath, "stackvo.json");
       let config = {};
-      
+
       try {
-        const configContent = await fs.readFile(configPath, 'utf-8');
+        const configContent = await fs.readFile(configPath, "utf-8");
         config = JSON.parse(configContent);
       } catch (error) {
         // If stackvo.json doesn't exist or is invalid, skip or use minimal info
@@ -319,7 +356,7 @@ class DockerService {
           document_root: null,
           running: false,
           container_exists: false,
-          error: 'Configuration file not found or invalid'
+          error: "Configuration file not found or invalid",
         });
         continue;
       }
@@ -328,66 +365,74 @@ class DockerService {
       const containerName = `stackvo-${projectName}`;
 
       // Find container for this project
-      const container = containers.find(c => c.Names[0].includes(containerName));
-      
-      const running = container ? container.State === 'running' : false;
+      const container = containers.find((c) =>
+        c.Names[0].includes(containerName)
+      );
+
+      const running = container ? container.State === "running" : false;
       const containerExists = !!container;
 
       // SSL and URLs
-      const sslEnabled = process.env.SSL_ENABLE === 'true';
+      const sslEnabled = process.env.SSL_ENABLE === "true";
       const urls = {
         https: config.domain ? `https://${config.domain}` : null,
         http: config.domain ? `http://${config.domain}` : null,
-        primary: config.domain ? (sslEnabled ? `https://${config.domain}` : `http://${config.domain}`) : null
+        primary: config.domain
+          ? sslEnabled
+            ? `https://${config.domain}`
+            : `http://${config.domain}`
+          : null,
       };
 
       // Project paths
       const projectPath = {
-        container_path: '/var/www/html',
-        host_path: `projects/${dir}`
+        container_path: "/var/www/html",
+        host_path: `projects/${dir}`,
       };
 
       // Log paths (if project is running and logs directory exists)
-      const webserver = config.webserver || 'nginx';
+      const webserver = config.webserver || "nginx";
       const webserverPaths = {
-        'nginx': '/var/log/nginx',
-        'apache': '/var/log/apache2',
-        'caddy': '/var/log/caddy'
+        nginx: "/var/log/nginx",
+        apache: "/var/log/apache2",
+        caddy: "/var/log/caddy",
       };
-      const webLogBase = webserverPaths[webserver] || '/var/log/nginx';
+      const webLogBase = webserverPaths[webserver] || "/var/log/nginx";
       const phpLogBase = `/var/log/${projectName}`;
 
-      const logs = running ? {
-        web_access: {
-          container_path: `${webLogBase}/access.log`,
-          host_path: `logs/projects/${projectName}/access.log`
-        },
-        web_error: {
-          container_path: `${webLogBase}/error.log`,
-          host_path: `logs/projects/${projectName}/error.log`
-        },
-        php_error: {
-          container_path: `${phpLogBase}/php-error.log`,
-          host_path: `logs/projects/${projectName}/php-error.log`
-        }
-      } : null;
+      const logs = running
+        ? {
+            web_access: {
+              container_path: `${webLogBase}/access.log`,
+              host_path: `logs/projects/${projectName}/access.log`,
+            },
+            web_error: {
+              container_path: `${webLogBase}/error.log`,
+              host_path: `logs/projects/${projectName}/error.log`,
+            },
+            php_error: {
+              container_path: `${phpLogBase}/php-error.log`,
+              host_path: `logs/projects/${projectName}/php-error.log`,
+            },
+          }
+        : null;
 
       // Check for custom configuration files in .stackvo directory
-      const stackvoDir = path.join(projectDirPath, '.stackvo');
+      const stackvoDir = path.join(projectDirPath, ".stackvo");
       let configuration = {
-        type: 'default',
+        type: "default",
         has_custom: false,
-        files: []
+        files: [],
       };
 
       try {
         const stackvoDirExists = await fs.stat(stackvoDir);
         if (stackvoDirExists.isDirectory()) {
           const possibleConfigs = {
-            'nginx': ['nginx.conf', 'default.conf'],
-            'apache': ['apache.conf', 'httpd.conf'],
-            'caddy': ['Caddyfile'],
-            'ferron': ['ferron.yaml', 'ferron.conf']
+            nginx: ["nginx.conf", "default.conf"],
+            apache: ["apache.conf", "httpd.conf"],
+            caddy: ["Caddyfile"],
+            ferron: ["ferron.yaml", "ferron.conf"],
           };
 
           const configFiles = [];
@@ -406,24 +451,24 @@ class DockerService {
 
           // Check for PHP configs
           try {
-            await fs.stat(path.join(stackvoDir, 'php.ini'));
-            configFiles.push('php.ini');
+            await fs.stat(path.join(stackvoDir, "php.ini"));
+            configFiles.push("php.ini");
           } catch (error) {
             // File doesn't exist
           }
 
           try {
-            await fs.stat(path.join(stackvoDir, 'php-fpm.conf'));
-            configFiles.push('php-fpm.conf');
+            await fs.stat(path.join(stackvoDir, "php-fpm.conf"));
+            configFiles.push("php-fpm.conf");
           } catch (error) {
             // File doesn't exist
           }
 
           if (configFiles.length > 0) {
             configuration = {
-              type: 'custom',
+              type: "custom",
               has_custom: true,
-              files: configFiles
+              files: configFiles,
             };
           }
         }
@@ -435,7 +480,7 @@ class DockerService {
       let dnsConfigured = false;
       if (config.domain) {
         try {
-          const dns = await import('dns/promises');
+          const dns = await import("dns/promises");
           await dns.lookup(config.domain);
           dnsConfigured = true;
         } catch (error) {
@@ -459,23 +504,28 @@ class DockerService {
         document_root: config.document_root || null,
         running,
         container_exists: containerExists,
-        containerName: container ? container.Names[0].replace('/', '') : containerName,
-        status: container ? container.State : 'not created',
+        containerName: container
+          ? container.Names[0].replace("/", "")
+          : containerName,
+        status: container ? container.State : "not created",
         image: container ? container.Image : null,
         created: container ? container.Created : null,
         id: container ? container.Id : null,
-        ports: container && running ? await this.getDetailedPorts(container.Id) : { ports: {}, ip_address: null, network: null, gateway: null },
+        ports:
+          container && running
+            ? await this.getDetailedPorts(container.Id)
+            : { ports: {}, ip_address: null, network: null, gateway: null },
         logs,
         project_path: projectPath,
         containers: {
           main: {
             name: containerName,
             running,
-            exists: containerExists
-          }
+            exists: containerExists,
+          },
         },
         configuration,
-        error: null
+        error: null,
       });
     }
 
@@ -484,7 +534,7 @@ class DockerService {
       // First sort by running status (running projects first)
       if (a.running && !b.running) return -1;
       if (!a.running && b.running) return 1;
-      
+
       // Then sort alphabetically by name
       return a.name.localeCompare(b.name);
     });
@@ -499,11 +549,11 @@ class DockerService {
   async getContainerStats(containerName) {
     const container = this.docker.getContainer(containerName);
     const stats = await container.stats({ stream: false });
-    
+
     return {
       cpu: this.calculateCPUPercent(stats),
       memory: this.calculateMemoryUsage(stats),
-      network: stats.networks
+      network: stats.networks,
     };
   }
 
@@ -542,10 +592,10 @@ class DockerService {
    */
   formatPorts(ports) {
     if (!ports) return [];
-    return ports.map(p => ({
+    return ports.map((p) => ({
       private: p.PrivatePort,
       public: p.PublicPort || null,
-      type: p.Type
+      type: p.Type,
     }));
   }
 
@@ -556,34 +606,38 @@ class DockerService {
     try {
       const container = this.docker.getContainer(containerId);
       const inspect = await container.inspect();
-      
+
       const networkSettings = inspect.NetworkSettings;
       const ports = inspect.NetworkSettings.Ports || {};
-      
+
       // Format ports object
       const formattedPorts = {};
-      Object.keys(ports).forEach(key => {
+      Object.keys(ports).forEach((key) => {
         const portBindings = ports[key];
         if (portBindings && portBindings.length > 0) {
           formattedPorts[key] = {
             docker_port: key,
-            host_ip: portBindings[0].HostIp || '0.0.0.0',
+            host_ip: portBindings[0].HostIp || "0.0.0.0",
             host_port: portBindings[0].HostPort,
-            exposed: true
+            exposed: true,
           };
         } else {
           formattedPorts[key] = {
             docker_port: key,
-            exposed: false
+            exposed: false,
           };
         }
       });
-      
+
       return {
         ports: formattedPorts,
         ip_address: networkSettings.IPAddress || null,
         network: Object.keys(networkSettings.Networks)[0] || null,
-        gateway: networkSettings.Gateway || (networkSettings.Networks[Object.keys(networkSettings.Networks)[0]]?.Gateway) || null
+        gateway:
+          networkSettings.Gateway ||
+          networkSettings.Networks[Object.keys(networkSettings.Networks)[0]]
+            ?.Gateway ||
+          null,
       };
     } catch (error) {
       return { ports: {}, ip_address: null, network: null, gateway: null };
@@ -594,13 +648,14 @@ class DockerService {
    * Calculate CPU usage percentage
    */
   calculateCPUPercent(stats) {
-    const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - 
-                     stats.precpu_stats.cpu_usage.total_usage;
-    const systemDelta = stats.cpu_stats.system_cpu_usage - 
-                        stats.precpu_stats.system_cpu_usage;
+    const cpuDelta =
+      stats.cpu_stats.cpu_usage.total_usage -
+      stats.precpu_stats.cpu_usage.total_usage;
+    const systemDelta =
+      stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
     const cpuCount = stats.cpu_stats.online_cpus || 1;
-    
-    if (systemDelta === 0) return '0.00';
+
+    if (systemDelta === 0) return "0.00";
     return ((cpuDelta / systemDelta) * cpuCount * 100).toFixed(2);
   }
 
@@ -611,11 +666,11 @@ class DockerService {
     const used = stats.memory_stats.usage || 0;
     const limit = stats.memory_stats.limit || 1;
     const percent = ((used / limit) * 100).toFixed(2);
-    
+
     return {
       used: this.formatBytes(used),
       limit: this.formatBytes(limit),
-      percent
+      percent,
     };
   }
 
@@ -623,46 +678,54 @@ class DockerService {
    * Build project containers
    */
   async buildContainer(projectName) {
-    const { execSync } = await import('child_process');
-    const path = await import('path');
-    
+    const path = await import("path");
+
     try {
-      const rootDir = path.join(process.cwd(), '..', '..');
-      const composeFile = path.join(rootDir, 'generated', 'docker-compose.projects.yml');
-      
+      // Use container path for compose file (we're running inside container)
+      // But the compose file itself contains host paths for build contexts
+      const containerRootDir = process.env.STACKVO_ROOT || "/app";
+      const composeFile = path.join(
+        containerRootDir,
+        "generated",
+        "docker-compose.projects.yml"
+      );
+
       console.log(`Building container for project: ${projectName}`);
-      
+      console.log(`Using compose file: ${composeFile}`);
+
       // Stackvo uses single-container architecture
-      const buildCommand = `docker-compose -f ${composeFile} build ${projectName}`;
-      
-      const buildOutput = execSync(buildCommand, {
-        cwd: rootDir,
-        encoding: 'utf-8',
-        stdio: 'pipe'
-      });
-      
+      // Note: compose file uses absolute paths, so we don't need cwd
+      const buildCommand = `docker-compose -f "${composeFile}" build ${projectName}`;
+
+      console.log(`Running: ${buildCommand}`);
+      const { stdout: buildOutput, stderr: buildStderr } = await execAsync(buildCommand);
+
+      if (buildStderr) {
+        console.log('Build stderr:', buildStderr);
+      }
       console.log(`Build successful, creating container for: ${projectName}`);
-      
+
       // Create and start container with docker-compose up
-      const upCommand = `docker-compose -f ${composeFile} up -d --no-build ${projectName}`;
-      
-      const upOutput = execSync(upCommand, {
-        cwd: rootDir,
-        encoding: 'utf-8',
-        stdio: 'pipe'
-      });
-      
+      const upCommand = `docker-compose -f "${composeFile}" up -d --no-build ${projectName}`;
+
+      console.log(`Running: ${upCommand}`);
+      const { stdout: upOutput, stderr: upStderr } = await execAsync(upCommand);
+
+      if (upStderr) {
+        console.log('Up stderr:', upStderr);
+      }
+
       return {
         success: true,
         message: `Container built and started successfully for ${projectName}`,
-        output: buildOutput + '\n' + upOutput
+        output: buildOutput + "\n" + upOutput,
       };
     } catch (error) {
-      console.error('Build error:', error);
+      console.error("Build error:", error);
       return {
         success: false,
         message: `Failed to build container: ${error.message}`,
-        output: error.stdout || error.stderr || error.message
+        output: error.stdout || error.stderr || error.message,
       };
     }
   }
@@ -673,10 +736,10 @@ class DockerService {
   async isProjectBuilt(projectName) {
     try {
       const containers = await this.docker.listContainers({ all: true });
-      const container = containers.find(c => 
-        c.Names.some(name => name.includes(`stackvo-${projectName}`))
+      const container = containers.find((c) =>
+        c.Names.some((name) => name.includes(`stackvo-${projectName}`))
       );
-      
+
       return !!container;
     } catch (error) {
       return false;
@@ -687,10 +750,10 @@ class DockerService {
    * Format bytes to human readable
    */
   formatBytes(bytes) {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    if (bytes === 0) return "0 Bytes";
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i];
   }
 
   /**
@@ -700,47 +763,50 @@ class DockerService {
    * @returns {Promise<Object>}
    */
   async enableService(serviceName, envService) {
-    const { execAsync } = await import('../utils/exec.js');
-    const path = await import('path');
-    
+    const { execAsync } = await import("../utils/exec.js");
+    const path = await import("path");
+
     try {
       // 1. Update .env file
       await envService.updateServiceEnable(serviceName, true);
-      console.log(`Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=true`);
-      
+      console.log(
+        `Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=true`
+      );
+
       // 2. Regenerate docker-compose.dynamic.yml
-      const rootDir = path.join(process.cwd(), '..', '..');
-      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
-      
+    const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
+    console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+
       const { stdout, stderr } = await execAsync(
-        './cli/stackvo.sh generate services',
+        "./cli/stackvo.sh generate services",
         { cwd: rootDir }
       );
-      
+
       if (stderr) {
-        console.error('Generate stderr:', stderr);
+        console.error("Generate stderr:", stderr);
       }
-      console.log('Generate stdout:', stdout);
-      
-      // 3. Start the service with all compose files
-      console.log(`Starting service: ${serviceName}`);
+      console.log("Generate stdout:", stdout);
+
+      // 3. Build and start the service with all compose files
+      // Note: Redirect stderr to avoid network label warnings
+      console.log(`Building and starting service: ${serviceName}`);
       const upResult = await execAsync(
-        `docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d ${serviceName}`,
+        `docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d --build ${serviceName} 2>&1`,
         { cwd: rootDir }
       );
-      
-      console.log('Service started:', upResult.stdout);
-      
+
+      console.log("Service started:", upResult.stdout);
+
       // 4. Clear cache
       this.cache.flushAll();
-      console.log('Cache cleared');
-      
+      console.log("Cache cleared");
+
       return {
         success: true,
-        message: `Service "${serviceName}" enabled and started successfully`
+        message: `Service "${serviceName}" enabled and started successfully`,
       };
     } catch (error) {
-      console.error('Enable service error:', error);
+      console.error("Enable service error:", error);
       throw new Error(`Failed to enable service: ${error.message}`);
     }
   }
@@ -752,39 +818,44 @@ class DockerService {
    * @returns {Promise<Object>}
    */
   async disableService(serviceName, envService) {
-    const { execAsync } = await import('../utils/exec.js');
-    const path = await import('path');
-    
+    const { execAsync } = await import("../utils/exec.js");
+    const path = await import("path");
+
     try {
       const containerName = `stackvo-${serviceName}`;
-      
+
       // 1. Stop and remove container
       try {
         const container = this.docker.getContainer(containerName);
-        
+
         // Stop container if running
         try {
           await container.stop();
           console.log(`Container ${containerName} stopped`);
         } catch (stopError) {
-          console.log(`Container ${containerName} already stopped or not running`);
+          console.log(
+            `Container ${containerName} already stopped or not running`
+          );
         }
-        
+
         // Remove container
         await container.remove();
         console.log(`Container ${containerName} removed`);
       } catch (containerError) {
-        console.warn(`Could not remove container ${containerName}:`, containerError.message);
+        console.warn(
+          `Could not remove container ${containerName}:`,
+          containerError.message
+        );
         // Continue even if container doesn't exist
       }
-      
+
       // 2. Remove Docker image
       try {
         // Get image name from service
         const images = await this.docker.listImages({
-          filters: { reference: [`*${serviceName}*`] }
+          filters: { reference: [`*${serviceName}*`] },
         });
-        
+
         if (images.length > 0) {
           for (const imageInfo of images) {
             const imageName = imageInfo.RepoTags?.[0] || imageInfo.Id;
@@ -793,45 +864,53 @@ class DockerService {
               await image.remove({ force: true });
               console.log(`Docker image ${imageName} removed`);
             } catch (imageError) {
-              console.warn(`Could not remove image ${imageName}:`, imageError.message);
+              console.warn(
+                `Could not remove image ${imageName}:`,
+                imageError.message
+              );
             }
           }
         } else {
           console.log(`No image found for service: ${serviceName}`);
         }
       } catch (imageError) {
-        console.warn(`Error removing images for ${serviceName}:`, imageError.message);
+        console.warn(
+          `Error removing images for ${serviceName}:`,
+          imageError.message
+        );
         // Continue even if image removal fails
       }
-      
+
       // 3. Update .env file
       await envService.updateServiceEnable(serviceName, false);
-      console.log(`Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=false`);
-      
+      console.log(
+        `Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=false`
+      );
+
       // 3. Regenerate docker-compose.dynamic.yml
-      const rootDir = path.join(process.cwd(), '..', '..');
-      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
-      
+    const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
+    console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+
       const { stdout, stderr } = await execAsync(
-        './cli/stackvo.sh generate services',
+        "./cli/stackvo.sh generate services",
         { cwd: rootDir }
       );
-      
+
       if (stderr) {
-        console.error('Generate stderr:', stderr);
+        console.error("Generate stderr:", stderr);
       }
-      console.log('Generate stdout:', stdout);
-      
+      console.log("Generate stdout:", stdout);
+
       // 4. Clear cache
       this.cache.flushAll();
-      console.log('Cache cleared');
-      
+      console.log("Cache cleared");
+
       return {
         success: true,
-        message: `Service "${serviceName}" disabled and stopped successfully`
+        message: `Service "${serviceName}" disabled and stopped successfully`,
       };
     } catch (error) {
-      console.error('Disable service error:', error);
+      console.error("Disable service error:", error);
       throw new Error(`Failed to disable service: ${error.message}`);
     }
   }
@@ -843,83 +922,86 @@ class DockerService {
    * @returns {Promise<Object>}
    */
   async enableTool(toolName, envService) {
-    const { execAsync } = await import('../utils/exec.js');
-    const path = await import('path');
-    
+    const { execAsync } = await import("../utils/exec.js");
+    const path = await import("path");
+
     try {
-      const containerName = 'stackvo-tools';
-      
+      const containerName = "stackvo-tools";
+
       // 1. Update .env file
       await envService.updateToolEnable(toolName, true);
       console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=true`);
-      
+
       // 2. Regenerate templates
-      const rootDir = path.join(process.cwd(), '..', '..');
+      const rootDir = path.join(process.cwd(), "..", "..");
       console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
-      
+
       const { stdout: genStdout, stderr: genStderr } = await execAsync(
-        './cli/stackvo.sh generate',
+        "./cli/stackvo.sh generate",
         { cwd: rootDir }
       );
-      
+
       if (genStderr) {
-        console.error('Generate stderr:', genStderr);
+        console.error("Generate stderr:", genStderr);
       }
-      console.log('Generate stdout:', genStdout);
-      
+      console.log("Generate stdout:", genStdout);
+
       // 3. Stop and remove tools container
       try {
         const container = this.docker.getContainer(containerName);
-        
+
         try {
           await container.stop();
           console.log(`Container ${containerName} stopped`);
         } catch (stopError) {
           console.log(`Container ${containerName} already stopped`);
         }
-        
+
         await container.remove();
         console.log(`Container ${containerName} removed`);
       } catch (containerError) {
-        console.warn(`Could not remove container ${containerName}:`, containerError.message);
+        console.warn(
+          `Could not remove container ${containerName}:`,
+          containerError.message
+        );
       }
-      
+
       // 4. Remove tools image
       try {
-        const imageName = 'stackvo-stackvo-tools';
+        const imageName = "stackvo-stackvo-tools";
         const image = this.docker.getImage(imageName);
         await image.remove({ force: true });
         console.log(`Docker image ${imageName} removed`);
       } catch (imageError) {
         console.warn(`Could not remove image:`, imageError.message);
       }
-      
+
       // 5. Rebuild tools container
-      console.log('Rebuilding tools container...');
+      console.log("Rebuilding tools container...");
       const { stdout: buildStdout } = await execAsync(
-        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools',
+        "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools",
         { cwd: rootDir }
       );
-      console.log('Build stdout:', buildStdout);
-      
+      console.log("Build stdout:", buildStdout);
+
       // 6. Start tools container
-      console.log('Starting tools container...');
+      console.log("Starting tools container...");
       const { stdout: upStdout } = await execAsync(
-        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools',
+        "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools",
         { cwd: rootDir }
       );
-      console.log('Up stdout:', upStdout);
-      
+      console.log("Up stdout:", upStdout);
+
       // 7. Clear cache
       this.cache.flushAll();
-      console.log('Cache cleared');
-      
+      console.log("Cache cleared");
+
       return {
         success: true,
-        message: `Tool "${toolName}" enabled successfully (container rebuilt)`
+        message: `Tool "${toolName}" enabled successfully (container rebuilt)`,
       };
     } catch (error) {
-      console.error('Enable tool error:', error);
+      console.error("Enable tool error:", error);
       throw new Error(`Failed to enable tool: ${error.message}`);
     }
   }
@@ -931,83 +1013,86 @@ class DockerService {
    * @returns {Promise<Object>}
    */
   async disableTool(toolName, envService) {
-    const { execAsync } = await import('../utils/exec.js');
-    const path = await import('path');
-    
+    const { execAsync } = await import("../utils/exec.js");
+    const path = await import("path");
+
     try {
-      const containerName = 'stackvo-tools';
-      
+      const containerName = "stackvo-tools";
+
       // 1. Update .env file
       await envService.updateToolEnable(toolName, false);
       console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=false`);
-      
+
       // 2. Regenerate templates
-      const rootDir = path.join(process.cwd(), '..', '..');
+      const rootDir = path.join(process.cwd(), "..", "..");
       console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
-      
+
       const { stdout: genStdout, stderr: genStderr } = await execAsync(
-        './cli/stackvo.sh generate',
+        "./cli/stackvo.sh generate",
         { cwd: rootDir }
       );
-      
+
       if (genStderr) {
-        console.error('Generate stderr:', genStderr);
+        console.error("Generate stderr:", genStderr);
       }
-      console.log('Generate stdout:', genStdout);
-      
+      console.log("Generate stdout:", genStdout);
+
       // 3. Stop and remove tools container
       try {
         const container = this.docker.getContainer(containerName);
-        
+
         try {
           await container.stop();
           console.log(`Container ${containerName} stopped`);
         } catch (stopError) {
           console.log(`Container ${containerName} already stopped`);
         }
-        
+
         await container.remove();
         console.log(`Container ${containerName} removed`);
       } catch (containerError) {
-        console.warn(`Could not remove container ${containerName}:`, containerError.message);
+        console.warn(
+          `Could not remove container ${containerName}:`,
+          containerError.message
+        );
       }
-      
+
       // 4. Remove tools image
       try {
-        const imageName = 'stackvo-stackvo-tools';
+        const imageName = "stackvo-stackvo-tools";
         const image = this.docker.getImage(imageName);
         await image.remove({ force: true });
         console.log(`Docker image ${imageName} removed`);
       } catch (imageError) {
         console.warn(`Could not remove image:`, imageError.message);
       }
-      
+
       // 5. Rebuild tools container
-      console.log('Rebuilding tools container...');
+      console.log("Rebuilding tools container...");
       const { stdout: buildStdout } = await execAsync(
-        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools',
+        "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools",
         { cwd: rootDir }
       );
-      console.log('Build stdout:', buildStdout);
-      
+      console.log("Build stdout:", buildStdout);
+
       // 6. Start tools container
-      console.log('Starting tools container...');
+      console.log("Starting tools container...");
       const { stdout: upStdout } = await execAsync(
-        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools',
+        "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools",
         { cwd: rootDir }
       );
-      console.log('Up stdout:', upStdout);
-      
+      console.log("Up stdout:", upStdout);
+
       // 7. Clear cache
       this.cache.flushAll();
-      console.log('Cache cleared');
-      
+      console.log("Cache cleared");
+
       return {
         success: true,
-        message: `Tool "${toolName}" disabled successfully (container rebuilt)`
+        message: `Tool "${toolName}" disabled successfully (container rebuilt)`,
       };
     } catch (error) {
-      console.error('Disable tool error:', error);
+      console.error("Disable tool error:", error);
       throw new Error(`Failed to disable tool: ${error.message}`);
     }
   }
@@ -1016,7 +1101,7 @@ class DockerService {
    * Get Docker system stats (CPU, Memory, Storage, Network)
    */
   async getDockerStats() {
-    const cacheKey = 'docker_stats';
+    const cacheKey = "docker_stats";
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
@@ -1025,7 +1110,7 @@ class DockerService {
         this.getCPUStats(),
         this.getMemoryStats(),
         this.getStorageStats(),
-        this.getNetworkStats()
+        this.getNetworkStats(),
       ]);
 
       const stats = {
@@ -1033,15 +1118,15 @@ class DockerService {
         memory,
         storage,
         network,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
 
       // Cache for 2 seconds
       this.cache.set(cacheKey, stats, 2);
-      
+
       return stats;
     } catch (error) {
-      console.error('Get Docker stats error:', error);
+      console.error("Get Docker stats error:", error);
       throw error;
     }
   }
@@ -1051,29 +1136,29 @@ class DockerService {
    */
   async getCPUStats() {
     try {
-      const fs = await import('fs/promises');
-      const stat = await fs.readFile('/proc/stat', 'utf-8');
-      const cpuLine = stat.split('\n')[0];
+      const fs = await import("fs/promises");
+      const stat = await fs.readFile("/proc/stat", "utf-8");
+      const cpuLine = stat.split("\n")[0];
       const values = cpuLine.split(/\s+/).slice(1).map(Number);
-      
+
       const [user, nice, system, idle, iowait, irq, softirq] = values;
       const total = user + nice + system + idle + iowait + irq + softirq;
       const used = total - idle;
-      
+
       return {
         percent: ((used / total) * 100).toFixed(1),
         breakdown: {
           user: ((user / total) * 100).toFixed(1),
           nice: ((nice / total) * 100).toFixed(1),
           system: ((system / total) * 100).toFixed(1),
-          idle: ((idle / total) * 100).toFixed(1)
-        }
+          idle: ((idle / total) * 100).toFixed(1),
+        },
       };
     } catch (error) {
-      console.error('Get CPU stats error:', error);
+      console.error("Get CPU stats error:", error);
       return {
-        percent: '0.0',
-        breakdown: { user: '0.0', nice: '0.0', system: '0.0', idle: '100.0' }
+        percent: "0.0",
+        breakdown: { user: "0.0", nice: "0.0", system: "0.0", idle: "100.0" },
       };
     }
   }
@@ -1083,31 +1168,31 @@ class DockerService {
    */
   async getMemoryStats() {
     try {
-      const fs = await import('fs/promises');
-      const meminfo = await fs.readFile('/proc/meminfo', 'utf-8');
-      
+      const fs = await import("fs/promises");
+      const meminfo = await fs.readFile("/proc/meminfo", "utf-8");
+
       const getVal = (key) => {
         const match = meminfo.match(new RegExp(`${key}:\\s+(\\d+)`));
         return match ? parseInt(match[1]) : 0;
       };
-      
-      const total = getVal('MemTotal');
-      const available = getVal('MemAvailable');
+
+      const total = getVal("MemTotal");
+      const available = getVal("MemAvailable");
       const used = total - available;
-      
+
       return {
         total: (total / 1024 / 1024).toFixed(2), // GB
         used: (used / 1024 / 1024).toFixed(2),
         available: (available / 1024 / 1024).toFixed(2),
-        percent: ((used / total) * 100).toFixed(1)
+        percent: ((used / total) * 100).toFixed(1),
       };
     } catch (error) {
-      console.error('Get memory stats error:', error);
+      console.error("Get memory stats error:", error);
       return {
-        total: '0.00',
-        used: '0.00',
-        available: '0.00',
-        percent: '0.0'
+        total: "0.00",
+        used: "0.00",
+        available: "0.00",
+        percent: "0.0",
       };
     }
   }
@@ -1117,30 +1202,32 @@ class DockerService {
    */
   async getStorageStats() {
     try {
-      const { promisify } = await import('util');
-      const { exec } = await import('child_process');
+      const { promisify } = await import("util");
+      const { exec } = await import("child_process");
       const execAsync = promisify(exec);
-      
+
       // Get disk usage for /var/lib/docker or fallback to /
       // Use grep to skip header line
-      const { stdout } = await execAsync('df -BG /var/lib/docker 2>/dev/null | grep -v "^Filesystem" || df -BG / | grep -v "^Filesystem"');
-      const lines = stdout.trim().split('\n');
+      const { stdout } = await execAsync(
+        'df -BG /var/lib/docker 2>/dev/null | grep -v "^Filesystem" || df -BG / | grep -v "^Filesystem"'
+      );
+      const lines = stdout.trim().split("\n");
       const lastLine = lines[lines.length - 1];
       const parts = lastLine.trim().split(/\s+/);
-      
+
       return {
-        total: parts[1].replace('G', ''),
-        used: parts[2].replace('G', ''),
-        available: parts[3].replace('G', ''),
-        percent: parts[4].replace('%', '')
+        total: parts[1].replace("G", ""),
+        used: parts[2].replace("G", ""),
+        available: parts[3].replace("G", ""),
+        percent: parts[4].replace("%", ""),
       };
     } catch (error) {
-      console.error('Get storage stats error:', error);
+      console.error("Get storage stats error:", error);
       return {
-        total: '0',
-        used: '0',
-        available: '0',
-        percent: '0'
+        total: "0",
+        used: "0",
+        available: "0",
+        percent: "0",
       };
     }
   }
@@ -1150,53 +1237,58 @@ class DockerService {
    */
   async getNetworkStats() {
     try {
-      const fs = await import('fs/promises');
-      const netdev = await fs.readFile('/proc/net/dev', 'utf-8');
-      
+      const fs = await import("fs/promises");
+      const netdev = await fs.readFile("/proc/net/dev", "utf-8");
+
       let totalRx = 0;
       let totalTx = 0;
-      
-      netdev.split('\n').slice(2).forEach(line => {
-        if (line.trim() && !line.includes('lo:')) { // Skip loopback
-          const parts = line.trim().split(/\s+/);
-          totalRx += parseInt(parts[1]) || 0;
-          totalTx += parseInt(parts[9]) || 0;
-        }
-      });
-      
+
+      netdev
+        .split("\n")
+        .slice(2)
+        .forEach((line) => {
+          if (line.trim() && !line.includes("lo:")) {
+            // Skip loopback
+            const parts = line.trim().split(/\s+/);
+            totalRx += parseInt(parts[1]) || 0;
+            totalTx += parseInt(parts[9]) || 0;
+          }
+        });
+
       // Calculate speed (MB/s) if we have previous values
       let rxSpeed = 0;
       let txSpeed = 0;
-      
+
       if (this.previousNetworkStats) {
-        const timeDelta = (Date.now() - this.previousNetworkStats.timestamp) / 1000; // seconds
+        const timeDelta =
+          (Date.now() - this.previousNetworkStats.timestamp) / 1000; // seconds
         const rxDelta = totalRx - this.previousNetworkStats.totalRx;
         const txDelta = totalTx - this.previousNetworkStats.totalTx;
-        
+
         rxSpeed = (rxDelta / timeDelta / 1024 / 1024).toFixed(2); // MB/s
         txSpeed = (txDelta / timeDelta / 1024 / 1024).toFixed(2); // MB/s
       }
-      
+
       // Store current values for next calculation
       this.previousNetworkStats = {
         totalRx,
         totalTx,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-      
+
       return {
         rx: (totalRx / 1024 / 1024 / 1024).toFixed(2), // Total GB
         tx: (totalTx / 1024 / 1024 / 1024).toFixed(2), // Total GB
-        rxSpeed: rxSpeed < 0 ? '0.00' : rxSpeed, // MB/s (prevent negative)
-        txSpeed: txSpeed < 0 ? '0.00' : txSpeed  // MB/s (prevent negative)
+        rxSpeed: rxSpeed < 0 ? "0.00" : rxSpeed, // MB/s (prevent negative)
+        txSpeed: txSpeed < 0 ? "0.00" : txSpeed, // MB/s (prevent negative)
       };
     } catch (error) {
-      console.error('Get network stats error:', error);
+      console.error("Get network stats error:", error);
       return {
-        rx: '0.00',
-        tx: '0.00',
-        rxSpeed: '0.00',
-        txSpeed: '0.00'
+        rx: "0.00",
+        tx: "0.00",
+        rxSpeed: "0.00",
+        txSpeed: "0.00",
       };
     }
   }
@@ -1208,24 +1300,31 @@ class DockerService {
     try {
       // Get all containers
       const { stdout } = await execAsync('docker ps -a --format "{{.Names}}"');
-      const containers = stdout.trim().split('\n').filter(name => {
-        // Exclude UI and Traefik containers
-        return name && name !== 'stackvo-ui' && name !== 'stackvo-traefik';
-      });
+      const containers = stdout
+        .trim()
+        .split("\n")
+        .filter((name) => {
+          // Exclude UI and Traefik containers
+          return name && name !== "stackvo-ui" && name !== "stackvo-traefik";
+        });
 
       const results = [];
       for (const containerName of containers) {
         try {
           await execAsync(`docker start ${containerName}`);
-          results.push({ container: containerName, status: 'started' });
+          results.push({ container: containerName, status: "started" });
         } catch (error) {
-          results.push({ container: containerName, status: 'failed', error: error.message });
+          results.push({
+            container: containerName,
+            status: "failed",
+            error: error.message,
+          });
         }
       }
 
       return {
         total: containers.length,
-        results
+        results,
       };
     } catch (error) {
       throw new Error(`Failed to start containers: ${error.message}`);
@@ -1239,24 +1338,31 @@ class DockerService {
     try {
       // Get all running containers
       const { stdout } = await execAsync('docker ps --format "{{.Names}}"');
-      const containers = stdout.trim().split('\n').filter(name => {
-        // Exclude UI and Traefik containers
-        return name && name !== 'stackvo-ui' && name !== 'stackvo-traefik';
-      });
+      const containers = stdout
+        .trim()
+        .split("\n")
+        .filter((name) => {
+          // Exclude UI and Traefik containers
+          return name && name !== "stackvo-ui" && name !== "stackvo-traefik";
+        });
 
       const results = [];
       for (const containerName of containers) {
         try {
           await execAsync(`docker stop ${containerName}`);
-          results.push({ container: containerName, status: 'stopped' });
+          results.push({ container: containerName, status: "stopped" });
         } catch (error) {
-          results.push({ container: containerName, status: 'failed', error: error.message });
+          results.push({
+            container: containerName,
+            status: "failed",
+            error: error.message,
+          });
         }
       }
 
       return {
         total: containers.length,
-        results
+        results,
       };
     } catch (error) {
       throw new Error(`Failed to stop containers: ${error.message}`);
@@ -1270,24 +1376,31 @@ class DockerService {
     try {
       // Get all containers
       const { stdout } = await execAsync('docker ps -a --format "{{.Names}}"');
-      const containers = stdout.trim().split('\n').filter(name => {
-        // Exclude UI and Traefik containers
-        return name && name !== 'stackvo-ui' && name !== 'stackvo-traefik';
-      });
+      const containers = stdout
+        .trim()
+        .split("\n")
+        .filter((name) => {
+          // Exclude UI and Traefik containers
+          return name && name !== "stackvo-ui" && name !== "stackvo-traefik";
+        });
 
       const results = [];
       for (const containerName of containers) {
         try {
           await execAsync(`docker restart ${containerName}`);
-          results.push({ container: containerName, status: 'restarted' });
+          results.push({ container: containerName, status: "restarted" });
         } catch (error) {
-          results.push({ container: containerName, status: 'failed', error: error.message });
+          results.push({
+            container: containerName,
+            status: "failed",
+            error: error.message,
+          });
         }
       }
 
       return {
         total: containers.length,
-        results
+        results,
       };
     } catch (error) {
       throw new Error(`Failed to restart containers: ${error.message}`);

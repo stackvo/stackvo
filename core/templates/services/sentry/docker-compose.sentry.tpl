@@ -41,7 +41,7 @@ services:
       - "traefik.http.routers.sentry.tls=true"
 
     volumes:
-      - ./logs/sentry:/var/log/sentry
+      - ../logs/sentry:/var/log/sentry
 
     depends_on:
       - sentry-redis

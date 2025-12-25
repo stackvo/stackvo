@@ -15,8 +15,8 @@ services:
 
     volumes:
       - stackvo-mongo-data:/data/db
-      - ./core/generated-configs/mongo.conf:/etc/mongo/mongo.conf:ro
-      - ./logs/mongo:/var/log/mongodb
+      - ./generated/configs/mongo.conf:/etc/mongo/mongo.conf:ro
+      - ../logs/mongo:/var/log/mongodb
 
     ports:
       - "{{ HOST_PORT_MONGO | default('27017') }}:27017"

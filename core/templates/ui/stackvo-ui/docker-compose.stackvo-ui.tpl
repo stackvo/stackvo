@@ -24,12 +24,18 @@ services:
       HOST_STACKVO_ROOT: {{ STACKVO_ROOT }}
     
     volumes:
-      # Mount entire stackvo directory for Docker operations
+      # Mount entire stackvo directory for Docker operations (read-only for security)
       - ../:/app:ro
+      # Mount .env file separately as read-write for enable/disable operations
+      - ../.env:/app/.env:rw
+      # Mount core directory as read-write for generate operations
+      - ../core:/app/core:rw
       # Mount projects directory (read-write for project management)
       - ../projects:/app/projects:rw
       # Mount generated directory (read-write for generate command)
       - ../generated:/app/generated:rw
+      # Mount logs directory (read-write for service logs)
+      - ../logs:/app/logs:rw
       # Mount Docker socket for Docker API access
       - /var/run/docker.sock:/var/run/docker.sock
     

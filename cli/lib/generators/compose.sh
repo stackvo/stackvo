@@ -188,8 +188,8 @@ generate_dynamic_compose() {
     echo "" >> "$output"
     echo "volumes:" >> "$output"
     
-    # Extract volume names to temp file
-    local volumes_tmp="$ROOT_DIR/.volumes.tmp"
+    # Extract volume names to temp file (use /tmp for read-only root)
+    local volumes_tmp="/tmp/.stackvo-volumes.tmp"
     > "$volumes_tmp"  # Clear temp file
     
     # Use find instead of glob for Bash 3.x compatibility

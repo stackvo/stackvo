@@ -74,26 +74,26 @@ export const useServicesStore = defineStore('services', {
     async enableService(serviceName) {
       try {
         const response = await axios.post(`/api/services/${serviceName}/enable`);
-        if (response.data.success) {
-          await this.loadServices();
-        }
         return response.data;
       } catch (error) {
         console.error('Error enabling service:', error);
         throw error;
+      } finally {
+        // Always reload services after enable attempt
+        await this.loadServices();
       }
     },
 
     async disableService(serviceName) {
       try {
         const response = await axios.post(`/api/services/${serviceName}/disable`);
-        if (response.data.success) {
-          await this.loadServices();
-        }
         return response.data;
       } catch (error) {
         console.error('Error disabling service:', error);
         throw error;
+      } finally {
+        // Always reload services after disable attempt
+        await this.loadServices();
       }
     }
   }

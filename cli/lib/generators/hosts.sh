@@ -48,43 +48,54 @@ collect_domains() {
     domains+=("traefik.stackvo.loc")
     
     # 2. Services - .env'den SERVICE_*_URL oku
-    while IFS='=' read -r key value; do
-        if [[ $key =~ ^SERVICE_([A-Z0-9_]+)_URL$ ]]; then
-            local service_name="${BASH_REMATCH[1]}"
-            local service_enable_var="SERVICE_${service_name}_ENABLE"
-            eval "local enabled=\${${service_enable_var}:-false}"
+    if [ -f "$ROOT_DIR/.env" ]; then
+        while IFS='=' read -r key value; do
+            # Skip comments and empty lines
+            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
             
-            if [ "$enabled" = "true" ]; then
-                # URL'den domain çıkar
-                local domain=$(echo "$value" | sed 's|https\?://||' | cut -d'/' -f1)
-                if [[ ! "$domain" =~ \. ]]; then
-                    domain="${domain}.stackvo.loc"
+            if [[ $key =~ ^SERVICE_([A-Z0-9_]+)_URL$ ]]; then
+                local service_name="${BASH_REMATCH[1]}"
+                local service_enable_var="SERVICE_${service_name}_ENABLE"
+                eval "local enabled=\${${service_enable_var}:-false}"
+                
+                if [ "$enabled" = "true" ]; then
+                    # URL'den domain çıkar
+                    local domain=$(echo "$value" | sed 's|https\?://||' | cut -d'/' -f1)
+                    if [[ ! "$domain" =~ \. ]]; then
+                        domain="${domain}.stackvo.loc"
+                    fi
+                    domains+=("$domain")
                 fi
-                domains+=("$domain")
             fi
-        fi
-    done < "$ENV_FILE"
+        done < "$ROOT_DIR/.env"
+    fi
     
     # 3. Tools - .env'den TOOLS_*_URL oku
-    while IFS='=' read -r key value; do
-        if [[ $key =~ ^TOOLS_([A-Z0-9_]+)_URL$ ]]; then
-            local tool_name="${BASH_REMATCH[1]}"
-            local tool_enable_var="TOOLS_${tool_name}_ENABLE"
-            eval "local enabled=\${${tool_enable_var}:-false}"
+    if [ -f "$ROOT_DIR/.env" ]; then
+        while IFS='=' read -r key value; do
+            # Skip comments and empty lines
+            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
             
-            if [ "$enabled" = "true" ]; then
-                local domain=$(echo "$value" | sed 's|https\?://||' | cut -d'/' -f1)
-                if [[ ! "$domain" =~ \. ]]; then
-                    domain="${domain}.stackvo.loc"
+            if [[ $key =~ ^TOOLS_([A-Z0-9_]+)_URL$ ]]; then
+                local tool_name="${BASH_REMATCH[1]}"
+                local tool_enable_var="TOOLS_${tool_name}_ENABLE"
+                eval "local enabled=\${${tool_enable_var}:-false}"
+                
+                if [ "$enabled" = "true" ]; then
+                    local domain=$(echo "$value" | sed 's|https\?://||' | cut -d'/' -f1)
+                    if [[ ! "$domain" =~ \. ]]; then
+                        domain="${domain}.stackvo.loc"
+                    fi
+                    domains+=("$domain")
                 fi
-                domains+=("$domain")
             fi
-        fi
-    done < "$ENV_FILE"
+        done < "$ROOT_DIR/.env"
+    fi
     
     # 4. Projects - stackvo.json dosyalarından domain oku
-    if [ -d "$PROJECTS_DIR" ]; then
-        for project_dir in "$PROJECTS_DIR"/*/; do
+    local projects_dir="$ROOT_DIR/projects"
+    if [ -d "$projects_dir" ]; then
+        for project_dir in "$projects_dir"/*/; do
             [ -d "$project_dir" ] || continue
             local config_file="${project_dir}stackvo.json"
             if [ -f "$config_file" ]; then
@@ -131,8 +142,14 @@ update_hosts_file() {
         return 1
     fi
     
-    # Remove old Stackvo entries
-    sudo sed -i.tmp '/# Stackvo - Auto-generated/,/# Stackvo - End/d' "$hosts_file" 2>/dev/null
+    # Remove old Stackvo entries (macOS/Linux compatible)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS requires empty string after -i
+        sudo sed -i '' '/# Stackvo - Auto-generated/,/# Stackvo - End/d' "$hosts_file" 2>/dev/null
+    else
+        # Linux
+        sudo sed -i '/# Stackvo - Auto-generated/,/# Stackvo - End/d' "$hosts_file" 2>/dev/null
+    fi
     
     # Add new entries
     {
@@ -144,8 +161,6 @@ update_hosts_file() {
         echo "# Stackvo - End"
     } | sudo tee -a "$hosts_file" > /dev/null
     
-    # Remove temp file
-    sudo rm -f "${hosts_file}.tmp" 2>/dev/null
     
     log_success "Updated $hosts_file (${#domains[@]} domains)"
 }
@@ -161,7 +176,12 @@ generate_hosts() {
     log_info "Updating hosts file..."
     
     local os_type=$(detect_os)
-    local domains=($(collect_domains))
+    
+    # Collect domains into array (Bash 3.x compatible)
+    local domains=()
+    while IFS= read -r domain; do
+        [ -n "$domain" ] && domains+=("$domain")
+    done < <(collect_domains)
     
     if [ ${#domains[@]} -eq 0 ]; then
         log_warn "No domains found, skipping hosts update"

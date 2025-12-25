@@ -752,7 +752,7 @@ generate_apache_single_container() {
     cat <<EOF
   ${project_name}:
     build:
-      context: ${host_generated_projects_dir}/${project_name}
+      context: ./projects/${project_name}
       dockerfile: Dockerfile
     image: stackvo-${project_name}:${php_version}
     container_name: "stackvo-${project_name}"
@@ -805,7 +805,7 @@ generate_nginx_single_container() {
     cat <<EOF
   ${project_name}:
     build:
-      context: ${host_generated_projects_dir}/${project_name}
+      context: ./projects/${project_name}
       dockerfile: Dockerfile
     image: stackvo-${project_name}:latest
     container_name: "stackvo-${project_name}"
@@ -859,7 +859,7 @@ generate_caddy_single_container() {
     cat <<EOF
   ${project_name}:
     build:
-      context: ${host_generated_projects_dir}/${project_name}
+      context: ./projects/${project_name}
       dockerfile: Dockerfile
     image: stackvo-${project_name}:latest
     container_name: "stackvo-${project_name}"

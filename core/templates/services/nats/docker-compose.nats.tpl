@@ -20,7 +20,7 @@ services:
       - "{{ HOST_PORT_NATS_CLUSTER | default('6222') }}:6222" # Clustering
 
     volumes:
-      - ./logs/nats:/var/log/nats
+      - ../logs/nats:/var/log/nats
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

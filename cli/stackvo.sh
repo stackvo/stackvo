@@ -35,11 +35,11 @@ case "$COMMAND" in
         ;;
 
     up)
-        # Only pull images that don't exist locally (avoids rate limits)
+        # Build images if needed, only pull missing images
         # Use plain progress mode for cleaner build output
         export BUILDKIT_PROGRESS=plain
         echo "🚀 Starting Stackvo services..."
-        docker compose "${COMPOSE_FILES[@]}" up -d --pull=missing --quiet-pull 2>&1 | grep -v "^#" | grep -v "^DEPRECATED" || true
+        docker compose "${COMPOSE_FILES[@]}" up -d --build --pull=missing --remove-orphans 2>&1 | grep -v "^#" | grep -v "^DEPRECATED" || true
         echo "✅ Stackvo services started successfully!"
         ;;
 

@@ -503,6 +503,51 @@
       </v-card>
     </v-dialog>
 
+    <!-- Terminal Command Dialog -->
+    <v-dialog v-model="terminalDialog" max-width="600">
+      <v-card>
+        <v-card-title class="bg-info text-white">
+          <v-icon start>mdi-console</v-icon>
+          Open Terminal
+        </v-card-title>
+        
+        <v-card-text class="pt-4">
+          <v-alert type="info" variant="tonal" class="mb-4">
+            Copy and run this command in your terminal:
+          </v-alert>
+          
+          <v-text-field
+            :model-value="terminalCommand"
+            readonly
+            variant="outlined"
+            density="comfortable"
+            class="font-monospace"
+          >
+            <template v-slot:append-inner>
+              <v-btn
+                icon="mdi-content-copy"
+                variant="text"
+                size="small"
+                @click="copyTerminalCommand"
+              >
+                <v-icon>mdi-content-copy</v-icon>
+                <v-tooltip activator="parent" location="top">Copy Command</v-tooltip>
+              </v-btn>
+            </template>
+          </v-text-field>
+        </v-card-text>
+        
+        <v-divider></v-divider>
+        
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="terminalDialog = false">
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Snackbar -->
     <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000">
       {{ snackbarMessage }}
@@ -531,6 +576,8 @@ const snackbarColor = ref('success');
 const deleteDialog = ref(false);
 const projectToDelete = ref(null);
 const deleteLoading = ref(false);
+const terminalDialog = ref(false);
+const terminalCommand = ref('');
 
 const projectHeaders = [
   { title: 'Project', key: 'name', sortable: true, align: 'left' },
@@ -636,31 +683,24 @@ async function restartProject(projectName) {
 }
 
 async function openTerminal(projectName) {
-  loadingProjects.value[projectName] = 'terminal';
+  const containerName = `stackvo-${projectName}`;
+  const command = `docker exec -it ${containerName} bash`;
   
-  try {
-    const containerName = `stackvo-${projectName}`;
-    const response = await fetch(`/api/terminal/${containerName}/open`, {
-      method: 'POST'
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-      snackbarMessage.value = `Terminal opened for "${projectName}"`;
-      snackbarColor.value = 'success';
-      showSnackbar.value = true;
-    } else {
-      throw new Error(data.message);
-    }
-  } catch (error) {
-    console.error('Failed to open terminal:', error);
-    snackbarMessage.value = `Failed to open terminal: ${error.message}`;
+  // Show dialog with command
+  terminalCommand.value = command;
+  terminalDialog.value = true;
+}
+
+function copyTerminalCommand() {
+  navigator.clipboard.writeText(terminalCommand.value).then(() => {
+    snackbarMessage.value = 'Command copied to clipboard!';
+    snackbarColor.value = 'success';
+    showSnackbar.value = true;
+  }).catch(() => {
+    snackbarMessage.value = 'Failed to copy command';
     snackbarColor.value = 'error';
     showSnackbar.value = true;
-  } finally {
-    delete loadingProjects.value[projectName];
-  }
+  });
 }
 
 function openDeleteDialog(project) {

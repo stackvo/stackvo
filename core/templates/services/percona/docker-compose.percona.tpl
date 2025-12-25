@@ -17,8 +17,8 @@ services:
 
     volumes:
       - stackvo-percona-data:/var/lib/mysql
-      - ./core/generated-configs/percona.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
-      - ./logs/percona:/var/log/mysql
+      - ./generated/configs/percona.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
+      - ../logs/percona:/var/log/mysql
 
     ports:
       - "{{ HOST_PORT_PERCONA | default('3307') }}:3306"

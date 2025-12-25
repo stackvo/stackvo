@@ -3,7 +3,9 @@ import path from 'path';
 
 class EnvService {
   constructor() {
-    this.envPath = path.join(process.cwd(), '..', '..', '.env');
+    // Use STACKVO_ROOT environment variable or fallback to relative path
+    const stackvoRoot = process.env.STACKVO_ROOT || path.join(process.cwd(), '..', '..');
+    this.envPath = path.join(stackvoRoot, '.env');
   }
 
   /**
