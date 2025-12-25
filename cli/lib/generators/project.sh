@@ -47,8 +47,10 @@ generate_projects() {
     local output="$GENERATED_DIR/docker-compose.projects.yml"
     local projects_dir="$ROOT_DIR/projects"
     
-    # Start with empty services
-    echo "services:" > "$output"
+    # Start with project name and services
+    echo "name: stackvo" > "$output"
+    echo "" >> "$output"
+    echo "services:" >> "$output"
     echo "" >> "$output"
     
     # Check if projects directory exists

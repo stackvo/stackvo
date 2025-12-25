@@ -84,4 +84,56 @@ router.post('/:containerName/restart', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/tools/:toolName/enable
+ * Enable a tool (requires container rebuild)
+ */
+router.post('/:toolName/enable', async (req, res) => {
+  try {
+    const { toolName } = req.params;
+    const dockerService = req.app.get('dockerService');
+    const EnvService = (await import('../services/EnvService.js')).default;
+    const envService = new EnvService();
+    
+    const result = await dockerService.enableTool(toolName, envService);
+    
+    res.json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Enable tool error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/tools/:toolName/disable
+ * Disable a tool (requires container rebuild)
+ */
+router.post('/:toolName/disable', async (req, res) => {
+  try {
+    const { toolName } = req.params;
+    const dockerService = req.app.get('dockerService');
+    const EnvService = (await import('../services/EnvService.js')).default;
+    const envService = new EnvService();
+    
+    const result = await dockerService.disableTool(toolName, envService);
+    
+    res.json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Disable tool error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;

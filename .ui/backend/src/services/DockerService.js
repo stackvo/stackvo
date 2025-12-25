@@ -1,5 +1,9 @@
 import Docker from 'dockerode';
 import NodeCache from 'node-cache';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 class DockerService {
   constructor() {
@@ -102,6 +106,21 @@ class DockerService {
         ports = await this.getDetailedPorts(container.Id);
       }
       
+      // Get version from .env if container doesn't exist
+      let imageVersion = '-';
+      if (container) {
+        imageVersion = container.Image;
+      } else {
+        // Read version from .env
+        const versionKey = `SERVICE_${serviceName.toUpperCase().replace(/-/g, '_')}_VERSION`;
+        const versionMatch = envContent.match(new RegExp(`^${versionKey}=(.+)$`, 'm'));
+        if (versionMatch) {
+          // Get service name for image (e.g., redis, mysql, etc.)
+          const baseServiceName = serviceName.replace('stackvo-', '');
+          imageVersion = `${baseServiceName}:${versionMatch[1]}`;
+        }
+      }
+      
       return {
         name: serviceName,
         containerName: containerName,
@@ -112,7 +131,7 @@ class DockerService {
         status: container ? container.State : 'not created',
         running: container ? container.State === 'running' : false,
         ports: ports,
-        image: container ? container.Image : '-',
+        image: imageVersion,
         created: container ? container.Created : null,
         id: container ? container.Id : null,
         credentials: serviceCredentials[serviceName] || {}
@@ -672,6 +691,607 @@ class DockerService {
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  /**
+   * Enable a service
+   * @param {string} serviceName - Service name
+   * @param {Object} envService - EnvService instance
+   * @returns {Promise<Object>}
+   */
+  async enableService(serviceName, envService) {
+    const { execAsync } = await import('../utils/exec.js');
+    const path = await import('path');
+    
+    try {
+      // 1. Update .env file
+      await envService.updateServiceEnable(serviceName, true);
+      console.log(`Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=true`);
+      
+      // 2. Regenerate docker-compose.dynamic.yml
+      const rootDir = path.join(process.cwd(), '..', '..');
+      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+      
+      const { stdout, stderr } = await execAsync(
+        './cli/stackvo.sh generate services',
+        { cwd: rootDir }
+      );
+      
+      if (stderr) {
+        console.error('Generate stderr:', stderr);
+      }
+      console.log('Generate stdout:', stdout);
+      
+      // 3. Start the service with all compose files
+      console.log(`Starting service: ${serviceName}`);
+      const upResult = await execAsync(
+        `docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d ${serviceName}`,
+        { cwd: rootDir }
+      );
+      
+      console.log('Service started:', upResult.stdout);
+      
+      // 4. Clear cache
+      this.cache.flushAll();
+      console.log('Cache cleared');
+      
+      return {
+        success: true,
+        message: `Service "${serviceName}" enabled and started successfully`
+      };
+    } catch (error) {
+      console.error('Enable service error:', error);
+      throw new Error(`Failed to enable service: ${error.message}`);
+    }
+  }
+
+  /**
+   * Disable a service
+   * @param {string} serviceName - Service name
+   * @param {Object} envService - EnvService instance
+   * @returns {Promise<Object>}
+   */
+  async disableService(serviceName, envService) {
+    const { execAsync } = await import('../utils/exec.js');
+    const path = await import('path');
+    
+    try {
+      const containerName = `stackvo-${serviceName}`;
+      
+      // 1. Stop and remove container
+      try {
+        const container = this.docker.getContainer(containerName);
+        
+        // Stop container if running
+        try {
+          await container.stop();
+          console.log(`Container ${containerName} stopped`);
+        } catch (stopError) {
+          console.log(`Container ${containerName} already stopped or not running`);
+        }
+        
+        // Remove container
+        await container.remove();
+        console.log(`Container ${containerName} removed`);
+      } catch (containerError) {
+        console.warn(`Could not remove container ${containerName}:`, containerError.message);
+        // Continue even if container doesn't exist
+      }
+      
+      // 2. Remove Docker image
+      try {
+        // Get image name from service
+        const images = await this.docker.listImages({
+          filters: { reference: [`*${serviceName}*`] }
+        });
+        
+        if (images.length > 0) {
+          for (const imageInfo of images) {
+            const imageName = imageInfo.RepoTags?.[0] || imageInfo.Id;
+            try {
+              const image = this.docker.getImage(imageName);
+              await image.remove({ force: true });
+              console.log(`Docker image ${imageName} removed`);
+            } catch (imageError) {
+              console.warn(`Could not remove image ${imageName}:`, imageError.message);
+            }
+          }
+        } else {
+          console.log(`No image found for service: ${serviceName}`);
+        }
+      } catch (imageError) {
+        console.warn(`Error removing images for ${serviceName}:`, imageError.message);
+        // Continue even if image removal fails
+      }
+      
+      // 3. Update .env file
+      await envService.updateServiceEnable(serviceName, false);
+      console.log(`Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=false`);
+      
+      // 3. Regenerate docker-compose.dynamic.yml
+      const rootDir = path.join(process.cwd(), '..', '..');
+      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+      
+      const { stdout, stderr } = await execAsync(
+        './cli/stackvo.sh generate services',
+        { cwd: rootDir }
+      );
+      
+      if (stderr) {
+        console.error('Generate stderr:', stderr);
+      }
+      console.log('Generate stdout:', stdout);
+      
+      // 4. Clear cache
+      this.cache.flushAll();
+      console.log('Cache cleared');
+      
+      return {
+        success: true,
+        message: `Service "${serviceName}" disabled and stopped successfully`
+      };
+    } catch (error) {
+      console.error('Disable service error:', error);
+      throw new Error(`Failed to disable service: ${error.message}`);
+    }
+  }
+
+  /**
+   * Enable a tool (requires tools container rebuild)
+   * @param {string} toolName - Tool name
+   * @param {Object} envService - EnvService instance
+   * @returns {Promise<Object>}
+   */
+  async enableTool(toolName, envService) {
+    const { execAsync } = await import('../utils/exec.js');
+    const path = await import('path');
+    
+    try {
+      const containerName = 'stackvo-tools';
+      
+      // 1. Update .env file
+      await envService.updateToolEnable(toolName, true);
+      console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=true`);
+      
+      // 2. Regenerate templates
+      const rootDir = path.join(process.cwd(), '..', '..');
+      console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
+      
+      const { stdout: genStdout, stderr: genStderr } = await execAsync(
+        './cli/stackvo.sh generate',
+        { cwd: rootDir }
+      );
+      
+      if (genStderr) {
+        console.error('Generate stderr:', genStderr);
+      }
+      console.log('Generate stdout:', genStdout);
+      
+      // 3. Stop and remove tools container
+      try {
+        const container = this.docker.getContainer(containerName);
+        
+        try {
+          await container.stop();
+          console.log(`Container ${containerName} stopped`);
+        } catch (stopError) {
+          console.log(`Container ${containerName} already stopped`);
+        }
+        
+        await container.remove();
+        console.log(`Container ${containerName} removed`);
+      } catch (containerError) {
+        console.warn(`Could not remove container ${containerName}:`, containerError.message);
+      }
+      
+      // 4. Remove tools image
+      try {
+        const imageName = 'stackvo-stackvo-tools';
+        const image = this.docker.getImage(imageName);
+        await image.remove({ force: true });
+        console.log(`Docker image ${imageName} removed`);
+      } catch (imageError) {
+        console.warn(`Could not remove image:`, imageError.message);
+      }
+      
+      // 5. Rebuild tools container
+      console.log('Rebuilding tools container...');
+      const { stdout: buildStdout } = await execAsync(
+        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools',
+        { cwd: rootDir }
+      );
+      console.log('Build stdout:', buildStdout);
+      
+      // 6. Start tools container
+      console.log('Starting tools container...');
+      const { stdout: upStdout } = await execAsync(
+        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools',
+        { cwd: rootDir }
+      );
+      console.log('Up stdout:', upStdout);
+      
+      // 7. Clear cache
+      this.cache.flushAll();
+      console.log('Cache cleared');
+      
+      return {
+        success: true,
+        message: `Tool "${toolName}" enabled successfully (container rebuilt)`
+      };
+    } catch (error) {
+      console.error('Enable tool error:', error);
+      throw new Error(`Failed to enable tool: ${error.message}`);
+    }
+  }
+
+  /**
+   * Disable a tool (requires tools container rebuild)
+   * @param {string} toolName - Tool name
+   * @param {Object} envService - EnvService instance
+   * @returns {Promise<Object>}
+   */
+  async disableTool(toolName, envService) {
+    const { execAsync } = await import('../utils/exec.js');
+    const path = await import('path');
+    
+    try {
+      const containerName = 'stackvo-tools';
+      
+      // 1. Update .env file
+      await envService.updateToolEnable(toolName, false);
+      console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=false`);
+      
+      // 2. Regenerate templates
+      const rootDir = path.join(process.cwd(), '..', '..');
+      console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
+      
+      const { stdout: genStdout, stderr: genStderr } = await execAsync(
+        './cli/stackvo.sh generate',
+        { cwd: rootDir }
+      );
+      
+      if (genStderr) {
+        console.error('Generate stderr:', genStderr);
+      }
+      console.log('Generate stdout:', genStdout);
+      
+      // 3. Stop and remove tools container
+      try {
+        const container = this.docker.getContainer(containerName);
+        
+        try {
+          await container.stop();
+          console.log(`Container ${containerName} stopped`);
+        } catch (stopError) {
+          console.log(`Container ${containerName} already stopped`);
+        }
+        
+        await container.remove();
+        console.log(`Container ${containerName} removed`);
+      } catch (containerError) {
+        console.warn(`Could not remove container ${containerName}:`, containerError.message);
+      }
+      
+      // 4. Remove tools image
+      try {
+        const imageName = 'stackvo-stackvo-tools';
+        const image = this.docker.getImage(imageName);
+        await image.remove({ force: true });
+        console.log(`Docker image ${imageName} removed`);
+      } catch (imageError) {
+        console.warn(`Could not remove image:`, imageError.message);
+      }
+      
+      // 5. Rebuild tools container
+      console.log('Rebuilding tools container...');
+      const { stdout: buildStdout } = await execAsync(
+        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools',
+        { cwd: rootDir }
+      );
+      console.log('Build stdout:', buildStdout);
+      
+      // 6. Start tools container
+      console.log('Starting tools container...');
+      const { stdout: upStdout } = await execAsync(
+        'docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools',
+        { cwd: rootDir }
+      );
+      console.log('Up stdout:', upStdout);
+      
+      // 7. Clear cache
+      this.cache.flushAll();
+      console.log('Cache cleared');
+      
+      return {
+        success: true,
+        message: `Tool "${toolName}" disabled successfully (container rebuilt)`
+      };
+    } catch (error) {
+      console.error('Disable tool error:', error);
+      throw new Error(`Failed to disable tool: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get Docker system stats (CPU, Memory, Storage, Network)
+   */
+  async getDockerStats() {
+    const cacheKey = 'docker_stats';
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const [cpu, memory, storage, network] = await Promise.all([
+        this.getCPUStats(),
+        this.getMemoryStats(),
+        this.getStorageStats(),
+        this.getNetworkStats()
+      ]);
+
+      const stats = {
+        cpu,
+        memory,
+        storage,
+        network,
+        timestamp: Date.now()
+      };
+
+      // Cache for 2 seconds
+      this.cache.set(cacheKey, stats, 2);
+      
+      return stats;
+    } catch (error) {
+      console.error('Get Docker stats error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get CPU stats from /proc/stat
+   */
+  async getCPUStats() {
+    try {
+      const fs = await import('fs/promises');
+      const stat = await fs.readFile('/proc/stat', 'utf-8');
+      const cpuLine = stat.split('\n')[0];
+      const values = cpuLine.split(/\s+/).slice(1).map(Number);
+      
+      const [user, nice, system, idle, iowait, irq, softirq] = values;
+      const total = user + nice + system + idle + iowait + irq + softirq;
+      const used = total - idle;
+      
+      return {
+        percent: ((used / total) * 100).toFixed(1),
+        breakdown: {
+          user: ((user / total) * 100).toFixed(1),
+          nice: ((nice / total) * 100).toFixed(1),
+          system: ((system / total) * 100).toFixed(1),
+          idle: ((idle / total) * 100).toFixed(1)
+        }
+      };
+    } catch (error) {
+      console.error('Get CPU stats error:', error);
+      return {
+        percent: '0.0',
+        breakdown: { user: '0.0', nice: '0.0', system: '0.0', idle: '100.0' }
+      };
+    }
+  }
+
+  /**
+   * Get Memory stats from /proc/meminfo
+   */
+  async getMemoryStats() {
+    try {
+      const fs = await import('fs/promises');
+      const meminfo = await fs.readFile('/proc/meminfo', 'utf-8');
+      
+      const getVal = (key) => {
+        const match = meminfo.match(new RegExp(`${key}:\\s+(\\d+)`));
+        return match ? parseInt(match[1]) : 0;
+      };
+      
+      const total = getVal('MemTotal');
+      const available = getVal('MemAvailable');
+      const used = total - available;
+      
+      return {
+        total: (total / 1024 / 1024).toFixed(2), // GB
+        used: (used / 1024 / 1024).toFixed(2),
+        available: (available / 1024 / 1024).toFixed(2),
+        percent: ((used / total) * 100).toFixed(1)
+      };
+    } catch (error) {
+      console.error('Get memory stats error:', error);
+      return {
+        total: '0.00',
+        used: '0.00',
+        available: '0.00',
+        percent: '0.0'
+      };
+    }
+  }
+
+  /**
+   * Get Storage stats from df command
+   */
+  async getStorageStats() {
+    try {
+      const { promisify } = await import('util');
+      const { exec } = await import('child_process');
+      const execAsync = promisify(exec);
+      
+      // Get disk usage for /var/lib/docker or fallback to /
+      // Use grep to skip header line
+      const { stdout } = await execAsync('df -BG /var/lib/docker 2>/dev/null | grep -v "^Filesystem" || df -BG / | grep -v "^Filesystem"');
+      const lines = stdout.trim().split('\n');
+      const lastLine = lines[lines.length - 1];
+      const parts = lastLine.trim().split(/\s+/);
+      
+      return {
+        total: parts[1].replace('G', ''),
+        used: parts[2].replace('G', ''),
+        available: parts[3].replace('G', ''),
+        percent: parts[4].replace('%', '')
+      };
+    } catch (error) {
+      console.error('Get storage stats error:', error);
+      return {
+        total: '0',
+        used: '0',
+        available: '0',
+        percent: '0'
+      };
+    }
+  }
+
+  /**
+   * Get Network stats from /proc/net/dev
+   */
+  async getNetworkStats() {
+    try {
+      const fs = await import('fs/promises');
+      const netdev = await fs.readFile('/proc/net/dev', 'utf-8');
+      
+      let totalRx = 0;
+      let totalTx = 0;
+      
+      netdev.split('\n').slice(2).forEach(line => {
+        if (line.trim() && !line.includes('lo:')) { // Skip loopback
+          const parts = line.trim().split(/\s+/);
+          totalRx += parseInt(parts[1]) || 0;
+          totalTx += parseInt(parts[9]) || 0;
+        }
+      });
+      
+      // Calculate speed (MB/s) if we have previous values
+      let rxSpeed = 0;
+      let txSpeed = 0;
+      
+      if (this.previousNetworkStats) {
+        const timeDelta = (Date.now() - this.previousNetworkStats.timestamp) / 1000; // seconds
+        const rxDelta = totalRx - this.previousNetworkStats.totalRx;
+        const txDelta = totalTx - this.previousNetworkStats.totalTx;
+        
+        rxSpeed = (rxDelta / timeDelta / 1024 / 1024).toFixed(2); // MB/s
+        txSpeed = (txDelta / timeDelta / 1024 / 1024).toFixed(2); // MB/s
+      }
+      
+      // Store current values for next calculation
+      this.previousNetworkStats = {
+        totalRx,
+        totalTx,
+        timestamp: Date.now()
+      };
+      
+      return {
+        rx: (totalRx / 1024 / 1024 / 1024).toFixed(2), // Total GB
+        tx: (totalTx / 1024 / 1024 / 1024).toFixed(2), // Total GB
+        rxSpeed: rxSpeed < 0 ? '0.00' : rxSpeed, // MB/s (prevent negative)
+        txSpeed: txSpeed < 0 ? '0.00' : txSpeed  // MB/s (prevent negative)
+      };
+    } catch (error) {
+      console.error('Get network stats error:', error);
+      return {
+        rx: '0.00',
+        tx: '0.00',
+        rxSpeed: '0.00',
+        txSpeed: '0.00'
+      };
+    }
+  }
+
+  /**
+   * Start all containers except stackvo-ui and stackvo-traefik
+   */
+  async startAllContainers() {
+    try {
+      // Get all containers
+      const { stdout } = await execAsync('docker ps -a --format "{{.Names}}"');
+      const containers = stdout.trim().split('\n').filter(name => {
+        // Exclude UI and Traefik containers
+        return name && name !== 'stackvo-ui' && name !== 'stackvo-traefik';
+      });
+
+      const results = [];
+      for (const containerName of containers) {
+        try {
+          await execAsync(`docker start ${containerName}`);
+          results.push({ container: containerName, status: 'started' });
+        } catch (error) {
+          results.push({ container: containerName, status: 'failed', error: error.message });
+        }
+      }
+
+      return {
+        total: containers.length,
+        results
+      };
+    } catch (error) {
+      throw new Error(`Failed to start containers: ${error.message}`);
+    }
+  }
+
+  /**
+   * Stop all containers except stackvo-ui and stackvo-traefik
+   */
+  async stopAllContainers() {
+    try {
+      // Get all running containers
+      const { stdout } = await execAsync('docker ps --format "{{.Names}}"');
+      const containers = stdout.trim().split('\n').filter(name => {
+        // Exclude UI and Traefik containers
+        return name && name !== 'stackvo-ui' && name !== 'stackvo-traefik';
+      });
+
+      const results = [];
+      for (const containerName of containers) {
+        try {
+          await execAsync(`docker stop ${containerName}`);
+          results.push({ container: containerName, status: 'stopped' });
+        } catch (error) {
+          results.push({ container: containerName, status: 'failed', error: error.message });
+        }
+      }
+
+      return {
+        total: containers.length,
+        results
+      };
+    } catch (error) {
+      throw new Error(`Failed to stop containers: ${error.message}`);
+    }
+  }
+
+  /**
+   * Restart all containers except stackvo-ui and stackvo-traefik
+   */
+  async restartAllContainers() {
+    try {
+      // Get all containers
+      const { stdout } = await execAsync('docker ps -a --format "{{.Names}}"');
+      const containers = stdout.trim().split('\n').filter(name => {
+        // Exclude UI and Traefik containers
+        return name && name !== 'stackvo-ui' && name !== 'stackvo-traefik';
+      });
+
+      const results = [];
+      for (const containerName of containers) {
+        try {
+          await execAsync(`docker restart ${containerName}`);
+          results.push({ container: containerName, status: 'restarted' });
+        } catch (error) {
+          results.push({ container: containerName, status: 'failed', error: error.message });
+        }
+      }
+
+      return {
+        total: containers.length,
+        results
+      };
+    } catch (error) {
+      throw new Error(`Failed to restart containers: ${error.message}`);
+    }
   }
 }
 

@@ -84,4 +84,54 @@ router.post('/:containerName/restart', async (req, res) => {
   }
 });
 
+/**
+ * Enable a service
+ */
+router.post('/:serviceName/enable', async (req, res) => {
+  try {
+    const { serviceName } = req.params;
+    const dockerService = req.app.get('dockerService');
+    const EnvService = (await import('../services/EnvService.js')).default;
+    const envService = new EnvService();
+    
+    const result = await dockerService.enableService(serviceName, envService);
+    
+    res.json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Enable service error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Disable a service
+ */
+router.post('/:serviceName/disable', async (req, res) => {
+  try {
+    const { serviceName } = req.params;
+    const dockerService = req.app.get('dockerService');
+    const EnvService = (await import('../services/EnvService.js')).default;
+    const envService = new EnvService();
+    
+    const result = await dockerService.disableService(serviceName, envService);
+    
+    res.json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Disable service error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;

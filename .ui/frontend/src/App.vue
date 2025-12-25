@@ -3,11 +3,10 @@
     <!-- App Bar with Tabs -->
     <v-app-bar color="primary" prominent>
       <v-toolbar-title>
-        <v-icon icon="mdi-docker" size="large" class="mr-2"></v-icon>
-        Stackvo
+        StackVo
       </v-toolbar-title>
 
-      <v-tabs v-model="currentView" color="white">
+      <v-tabs :model-value="currentTab" color="white" @update:model-value="navigateTo">
         <v-tab value="dashboard">
           <v-icon start>mdi-view-dashboard</v-icon>
           Dashboard
@@ -36,19 +35,37 @@
       <v-list nav density="compact">
         <v-list-subheader>QUICK ACTIONS</v-list-subheader>
 
-        <v-list-item prepend-icon="mdi-play-circle" title="Start All" subtitle="stackvo up" :disabled="commandLoading">
+        <v-list-item 
+          prepend-icon="mdi-play-circle" 
+          title="Start All" 
+          subtitle="stackvo up" 
+          :disabled="commandLoading"
+          @click="startAll"
+        >
           <template v-slot:append v-if="commandLoading">
             <v-progress-circular indeterminate size="20"></v-progress-circular>
           </template>
         </v-list-item>
 
-        <v-list-item prepend-icon="mdi-stop-circle" title="Stop All" subtitle="stackvo down" :disabled="commandLoading">
+        <v-list-item 
+          prepend-icon="mdi-stop-circle" 
+          title="Stop All" 
+          subtitle="stackvo down" 
+          :disabled="commandLoading"
+          @click="stopAll"
+        >
           <template v-slot:append v-if="commandLoading">
             <v-progress-circular indeterminate size="20"></v-progress-circular>
           </template>
         </v-list-item>
 
-        <v-list-item prepend-icon="mdi-restart" title="Restart" subtitle="stackvo restart" :disabled="commandLoading">
+        <v-list-item 
+          prepend-icon="mdi-restart" 
+          title="Restart" 
+          subtitle="stackvo restart" 
+          :disabled="commandLoading"
+          @click="restartAll"
+        >
           <template v-slot:append v-if="commandLoading">
             <v-progress-circular indeterminate size="20"></v-progress-circular>
           </template>
@@ -79,18 +96,7 @@
     <!-- Main Content -->
     <v-main>
       <v-container fluid>
-        <div v-show="currentView === 'dashboard'">
-          <Dashboard />
-        </div>
-        <div v-show="currentView === 'projects'">
-          <Projects />
-        </div>
-        <div v-show="currentView === 'services'">
-          <Services />
-        </div>
-        <div v-show="currentView === 'tools'">
-          <Tools />
-        </div>
+        <router-view />
       </v-container>
     </v-main>
 
@@ -101,25 +107,59 @@
 
 <script setup>
 import { ref, computed, onMounted, provide } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { useServicesStore } from '@/stores/services';
 import { useProjectsStore } from '@/stores/projects';
-import Dashboard from '@/views/Dashboard.vue';
-import Projects from '@/views/Projects.vue';
-import Services from '@/views/Services.vue';
-import Tools from '@/views/Tools.vue';
 import NewProjectDrawer from '@/components/NewProjectDrawer.vue';
 
+const router = useRouter();
+const route = useRoute();
 const theme = useTheme();
 const servicesStore = useServicesStore();
 const projectsStore = useProjectsStore();
 
-const currentView = ref('dashboard');
 const commandLoading = ref(false);
 const newProjectDrawer = ref(false);
+const isNavigating = ref(false);
 
 // Provide newProjectDrawer to child components
 provide('newProjectDrawer', newProjectDrawer);
+provide('isNavigating', isNavigating);
+
+// Router navigation guards
+router.beforeEach((to, from, next) => {
+  isNavigating.value = true;
+  next();
+});
+
+router.afterEach(() => {
+  // Small delay for smooth transition
+  setTimeout(() => {
+    isNavigating.value = false;
+  }, 200);
+});
+
+// Compute current tab from route
+const currentTab = computed(() => {
+  const path = route.path;
+  if (path === '/') return 'dashboard';
+  if (path.startsWith('/projects')) return 'projects';
+  if (path.startsWith('/services')) return 'services';
+  if (path.startsWith('/tools')) return 'tools';
+  return 'dashboard';
+});
+
+// Navigate to route
+function navigateTo(tab) {
+  const routes = {
+    'dashboard': '/',
+    'projects': '/projects',
+    'services': '/services',
+    'tools': '/tools'
+  };
+  router.push(routes[tab] || '/');
+}
 
 const systemStatus = computed(() => ({
   running: servicesStore.runningServices.length > 0 || projectsStore.runningProjects.length > 0,
@@ -129,6 +169,73 @@ const systemStatus = computed(() => ({
 function toggleTheme() {
   theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark';
   localStorage.setItem('stackvo-theme', theme.global.name.value);
+}
+
+// QUICK ACTIONS
+async function startAll() {
+  commandLoading.value = true;
+  try {
+    const response = await fetch('/api/docker/start-all', { method: 'POST' });
+    const data = await response.json();
+    
+    if (data.success) {
+      // Reload data
+      await Promise.all([
+        servicesStore.loadServices(),
+        projectsStore.loadProjects()
+      ]);
+    } else {
+      console.error('Start All failed:', data.message);
+    }
+  } catch (error) {
+    console.error('Start All error:', error);
+  } finally {
+    commandLoading.value = false;
+  }
+}
+
+async function stopAll() {
+  commandLoading.value = true;
+  try {
+    const response = await fetch('/api/docker/stop-all', { method: 'POST' });
+    const data = await response.json();
+    
+    if (data.success) {
+      // Reload data
+      await Promise.all([
+        servicesStore.loadServices(),
+        projectsStore.loadProjects()
+      ]);
+    } else {
+      console.error('Stop All failed:', data.message);
+    }
+  } catch (error) {
+    console.error('Stop All error:', error);
+  } finally {
+    commandLoading.value = false;
+  }
+}
+
+async function restartAll() {
+  commandLoading.value = true;
+  try {
+    const response = await fetch('/api/docker/restart-all', { method: 'POST' });
+    const data = await response.json();
+    
+    if (data.success) {
+      // Reload data
+      await Promise.all([
+        servicesStore.loadServices(),
+        projectsStore.loadProjects()
+      ]);
+    } else {
+      console.error('Restart All failed:', data.message);
+    }
+  } catch (error) {
+    console.error('Restart All error:', error);
+  } finally {
+    commandLoading.value = false;
+  }
 }
 
 async function handleCreateProject(projectData) {
@@ -153,3 +260,15 @@ onMounted(async () => {
   ]);
 });
 </script>
+
+<style scoped>
+:deep(.v-main) {
+  overflow: hidden !important;
+  height: calc(100vh - 64px); /* App bar height */
+}
+
+:deep(.v-container) {
+  overflow: hidden !important;
+  height: 100%;
+}
+</style>

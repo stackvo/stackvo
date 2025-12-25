@@ -1,11 +1,21 @@
 <template>
   <div class="pa-2">
     <v-card rounded="0" elevation="0">
+      <!-- Loading Progress -->
+      <v-progress-linear
+        v-if="isNavigating"
+        indeterminate
+        color="success"
+        height="3"
+        absolute
+        top
+      ></v-progress-linear>
+      
       <v-card-title class="d-flex align-center">
         <v-icon start>mdi-folder-multiple</v-icon>
         Projects
         <v-spacer></v-spacer>
-        <p>{{ runningProjectsCount }} / {{ projectsStore.projects.length }} Projects</p>
+        <p>{{ runningProjectsCount }} / {{ projectsStore.projects.length }} Running</p>
         <v-divider vertical class="mx-2"></v-divider>
         <v-btn icon="mdi-plus" variant="flat" @click="newProjectDrawer = true">
           <v-icon>mdi-plus</v-icon>
@@ -168,7 +178,16 @@
         </template>
 
         <template v-slot:item.terminal="{ item }">
-          <v-btn v-if="item.running" block size="small" color="info" variant="tonal">
+          <v-btn 
+            v-if="item.running" 
+            block 
+            size="small" 
+            color="info" 
+            variant="tonal"
+            :loading="loadingProjects[item.name] === 'terminal'"
+            :disabled="!!loadingProjects[item.name]"
+            @click="openTerminal(item.name)"
+          >
             <v-icon>mdi-console</v-icon>
           </v-btn>
         </template>
@@ -500,6 +519,7 @@ import { useProjectsStore } from '@/stores/projects';
 
 const projectsStore = useProjectsStore();
 const newProjectDrawer = inject('newProjectDrawer');
+const isNavigating = inject('isNavigating', ref(false));
 const projectSearch = ref('');
 const expandedProjects = ref([]);
 const loadingProjects = ref({});
@@ -612,6 +632,34 @@ async function restartProject(projectName) {
   } finally {
     delete loadingProjects.value[projectName];
     showOverlay.value = false;
+  }
+}
+
+async function openTerminal(projectName) {
+  loadingProjects.value[projectName] = 'terminal';
+  
+  try {
+    const containerName = `stackvo-${projectName}`;
+    const response = await fetch(`/api/terminal/${containerName}/open`, {
+      method: 'POST'
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      snackbarMessage.value = `Terminal opened for "${projectName}"`;
+      snackbarColor.value = 'success';
+      showSnackbar.value = true;
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (error) {
+    console.error('Failed to open terminal:', error);
+    snackbarMessage.value = `Failed to open terminal: ${error.message}`;
+    snackbarColor.value = 'error';
+    showSnackbar.value = true;
+  } finally {
+    delete loadingProjects.value[projectName];
   }
 }
 

@@ -5,6 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stackvo - Docker Development Environment</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <style>
+    /* Hide scrollbar completely */
+    html {
+      overflow: hidden;
+      scrollbar-width: none; /* Firefox */
+    }
+    
+    html::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Edge */
+    }
+    
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100vh;
+    }
+    
+    body::-webkit-scrollbar {
+      display: none;
+    }
+    
+    #app {
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    #app::-webkit-scrollbar {
+      display: none;
+    }
+    
+    /* Hide all scrollbars globally */
+    * {
+      scrollbar-width: none; /* Firefox */
+    }
+    
+    *::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Edge */
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>

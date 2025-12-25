@@ -12,11 +12,15 @@ import projectsRouter from './routes/projects.js';
 import dockerRouter from './routes/docker.js';
 import envRouter from './routes/env.js';
 import toolsRouter from './routes/tools.js';
+import terminalRouter from './routes/terminal.js';
 
 // Services
 import TerminalService from './services/TerminalService.js';
+import DockerService from './services/DockerService.js';
 
-dotenv.config();
+// Load environment variables from STACKVO_ROOT/.env
+const stackvoRoot = process.env.STACKVO_ROOT || '/app';
+dotenv.config({ path: `${stackvoRoot}/.env` });
 
 const app = express();
 const httpServer = createServer(app);
@@ -47,9 +51,15 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/docker', dockerRouter);
 app.use('/api/env', envRouter);
 app.use('/api/tools', toolsRouter);
+app.use('/api/terminal', terminalRouter);
 
-// Terminal WebSocket
+// Terminal WebSocket and Service
 const terminalService = new TerminalService(io);
+app.set('terminalService', terminalService);
+
+// Docker Service
+const dockerService = new DockerService();
+app.set('dockerService', dockerService);
 
 // Health check
 app.get('/health', (req, res) => {

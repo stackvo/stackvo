@@ -69,6 +69,32 @@ export const useServicesStore = defineStore('services', {
         console.error('Error restarting service:', error);
         throw error;
       }
+    },
+
+    async enableService(serviceName) {
+      try {
+        const response = await axios.post(`/api/services/${serviceName}/enable`);
+        if (response.data.success) {
+          await this.loadServices();
+        }
+        return response.data;
+      } catch (error) {
+        console.error('Error enabling service:', error);
+        throw error;
+      }
+    },
+
+    async disableService(serviceName) {
+      try {
+        const response = await axios.post(`/api/services/${serviceName}/disable`);
+        if (response.data.success) {
+          await this.loadServices();
+        }
+        return response.data;
+      } catch (error) {
+        console.error('Error disabling service:', error);
+        throw error;
+      }
     }
   }
 });

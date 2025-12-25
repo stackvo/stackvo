@@ -1,11 +1,21 @@
 <template>
   <div class="pa-2">
     <v-card rounded="0" elevation="0">
+      <!-- Loading Progress -->
+      <v-progress-linear
+        v-if="isNavigating"
+        indeterminate
+        color="success"
+        height="3"
+        absolute
+        top
+      ></v-progress-linear>
+      
       <v-card-title class="d-flex align-center">
         <v-icon start>mdi-tools</v-icon>
         Tools
         <v-spacer></v-spacer>
-        <p>{{ runningTools }} / {{ enabledTools }} Enabled</p>
+        <p>{{ runningTools }} / {{ totalTools }} Enabled</p>
         <v-divider vertical class="mx-2"></v-divider>
         <v-btn icon="mdi-refresh" variant="flat" @click="toolsStore.loadTools()">
           <v-icon>mdi-refresh</v-icon>
@@ -78,10 +88,33 @@
         </template>
 
         <template v-slot:item.status="{ item }">
-          <v-chip :color="item.enabled ? 'success' : 'grey'" size="small">
-            <v-icon start size="small">{{ item.enabled ? 'mdi-check-circle' : 'mdi-close-circle' }}</v-icon>
-            {{ item.enabled ? 'Enabled' : 'Disabled' }}
-          </v-chip>
+          <!-- Disabled tool - Enable button (icon only) -->
+          <v-btn 
+            v-if="!item.enabled" 
+            icon
+            size="small" 
+            color="success" 
+            variant="tonal" 
+            @click="enableTool(item.name)" 
+            :loading="loadingTools[item.name] === 'enable'"
+            :disabled="!!loadingTools[item.name]"
+          >
+            <v-icon>mdi-power</v-icon>
+          </v-btn>
+          
+          <!-- Enabled tool - Disable button (icon only) -->
+          <v-btn 
+            v-else 
+            icon
+            size="small" 
+            color="orange-darken-2" 
+            variant="tonal" 
+            @click="disableTool(item.name)" 
+            :loading="loadingTools[item.name] === 'disable'"
+            :disabled="!!loadingTools[item.name]"
+          >
+            <v-icon>mdi-power-off</v-icon>
+          </v-btn>
         </template>
 
         <template v-slot:item.open="{ item }">
@@ -105,8 +138,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, inject } from 'vue';
 import { useToolsStore } from '@/stores/tools';
+
+const isNavigating = inject('isNavigating', ref(false));
 
 const toolsStore = useToolsStore();
 const toolSearch = ref('');
@@ -125,7 +160,7 @@ const toolHeaders = [
 const tools = computed(() => toolsStore.tools);
 const toolsLoading = computed(() => toolsStore.loading);
 const runningTools = computed(() => tools.value.filter(t => t.running).length);
-const enabledTools = computed(() => tools.value.filter(t => t.enabled).length);
+const totalTools = computed(() => tools.value.length);
 
 async function startTool(containerName) {
   showOverlay.value = true;
@@ -165,6 +200,36 @@ async function restartTool(containerName) {
     console.error('Failed to restart tool:', error);
   } finally {
     loadingTools.value[containerName] = false;
+    showOverlay.value = false;
+  }
+}
+
+async function enableTool(toolName) {
+  showOverlay.value = true;
+  overlayMessage.value = `Enabling ${toolName}... (This may take 2-5 minutes - container rebuild required)`;
+  loadingTools.value[toolName] = 'enable';
+  try {
+    await toolsStore.enableTool(toolName);
+    await toolsStore.loadTools();
+  } catch (error) {
+    console.error('Failed to enable tool:', error);
+  } finally {
+    delete loadingTools.value[toolName];
+    showOverlay.value = false;
+  }
+}
+
+async function disableTool(toolName) {
+  showOverlay.value = true;
+  overlayMessage.value = `Disabling ${toolName}... (This may take 2-5 minutes - container rebuild required)`;
+  loadingTools.value[toolName] = 'disable';
+  try {
+    await toolsStore.disableTool(toolName);
+    await toolsStore.loadTools();
+  } catch (error) {
+    console.error('Failed to disable tool:', error);
+  } finally {
+    delete loadingTools.value[toolName];
     showOverlay.value = false;
   }
 }

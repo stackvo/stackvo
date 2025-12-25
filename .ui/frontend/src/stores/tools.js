@@ -69,6 +69,38 @@ export const useToolsStore = defineStore('tools', {
         console.error('Error restarting tool:', error);
         throw error;
       }
+    },
+
+    async enableTool(toolName) {
+      try {
+        // 5 minute timeout for container rebuild
+        const response = await axios.post(`/api/tools/${toolName}/enable`, {}, {
+          timeout: 300000 // 5 minutes
+        });
+        if (response.data.success) {
+          await this.loadTools();
+        }
+        return response.data;
+      } catch (error) {
+        console.error('Error enabling tool:', error);
+        throw error;
+      }
+    },
+
+    async disableTool(toolName) {
+      try {
+        // 5 minute timeout for container rebuild
+        const response = await axios.post(`/api/tools/${toolName}/disable`, {}, {
+          timeout: 300000 // 5 minutes
+        });
+        if (response.data.success) {
+          await this.loadTools();
+        }
+        return response.data;
+      } catch (error) {
+        console.error('Error disabling tool:', error);
+        throw error;
+      }
     }
   }
 });

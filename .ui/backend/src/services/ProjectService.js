@@ -261,6 +261,17 @@ class ProjectService {
         // Remove container
         await container.remove();
         console.log(`Container ${containerName} removed`);
+        
+        // Remove Docker image
+        const imageName = `stackvo-${projectName}:latest`;
+        try {
+          const image = this.docker.docker.getImage(imageName);
+          await image.remove({ force: true });
+          console.log(`Docker image ${imageName} removed`);
+        } catch (imageError) {
+          console.warn(`Could not remove image ${imageName}:`, imageError.message);
+          // Continue even if image doesn't exist
+        }
       } catch (containerError) {
         console.warn(`Could not remove container ${containerName}:`, containerError.message);
         // Continue even if container doesn't exist

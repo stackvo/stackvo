@@ -1,35 +1,73 @@
-FROM php:8.2-fpm-alpine
+###################################################################
+# STACKVO UI DOCKERFILE
+# Multi-stage build: Node.js build + Nginx serve
+###################################################################
 
-# Install nginx, Docker CLI, and bash (required for generate.sh)
+# Stage 1: Build Vue.js frontend
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Copy frontend package files
+COPY .ui/frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source
+COPY .ui/frontend/ ./
+
+# Build for production
+RUN npm run build
+
+# Stage 2: Setup Node.js backend
+FROM node:20-alpine AS backend-setup
+
+# Install build dependencies for native modules (node-pty)
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /app/backend
+
+# Copy backend package files
+COPY .ui/backend/package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production
+
+# Copy backend source
+COPY .ui/backend/ ./
+
+# Stage 3: Final Nginx + Node.js runtime
+FROM node:20-alpine
+
+# Install nginx, Docker CLI, and bash
 RUN apk add --no-cache nginx docker-cli docker-cli-compose bash
 
-# Create necessary directories and set permissions
-RUN mkdir -p /var/run/php-fpm /var/log/nginx /usr/share/nginx/html && \
-    chown -R nginx:nginx /var/run/php-fpm
+# Create necessary directories
+RUN mkdir -p /var/log/nginx /usr/share/nginx/html /opt/backend
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/http.d/default.conf
+# Copy Nginx configuration
+COPY core/templates/ui/stackvo-ui/nginx.conf /etc/nginx/http.d/default.conf
 
-# Configure PHP-FPM to use nginx user (keep default TCP port)
-RUN sed -i 's/^user = www-data/user = nginx/g' /usr/local/etc/php-fpm.d/www.conf && \
-    sed -i 's/^group = www-data/group = nginx/g' /usr/local/etc/php-fpm.d/www.conf
+# Copy built frontend from builder stage
+COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html/frontend
 
-# Create startup script with docker socket permissions and generated directory fix
+# Copy backend from backend-setup stage to /opt/backend
+COPY --from=backend-setup /app/backend /opt/backend
+
+# Create startup script
 RUN echo '#!/bin/sh' > /start.sh && \
     echo '# Fix docker socket permissions' >> /start.sh && \
     echo 'if [ -S /var/run/docker.sock ]; then' >> /start.sh && \
     echo '  chmod 666 /var/run/docker.sock' >> /start.sh && \
     echo 'fi' >> /start.sh && \
-    echo '# Fix generated directory permissions for PHP-FPM nginx user' >> /start.sh && \
-    echo 'if [ -d /app/generated ]; then' >> /start.sh && \
-    echo '  chown -R nginx:nginx /app/generated 2>/dev/null || true' >> /start.sh && \
-    echo '  chmod -R 777 /app/generated 2>/dev/null || true' >> /start.sh && \
-    echo 'fi' >> /start.sh && \
-    echo 'php-fpm -D' >> /start.sh && \
+    echo '# Start Node.js backend in background' >> /start.sh && \
+    echo 'cd /opt/backend && node src/server.js &' >> /start.sh && \
+    echo '# Start Nginx in foreground' >> /start.sh && \
     echo 'nginx -g "daemon off;"' >> /start.sh && \
     chmod +x /start.sh
 
-WORKDIR /usr/share/nginx/html
+WORKDIR /app
 
 EXPOSE 80
 

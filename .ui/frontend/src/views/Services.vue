@@ -1,6 +1,16 @@
 <template>
   <div class="pa-2">
     <v-card rounded="0" elevation="0">
+      <!-- Loading Progress -->
+      <v-progress-linear
+        v-if="isNavigating"
+        indeterminate
+        color="success"
+        height="3"
+        absolute
+        top
+      ></v-progress-linear>
+      
       <v-card-title class="d-flex align-center">
         <v-icon start>mdi-server-network</v-icon>
         Services
@@ -79,23 +89,80 @@
         </template>
 
         <template v-slot:item.status="{ item }">
-          <v-chip :color="item.running ? 'success' : (item.enabled ? 'warning' : 'grey')" size="small">
-            <v-icon start size="small">{{ item.running ? 'mdi-check-circle' : (item.enabled ? 'mdi-pause-circle' : 'mdi-close-circle') }}</v-icon>
-            {{ item.running ? 'Running' : (item.enabled ? 'Enabled' : 'Disabled') }}
-          </v-chip>
+          <!-- Disabled service - Enable button (icon only) -->
+          <v-btn 
+            v-if="!item.enabled" 
+            icon
+            size="small" 
+            color="success" 
+            variant="tonal" 
+            @click="enableService(item.name)" 
+            :loading="loadingServices[item.name] === 'enable'"
+            :disabled="!!loadingServices[item.name]"
+          >
+            <v-icon>mdi-power</v-icon>
+          </v-btn>
+          
+          <!-- Enabled service - Disable button (icon only) -->
+          <v-btn 
+            v-else 
+            icon
+            size="small" 
+            color="orange-darken-2" 
+            variant="tonal" 
+            @click="disableService(item.name)" 
+            :loading="loadingServices[item.name] === 'disable'"
+            :disabled="!!loadingServices[item.name]"
+          >
+            <v-icon>mdi-power-off</v-icon>
+          </v-btn>
         </template>
 
         <template v-slot:item.control="{ item }">
-          <v-btn v-if="item.enabled && item.running" block size="small" color="error" variant="tonal" @click="stopService(item.containerName)" :loading="loadingServices[item.containerName]">
-            <v-icon>mdi-stop</v-icon>
-          </v-btn>
-          <v-btn v-else-if="item.enabled && !item.running" block size="small" color="success" variant="tonal" @click="startService(item.containerName)" :loading="loadingServices[item.containerName]">
-            <v-icon>mdi-play</v-icon>
-          </v-btn>
+          <!-- Only show Start/Stop for enabled services -->
+          <template v-if="item.enabled">
+            <!-- Running - Stop button -->
+            <v-btn 
+              v-if="item.running" 
+              block 
+              size="small" 
+              color="error" 
+              variant="tonal" 
+              @click="stopService(item.containerName)" 
+              :loading="loadingServices[item.containerName] === 'stop'"
+              :disabled="!!loadingServices[item.containerName]"
+            >
+              <v-icon>mdi-stop</v-icon>
+            </v-btn>
+            
+            <!-- Stopped - Start button -->
+            <v-btn 
+              v-else 
+              block 
+              size="small" 
+              color="success" 
+              variant="tonal" 
+              @click="startService(item.containerName)" 
+              :loading="loadingServices[item.containerName] === 'start'"
+              :disabled="!!loadingServices[item.containerName]"
+            >
+              <v-icon>mdi-play</v-icon>
+            </v-btn>
+          </template>
         </template>
 
         <template v-slot:item.restart="{ item }">
-          <v-btn v-if="item.enabled && item.running" block size="small" color="warning" variant="tonal" @click="restartService(item.containerName)" :loading="loadingServices[item.containerName]">
+          <!-- Only show Restart for enabled + running services -->
+          <v-btn 
+            v-if="item.enabled && item.running" 
+            block 
+            size="small" 
+            color="warning" 
+            variant="tonal" 
+            @click="restartService(item.containerName)" 
+            :loading="loadingServices[item.containerName] === 'restart'"
+            :disabled="!!loadingServices[item.containerName]"
+          >
             <v-icon>mdi-restart</v-icon>
           </v-btn>
         </template>
@@ -301,8 +368,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, inject } from 'vue';
 import { useServicesStore } from '@/stores/services';
+
+const isNavigating = inject('isNavigating', ref(false));
 
 const servicesStore = useServicesStore();
 const serviceSearch = ref('');
@@ -316,10 +385,10 @@ const serviceHeaders = [
   { title: 'Container Name', key: 'container_name', sortable: true, align: 'left' },
   { title: 'Domain', key: 'domain', sortable: true, align: 'left' },
   { title: 'Version', key: 'version', sortable: true, align: 'left' },
-  { title: 'Status', key: 'status', sortable: true, align: 'center', width: '100' },
   { title: 'Stop/Start', key: 'control', sortable: false, align: 'center', width: '100' },
   { title: 'Restart', key: 'restart', sortable: false, align: 'center', width: '100' },
-  { title: 'Open', key: 'open', sortable: false, align: 'center', width: '100' }
+  { title: 'Open', key: 'open', sortable: false, align: 'center', width: '100' },
+  { title: 'Status', key: 'status', sortable: true, align: 'center', width: '100' }
 ];
 
 const runningServicesCount = computed(() => servicesStore.runningServices.length);
@@ -331,13 +400,13 @@ async function loadServices() {
 async function startService(containerName) {
   showOverlay.value = true;
   overlayMessage.value = 'Starting service...';
-  loadingServices.value[containerName] = true;
+  loadingServices.value[containerName] = 'start';
   try {
     await servicesStore.startService(containerName);
   } catch (error) {
     console.error('Failed to start service:', error);
   } finally {
-    loadingServices.value[containerName] = false;
+    delete loadingServices.value[containerName];
     showOverlay.value = false;
   }
 }
@@ -345,13 +414,13 @@ async function startService(containerName) {
 async function stopService(containerName) {
   showOverlay.value = true;
   overlayMessage.value = 'Stopping service...';
-  loadingServices.value[containerName] = true;
+  loadingServices.value[containerName] = 'stop';
   try {
     await servicesStore.stopService(containerName);
   } catch (error) {
     console.error('Failed to stop service:', error);
   } finally {
-    loadingServices.value[containerName] = false;
+    delete loadingServices.value[containerName];
     showOverlay.value = false;
   }
 }
@@ -359,13 +428,45 @@ async function stopService(containerName) {
 async function restartService(containerName) {
   showOverlay.value = true;
   overlayMessage.value = 'Restarting service...';
-  loadingServices.value[containerName] = true;
+  loadingServices.value[containerName] = 'restart';
   try {
     await servicesStore.restartService(containerName);
   } catch (error) {
     console.error('Failed to restart service:', error);
   } finally {
-    loadingServices.value[containerName] = false;
+    delete loadingServices.value[containerName];
+    showOverlay.value = false;
+  }
+}
+
+async function enableService(serviceName) {
+  showOverlay.value = true;
+  overlayMessage.value = `Enabling ${serviceName}...`;
+  loadingServices.value[serviceName] = 'enable';
+  try {
+    await servicesStore.enableService(serviceName);
+    // Reload services to update table
+    await servicesStore.loadServices();
+  } catch (error) {
+    console.error('Failed to enable service:', error);
+  } finally {
+    delete loadingServices.value[serviceName];
+    showOverlay.value = false;
+  }
+}
+
+async function disableService(serviceName) {
+  showOverlay.value = true;
+  overlayMessage.value = `Disabling ${serviceName}...`;
+  loadingServices.value[serviceName] = 'disable';
+  try {
+    await servicesStore.disableService(serviceName);
+    // Reload services to update table
+    await servicesStore.loadServices();
+  } catch (error) {
+    console.error('Failed to disable service:', error);
+  } finally {
+    delete loadingServices.value[serviceName];
     showOverlay.value = false;
   }
 }

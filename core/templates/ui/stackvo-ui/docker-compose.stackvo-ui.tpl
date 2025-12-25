@@ -1,28 +1,37 @@
 ###################################################################
 # STACKVO WEB UI COMPOSE TEMPLATE
-# Nginx + PHP-FPM container for serving the web interface
+# Nginx + Node.js container for serving the web interface
 ###################################################################
 
 services:
   stackvo-ui:
     build:
-      context: ../core/templates/ui/stackvo-ui
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: core/templates/ui/stackvo-ui/Dockerfile
     container_name: "stackvo-ui"
     restart: unless-stopped
     
     environment:
+      # Node.js environment
+      NODE_ENV: production
+      # Stackvo root directory for backend
+      STACKVO_ROOT: /app
+      # Projects directory
+      PROJECTS_DIR: /app/projects
+      # Generated directory
+      GENERATED_DIR: /app/generated
       # Host path for volume mappings when running generate inside container
       HOST_STACKVO_ROOT: {{ STACKVO_ROOT }}
     
     volumes:
-      - ../.ui:/usr/share/nginx/html
+      # Mount entire stackvo directory for Docker operations
       - ../:/app:ro
+      # Mount projects directory (read-write for project management)
       - ../projects:/app/projects:rw
+      # Mount generated directory (read-write for generate command)
       - ../generated:/app/generated:rw
+      # Mount Docker socket for Docker API access
       - /var/run/docker.sock:/var/run/docker.sock
-      - ../.ui/logs:/usr/share/nginx/html/logs:rw
-      - ../.ui/cache:/usr/share/nginx/html/cache:rw
     
     networks:
       - {{ DOCKER_DEFAULT_NETWORK }}
