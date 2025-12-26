@@ -37,10 +37,15 @@ generate_projects() {
                 log_info "Set generated directory ownership to nginx user (100:101)"
             fi
         else
-            # We're on the host, use chmod 777 for simplicity
-            # This allows both host user and container nginx user to write
-            chmod -R 777 "$GENERATED_DIR" 2>/dev/null || true
-            log_info "Set generated directory permissions to 777 (writable by all)"
+            # We're on the host, use HOST_UID and HOST_GID from .env
+            if [ -n "${HOST_UID}" ] && [ -n "${HOST_GID}" ]; then
+                sudo chown -R "${HOST_UID}:${HOST_GID}" "$GENERATED_DIR" 2>/dev/null || true
+                chmod -R 755 "$GENERATED_DIR" 2>/dev/null || true
+                log_info "Set generated directory ownership to ${HOST_UID}:${HOST_GID}"
+            else
+                log_warn "HOST_UID or HOST_GID not set, using chmod 777"
+                chmod -R 777 "$GENERATED_DIR" 2>/dev/null || true
+            fi
         fi
     fi
     

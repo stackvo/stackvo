@@ -107,37 +107,82 @@ git push origin main
 ```
 stackvo/
 ├── cli/                    # Bash CLI sistemi
-│   ├── stackvo.sh       # Ana CLI giriş noktası
-│   ├── commands/          # Komut implementasyonları
-│   ├── lib/               # Paylaşılan kütüphaneler
-│   │   ├── generators/    # Generator modülleri
-│   │   └── uninstallers/  # Uninstaller modülleri
-│   └── utils/             # Yardımcı scriptler
+│   ├── stackvo.sh          # Ana CLI giriş noktası
+│   ├── commands/           # Komut implementasyonları
+│   ├── lib/                # Paylaşılan kütüphaneler
+│   │   ├── generators/     # Generator modülleri
+│   │   │   ├── compose.sh  # Docker Compose generator
+│   │   │   ├── config.sh   # Config generator
+│   │   │   ├── project.sh  # Project generator
+│   │   │   ├── tools.sh    # Tools generator
+│   │   │   └── traefik.sh  # Traefik generator
+│   │   ├── uninstallers/   # Uninstaller modülleri
+│   │   ├── common.sh       # Ortak fonksiyonlar
+│   │   ├── constants.sh    # Sabitler
+│   │   ├── env-loader.sh   # Environment yükleyici
+│   │   ├── logger.sh       # Log fonksiyonları
+│   │   ├── php-extensions.sh        # PHP extension yönetimi
+│   │   └── template-processor.sh    # Template işleyici
+│   └── utils/              # Yardımcı scriptler
 ├── core/
-│   ├── compose/           # Base compose dosyaları
-│   └── templates/         # Servis ve sunucu şablonları
-│       ├── servers/       # Web sunucu konfigürasyonları
-│       ├── services/      # 40+ servis şablonu
-│       └── ui/            # UI container şablonları
-├── .ui/                   # Web UI (PHP + Vue.js)
-│   ├── index.html         # Vue.js 3 SPA
-│   ├── api/               # PHP API endpoints
-│   ├── lib/               # PHP kütüphaneleri
-│   └── config/            # Uygulama konfigürasyonu
-├── projects/              # Kullanıcı projeleri
+│   ├── compose/            # Base compose dosyaları
+│   │   └── stackvo.yml     # Base Traefik compose
+│   └── templates/          # Servis ve sunucu şablonları
+│       ├── servers/        # Web sunucu konfigürasyonları (nginx, apache, caddy)
+│       ├── services/       # 40+ servis şablonu (mysql, redis, postgres, etc.)
+│       └── ui/             # UI container şablonları
+│           ├── stackvo-ui/ # Ana UI container
+│           └── tools/      # Developer tools container
+├── .ui/                    # Web UI (Node.js Monorepo)
+│   ├── client/             # Vue.js 3 Frontend
+│   │   ├── src/            # Vue.js kaynak dosyaları
+│   │   ├── public/         # Statik dosyalar
+│   │   ├── index.html      # Ana HTML
+│   │   └── package.json    # Frontend bağımlılıkları
+│   ├── server/             # Node.js Backend (Express)
+│   │   ├── index.js        # Express server
+│   │   ├── routes/         # API route'ları
+│   │   ├── services/       # Business logic
+│   │   ├── middleware/     # Express middleware
+│   │   └── utils/          # Yardımcı fonksiyonlar
+│   ├── dist/               # Build çıktıları (gitignore)
+│   ├── cache/              # Cache dosyaları
+│   ├── logs/               # Log dosyaları
+│   ├── vite.config.js      # Vite konfigürasyonu
+│   └── package.json        # Monorepo bağımlılıkları
+├── projects/               # Kullanıcı projeleri
 │   └── {project-name}/
-│       ├── stackvo.json # Proje konfigürasyonu (ZORUNLU)
-│       ├── .stackvo/    # Özel konfigürasyonlar (opsiyonel)
-│       └── public/        # Document root
-├── generated/             # Otomatik oluşturulan dosyalar
-│   ├── stackvo.yml
-│   ├── docker-compose.dynamic.yml
-│   ├── docker-compose.projects.yml
-│   ├── configs/
-│   ├── certs/
-│   └── traefik/
-├── .env                   # Ana konfigürasyon dosyası
-└── README.md              # Dokümantasyon
+│       ├── stackvo.json    # Proje konfigürasyonu (ZORUNLU)
+│       ├── .stackvo/       # Özel konfigürasyonlar (opsiyonel)
+│       │   ├── nginx.conf  # Custom Nginx config
+│       │   ├── apache.conf # Custom Apache config
+│       │   ├── Caddyfile   # Custom Caddy config
+│       │   ├── php.ini     # Custom PHP config
+│       │   └── Dockerfile  # Custom Dockerfile
+│       └── public/         # Document root
+├── generated/              # Otomatik oluşturulan dosyalar (gitignore)
+│   ├── stackvo.yml         # Base compose
+│   ├── docker-compose.dynamic.yml    # Dinamik servisler
+│   ├── docker-compose.projects.yml   # Proje containerları
+│   ├── configs/            # Generated configs
+│   ├── certs/              # SSL sertifikaları
+│   ├── projects/           # Proje Dockerfile'ları
+│   └── traefik/            # Traefik konfigürasyonları
+├── scripts/                # Utility scriptler
+│   ├── generate-changelog.sh  # Changelog oluşturucu
+│   └── release.sh          # Release scripti
+├── docs/                   # MkDocs dokümantasyonu
+│   ├── en/                 # İngilizce dokümantasyon
+│   └── tr/                 # Türkçe dokümantasyon
+├── logs/                   # Container logları
+│   ├── projects/           # Proje logları
+│   └── services/           # Servis logları
+├── .github/                # GitHub Actions workflows
+│   └── workflows/          # CI/CD workflows
+├── .env                    # Ana konfigürasyon dosyası
+├── .env.example            # Örnek konfigürasyon
+├── mkdocs.yml              # MkDocs konfigürasyonu
+└── README.md               # Dokümantasyon
 ```
 
 ---
@@ -504,7 +549,62 @@ ANOTHER_VARIABLE=value
 - Service Toggles (40+ servis)
 - Supported Languages
 
-### 2. **`stackvo.json` Yapısı**
+### 2. **UID/GID Yönetimi**
+
+**KRİTİK KURAL**: Tüm container'larda ve Dockerfile'larda kullanıcı/grup ID'leri **MUTLAKA** `.env` dosyasından okunmalıdır.
+
+**`.env` Değişkenleri**:
+
+```bash
+# User/Group ID Settings
+STACKVO_UID=1000
+STACKVO_GID=1000
+```
+
+**Kullanım Alanları**:
+
+1. **Dockerfile'larda**:
+
+```dockerfile
+ARG STACKVO_UID=1000
+ARG STACKVO_GID=1000
+
+RUN groupadd -g ${STACKVO_GID} stackvo && \
+    useradd -u ${STACKVO_UID} -g stackvo -m stackvo
+
+USER ${STACKVO_UID}:${STACKVO_GID}
+```
+
+2. **Docker Compose Template'lerinde**:
+
+```yaml
+services:
+  service-name:
+    build:
+      args:
+        STACKVO_UID: ${STACKVO_UID:-1000}
+        STACKVO_GID: ${STACKVO_GID:-1000}
+    user: "${STACKVO_UID}:${STACKVO_GID}"
+```
+
+3. **Bash Generator'larda**:
+
+```bash
+# Template'e UID/GID değişkenlerini ekle
+export STACKVO_UID="${STACKVO_UID:-1000}"
+export STACKVO_GID="${STACKVO_GID:-1000}"
+```
+
+**Neden Gerekli?**:
+
+- ✅ **Permission sorunlarını önler** - Host ve container arasında dosya izinleri uyumlu olur
+- ✅ **Cross-platform uyumluluk** - Farklı sistemlerde aynı UID/GID kullanılabilir
+- ✅ **Güvenlik** - Container içinde root yerine normal kullanıcı ile çalışma
+- ✅ **Volume mount sorunlarını çözer** - Bind mount'larda dosya sahipliği doğru olur
+
+**Antigravity Kuralı**: Yeni bir Dockerfile, Docker Compose template veya generator oluştururken, **mutlaka** UID/GID değişkenlerini `.env`'den okuyacak şekilde yapılandır. Hardcoded UID/GID kullanımı **KABUL EDİLEMEZ**.
+
+### 3. **`stackvo.json` Yapısı**
 
 ```json
 {

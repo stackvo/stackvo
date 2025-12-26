@@ -27,6 +27,7 @@ source "$SCRIPT_DIR/../lib/generators/compose.sh"
 source "$SCRIPT_DIR/../lib/generators/traefik.sh"
 source "$SCRIPT_DIR/../lib/generators/project.sh"
 source "$SCRIPT_DIR/../lib/generators/tools.sh"
+source "$SCRIPT_DIR/../lib/generators/stackvo-ui.sh"
 source "$SCRIPT_DIR/../lib/uninstallers/tools.sh"
 
 ##
@@ -94,6 +95,7 @@ main() {
         services)
             log_info "Generating services only..."
             generate_tools_configs
+            generate_stackvo_ui_configs
             generate_module_configs
             generate_base_compose
             generate_traefik_config
@@ -104,6 +106,7 @@ main() {
         *)
             # Generate everything
             generate_tools_configs
+            generate_stackvo_ui_configs
             generate_module_configs
             generate_base_compose
             generate_traefik_config

@@ -44,6 +44,16 @@ generate_base_compose() {
     # Create generated directory
     mkdir -p "$GENERATED_DIR"
     
+    # Create logs directory and set ownership
+    mkdir -p "$ROOT_DIR/logs/projects" "$ROOT_DIR/logs/services"
+    
+    # Set ownership for logs directory
+    if [ -n "${HOST_UID}" ] && [ -n "${HOST_GID}" ]; then
+        sudo chown -R "${HOST_UID}:${HOST_GID}" "$ROOT_DIR/logs" 2>/dev/null || true
+        chmod -R 755 "$ROOT_DIR/logs" 2>/dev/null || true
+        log_info "Set logs directory ownership to ${HOST_UID}:${HOST_GID}"
+    fi
+    
     local output="$GENERATED_DIR/stackvo.yml"
     local template="$ROOT_DIR/core/compose/base.yml"
     
@@ -178,7 +188,7 @@ generate_dynamic_compose() {
     if [ "${STACKVO_UI_TOOLS_CONTAINER_ENABLE}" = "true" ]; then
         if has_any_tool_enabled; then
             log_info "Including tools container (at least one tool is enabled)"
-            include_module "STACKVO_UI_TOOLS_CONTAINER_ENABLE" "ui/tools/tpl/docker-compose.tools.tpl" >> "$output"
+            include_module "STACKVO_UI_TOOLS_CONTAINER_ENABLE" "ui/tools/docker-compose.tools.tpl" >> "$output"
         else
             log_warn "Tools container is enabled but no tools are active, skipping..."
         fi

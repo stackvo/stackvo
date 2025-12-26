@@ -24,12 +24,14 @@ render_template() {
     
     # Optimized: sed and envsubst in single pipeline
     # {{ VAR }} → ${VAR} and {{ VAR | default('x') }} → ${VAR:-x} conversion
+    # IMPORTANT: Only substitute STACKVO_* and SERVICE_* variables to preserve Nginx variables
     local rendered_content
+    local env_vars=$(env | grep -E '^(STACKVO_|SERVICE_|DEFAULT_|DOCKER_|TLD_|HOST_|SSL_|REDIRECT_)' | cut -d= -f1 | sed 's/^/$/' | tr '\n' ' ')
     rendered_content=$(sed \
         -e 's/{{[[:space:]]*\([A-Z0-9_]*\)[[:space:]]*}}/${\1}/g' \
         -e "s/{{[[:space:]]*\([A-Z0-9_]*\)[[:space:]]*|[[:space:]]*default('\([^']*\)')[[:space:]]*}}/\${\1:-\2}/g" \
         -e "s/{{[[:space:]]*\([A-Z0-9_]*\)[[:space:]]*|[[:space:]]*default(\"\([^\"]*\)\")[[:space:]]*}}/\${\1:-\2}/g" \
-        "$template_file" 2>/dev/null | envsubst 2>/dev/null)
+        "$template_file" 2>/dev/null | envsubst "$env_vars" 2>/dev/null)
     
     if [ $? -ne 0 ] || [ -z "$rendered_content" ]; then
         log_error "Failed to render template: $template_file"

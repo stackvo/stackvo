@@ -14,14 +14,10 @@ data/
 # .env
 
 # UI files
-.ui/frontend/node_modules/
-.ui/backend/node_modules/
-.ui/frontend/yarn-error.log
-.ui/backend/yarn-error.log
-.ui/frontend/yarn.lock
-.ui/backend/yarn.lock
-.ui/frontend/package-lock.json
-.ui/backend/package-lock.json
+.ui/node_modules/
+.ui/yarn-error.log
+.ui/yarn.lock
+.ui/package-lock.json
 
 # IDE and Editor files
 .vscode/
@@ -41,8 +37,7 @@ temp/
 *.tmp
 
 # Cache
-.ui/cache/
-.ui/logs/
+cache/
 
 # OS files
 Thumbs.db
@@ -60,4 +55,3 @@ venv/
 
 # MkDocs build output
 site/
-

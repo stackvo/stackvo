@@ -7,7 +7,7 @@ services:
   stackvo-ui:
     build:
       context: ..
-      dockerfile: core/templates/ui/stackvo-ui/Dockerfile
+      dockerfile: generated/ui/Dockerfile
     container_name: "stackvo-ui"
     restart: unless-stopped
     
@@ -22,6 +22,9 @@ services:
       GENERATED_DIR: /app/generated
       # Host path for volume mappings when running generate inside container
       HOST_STACKVO_ROOT: {{ STACKVO_ROOT }}
+      # Host user ID for file ownership (fixes permission issues)
+      HOST_UID: {{ HOST_UID | default('1000') }}
+      HOST_GID: {{ HOST_GID | default('1000') }}
     
     volumes:
       # Mount entire stackvo directory for Docker operations (read-only for security)
@@ -36,6 +39,8 @@ services:
       - ../generated:/app/generated:rw
       # Mount logs directory (read-write for service logs)
       - ../logs:/app/logs:rw
+      # Mount cache directory (read-write for UI cache)
+      - ../cache:/app/cache:rw
       # Mount Docker socket for Docker API access
       - /var/run/docker.sock:/var/run/docker.sock
     

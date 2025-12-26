@@ -14,8 +14,8 @@
 generate_tools_configs() {
     log_info "Generating tools configurations..."
     
-    local tools_dir="$ROOT_DIR/core/templates/ui/tools"
-    local tpl_dir="$tools_dir/tpl"
+    local template_dir="$ROOT_DIR/core/templates/ui/tools"
+    local output_dir="$GENERATED_DIR/tools"
     
     # Check if tools container is enabled
     if [ "${STACKVO_UI_TOOLS_CONTAINER_ENABLE}" != "true" ]; then
@@ -23,62 +23,34 @@ generate_tools_configs() {
         return 0
     fi
     
-    # Backup existing files (first time only)
-    create_tools_backup "$tools_dir"
+    # Create output directory
+    mkdir -p "$output_dir"
     
     # Generate Dockerfile
     log_info "Generating Dockerfile from template..."
-    if ! render_tools_template "$tpl_dir/Dockerfile.tpl" > "$tools_dir/Dockerfile"; then
+    if ! render_tools_template "$template_dir/Dockerfile.tpl" > "$output_dir/Dockerfile"; then
         log_error "Failed to generate Dockerfile"
         return 1
     fi
     
     # Generate nginx.conf
     log_info "Generating nginx.conf from template..."
-    if ! render_tools_template "$tpl_dir/nginx.conf.tpl" > "$tools_dir/nginx.conf"; then
+    if ! render_tools_template "$template_dir/nginx.conf.tpl" > "$output_dir/nginx.conf"; then
         log_error "Failed to generate nginx.conf"
         return 1
     fi
     
     # Generate supervisord.conf
     log_info "Generating supervisord.conf from template..."
-    if ! render_tools_template "$tpl_dir/supervisord.conf.tpl" > "$tools_dir/supervisord.conf"; then
+    if ! render_tools_template "$template_dir/supervisord.conf.tpl" > "$output_dir/supervisord.conf"; then
         log_error "Failed to generate supervisord.conf"
         return 1
     fi
     
     log_success "Tools configurations generated successfully!"
-    log_info "  - Dockerfile: $(wc -l < "$tools_dir/Dockerfile") lines"
-    log_info "  - nginx.conf: $(wc -l < "$tools_dir/nginx.conf") lines"
-    log_info "  - supervisord.conf: $(wc -l < "$tools_dir/supervisord.conf") lines"
-}
-
-##
-# Backup existing tools configuration files
-#
-# Args:
-#   $1 - Tools directory path
-##
-create_tools_backup() {
-    local tools_dir=$1
-    
-    # Backup Dockerfile
-    if [ -f "$tools_dir/Dockerfile" ] && [ ! -f "$tools_dir/Dockerfile.backup" ]; then
-        log_info "Backing up existing Dockerfile..."
-        cp "$tools_dir/Dockerfile" "$tools_dir/Dockerfile.backup"
-    fi
-    
-    # Backup nginx.conf
-    if [ -f "$tools_dir/nginx.conf" ] && [ ! -f "$tools_dir/nginx.conf.backup" ]; then
-        log_info "Backing up existing nginx.conf..."
-        cp "$tools_dir/nginx.conf" "$tools_dir/nginx.conf.backup"
-    fi
-    
-    # Backup supervisord.conf
-    if [ -f "$tools_dir/supervisord.conf" ] && [ ! -f "$tools_dir/supervisord.conf.backup" ]; then
-        log_info "Backing up existing supervisord.conf..."
-        cp "$tools_dir/supervisord.conf" "$tools_dir/supervisord.conf.backup"
-    fi
+    log_info "  - Dockerfile: $(wc -l < "$output_dir/Dockerfile") lines"
+    log_info "  - nginx.conf: $(wc -l < "$output_dir/nginx.conf") lines"
+    log_info "  - supervisord.conf: $(wc -l < "$output_dir/supervisord.conf") lines"
 }
 
 ##
