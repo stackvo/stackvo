@@ -1,31 +1,90 @@
 <template>
   <v-app>
-    <!-- App Bar with Tabs -->
-    <v-app-bar color="primary" prominent>
-      <v-toolbar-title>
-        StackVo
+    <!-- App Bar with Social Links -->
+    <v-app-bar color="primary">
+      <v-toolbar-title class="text-h4">
+        <span class="font-weight-bold">Stack</span>
+        <span class="font-weight-light">Vo</span>
       </v-toolbar-title>
 
-      <v-tabs :model-value="currentTab" color="white" @update:model-value="navigateTo">
-        <v-tab value="dashboard">
-          <v-icon start>mdi-view-dashboard</v-icon>
-          Dashboard
-        </v-tab>
-        <v-tab value="projects">
-          <v-icon start>mdi-folder-multiple</v-icon>
-          Projects
-        </v-tab>
-        <v-tab value="services">
-          <v-icon start>mdi-server</v-icon>
-          Services
-        </v-tab>
-        <v-tab value="tools">
-          <v-icon start>mdi-tools</v-icon>
-          Tools
-        </v-tab>
-      </v-tabs>
+      <v-spacer></v-spacer>
 
-      <v-btn icon @click="toggleTheme">
+      <!-- Primary Links -->
+      <v-btn icon href="https://stackvo.github.io/stackvo" target="_blank" title="Documentation">
+        <v-icon>mdi-book-open-variant</v-icon>
+      </v-btn>
+
+      <v-btn icon href="https://github.com/stackvo/stackvo" target="_blank" title="GitHub">
+        <v-icon>mdi-github</v-icon>
+      </v-btn>
+
+      <v-btn icon href="https://buymeacoffee.com/stackvo" target="_blank" title="Buy Me a Coffee">
+        <v-icon>mdi-coffee</v-icon>
+      </v-btn>
+
+      <!-- Social Media Dropdown -->
+      <v-menu>
+        <template v-slot:activator="{ props }">
+          <v-btn icon v-bind="props" title="Social Media">
+            <v-icon>mdi-share-variant</v-icon>
+          </v-btn>
+        </template>
+        <v-list>
+          <v-list-item href="https://www.youtube.com/stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-youtube</v-icon>
+            </template>
+            <v-list-item-title>YouTube</v-list-item-title>
+          </v-list-item>
+
+          <v-list-item href="https://fosstodon.org/@stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-mastodon</v-icon>
+            </template>
+            <v-list-item-title>Mastodon</v-list-item-title>
+          </v-list-item>
+
+          <v-list-item href="https://www.linkedin.com/company/stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-linkedin</v-icon>
+            </template>
+            <v-list-item-title>LinkedIn</v-list-item-title>
+          </v-list-item>
+
+          <v-list-item href="https://reddit.com/r/stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-reddit</v-icon>
+            </template>
+            <v-list-item-title>Reddit</v-list-item-title>
+          </v-list-item>
+
+          <v-list-item href="https://bsky.app/profile/stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-cloud</v-icon>
+            </template>
+            <v-list-item-title>Bluesky</v-list-item-title>
+          </v-list-item>
+
+          <v-list-item href="https://twitter.com/stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-twitter</v-icon>
+            </template>
+            <v-list-item-title>Twitter/X</v-list-item-title>
+          </v-list-item>
+
+          <v-list-item href="https://discord.gg/stackvo" target="_blank">
+            <template v-slot:prepend>
+              <v-icon>mdi-discord</v-icon>
+            </template>
+            <v-list-item-title>Discord</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+
+      <v-divider vertical class="mx-2"></v-divider>
+
+      <!-- Theme Toggle -->
+      <v-btn icon @click="toggleTheme" title="Toggle Theme">
         <v-icon>{{ theme.global.current.value.dark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
       </v-btn>
     </v-app-bar>

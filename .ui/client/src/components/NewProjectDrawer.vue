@@ -7,7 +7,7 @@
     absolute
     width="750"
     elevation="24"
-    style="position: fixed !important; right: 0; top: 0; height: 100vh; z-index: 2001;"
+    style="border: 0; position: fixed !important; right: 0; top: 0; height: 100vh; z-index: 2001;"
   >
     <v-card class="h-100 d-flex flex-column" rounded="0">
       <v-card-title class="d-flex align-center bg-primary">

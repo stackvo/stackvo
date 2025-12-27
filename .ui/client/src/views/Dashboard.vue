@@ -385,7 +385,7 @@
                   :smooth="10"
                   :fill="true"
                   auto-draw
-                  height="50"
+                  height="35"
                 ></v-sparkline>
               </v-col>
               <v-col cols="12" md="6">
@@ -401,7 +401,7 @@
                   :smooth="10"
                   :fill="true"
                   auto-draw
-                  height="50"
+                  height="35"
                 ></v-sparkline>
               </v-col>
             </v-row>
