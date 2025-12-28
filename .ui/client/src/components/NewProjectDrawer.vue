@@ -30,11 +30,11 @@
                 label="Project Name"
                 prepend-inner-icon="mdi-folder"
                 variant="outlined"
-                hint="Only alphanumeric, dash, and underscore allowed"
+                hint="Alphanumeric, dash, underscore, and dot allowed (e.g., api.myapp)"
                 persistent-hint
                 :rules="[
                   v => !!v || 'Project name is required',
-                  v => /^[a-zA-Z0-9\-_]+$/.test(v) || 'Invalid characters'
+                  v => /^[a-zA-Z0-9\-_.]+$/.test(v) || 'Invalid characters'
                 ]"
                 required
                 @input="onProjectNameChange"
@@ -69,12 +69,13 @@
             <v-col cols="6">
               <v-select
                 v-model="formData.runtime"
-                :items="['php', 'nodejs', 'python', 'ruby', 'golang']"
+                :items="supportedLanguages"
                 label="Runtime"
                 prepend-inner-icon="mdi-code-braces"
                 variant="outlined"
                 required
                 hide-details
+                :menu-props="{ zIndex: 9999 }"
               ></v-select>
             </v-col>
 
@@ -88,18 +89,20 @@
                 variant="outlined"
                 required
                 hide-details
+                :menu-props="{ zIndex: 9999 }"
               ></v-select>
             </v-col>
 
             <v-col cols="12">
               <v-select
                 v-model="formData.webserver"
-                :items="['nginx', 'apache', 'caddy']"
+                :items="supportedWebservers"
                 label="Web Server"
                 prepend-inner-icon="mdi-server"
                 variant="outlined"
                 hide-details
                 required
+                :menu-props="{ zIndex: 9999 }"
               ></v-select>
             </v-col>
 
@@ -152,37 +155,84 @@ const emit = defineEmits(['update:modelValue', 'created']);
 
 const formRef = ref(null);
 const loading = ref(false);
+const loadingLanguages = ref(true);
+
+// Supported languages data from API
+const supportedLanguages = ref([]);
+const supportedVersions = ref({});
+const supportedDefaults = ref({});
+const supportedExtensions = ref({});
+const supportedWebservers = ref([]);
+const defaultWebserver = ref('nginx');
 
 const formData = ref({
   name: '',
   domain: '',
   document_root: 'public',
   runtime: 'php',
-  version: '8.2',
-  webserver: 'nginx',
-  extensions: ['pdo', 'pdo_mysql', 'mysqli', 'gd', 'curl', 'zip', 'mbstring']
+  version: '8.4',
+  webserver: defaultWebserver.value || 'nginx',
+  extensions: []
 });
 
-const phpExtensions = [
-  'pdo', 'pdo_mysql', 'pdo_pgsql', 'mysqli', 'pgsql',
-  'gd', 'imagick', 'curl', 'zip', 'mbstring', 'intl',
-  'soap', 'xml', 'dom', 'simplexml', 'xmlwriter',
-  'bcmath', 'gmp', 'opcache', 'apcu', 'redis', 'memcached'
-];
-
 const runtimeVersions = computed(() => {
-  const versions = {
-    php: ['8.0', '8.1', '8.2', '8.3', '8.4'],
-    nodejs: ['18', '20', '22'],
-    python: ['3.9', '3.10', '3.11', '3.12', '3.13'],
-    ruby: ['3.1', '3.2', '3.3'],
-    golang: ['1.21', '1.22', '1.23']
-  };
-  return versions[formData.value.runtime] || [];
+  return supportedVersions.value[formData.value.runtime] || [];
+});
+
+const phpExtensions = computed(() => {
+  return supportedExtensions.value.php || [];
 });
 
 const computedDomain = computed(() => {
   return formData.value.name ? `${formData.value.name}.loc` : '';
+});
+
+// Load supported languages from API
+async function loadSupportedLanguages() {
+  loadingLanguages.value = true;
+  try {
+    const response = await fetch('/api/supported-languages');
+    const data = await response.json();
+
+    if (data.success) {
+      supportedLanguages.value = data.data.languages;
+      supportedVersions.value = data.data.versions;
+      supportedDefaults.value = data.data.defaults;
+      supportedExtensions.value = data.data.extensions;
+      supportedWebservers.value = data.data.webservers;
+      defaultWebserver.value = data.data.defaultWebserver;
+
+      // Set default runtime and version
+      if (supportedLanguages.value.length > 0) {
+        const defaultRuntime = supportedLanguages.value.includes('php') ? 'php' : supportedLanguages.value[0];
+        formData.value.runtime = defaultRuntime;
+        formData.value.version = supportedDefaults.value[defaultRuntime] || '';
+        
+        // Set default PHP extensions if runtime is PHP
+        if (defaultRuntime === 'php' && supportedDefaults.value.php_extensions) {
+          formData.value.extensions = supportedDefaults.value.php_extensions;
+        }
+      }
+    } else {
+      console.error('Failed to load supported languages:', data.message);
+    }
+  } catch (error) {
+    console.error('Error loading supported languages:', error);
+  } finally {
+    loadingLanguages.value = false;
+  }
+}
+
+// Watch runtime changes to update version
+watch(() => formData.value.runtime, (newRuntime) => {
+  if (newRuntime && supportedDefaults.value[newRuntime]) {
+    formData.value.version = supportedDefaults.value[newRuntime];
+  }
+  
+  // Reset extensions if not PHP
+  if (newRuntime !== 'php') {
+    formData.value.extensions = [];
+  }
 });
 
 function onProjectNameChange() {
@@ -214,15 +264,20 @@ async function handleSubmit() {
 
 // Reset form when drawer closes
 watch(() => props.modelValue, (newVal) => {
-  if (!newVal) {
+  if (newVal) {
+    // Drawer açıldı - API'den veri yükle
+    loadSupportedLanguages();
+  } else {
+    // Drawer kapandı - formu resetle
+    const defaultRuntime = supportedLanguages.value.includes('php') ? 'php' : supportedLanguages.value[0] || '';
     formData.value = {
       name: '',
       domain: '',
       document_root: 'public',
-      runtime: 'php',
-      version: '8.2',
-      webserver: 'nginx',
-      extensions: ['pdo', 'pdo_mysql', 'mysqli', 'gd', 'curl', 'zip', 'mbstring']
+      runtime: defaultRuntime,
+      version: supportedDefaults.value[defaultRuntime] || '',
+      webserver: defaultWebserver.value || 'nginx',
+      extensions: defaultRuntime === 'php' && supportedDefaults.value.php_extensions ? supportedDefaults.value.php_extensions : []
     };
     formRef.value?.resetValidation();
   }

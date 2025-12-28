@@ -25,7 +25,7 @@ services:
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"
 
-    user: "{{ HOST_USER_ID | default('472') }}"
+    user: "{{ HOST_UID | default('472') }}"
 
 volumes:
   stackvo-grafana-data:

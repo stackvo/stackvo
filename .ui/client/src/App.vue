@@ -18,7 +18,7 @@
         <v-icon>mdi-github</v-icon>
       </v-btn>
 
-      <v-btn icon href="https://buymeacoffee.com/stackvo" target="_blank" title="Buy Me a Coffee">
+      <v-btn icon href="https://buymeacoffee.com/fahrettinaksoy" target="_blank" title="Buy Me a Coffee">
         <v-icon>mdi-coffee</v-icon>
       </v-btn>
 

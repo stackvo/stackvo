@@ -5,6 +5,22 @@
 ###################################################################
 
 ##
+# Sanitize project name for Traefik labels
+# Traefik uses dots as separators, so we need to replace them
+#
+# Args:
+#   $1 - Project name
+#
+# Returns:
+#   Sanitized project name (dots replaced with dashes)
+##
+sanitize_project_name_for_traefik() {
+    local project_name=$1
+    # Replace dots with dashes for Traefik compatibility
+    echo "$project_name" | tr '.' '-'
+}
+
+##
 # Main function to generate all project containers
 ##
 generate_projects() {
@@ -739,6 +755,9 @@ generate_apache_single_container() {
     local host_logs_path=$6
     local host_generated_projects_dir=$7
     
+    # Sanitize project name for Traefik (replace dots with dashes)
+    local traefik_safe_name=$(sanitize_project_name_for_traefik "$project_name")
+    
     # Determine apache config path
     local apache_config_mount=""
     if [ -f "$project_path/.stackvo/apache.conf" ]; then
@@ -773,10 +792,10 @@ $apache_config_mount
     
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${project_name}.rule=Host(\`${project_domain}\`)"
-      - "traefik.http.routers.${project_name}.entrypoints=websecure"
-      - "traefik.http.routers.${project_name}.tls=true"
-      - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
+      - "traefik.http.routers.${traefik_safe_name}.rule=Host(\`${project_domain}\`)"
+      - "traefik.http.routers.${traefik_safe_name}.entrypoints=websecure"
+      - "traefik.http.routers.${traefik_safe_name}.tls=true"
+      - "traefik.http.services.${traefik_safe_name}.loadbalancer.server.port=80"
 
 EOF
 }
@@ -792,6 +811,9 @@ generate_nginx_single_container() {
     local host_logs_path=$5
     local host_generated_configs_dir=$6
     local host_generated_projects_dir=$7
+    
+    # Sanitize project name for Traefik (replace dots with dashes)
+    local traefik_safe_name=$(sanitize_project_name_for_traefik "$project_name")
     
     # Nginx config is already generated in generate_nginx_dockerfile()
     # and copied into the container via Dockerfile COPY command
@@ -826,10 +848,10 @@ $nginx_config_mount
     
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${project_name}.rule=Host(\`${project_domain}\`)"
-      - "traefik.http.routers.${project_name}.entrypoints=websecure"
-      - "traefik.http.routers.${project_name}.tls=true"
-      - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
+      - "traefik.http.routers.${traefik_safe_name}.rule=Host(\`${project_domain}\`)"
+      - "traefik.http.routers.${traefik_safe_name}.entrypoints=websecure"
+      - "traefik.http.routers.${traefik_safe_name}.tls=true"
+      - "traefik.http.services.${traefik_safe_name}.loadbalancer.server.port=80"
 
 EOF
 }
@@ -846,6 +868,9 @@ generate_caddy_single_container() {
     local host_logs_path=$6
     local host_generated_configs_dir=$7
     local host_generated_projects_dir=$8
+    
+    # Sanitize project name for Traefik (replace dots with dashes)
+    local traefik_safe_name=$(sanitize_project_name_for_traefik "$project_name")
     
     # Caddyfile is already generated in generate_caddy_dockerfile()
     # and copied into the container via Dockerfile COPY command
@@ -880,10 +905,10 @@ $caddy_config_mount
     
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.${project_name}.rule=Host(\`${project_domain}\`)"
-      - "traefik.http.routers.${project_name}.entrypoints=websecure"
-      - "traefik.http.routers.${project_name}.tls=true"
-      - "traefik.http.services.${project_name}.loadbalancer.server.port=80"
+      - "traefik.http.routers.${traefik_safe_name}.rule=Host(\`${project_domain}\`)"
+      - "traefik.http.routers.${traefik_safe_name}.entrypoints=websecure"
+      - "traefik.http.routers.${traefik_safe_name}.tls=true"
+      - "traefik.http.services.${traefik_safe_name}.loadbalancer.server.port=80"
 
 EOF
 }

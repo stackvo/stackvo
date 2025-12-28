@@ -35,7 +35,7 @@ Stackvo'u kullanmaya başlamak için gereken 3 temel adımı sırasıyla takip e
 
     ---
 
-    İlk projenizi oluşturun
+    Hızlıca ilk projenizi oluşturun
 
     [:octicons-arrow-right-24: Hızlı Başlangıç](quick-start.md)
 

@@ -15,6 +15,7 @@ import dockerRouter from './routes/docker.js';
 import envRouter from './routes/env.js';
 import toolsRouter from './routes/tools.js';
 import terminalRouter from './routes/terminal.js';
+import supportedLanguagesRouter from './routes/supported-languages.js';
 
 // Services
 import TerminalService from './services/TerminalService.js';
@@ -58,6 +59,7 @@ app.use('/api/docker', dockerRouter);
 app.use('/api/env', envRouter);
 app.use('/api/tools', toolsRouter);
 app.use('/api/terminal', terminalRouter);
+app.use('/api/supported-languages', supportedLanguagesRouter);
 
 // Terminal WebSocket and Service
 const terminalService = new TerminalService(io);

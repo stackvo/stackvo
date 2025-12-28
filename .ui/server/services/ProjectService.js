@@ -32,8 +32,8 @@ class ProjectService {
     }
 
     // Validate project name
-    if (!/^[a-zA-Z0-9\-_]+$/.test(name)) {
-      throw new Error('Invalid project name. Only alphanumeric, dash, and underscore allowed');
+    if (!/^[a-zA-Z0-9\-_.]+$/.test(name)) {
+      throw new Error('Invalid project name. Alphanumeric, dash, underscore, and dot allowed');
     }
 
     // Use PROJECTS_DIR environment variable or fallback to relative path

@@ -22,4 +22,8 @@ load_env() {
     set -a
     source "$ROOT_DIR/.env"
     set +a
+    
+    # Auto-detect HOST_UID and HOST_GID if not set in .env
+    export HOST_UID="${HOST_UID:-$(id -u)}"
+    export HOST_GID="${HOST_GID:-$(id -g)}"
 }
