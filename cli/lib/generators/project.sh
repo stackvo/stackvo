@@ -558,17 +558,21 @@ generate_caddy_dockerfile() {
 # PHP Version: $php_version
 FROM php:${php_version}-fpm
 
-# Install Caddy and Supervisord
+# Install Supervisord and dependencies
 RUN apt-get update && apt-get install -y \\
-    debian-keyring \\
-    debian-archive-keyring \\
-    apt-transport-https \\
     curl \\
+    ca-certificates \\
     supervisor \\
-    && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \\
-    && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list \\
-    && apt-get update && apt-get install -y caddy \\
     && rm -rf /var/lib/apt/lists/*
+
+# Install Caddy from official binary (cross-platform compatible, no GPG issues)
+ARG CADDY_VERSION=2.8.4
+RUN curl -o /tmp/caddy.tar.gz -L "https://github.com/caddyserver/caddy/releases/download/v\${CADDY_VERSION}/caddy_\${CADDY_VERSION}_linux_amd64.tar.gz" \\
+    && tar -xzf /tmp/caddy.tar.gz -C /usr/bin caddy \\
+    && chmod +x /usr/bin/caddy \\
+    && rm /tmp/caddy.tar.gz \\
+    && caddy version
+
 
 EOF
     
