@@ -779,6 +779,7 @@ generate_apache_single_container() {
     
     cat <<EOF
   ${project_name}:
+    profiles: ["projects", "project-${project_name}"]  # --projects ile tümü, --profile project-{name} ile sadece bu proje
     build:
       context: ./projects/${project_name}
       dockerfile: Dockerfile
@@ -835,6 +836,7 @@ generate_nginx_single_container() {
     
     cat <<EOF
   ${project_name}:
+    profiles: ["projects", "project-${project_name}"]  # --projects ile tümü, --profile project-{name} ile sadece bu proje
     build:
       context: ./projects/${project_name}
       dockerfile: Dockerfile
@@ -892,6 +894,7 @@ generate_caddy_single_container() {
     
     cat <<EOF
   ${project_name}:
+    profiles: ["projects", "project-${project_name}"]  # --projects ile tümü, --profile project-{name} ile sadece bu proje
     build:
       context: ./projects/${project_name}
       dockerfile: Dockerfile

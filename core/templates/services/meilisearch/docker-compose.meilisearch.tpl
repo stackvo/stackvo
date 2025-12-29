@@ -4,6 +4,7 @@
 
 services:
   meilisearch:
+    profiles: ["services", "meilisearch"]  # --services ile tümü, --profile meilisearch ile sadece bu servis
     image: "getmeili/meilisearch:{{ SERVICE_MEILISEARCH_VERSION }}"
     container_name: "stackvo-meilisearch"
     restart: unless-stopped

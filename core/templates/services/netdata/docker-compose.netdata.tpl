@@ -4,6 +4,7 @@
 
 services:
   netdata:
+    profiles: ["services", "netdata"]  # --services ile tümü, --profile netdata ile sadece bu servis
     image: "netdata/netdata:{{ SERVICE_NETDATA_VERSION }}"
     container_name: "stackvo-netdata"
     restart: unless-stopped

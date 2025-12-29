@@ -4,6 +4,7 @@
 
 services:
   postgres:
+    profiles: ["services", "postgres"]  # --services ile tümü, --profile postgres ile sadece bu servis
     image: "postgres:{{ SERVICE_POSTGRES_VERSION }}"
     container_name: "stackvo-postgres"
     restart: unless-stopped

@@ -4,6 +4,7 @@
 
 services:
   redis:
+    profiles: ["services", "redis"]  # --services ile tümü, --profile redis ile sadece Redis
     image: "redis:{{ SERVICE_REDIS_VERSION }}"
     container_name: "stackvo-redis"
     restart: unless-stopped

@@ -4,6 +4,7 @@
 
 services:
   grafana:
+    profiles: ["services", "grafana"]  # --services ile tümü, --profile grafana ile sadece bu servis
     image: "grafana/grafana:{{ SERVICE_GRAFANA_VERSION }}"
     container_name: "stackvo-grafana"
     restart: unless-stopped

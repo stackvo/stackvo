@@ -16,6 +16,7 @@ import envRouter from './routes/env.js';
 import toolsRouter from './routes/tools.js';
 import terminalRouter from './routes/terminal.js';
 import supportedLanguagesRouter from './routes/supported-languages.js';
+import startWithProfileRouter from './routes/start-with-profile.js';
 
 // Services
 import TerminalService from './services/TerminalService.js';
@@ -60,6 +61,10 @@ app.use('/api/env', envRouter);
 app.use('/api/tools', toolsRouter);
 app.use('/api/terminal', terminalRouter);
 app.use('/api/supported-languages', supportedLanguagesRouter);
+app.use('/api/start-with-profile', startWithProfileRouter);
+
+// Make Socket.io available to routes
+app.set('io', io);
 
 // Terminal WebSocket and Service
 const terminalService = new TerminalService(io);

@@ -4,6 +4,7 @@
 
 services:
   mysql:
+    profiles: ["services", "mysql"]  # --services ile tümü, --profile mysql ile sadece MySQL
     image: "mysql:{{ SERVICE_MYSQL_VERSION }}"
     container_name: "stackvo-mysql"
     restart: unless-stopped

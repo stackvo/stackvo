@@ -35,12 +35,65 @@ case "$COMMAND" in
         ;;
 
     up)
-        # Build images if needed, only pull missing images
-        # Use plain progress mode for cleaner build output
+        # Parse flags for selective startup
+        START_MODE="minimal"  # Default: minimal (core only)
+        CUSTOM_PROFILES=()
+        
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --all)
+                    START_MODE="all"
+                    shift
+                    ;;
+                --services)
+                    START_MODE="services"
+                    shift
+                    ;;
+                --projects)
+                    START_MODE="projects"
+                    shift
+                    ;;
+                --profile)
+                    CUSTOM_PROFILES+=("$2")
+                    shift 2
+                    ;;
+                *)
+                    shift
+                    ;;
+            esac
+        done
+        
+        # Build profile arguments
+        PROFILE_ARGS=""
+        case "$START_MODE" in
+            minimal)
+                PROFILE_ARGS="--profile core"
+                echo "🚀 Starting Stackvo (minimal mode: core services only)..."
+                ;;
+            services)
+                PROFILE_ARGS="--profile core --profile services"
+                echo "🚀 Starting Stackvo (core + services)..."
+                ;;
+            projects)
+                PROFILE_ARGS="--profile core --profile projects"
+                echo "🚀 Starting Stackvo (core + projects)..."
+                ;;
+            all)
+                PROFILE_ARGS="--profile core --profile services --profile projects"
+                echo "🚀 Starting Stackvo (all services and projects)..."
+                ;;
+        esac
+        
+        # Add custom profiles if specified
+        for profile in "${CUSTOM_PROFILES[@]}"; do
+            PROFILE_ARGS="$PROFILE_ARGS --profile $profile"
+            echo "  + Including profile: $profile"
+        done
+        
+        # Start with profiles
         export BUILDKIT_PROGRESS=plain
-        echo "🚀 Starting Stackvo services..."
-        docker compose "${COMPOSE_FILES[@]}" up -d --build --pull=missing --remove-orphans 2>&1 | grep -v "^#" | grep -v "^DEPRECATED" || true
-        echo "✅ Stackvo services started successfully!"
+        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS up -d --build --pull=missing --remove-orphans 2>&1 | grep -v "^#" | grep -v "^DEPRECATED" || true
+        echo "✅ Stackvo started successfully!"
         ;;
 
     down)
@@ -83,7 +136,11 @@ case "$COMMAND" in
         echo "  stackvo generate              → generate dynamic compose (all)"
         echo "  stackvo generate projects     → generate only projects"
         echo "  stackvo generate services     → generate only services"
-        echo "  stackvo up                    → start all systems"
+        echo "  stackvo up                    → start core services (minimal)"
+        echo "  stackvo up --services         → start core + all services"
+        echo "  stackvo up --projects         → start core + all projects"
+        echo "  stackvo up --all              → start everything (old behavior)"
+        echo "  stackvo up --profile <name>   → start core + specific profile"
         echo "  stackvo down                  → stop the system"
         echo "  stackvo restart               → restart services"
         echo "  stackvo ps                    → list running services"
@@ -91,6 +148,11 @@ case "$COMMAND" in
         echo "  stackvo pull                  → pull Docker images"
         echo "  stackvo doctor                → system health check"
         echo "  stackvo uninstall             → uninstall Stackvo"
+        echo ""
+        echo "Examples:"
+        echo "  stackvo up                    → Start only Traefik + UI"
+        echo "  stackvo up --profile mysql    → Start core + MySQL only"
+        echo "  stackvo up --profile project-myproject  → Start core + myproject only"
         echo ""
         exit 1
         ;;

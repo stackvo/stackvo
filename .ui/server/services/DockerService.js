@@ -139,7 +139,7 @@ class DockerService {
       return {
         name: serviceName,
         containerName: containerName,
-        enabled: enabled,
+        configured: enabled,  // .env'de SERVICE_*_ENABLE=true olup olmadığı
         url: url,
         domain: url
           ? url.replace("https://", "").replace("http://", "").split("/")[0]
@@ -157,15 +157,15 @@ class DockerService {
 
     const services = await Promise.all(servicesPromises);
 
-    // Sort services: Running first, then Enabled, then Disabled
+    // Sort services: Running first, then Configured, then Disabled
     services.sort((a, b) => {
       // Running services first
       if (a.running && !b.running) return -1;
       if (!a.running && b.running) return 1;
 
-      // Then enabled services
-      if (a.enabled && !b.enabled) return -1;
-      if (!a.enabled && b.enabled) return 1;
+      // Then configured services
+      if (a.configured && !b.configured) return -1;
+      if (!a.configured && b.configured) return 1;
 
       // Finally sort by name
       return a.name.localeCompare(b.name);
@@ -266,7 +266,7 @@ class DockerService {
         return {
           name: toolName,
           containerName: containerName,
-          enabled: enabled,
+          configured: enabled,  // .env'de TOOLS_*_ENABLE=true olup olmadığı
           version: toolVersions[toolName] || "latest",
           url: url,
           domain: domain,
@@ -281,12 +281,12 @@ class DockerService {
       })
     );
 
-    // Sort: Running first, then Enabled, then Disabled
+    // Sort: Running first, then Configured, then Disabled
     tools.sort((a, b) => {
       if (a.running && !b.running) return -1;
       if (!a.running && b.running) return 1;
-      if (a.enabled && !b.enabled) return -1;
-      if (!a.enabled && b.enabled) return 1;
+      if (a.configured && !b.configured) return -1;
+      if (!a.configured && b.configured) return 1;
       return a.name.localeCompare(b.name);
     });
 
@@ -675,14 +675,16 @@ class DockerService {
   }
 
   /**
-   * Build project containers
+   * Build project containers with realtime progress streaming
+   * @param {string} projectName - Project name
+   * @param {Object} io - Socket.io instance (optional)
    */
-  async buildContainer(projectName) {
+  async buildContainer(projectName, io = null) {
     const path = await import("path");
+    const { spawn } = await import("child_process");
 
     try {
       // Use container path for compose file (we're running inside container)
-      // But the compose file itself contains host paths for build contexts
       const containerRootDir = process.env.STACKVO_ROOT || "/app";
       const composeFile = path.join(
         containerRootDir,
@@ -693,26 +695,136 @@ class DockerService {
       console.log(`Building container for project: ${projectName}`);
       console.log(`Using compose file: ${composeFile}`);
 
-      // Stackvo uses single-container architecture
-      // Note: compose file uses absolute paths, so we don't need cwd
-      const buildCommand = `docker-compose -f "${composeFile}" build ${projectName}`;
-
-      console.log(`Running: ${buildCommand}`);
-      const { stdout: buildOutput, stderr: buildStderr } = await execAsync(buildCommand);
-
-      if (buildStderr) {
-        console.log('Build stderr:', buildStderr);
+      // Emit start event
+      if (io) {
+        io.emit("build:start", { project: projectName });
       }
+
+      // Build with streaming output
+      const buildProcess = spawn("docker-compose", [
+        "-f",
+        composeFile,
+        "build",
+        projectName,
+      ]);
+
+      let buildOutput = "";
+      let buildError = "";
+
+      // Stream stdout
+      buildProcess.stdout.on("data", (data) => {
+        const output = data.toString();
+        buildOutput += output;
+        console.log(output);
+        
+        if (io) {
+          io.emit("build:progress", {
+            project: projectName,
+            output: output,
+            type: "stdout",
+          });
+        }
+      });
+
+      // Stream stderr
+      buildProcess.stderr.on("data", (data) => {
+        const output = data.toString();
+        buildError += output;
+        console.error(output);
+        
+        if (io) {
+          io.emit("build:progress", {
+            project: projectName,
+            output: output,
+            type: "stderr",
+          });
+        }
+      });
+
+      // Wait for build completion
+      const buildExitCode = await new Promise((resolve) => {
+        buildProcess.on("close", (code) => {
+          resolve(code);
+        });
+      });
+
+      if (buildExitCode !== 0) {
+        throw new Error(
+          `Build failed with exit code ${buildExitCode}: ${buildError}`
+        );
+      }
+
       console.log(`Build successful, creating container for: ${projectName}`);
 
+      // Emit progress for container start
+      if (io) {
+        io.emit("build:progress", {
+          project: projectName,
+          output: "Build successful! Starting container...\n",
+          type: "info",
+        });
+      }
+
       // Create and start container with docker-compose up
-      const upCommand = `docker-compose -f "${composeFile}" up -d --no-build ${projectName}`;
+      const upProcess = spawn("docker-compose", [
+        "-f",
+        composeFile,
+        "up",
+        "-d",
+        "--no-build",
+        projectName,
+      ]);
 
-      console.log(`Running: ${upCommand}`);
-      const { stdout: upOutput, stderr: upStderr } = await execAsync(upCommand);
+      let upOutput = "";
+      let upError = "";
 
-      if (upStderr) {
-        console.log('Up stderr:', upStderr);
+      upProcess.stdout.on("data", (data) => {
+        const output = data.toString();
+        upOutput += output;
+        console.log(output);
+        
+        if (io) {
+          io.emit("build:progress", {
+            project: projectName,
+            output: output,
+            type: "stdout",
+          });
+        }
+      });
+
+      upProcess.stderr.on("data", (data) => {
+        const output = data.toString();
+        upError += output;
+        console.error(output);
+        
+        if (io) {
+          io.emit("build:progress", {
+            project: projectName,
+            output: output,
+            type: "stderr",
+          });
+        }
+      });
+
+      // Wait for up completion
+      const upExitCode = await new Promise((resolve) => {
+        upProcess.on("close", (code) => {
+          resolve(code);
+        });
+      });
+
+      if (upExitCode !== 0) {
+        throw new Error(
+          `Container start failed with exit code ${upExitCode}: ${upError}`
+        );
+      }
+
+      // Emit success
+      if (io) {
+        io.emit("build:success", {
+          project: projectName,
+          message: `Container built and started successfully`,
+        });
       }
 
       return {
@@ -722,10 +834,19 @@ class DockerService {
       };
     } catch (error) {
       console.error("Build error:", error);
+
+      // Emit error
+      if (io) {
+        io.emit("build:error", {
+          project: projectName,
+          error: error.message,
+        });
+      }
+
       return {
         success: false,
         message: `Failed to build container: ${error.message}`,
-        output: error.stdout || error.stderr || error.message,
+        output: error.message,
       };
     }
   }

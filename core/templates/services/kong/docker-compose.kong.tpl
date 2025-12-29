@@ -4,6 +4,7 @@
 
 services:
   kong:
+    profiles: ["services", "kong"]  # --services ile tümü, --profile kong ile sadece bu servis
     image: "kong:{{ SERVICE_KONG_VERSION }}"
     container_name: "stackvo-kong"
     restart: unless-stopped

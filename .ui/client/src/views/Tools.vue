@@ -91,7 +91,7 @@
         <template v-slot:item.status="{ item }">
           <!-- Disabled tool - Enable button (icon only) -->
           <v-btn 
-            v-if="!item.enabled" 
+            v-if="!item.configured" 
             icon
             size="small" 
             color="success" 
@@ -119,7 +119,7 @@
         </template>
 
         <template v-slot:item.open="{ item }">
-          <v-btn v-if="item.url && item.enabled" block size="small" color="primary" variant="tonal" :href="item.url" target="_blank">
+          <v-btn v-if="item.url && item.configured" block size="small" color="primary" variant="tonal" :href="item.url" target="_blank">
             <v-icon>mdi-open-in-new</v-icon>
           </v-btn>
         </template>

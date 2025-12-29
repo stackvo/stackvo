@@ -92,7 +92,7 @@
         <template v-slot:item.status="{ item }">
           <!-- Disabled service - Enable button (icon only) -->
           <v-btn 
-            v-if="!item.enabled" 
+            v-if="!item.configured" 
             icon
             size="small" 
             color="success" 
@@ -120,8 +120,8 @@
         </template>
 
         <template v-slot:item.control="{ item }">
-          <!-- Only show Start/Stop for enabled services -->
-          <template v-if="item.enabled">
+          <!-- Only show Start/Stop for configured services -->
+          <template v-if="item.configured">
             <!-- Running - Stop button -->
             <v-btn 
               v-if="item.running" 
@@ -153,9 +153,9 @@
         </template>
 
         <template v-slot:item.restart="{ item }">
-          <!-- Only show Restart for enabled + running services -->
+          <!-- Only show Restart for configured + running services -->
           <v-btn 
-            v-if="item.enabled && item.running" 
+            v-if="item.configured && item.running" 
             block 
             size="small" 
             color="warning" 
@@ -358,6 +358,46 @@
       </v-data-table>
     </v-card>
 
+    <!-- Progress Dialog -->
+    <v-dialog v-model="showProgress" max-width="700" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon start>mdi-cog-sync</v-icon>
+          {{ progressOperation }} {{ progressService }}
+          <v-spacer></v-spacer>
+          <v-chip color="primary" variant="tonal">
+            Processing...
+          </v-chip>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="pa-4">
+          <!-- Progress Steps -->
+          <v-list density="compact">
+            <v-list-item
+              v-for="(step, index) in progressSteps"
+              :key="index"
+              :prepend-icon="
+                step.status === 'done'
+                  ? 'mdi-check-circle'
+                  : step.status === 'running'
+                  ? 'mdi-loading mdi-spin'
+                  : 'mdi-circle-outline'
+              "
+              :class="{
+                'text-success': step.status === 'done',
+                'text-primary': step.status === 'running',
+                'text-grey': step.status === 'pending',
+              }"
+            >
+              <v-list-item-title>{{ step.message }}</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
     <!-- Overlay -->
     <v-overlay v-model="showOverlay" class="align-center justify-center" :opacity="0.8">
       <v-card class="pa-8 text-center" min-width="300">
@@ -369,8 +409,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue';
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue';
 import { useServicesStore } from '@/stores/services';
+import { io } from "socket.io-client";
 
 const isNavigating = inject('isNavigating', ref(false));
 
@@ -380,6 +421,15 @@ const expandedServices = ref([]);
 const loadingServices = ref({});
 const showOverlay = ref(false);
 const overlayMessage = ref('');
+
+// WebSocket for realtime status updates
+const socket = ref(null);
+
+// Progress dialog for enable/disable operations
+const showProgress = ref(false);
+const progressOperation = ref('');
+const progressService = ref('');
+const progressSteps = ref([]);
 
 const serviceHeaders = [
   { title: 'Service', key: 'name', sortable: true },
@@ -470,5 +520,186 @@ async function disableService(serviceName) {
 
 onMounted(async () => {
   await servicesStore.loadServices();
+  
+  // Connect to WebSocket
+  socket.value = io();
+  
+  // Listen to service events
+  socket.value.on("service:enabling", (data) => {
+    console.log("Service enabling:", data.service);
+    showProgress.value = true;
+    progressOperation.value = "Enabling";
+    progressService.value = data.service;
+    progressSteps.value = [
+      { message: "Updating .env configuration...", status: "running" },
+      { message: "Generating Docker Compose files...", status: "pending" },
+      { message: "Starting container...", status: "pending" },
+    ];
+  });
+  
+  socket.value.on("service:enabled", (data) => {
+    console.log("Service enabled:", data.service);
+    
+    // Update progress steps
+    progressSteps.value = [
+      { message: "Updating .env configuration...", status: "done" },
+      { message: "Generating Docker Compose files...", status: "done" },
+      { message: "Starting container...", status: "done" },
+    ];
+    
+    // Update service in store
+    const service = servicesStore.services.find(s => s.name === data.service);
+    if (service) {
+      service.configured = data.configured;
+      service.running = data.running;
+    }
+    
+    // Close dialog after 1 second
+    setTimeout(() => {
+      showProgress.value = false;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("service:disabling", (data) => {
+    console.log("Service disabling:", data.service);
+    showProgress.value = true;
+    progressOperation.value = "Disabling";
+    progressService.value = data.service;
+    progressSteps.value = [
+      { message: "Stopping container...", status: "running" },
+      { message: "Updating .env configuration...", status: "pending" },
+      { message: "Generating Docker Compose files...", status: "pending" },
+    ];
+  });
+  
+  socket.value.on("service:disabled", (data) => {
+    console.log("Service disabled:", data.service);
+    
+    // Update progress steps
+    progressSteps.value = [
+      { message: "Stopping container...", status: "done" },
+      { message: "Updating .env configuration...", status: "done" },
+      { message: "Generating Docker Compose files...", status: "done" },
+    ];
+    
+    // Update service in store
+    const service = servicesStore.services.find(s => s.name === data.service);
+    if (service) {
+      service.configured = data.configured;
+      service.running = data.running;
+    }
+    
+    // Close dialog after 1 second
+    setTimeout(() => {
+      showProgress.value = false;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("service:starting", (data) => {
+    console.log("Service starting:", data.service);
+    showProgress.value = true;
+    progressOperation.value = "Starting";
+    progressService.value = data.service;
+    progressSteps.value = [
+      { message: "Starting container...", status: "running" },
+    ];
+  });
+  
+  socket.value.on("service:started", (data) => {
+    console.log("Service started:", data.service);
+    
+    // Update progress steps
+    progressSteps.value = [
+      { message: "Starting container...", status: "done" },
+    ];
+    
+    // Update service in store
+    const service = servicesStore.services.find(s => s.name === data.service);
+    if (service) {
+      service.running = data.running;
+    }
+    
+    // Close dialog after 1 second
+    setTimeout(() => {
+      showProgress.value = false;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("service:stopping", (data) => {
+    console.log("Service stopping:", data.service);
+    showProgress.value = true;
+    progressOperation.value = "Stopping";
+    progressService.value = data.service;
+    progressSteps.value = [
+      { message: "Stopping container...", status: "running" },
+    ];
+  });
+  
+  socket.value.on("service:stopped", (data) => {
+    console.log("Service stopped:", data.service);
+    
+    // Update progress steps
+    progressSteps.value = [
+      { message: "Stopping container...", status: "done" },
+    ];
+    
+    // Update service in store
+    const service = servicesStore.services.find(s => s.name === data.service);
+    if (service) {
+      service.running = data.running;
+    }
+    
+    // Close dialog after 1 second
+    setTimeout(() => {
+      showProgress.value = false;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("service:restarting", (data) => {
+    console.log("Service restarting:", data.service);
+    showProgress.value = true;
+    progressOperation.value = "Restarting";
+    progressService.value = data.service;
+    progressSteps.value = [
+      { message: "Stopping container...", status: "running" },
+      { message: "Starting container...", status: "pending" },
+    ];
+  });
+  
+  socket.value.on("service:restarted", (data) => {
+    console.log("Service restarted:", data.service);
+    
+    // Update progress steps
+    progressSteps.value = [
+      { message: "Stopping container...", status: "done" },
+      { message: "Starting container...", status: "done" },
+    ];
+    
+    // Update service in store
+    const service = servicesStore.services.find(s => s.name === data.service);
+    if (service) {
+      service.running = data.running;
+    }
+    
+    // Close dialog after 1 second
+    setTimeout(() => {
+      showProgress.value = false;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("service:error", (data) => {
+    console.error("Service error:", data.service, data.error);
+  });
+});
+
+onUnmounted(() => {
+  if (socket.value) {
+    socket.value.disconnect();
+  }
 });
 </script>

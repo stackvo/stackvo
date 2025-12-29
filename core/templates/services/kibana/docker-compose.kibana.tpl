@@ -4,6 +4,7 @@
 
 services:
   kibana:
+    profiles: ["services", "kibana"]  # --services ile tümü, --profile kibana ile sadece bu servis
     image: "kibana:{{ SERVICE_KIBANA_VERSION }}"
     container_name: "stackvo-kibana"
     restart: unless-stopped

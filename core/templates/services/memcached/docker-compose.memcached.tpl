@@ -4,6 +4,7 @@
 
 services:
   memcached:
+    profiles: ["services", "memcached"]  # --services ile tümü, --profile memcached ile sadece bu servis
     image: "memcached:{{ SERVICE_MEMCACHED_VERSION }}"
     container_name: "stackvo-memcached"
     restart: unless-stopped

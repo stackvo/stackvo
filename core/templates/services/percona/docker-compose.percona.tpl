@@ -4,6 +4,7 @@
 
 services:
   percona:
+    profiles: ["services", "percona"]  # --services ile tümü, --profile percona ile sadece bu servis
     image: "percona:{{ SERVICE_PERCONA_VERSION }}"
     container_name: "stackvo-percona"
     platform: linux/amd64

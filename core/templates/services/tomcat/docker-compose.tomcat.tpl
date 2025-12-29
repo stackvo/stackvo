@@ -4,6 +4,7 @@
 
 services:
   tomcat:
+    profiles: ["services", "tomcat"]  # --services ile tümü, --profile tomcat ile sadece bu servis
     image: "tomcat:{{ SERVICE_TOMCAT_VERSION }}"
     container_name: "stackvo-tomcat"
     restart: unless-stopped

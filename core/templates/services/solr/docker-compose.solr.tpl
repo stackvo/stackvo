@@ -4,6 +4,7 @@
 
 services:
   solr:
+    profiles: ["services", "solr"]  # --services ile tümü, --profile solr ile sadece bu servis
     image: "solr:{{ SERVICE_SOLR_VERSION }}"
     container_name: "stackvo-solr"
     restart: unless-stopped

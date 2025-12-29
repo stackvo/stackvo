@@ -4,6 +4,7 @@
 
 services:
   sonarqube:
+    profiles: ["services", "sonarqube"]  # --services ile tümü, --profile sonarqube ile sadece bu servis
     image: "sonarqube:{{ SERVICE_SONARQUBE_VERSION }}"
     container_name: "stackvo-sonarqube"
     restart: unless-stopped

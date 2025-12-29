@@ -4,6 +4,7 @@
 
 services:
   nats:
+    profiles: ["services", "nats"]  # --services ile tümü, --profile nats ile sadece bu servis
     image: "nats:{{ SERVICE_NATS_VERSION }}"
     container_name: "stackvo-nats"
     restart: unless-stopped

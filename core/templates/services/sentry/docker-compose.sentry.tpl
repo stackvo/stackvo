@@ -4,6 +4,7 @@
 
 services:
   sentry:
+    profiles: ["services", "sentry"]  # --services ile tümü, --profile sentry ile sadece bu servis
     image: "getsentry/sentry:{{ SERVICE_SENTRY_VERSION }}"
     container_name: "stackvo-sentry"
     restart: unless-stopped

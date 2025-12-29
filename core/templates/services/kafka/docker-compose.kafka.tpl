@@ -4,6 +4,7 @@
 
 services:
   zookeeper:
+    profiles: ["services", "kafka"]  # --services ile tümü, --profile kafka ile sadece bu servis
     image: confluentinc/cp-zookeeper:latest
     container_name: stackvo-zookeeper
     restart: unless-stopped

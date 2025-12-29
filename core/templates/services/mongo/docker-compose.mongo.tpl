@@ -4,6 +4,7 @@
 
 services:
   mongo:
+    profiles: ["services", "mongo"]  # --services ile tümü, --profile mongo ile sadece bu servis
     image: "mongo:{{ SERVICE_MONGO_VERSION }}"
     container_name: "stackvo-mongo"
     restart: unless-stopped

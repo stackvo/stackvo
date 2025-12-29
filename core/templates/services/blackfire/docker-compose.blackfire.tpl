@@ -4,6 +4,7 @@
 
 services:
   blackfire:
+    profiles: ["services", "blackfire"]  # --services ile tümü, --profile blackfire ile sadece bu servis
     image: "blackfire/blackfire:{{ SERVICE_BLACKFIRE_VERSION }}"
     container_name: "stackvo-blackfire"
     restart: unless-stopped

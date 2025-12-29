@@ -26,6 +26,28 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+        
+        # Timeout settings for long-running operations (e.g., Docker builds)
+        proxy_read_timeout 600s;      # 10 minutes for build operations
+        proxy_connect_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+    
+    # Socket.io WebSocket proxy
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        # WebSocket timeouts
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
     }
 
     # Vue.js SPA - serve index.html for all routes

@@ -4,6 +4,7 @@
 
 services:
   ngrok:
+    profiles: ["services", "ngrok"]  # --services ile tümü, --profile ngrok ile sadece bu servis
     image: "ngrok/ngrok:{{ SERVICE_NGROK_VERSION }}"
     container_name: "stackvo-ngrok"
     restart: unless-stopped

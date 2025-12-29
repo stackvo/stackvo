@@ -4,6 +4,7 @@
 
 services:
   selenium:
+    profiles: ["services", "selenium"]  # --services ile tümü, --profile selenium ile sadece bu servis
     image: "selenium/standalone-chrome:{{ SERVICE_SELENIUM_VERSION }}"
     container_name: "stackvo-selenium"
     restart: unless-stopped

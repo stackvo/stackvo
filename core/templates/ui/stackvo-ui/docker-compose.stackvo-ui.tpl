@@ -5,6 +5,7 @@
 
 services:
   stackvo-ui:
+    profiles: ["core"]  # Core service - minimal başlatmada otomatik başlar
     build:
       context: ..
       dockerfile: generated/ui/Dockerfile

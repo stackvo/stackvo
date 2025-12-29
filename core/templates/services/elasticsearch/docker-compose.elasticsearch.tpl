@@ -4,6 +4,7 @@
 
 services:
   elasticsearch:
+    profiles: ["services", "elasticsearch"]  # --services ile tümü, --profile elasticsearch ile sadece bu servis
     image: "docker.elastic.co/elasticsearch/elasticsearch:{{ SERVICE_ELASTICSEARCH_VERSION }}"
     container_name: "stackvo-elasticsearch"
     restart: unless-stopped

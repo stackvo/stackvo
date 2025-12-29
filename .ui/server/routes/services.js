@@ -31,12 +31,36 @@ router.get('/', async (req, res) => {
 router.post('/:containerName/start', async (req, res) => {
   try {
     const { containerName } = req.params;
+    const io = req.app.get('io');
+    
+    // Emit starting event
+    if (io) {
+      io.emit('service:starting', { service: containerName });
+    }
+    
     const result = await dockerService.startContainer(containerName);
+    
+    // Emit success event
+    if (io) {
+      io.emit('service:started', { 
+        service: containerName,
+        running: true
+      });
+    }
+    
     res.json({
       success: true,
       message: result.message
     });
   } catch (error) {
+    // Emit error event
+    if (io) {
+      io.emit('service:error', { 
+        service: containerName,
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: error.message
@@ -51,12 +75,36 @@ router.post('/:containerName/start', async (req, res) => {
 router.post('/:containerName/stop', async (req, res) => {
   try {
     const { containerName } = req.params;
+    const io = req.app.get('io');
+    
+    // Emit stopping event
+    if (io) {
+      io.emit('service:stopping', { service: containerName });
+    }
+    
     const result = await dockerService.stopContainer(containerName);
+    
+    // Emit success event
+    if (io) {
+      io.emit('service:stopped', { 
+        service: containerName,
+        running: false
+      });
+    }
+    
     res.json({
       success: true,
       message: result.message
     });
   } catch (error) {
+    // Emit error event
+    if (io) {
+      io.emit('service:error', { 
+        service: containerName,
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: error.message
@@ -71,12 +119,36 @@ router.post('/:containerName/stop', async (req, res) => {
 router.post('/:containerName/restart', async (req, res) => {
   try {
     const { containerName } = req.params;
+    const io = req.app.get('io');
+    
+    // Emit restarting event
+    if (io) {
+      io.emit('service:restarting', { service: containerName });
+    }
+    
     const result = await dockerService.restartContainer(containerName);
+    
+    // Emit success event
+    if (io) {
+      io.emit('service:restarted', { 
+        service: containerName,
+        running: true
+      });
+    }
+    
     res.json({
       success: true,
       message: result.message
     });
   } catch (error) {
+    // Emit error event
+    if (io) {
+      io.emit('service:error', { 
+        service: containerName,
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: error.message
@@ -91,10 +163,25 @@ router.post('/:serviceName/enable', async (req, res) => {
   try {
     const { serviceName } = req.params;
     const dockerService = req.app.get('dockerService');
+    const io = req.app.get('io');
     const EnvService = (await import('../services/EnvService.js')).default;
     const envService = new EnvService();
     
+    // Emit enabling event
+    if (io) {
+      io.emit('service:enabling', { service: serviceName });
+    }
+    
     const result = await dockerService.enableService(serviceName, envService);
+    
+    // Emit success event
+    if (io) {
+      io.emit('service:enabled', { 
+        service: serviceName,
+        configured: true,
+        running: result.running || false
+      });
+    }
     
     res.json({
       success: true,
@@ -102,6 +189,15 @@ router.post('/:serviceName/enable', async (req, res) => {
     });
   } catch (error) {
     console.error('Enable service error:', error);
+    
+    // Emit error event
+    if (io) {
+      io.emit('service:error', { 
+        service: serviceName,
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: error.message
@@ -116,10 +212,25 @@ router.post('/:serviceName/disable', async (req, res) => {
   try {
     const { serviceName } = req.params;
     const dockerService = req.app.get('dockerService');
+    const io = req.app.get('io');
     const EnvService = (await import('../services/EnvService.js')).default;
     const envService = new EnvService();
     
+    // Emit disabling event
+    if (io) {
+      io.emit('service:disabling', { service: serviceName });
+    }
+    
     const result = await dockerService.disableService(serviceName, envService);
+    
+    // Emit success event
+    if (io) {
+      io.emit('service:disabled', { 
+        service: serviceName,
+        configured: false,
+        running: false
+      });
+    }
     
     res.json({
       success: true,
@@ -127,6 +238,15 @@ router.post('/:serviceName/disable', async (req, res) => {
     });
   } catch (error) {
     console.error('Disable service error:', error);
+    
+    // Emit error event
+    if (io) {
+      io.emit('service:error', { 
+        service: serviceName,
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: error.message

@@ -4,6 +4,7 @@
 
 services:
   couchdb:
+    profiles: ["services", "couchdb"]  # --services ile tümü, --profile couchdb ile sadece bu servis
     image: "couchdb:{{ SERVICE_COUCHDB_VERSION }}"
     container_name: "stackvo-couchdb"
     restart: unless-stopped

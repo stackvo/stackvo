@@ -4,6 +4,7 @@
 
 services:
   activemq:
+    profiles: ["services", "activemq"]  # --services ile tümü, --profile activemq ile sadece bu servis
     image: "apache/activemq-classic:{{ SERVICE_ACTIVEMQ_VERSION }}"
     container_name: "stackvo-activemq"
     restart: unless-stopped

@@ -814,6 +814,116 @@
       </v-card>
     </v-dialog>
 
+    <!-- Progress Dialog (Redesigned - Services Style) -->
+    <v-dialog v-model="showBuildProgress" max-width="700" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon start>mdi-cog-sync</v-icon>
+          Building {{ currentBuildProject }}
+          <v-spacer></v-spacer>
+          <v-chip
+            :color="
+              buildProgress[currentBuildProject]?.status === 'building'
+                ? 'primary'
+                : buildProgress[currentBuildProject]?.status === 'success'
+                ? 'success'
+                : 'error'
+            "
+            variant="tonal"
+          >
+            {{
+              buildProgress[currentBuildProject]?.status === "building"
+                ? "Processing..."
+                : buildProgress[currentBuildProject]?.status === "success"
+                ? "Success!"
+                : "Failed"
+            }}
+          </v-chip>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="pa-4">
+          <!-- Progress Steps -->
+          <v-list density="compact">
+            <v-list-item
+              v-for="(step, index) in progressSteps"
+              :key="index"
+              :prepend-icon="
+                step.status === 'done'
+                  ? 'mdi-check-circle'
+                  : step.status === 'running'
+                  ? 'mdi-loading mdi-spin'
+                  : 'mdi-circle-outline'
+              "
+              :class="{
+                'text-success': step.status === 'done',
+                'text-primary': step.status === 'running',
+                'text-grey': step.status === 'pending',
+              }"
+            >
+              <v-list-item-title>{{ step.message }}</v-list-item-title>
+            </v-list-item>
+          </v-list>
+
+          <!-- Build Logs (Show/Hide) - Only for Build operation -->
+          <div v-if="buildLogs[currentBuildProject]?.length > 0" class="mt-4">
+            <v-btn
+              @click="showLogs = !showLogs"
+              variant="outlined"
+              size="small"
+              block
+            >
+              <v-icon start>{{ showLogs ? 'mdi-eye-off' : 'mdi-eye' }}</v-icon>
+              {{ showLogs ? 'Hide Logs' : 'Show Logs' }}
+            </v-btn>
+
+            <v-card
+              v-if="showLogs"
+              elevation="0"
+              color="grey-darken-4"
+              class="pa-2 mt-2"
+            >
+              <div
+                style="
+                  max-height: 300px;
+                  overflow-y: auto;
+                  font-family: monospace;
+                  font-size: 12px;
+                "
+              >
+                <div
+                  v-for="(log, index) in buildLogs[currentBuildProject]"
+                  :key="index"
+                  :class="{
+                    'text-red': log.type === 'stderr',
+                    'text-blue': log.type === 'info',
+                    'text-white': log.type === 'stdout',
+                  }"
+                  style="white-space: pre-wrap; word-break: break-all"
+                >
+                  {{ log.output }}
+                </div>
+              </div>
+            </v-card>
+          </div>
+        </v-card-text>
+
+        <v-divider></v-divider>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            v-if="buildProgress[currentBuildProject]?.status === 'error'"
+            color="error"
+            @click="showBuildProgress = false"
+          >
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Snackbar -->
     <v-snackbar v-model="showSnackbar" :color="snackbarColor" :timeout="3000">
       {{ snackbarMessage }}
@@ -825,8 +935,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, inject } from "vue";
+import { ref, onMounted, onUnmounted, computed, inject } from "vue";
 import { useProjectsStore } from "@/stores/projects";
+import { io } from "socket.io-client";
 
 const projectsStore = useProjectsStore();
 const newProjectDrawer = inject("newProjectDrawer");
@@ -844,6 +955,15 @@ const projectToDelete = ref(null);
 const deleteLoading = ref(false);
 const terminalDialog = ref(false);
 const terminalCommand = ref("");
+
+// WebSocket for realtime build progress
+const socket = ref(null);
+const buildProgress = ref({});
+const buildLogs = ref({});
+const showBuildProgress = ref(false);
+const currentBuildProject = ref(null);
+const showLogs = ref(false); // Show/hide logs
+const progressSteps = ref([]); // Progress steps for all operations
 
 const projectHeaders = [
   { title: "Project", key: "name", sortable: true, align: "left" },
@@ -945,23 +1065,25 @@ async function stopProject(projectName) {
 }
 
 async function buildProject(projectName) {
-  loadingProjects.value[projectName] = "build";
-  showOverlay.value = true;
-  overlayMessage.value = `Building containers for ${projectName}...`;
-
   try {
-    await projectsStore.buildProject(projectName);
-    snackbarMessage.value = `Project "${projectName}" built successfully!`;
-    snackbarColor.value = "success";
-    showSnackbar.value = true;
+    // Start build (202 Accepted - immediate return)
+    const response = await fetch(`/api/projects/${projectName}/build`, {
+      method: "POST",
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message);
+    }
+
+    // Progress will be shown via WebSocket events
+    // No need to wait here, build runs in background
   } catch (error) {
-    console.error("Failed to build project:", error);
-    snackbarMessage.value = `Failed to build "${projectName}": ${error.message}`;
+    console.error("Failed to start build:", error);
+    snackbarMessage.value = `Failed to start build for "${projectName}": ${error.message}`;
     snackbarColor.value = "error";
     showSnackbar.value = true;
-  } finally {
-    delete loadingProjects.value[projectName];
-    showOverlay.value = false;
   }
 }
 
@@ -1019,19 +1141,16 @@ async function confirmDeleteProject() {
   if (!projectToDelete.value) return;
 
   deleteLoading.value = true;
+  deleteDialog.value = false; // Close confirmation dialog immediately
+  
   try {
+    // API call will trigger WebSocket events (project:deleting, project:deleted)
+    // which will show the progress dialog automatically
     await projectsStore.deleteProject(projectToDelete.value.name);
-
-    snackbarMessage.value = `Project "${projectToDelete.value.name}" deleted successfully!`;
-    snackbarColor.value = "success";
-    showSnackbar.value = true;
-    deleteDialog.value = false;
     projectToDelete.value = null;
   } catch (error) {
     console.error("Failed to delete project:", error);
-    snackbarMessage.value = `Failed to delete "${projectToDelete.value.name}": ${error.message}`;
-    snackbarColor.value = "error";
-    showSnackbar.value = true;
+    // Error will be shown in progress dialog via project:error event
   } finally {
     deleteLoading.value = false;
   }
@@ -1039,5 +1158,250 @@ async function confirmDeleteProject() {
 
 onMounted(async () => {
   await projectsStore.loadProjects();
+  
+  // Connect to WebSocket
+  socket.value = io();
+  
+  // Listen to build events
+  socket.value.on("build:start", (data) => {
+    console.log("Build started:", data.project);
+    currentBuildProject.value = data.project;
+    buildProgress.value[data.project] = {
+      status: "building",
+      progress: 0,
+    };
+    buildLogs.value[data.project] = [];
+    progressSteps.value = [
+      { message: "Building Docker image...", status: "running" },
+      { message: "Starting container...", status: "pending" },
+    ];
+    showLogs.value = false;
+    showBuildProgress.value = true;
+  });
+  
+  socket.value.on("build:progress", (data) => {
+    if (!buildLogs.value[data.project]) {
+      buildLogs.value[data.project] = [];
+    }
+    buildLogs.value[data.project].push({
+      type: data.type,
+      output: data.output,
+      timestamp: new Date(),
+    });
+    
+    // Update progress steps based on log count
+    const logCount = buildLogs.value[data.project].length;
+    if (logCount > 50 && progressSteps.value[0]?.status === 'running') {
+      progressSteps.value[0].status = 'done';
+      progressSteps.value[1].status = 'running';
+    }
+    
+    // Update progress (estimate based on log lines)
+    const progress = Math.min(95, logCount * 2);
+    buildProgress.value[data.project].progress = progress;
+  });
+  
+  socket.value.on("build:success", (data) => {
+    console.log("Build success:", data.project);
+    progressSteps.value = [
+      { message: "Building Docker image...", status: "done" },
+      { message: "Starting container...", status: "done" },
+    ];
+    buildProgress.value[data.project] = {
+      status: "success",
+      progress: 100,
+      message: data.message,
+    };
+    
+    // Reload projects after 2 seconds
+    setTimeout(async () => {
+      await projectsStore.loadProjects();
+      showBuildProgress.value = false;
+      delete buildProgress.value[data.project];
+      delete buildLogs.value[data.project];
+      currentBuildProject.value = null;
+      progressSteps.value = [];
+      showLogs.value = false;
+    }, 2000);
+  });
+  
+  socket.value.on("build:error", (data) => {
+    console.error("Build error:", data.project, data.error);
+    buildProgress.value[data.project] = {
+      status: "error",
+      progress: 0,
+      message: data.error,
+    };
+  });
+  
+  // Start/Stop/Restart/Delete events
+  socket.value.on("project:starting", (data) => {
+    console.log("Project starting:", data.project);
+    currentBuildProject.value = data.project;
+    buildProgress.value[data.project] = { status: "building" };
+    progressSteps.value = [
+      { message: "Starting containers...", status: "running" },
+    ];
+    showLogs.value = false;
+    showBuildProgress.value = true;
+  });
+  
+  socket.value.on("project:started", (data) => {
+    console.log("Project started:", data.project);
+    progressSteps.value = [
+      { message: "Starting containers...", status: "done" },
+    ];
+    buildProgress.value[data.project] = { status: "success" };
+    
+    // Update project in store
+    const project = projectsStore.projects.find(p => p.name === data.project);
+    if (project) {
+      project.running = data.running;
+    }
+    
+    setTimeout(() => {
+      showBuildProgress.value = false;
+      currentBuildProject.value = null;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("project:stopping", (data) => {
+    console.log("Project stopping:", data.project);
+    currentBuildProject.value = data.project;
+    buildProgress.value[data.project] = { status: "building" };
+    progressSteps.value = [
+      { message: "Stopping containers...", status: "running" },
+    ];
+    showLogs.value = false;
+    showBuildProgress.value = true;
+  });
+  
+  socket.value.on("project:stopped", (data) => {
+    console.log("Project stopped:", data.project);
+    progressSteps.value = [
+      { message: "Stopping containers...", status: "done" },
+    ];
+    buildProgress.value[data.project] = { status: "success" };
+    
+    const project = projectsStore.projects.find(p => p.name === data.project);
+    if (project) {
+      project.running = data.running;
+    }
+    
+    setTimeout(() => {
+      showBuildProgress.value = false;
+      currentBuildProject.value = null;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("project:restarting", (data) => {
+    console.log("Project restarting:", data.project);
+    currentBuildProject.value = data.project;
+    buildProgress.value[data.project] = { status: "building" };
+    progressSteps.value = [
+      { message: "Stopping containers...", status: "running" },
+      { message: "Starting containers...", status: "pending" },
+    ];
+    showLogs.value = false;
+    showBuildProgress.value = true;
+  });
+  
+  socket.value.on("project:restarted", (data) => {
+    console.log("Project restarted:", data.project);
+    progressSteps.value = [
+      { message: "Stopping containers...", status: "done" },
+      { message: "Starting containers...", status: "done" },
+    ];
+    buildProgress.value[data.project] = { status: "success" };
+    
+    const project = projectsStore.projects.find(p => p.name === data.project);
+    if (project) {
+      project.running = data.running;
+    }
+    
+    setTimeout(() => {
+      showBuildProgress.value = false;
+      currentBuildProject.value = null;
+      progressSteps.value = [];
+    }, 1000);
+  });
+  
+  socket.value.on("project:deleting", (data) => {
+    console.log("Project deleting:", data.project);
+    currentBuildProject.value = data.project;
+    buildProgress.value[data.project] = { status: "building" };
+    progressSteps.value = [
+      { message: "Stopping containers...", status: "running" },
+      { message: "Removing containers...", status: "pending" },
+      { message: "Deleting project files...", status: "pending" },
+    ];
+    showLogs.value = false;
+    showBuildProgress.value = true;
+  });
+  
+  socket.value.on("project:deleted", (data) => {
+    console.log("Project deleted:", data.project);
+    progressSteps.value = [
+      { message: "Stopping containers...", status: "done" },
+      { message: "Removing containers...", status: "done" },
+      { message: "Deleting project files...", status: "done" },
+    ];
+    buildProgress.value[data.project] = { status: "success" };
+    
+    // Remove project from store
+    projectsStore.projects = projectsStore.projects.filter(
+      p => p.name !== data.project
+    );
+    
+    setTimeout(() => {
+      showBuildProgress.value = false;
+      currentBuildProject.value = null;
+      progressSteps.value = [];
+    }, 2000);
+  });
+  
+  socket.value.on("project:creating", (data) => {
+    console.log("Project creating:", data.project);
+    currentBuildProject.value = data.project;
+    buildProgress.value[data.project] = { status: "building" };
+    progressSteps.value = [
+      { message: "Creating project directory...", status: "running" },
+      { message: "Generating configuration files...", status: "pending" },
+      { message: "Building Docker image...", status: "pending" },
+    ];
+    showLogs.value = false;
+    showBuildProgress.value = true;
+  });
+  
+  socket.value.on("project:created", (data) => {
+    console.log("Project created:", data.project);
+    progressSteps.value = [
+      { message: "Creating project directory...", status: "done" },
+      { message: "Generating configuration files...", status: "done" },
+      { message: "Building Docker image...", status: "done" },
+    ];
+    buildProgress.value[data.project] = { status: "success" };
+    
+    // Reload projects
+    setTimeout(async () => {
+      await projectsStore.loadProjects();
+      showBuildProgress.value = false;
+      currentBuildProject.value = null;
+      progressSteps.value = [];
+    }, 2000);
+  });
+  
+  socket.value.on("project:error", (data) => {
+    console.error("Project error:", data.project, data.error);
+    buildProgress.value[data.project] = { status: "error" };
+  });
+});
+
+onUnmounted(() => {
+  if (socket.value) {
+    socket.value.disconnect();
+  }
 });
 </script>

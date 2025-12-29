@@ -4,6 +4,7 @@
 
 services:
   logstash:
+    profiles: ["services", "logstash"]  # --services ile tümü, --profile logstash ile sadece bu servis
     image: "logstash:{{ SERVICE_LOGSTASH_VERSION }}"
     container_name: "stackvo-logstash"
     restart: unless-stopped

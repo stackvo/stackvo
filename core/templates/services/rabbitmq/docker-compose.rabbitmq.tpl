@@ -4,6 +4,7 @@
 
 services:
   rabbitmq:
+    profiles: ["services", "rabbitmq"]  # --services ile tümü, --profile rabbitmq ile sadece RabbitMQ
     image: "rabbitmq:{{ SERVICE_RABBITMQ_VERSION }}-management"
     container_name: "stackvo-rabbitmq"
     restart: unless-stopped

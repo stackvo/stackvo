@@ -4,6 +4,7 @@
 
 services:
   couchbase:
+    profiles: ["services", "couchbase"]  # --services ile tümü, --profile couchbase ile sadece bu servis
     image: "couchbase:{{ SERVICE_COUCHBASE_VERSION }}"
     container_name: "stackvo-couchbase"
     restart: unless-stopped

@@ -4,6 +4,7 @@
 
 services:
   mariadb:
+    profiles: ["services", "mariadb"]  # --services ile tümü, --profile mariadb ile sadece bu servis
     image: "mariadb:{{ SERVICE_MARIADB_VERSION }}"
     container_name: "stackvo-mariadb"
     restart: unless-stopped
