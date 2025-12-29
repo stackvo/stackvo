@@ -35,9 +35,6 @@ export const useProjectsStore = defineStore('projects', {
     async startProject(containerName) {
       try {
         const response = await axios.post(`/api/projects/${containerName}/start`);
-        if (response.data.success) {
-          await this.loadProjects();
-        }
         return response.data;
       } catch (error) {
         console.error('Error starting project:', error);
@@ -48,9 +45,6 @@ export const useProjectsStore = defineStore('projects', {
     async stopProject(containerName) {
       try {
         const response = await axios.post(`/api/projects/${containerName}/stop`);
-        if (response.data.success) {
-          await this.loadProjects();
-        }
         return response.data;
       } catch (error) {
         console.error('Error stopping project:', error);
@@ -61,9 +55,6 @@ export const useProjectsStore = defineStore('projects', {
     async restartProject(containerName) {
       try {
         const response = await axios.post(`/api/projects/${containerName}/restart`);
-        if (response.data.success) {
-          await this.loadProjects();
-        }
         return response.data;
       } catch (error) {
         console.error('Error restarting project:', error);

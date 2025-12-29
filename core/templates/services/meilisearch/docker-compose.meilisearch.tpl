@@ -19,7 +19,7 @@ services:
 
     volumes:
       - stackvo-meili-data:/meili_data
-      - ../logs/meilisearch:/meili_data/logs
+      - ../logs/services/meilisearch:/meili_data/logs
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

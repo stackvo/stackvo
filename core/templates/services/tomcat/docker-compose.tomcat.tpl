@@ -11,7 +11,7 @@ services:
 
     volumes:
       - ./core/templates/appserver/tomcat/webapps:/usr/local/tomcat/webapps
-      - ../logs/tomcat:/usr/local/tomcat/logs
+      - ../logs/services/tomcat:/usr/local/tomcat/logs
 
     ports:
       - "{{ HOST_PORT_TOMCAT | default('8080') }}:8080"

@@ -160,10 +160,11 @@ router.post('/:containerName/restart', async (req, res) => {
  * Enable a service
  */
 router.post('/:serviceName/enable', async (req, res) => {
+  const { serviceName } = req.params;
+  const dockerService = req.app.get('dockerService');
+  const io = req.app.get('io');
+  
   try {
-    const { serviceName } = req.params;
-    const dockerService = req.app.get('dockerService');
-    const io = req.app.get('io');
     const EnvService = (await import('../services/EnvService.js')).default;
     const envService = new EnvService();
     
@@ -209,10 +210,11 @@ router.post('/:serviceName/enable', async (req, res) => {
  * Disable a service
  */
 router.post('/:serviceName/disable', async (req, res) => {
+  const { serviceName } = req.params;
+  const dockerService = req.app.get('dockerService');
+  const io = req.app.get('io');
+  
   try {
-    const { serviceName } = req.params;
-    const dockerService = req.app.get('dockerService');
-    const io = req.app.get('io');
     const EnvService = (await import('../services/EnvService.js')).default;
     const envService = new EnvService();
     

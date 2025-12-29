@@ -78,9 +78,6 @@ export const useServicesStore = defineStore('services', {
       } catch (error) {
         console.error('Error enabling service:', error);
         throw error;
-      } finally {
-        // Always reload services after enable attempt
-        await this.loadServices();
       }
     },
 
@@ -91,9 +88,6 @@ export const useServicesStore = defineStore('services', {
       } catch (error) {
         console.error('Error disabling service:', error);
         throw error;
-      } finally {
-        // Always reload services after disable attempt
-        await this.loadServices();
       }
     }
   }

@@ -23,7 +23,7 @@ services:
 
     volumes:
       - stackvo-elasticsearch-data:/usr/share/elasticsearch/data
-      - ../logs/elasticsearch:/usr/share/elasticsearch/logs
+      - ../logs/services/elasticsearch:/usr/share/elasticsearch/logs
 
     ports:
       - "{{ HOST_PORT_ELASTICSEARCH | default('9200') }}:9200"

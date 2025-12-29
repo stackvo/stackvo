@@ -15,7 +15,7 @@ services:
 
     volumes:
       - stackvo-couchbase-data:/opt/couchbase/var
-      - ../logs/couchbase:/opt/couchbase/var/lib/couchbase/logs
+      - ../logs/services/couchbase:/opt/couchbase/var/lib/couchbase/logs
 
     ports:
       - "{{ HOST_PORT_COUCHBASE_WEB | default('8091') }}:8091"

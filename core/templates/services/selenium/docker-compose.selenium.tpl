@@ -21,7 +21,7 @@ services:
       SCREEN_DEPTH: "{{ SERVICE_SELENIUM_SCREEN_DEPTH | default('24') }}"
 
     volumes:
-      - ../logs/selenium:/var/log/selenium
+      - ../logs/services/selenium:/var/log/selenium
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

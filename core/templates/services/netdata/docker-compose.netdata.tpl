@@ -27,7 +27,7 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /etc/os-release:/host/etc/os-release:ro
-      - ../logs/netdata:/var/log/netdata
+      - ../logs/services/netdata:/var/log/netdata
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

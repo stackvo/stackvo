@@ -18,7 +18,7 @@ services:
       - "{{ HOST_PORT_BLACKFIRE | default('8707') }}:8707"
 
     volumes:
-      - ../logs/blackfire:/var/log/blackfire
+      - ../logs/services/blackfire:/var/log/blackfire
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

@@ -28,8 +28,8 @@ services:
       HOST_GID: {{ HOST_GID | default('1000') }}
     
     volumes:
-      # Mount entire stackvo directory for Docker operations (read-only for security)
-      - ../:/app:ro
+      # Mount entire stackvo directory for Docker operations
+      - ../:/app:rw
       # Mount .env file separately as read-write for enable/disable operations
       - ../.env:/app/.env:rw
       # Mount core directory as read-write for generate operations

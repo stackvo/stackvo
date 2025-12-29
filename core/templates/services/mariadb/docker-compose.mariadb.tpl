@@ -18,7 +18,7 @@ services:
     volumes:
       - stackvo-mariadb-data:/var/lib/mysql
       - ./generated/configs/mariadb.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
-      - ../logs/mariadb:/var/log/mysql
+      - ../logs/services/mariadb:/var/log/mysql
 
     command: >
       mariadbd

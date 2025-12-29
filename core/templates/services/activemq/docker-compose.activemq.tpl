@@ -24,7 +24,7 @@ services:
     volumes:
       - stackvo-activemq-data:/opt/apache-activemq/data
       - stackvo-activemq-conf:/opt/apache-activemq/conf
-      - ../logs/activemq:/opt/apache-activemq/data
+      - ../logs/services/activemq:/opt/apache-activemq/data
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

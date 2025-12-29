@@ -311,6 +311,10 @@ Eğer proje dizininde `.stackvo/Dockerfile` varsa, o kullanılır (öncelik sır
 3. **Türkçe mesajlar kullan** - Kullanıcı deneyimi için
 4. **Kod yorumları ekle** - Bakım kolaylığı için
 5. **Test et** - Her değişiklikten sonra
+6. **UI değişikliklerinden sonra build et** - `.ui/client` veya `.ui/server` dizinlerinde değişiklik yapıldığında mutlaka aşağıdaki komutu çalıştır:
+   ```bash
+   docker compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-ui && docker compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-ui
+   ```
 
 ---
 

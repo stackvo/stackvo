@@ -698,22 +698,7 @@
       </v-data-table>
     </v-card>
 
-    <!-- Overlay -->
-    <v-overlay
-      v-model="showOverlay"
-      class="align-center justify-center"
-      :opacity="0.8"
-    >
-      <v-card class="pa-8 text-center" min-width="300">
-        <v-progress-circular
-          indeterminate
-          size="64"
-          color="primary"
-          class="mb-4"
-        ></v-progress-circular>
-        <div class="text-h6">{{ overlayMessage }}</div>
-      </v-card>
-    </v-overlay>
+
 
     <!-- Delete Project Confirmation Dialog -->
     <v-dialog v-model="deleteDialog" max-width="500">
@@ -935,7 +920,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, inject } from "vue";
+import { ref, onMounted, onUnmounted, computed, inject, nextTick } from "vue";
 import { useProjectsStore } from "@/stores/projects";
 import { io } from "socket.io-client";
 
@@ -945,8 +930,6 @@ const isNavigating = inject("isNavigating", ref(false));
 const projectSearch = ref("");
 const expandedProjects = ref([]);
 const loadingProjects = ref({});
-const showOverlay = ref(false);
-const overlayMessage = ref("");
 const showSnackbar = ref(false);
 const snackbarMessage = ref("");
 const snackbarColor = ref("success");
@@ -1024,14 +1007,10 @@ async function loadProjects() {
 
 async function startProject(projectName) {
   loadingProjects.value[projectName] = "start";
-  showOverlay.value = true;
-  overlayMessage.value = `Starting ${projectName}...`;
 
   try {
     await projectsStore.startProject(projectName);
-    snackbarMessage.value = `Project "${projectName}" started successfully!`;
-    snackbarColor.value = "success";
-    showSnackbar.value = true;
+    // Success/error messages will be shown via WebSocket events
   } catch (error) {
     console.error("Failed to start project:", error);
     snackbarMessage.value = `Failed to start "${projectName}": ${error.message}`;
@@ -1039,20 +1018,15 @@ async function startProject(projectName) {
     showSnackbar.value = true;
   } finally {
     delete loadingProjects.value[projectName];
-    showOverlay.value = false;
   }
 }
 
 async function stopProject(projectName) {
   loadingProjects.value[projectName] = "stop";
-  showOverlay.value = true;
-  overlayMessage.value = `Stopping ${projectName}...`;
 
   try {
     await projectsStore.stopProject(projectName);
-    snackbarMessage.value = `Project "${projectName}" stopped successfully!`;
-    snackbarColor.value = "success";
-    showSnackbar.value = true;
+    // Success/error messages will be shown via WebSocket events
   } catch (error) {
     console.error("Failed to stop project:", error);
     snackbarMessage.value = `Failed to stop "${projectName}": ${error.message}`;
@@ -1060,7 +1034,6 @@ async function stopProject(projectName) {
     showSnackbar.value = true;
   } finally {
     delete loadingProjects.value[projectName];
-    showOverlay.value = false;
   }
 }
 
@@ -1089,14 +1062,10 @@ async function buildProject(projectName) {
 
 async function restartProject(projectName) {
   loadingProjects.value[projectName] = "restart";
-  showOverlay.value = true;
-  overlayMessage.value = `Restarting ${projectName}...`;
 
   try {
     await projectsStore.restartProject(projectName);
-    snackbarMessage.value = `Project "${projectName}" restarted successfully!`;
-    snackbarColor.value = "success";
-    showSnackbar.value = true;
+    // Success/error messages will be shown via WebSocket events
   } catch (error) {
     console.error("Failed to restart project:", error);
     snackbarMessage.value = `Failed to restart "${projectName}": ${error.message}`;
@@ -1104,7 +1073,6 @@ async function restartProject(projectName) {
     showSnackbar.value = true;
   } finally {
     delete loadingProjects.value[projectName];
-    showOverlay.value = false;
   }
 }
 
@@ -1212,17 +1180,6 @@ onMounted(async () => {
       progress: 100,
       message: data.message,
     };
-    
-    // Reload projects after 2 seconds
-    setTimeout(async () => {
-      await projectsStore.loadProjects();
-      showBuildProgress.value = false;
-      delete buildProgress.value[data.project];
-      delete buildLogs.value[data.project];
-      currentBuildProject.value = null;
-      progressSteps.value = [];
-      showLogs.value = false;
-    }, 2000);
   });
   
   socket.value.on("build:error", (data) => {
@@ -1253,17 +1210,15 @@ onMounted(async () => {
     ];
     buildProgress.value[data.project] = { status: "success" };
     
-    // Update project in store
-    const project = projectsStore.projects.find(p => p.name === data.project);
-    if (project) {
-      project.running = data.running;
-    }
+    // Close dialog immediately on success
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
     
-    setTimeout(() => {
-      showBuildProgress.value = false;
-      currentBuildProject.value = null;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear from DOM, then reload table
+    nextTick(async () => {
+      await projectsStore.loadProjects();
+    });
   });
   
   socket.value.on("project:stopping", (data) => {
@@ -1284,16 +1239,15 @@ onMounted(async () => {
     ];
     buildProgress.value[data.project] = { status: "success" };
     
-    const project = projectsStore.projects.find(p => p.name === data.project);
-    if (project) {
-      project.running = data.running;
-    }
+    // Close dialog immediately on success
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
     
-    setTimeout(() => {
-      showBuildProgress.value = false;
-      currentBuildProject.value = null;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear from DOM, then reload table
+    nextTick(async () => {
+      await projectsStore.loadProjects();
+    });
   });
   
   socket.value.on("project:restarting", (data) => {
@@ -1316,16 +1270,15 @@ onMounted(async () => {
     ];
     buildProgress.value[data.project] = { status: "success" };
     
-    const project = projectsStore.projects.find(p => p.name === data.project);
-    if (project) {
-      project.running = data.running;
-    }
+    // Close dialog immediately on success
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
     
-    setTimeout(() => {
-      showBuildProgress.value = false;
-      currentBuildProject.value = null;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear from DOM, then reload table
+    nextTick(async () => {
+      await projectsStore.loadProjects();
+    });
   });
   
   socket.value.on("project:deleting", (data) => {
@@ -1349,17 +1302,6 @@ onMounted(async () => {
       { message: "Deleting project files...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
-    
-    // Remove project from store
-    projectsStore.projects = projectsStore.projects.filter(
-      p => p.name !== data.project
-    );
-    
-    setTimeout(() => {
-      showBuildProgress.value = false;
-      currentBuildProject.value = null;
-      progressSteps.value = [];
-    }, 2000);
   });
   
   socket.value.on("project:creating", (data) => {
@@ -1383,19 +1325,21 @@ onMounted(async () => {
       { message: "Building Docker image...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
-    
-    // Reload projects
-    setTimeout(async () => {
-      await projectsStore.loadProjects();
-      showBuildProgress.value = false;
-      currentBuildProject.value = null;
-      progressSteps.value = [];
-    }, 2000);
   });
   
   socket.value.on("project:error", (data) => {
     console.error("Project error:", data.project, data.error);
     buildProgress.value[data.project] = { status: "error" };
+    
+    // Close dialog on error
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
+    
+    // Show error snackbar
+    snackbarMessage.value = `Error: ${data.error}`;
+    snackbarColor.value = "error";
+    showSnackbar.value = true;
   });
 });
 

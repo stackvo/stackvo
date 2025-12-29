@@ -16,7 +16,7 @@ services:
     volumes:
       - stackvo-couchdb-data:/opt/couchdb/data
       - stackvo-couchdb-config:/opt/couchdb/etc/local.d
-      - ../logs/couchdb:/opt/couchdb/var/log
+      - ../logs/services/couchdb:/opt/couchdb/var/log
 
     ports:
       - "{{ HOST_PORT_COUCHDB | default('5984') }}:5984"

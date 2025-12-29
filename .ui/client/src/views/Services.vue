@@ -90,32 +90,32 @@
         </template>
 
         <template v-slot:item.status="{ item }">
-          <!-- Disabled service - Enable button (icon only) -->
+          <!-- Disabled service - Enable button -->
           <v-btn 
             v-if="!item.configured" 
-            icon
             size="small" 
-            color="success" 
+            color="grey" 
             variant="tonal" 
             @click="enableService(item.name)" 
             :loading="loadingServices[item.name] === 'enable'"
             :disabled="!!loadingServices[item.name]"
           >
-            <v-icon>mdi-power</v-icon>
+            <v-icon start>mdi-power</v-icon>
+            Disabled
           </v-btn>
           
-          <!-- Enabled service - Disable button (icon only) -->
+          <!-- Enabled service - Disable button -->
           <v-btn 
             v-else 
-            icon
             size="small" 
-            color="orange-darken-2" 
+            color="success" 
             variant="tonal" 
             @click="disableService(item.name)" 
             :loading="loadingServices[item.name] === 'disable'"
             :disabled="!!loadingServices[item.name]"
           >
-            <v-icon>mdi-power-off</v-icon>
+            <v-icon start>mdi-check-circle</v-icon>
+            Enabled
           </v-btn>
         </template>
 
@@ -397,19 +397,11 @@
         </v-card-text>
       </v-card>
     </v-dialog>
-
-    <!-- Overlay -->
-    <v-overlay v-model="showOverlay" class="align-center justify-center" :opacity="0.8">
-      <v-card class="pa-8 text-center" min-width="300">
-        <v-progress-circular indeterminate size="64" color="primary" class="mb-4"></v-progress-circular>
-        <div class="text-h6">{{ overlayMessage }}</div>
-      </v-card>
-    </v-overlay>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, inject } from 'vue';
+import { ref, computed, onMounted, onUnmounted, inject, nextTick } from 'vue';
 import { useServicesStore } from '@/stores/services';
 import { io } from "socket.io-client";
 
@@ -419,8 +411,6 @@ const servicesStore = useServicesStore();
 const serviceSearch = ref('');
 const expandedServices = ref([]);
 const loadingServices = ref({});
-const showOverlay = ref(false);
-const overlayMessage = ref('');
 
 // WebSocket for realtime status updates
 const socket = ref(null);
@@ -449,8 +439,6 @@ async function loadServices() {
 }
 
 async function startService(containerName) {
-  showOverlay.value = true;
-  overlayMessage.value = 'Starting service...';
   loadingServices.value[containerName] = 'start';
   try {
     await servicesStore.startService(containerName);
@@ -458,13 +446,10 @@ async function startService(containerName) {
     console.error('Failed to start service:', error);
   } finally {
     delete loadingServices.value[containerName];
-    showOverlay.value = false;
   }
 }
 
 async function stopService(containerName) {
-  showOverlay.value = true;
-  overlayMessage.value = 'Stopping service...';
   loadingServices.value[containerName] = 'stop';
   try {
     await servicesStore.stopService(containerName);
@@ -472,13 +457,10 @@ async function stopService(containerName) {
     console.error('Failed to stop service:', error);
   } finally {
     delete loadingServices.value[containerName];
-    showOverlay.value = false;
   }
 }
 
 async function restartService(containerName) {
-  showOverlay.value = true;
-  overlayMessage.value = 'Restarting service...';
   loadingServices.value[containerName] = 'restart';
   try {
     await servicesStore.restartService(containerName);
@@ -486,13 +468,10 @@ async function restartService(containerName) {
     console.error('Failed to restart service:', error);
   } finally {
     delete loadingServices.value[containerName];
-    showOverlay.value = false;
   }
 }
 
 async function enableService(serviceName) {
-  showOverlay.value = true;
-  overlayMessage.value = `Enabling ${serviceName}...`;
   loadingServices.value[serviceName] = 'enable';
   try {
     await servicesStore.enableService(serviceName);
@@ -500,13 +479,10 @@ async function enableService(serviceName) {
     console.error('Failed to enable service:', error);
   } finally {
     delete loadingServices.value[serviceName];
-    showOverlay.value = false;
   }
 }
 
 async function disableService(serviceName) {
-  showOverlay.value = true;
-  overlayMessage.value = `Disabling ${serviceName}...`;
   loadingServices.value[serviceName] = 'disable';
   try {
     await servicesStore.disableService(serviceName);
@@ -514,7 +490,6 @@ async function disableService(serviceName) {
     console.error('Failed to disable service:', error);
   } finally {
     delete loadingServices.value[serviceName];
-    showOverlay.value = false;
   }
 }
 
@@ -547,18 +522,14 @@ onMounted(async () => {
       { message: "Starting container...", status: "done" },
     ];
     
-    // Update service in store
-    const service = servicesStore.services.find(s => s.name === data.service);
-    if (service) {
-      service.configured = data.configured;
-      service.running = data.running;
-    }
+    // Close dialog immediately
+    showProgress.value = false;
+    progressSteps.value = [];
     
-    // Close dialog after 1 second
-    setTimeout(() => {
-      showProgress.value = false;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear, then reload services
+    nextTick(async () => {
+      await servicesStore.loadServices();
+    });
   });
   
   socket.value.on("service:disabling", (data) => {
@@ -583,18 +554,14 @@ onMounted(async () => {
       { message: "Generating Docker Compose files...", status: "done" },
     ];
     
-    // Update service in store
-    const service = servicesStore.services.find(s => s.name === data.service);
-    if (service) {
-      service.configured = data.configured;
-      service.running = data.running;
-    }
+    // Close dialog immediately
+    showProgress.value = false;
+    progressSteps.value = [];
     
-    // Close dialog after 1 second
-    setTimeout(() => {
-      showProgress.value = false;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear, then reload services
+    nextTick(async () => {
+      await servicesStore.loadServices();
+    });
   });
   
   socket.value.on("service:starting", (data) => {
@@ -615,17 +582,14 @@ onMounted(async () => {
       { message: "Starting container...", status: "done" },
     ];
     
-    // Update service in store
-    const service = servicesStore.services.find(s => s.name === data.service);
-    if (service) {
-      service.running = data.running;
-    }
+    // Close dialog immediately
+    showProgress.value = false;
+    progressSteps.value = [];
     
-    // Close dialog after 1 second
-    setTimeout(() => {
-      showProgress.value = false;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear, then reload services
+    nextTick(async () => {
+      await servicesStore.loadServices();
+    });
   });
   
   socket.value.on("service:stopping", (data) => {
@@ -646,17 +610,14 @@ onMounted(async () => {
       { message: "Stopping container...", status: "done" },
     ];
     
-    // Update service in store
-    const service = servicesStore.services.find(s => s.name === data.service);
-    if (service) {
-      service.running = data.running;
-    }
+    // Close dialog immediately
+    showProgress.value = false;
+    progressSteps.value = [];
     
-    // Close dialog after 1 second
-    setTimeout(() => {
-      showProgress.value = false;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear, then reload services
+    nextTick(async () => {
+      await servicesStore.loadServices();
+    });
   });
   
   socket.value.on("service:restarting", (data) => {
@@ -679,17 +640,14 @@ onMounted(async () => {
       { message: "Starting container...", status: "done" },
     ];
     
-    // Update service in store
-    const service = servicesStore.services.find(s => s.name === data.service);
-    if (service) {
-      service.running = data.running;
-    }
+    // Close dialog immediately
+    showProgress.value = false;
+    progressSteps.value = [];
     
-    // Close dialog after 1 second
-    setTimeout(() => {
-      showProgress.value = false;
-      progressSteps.value = [];
-    }, 1000);
+    // Wait for dialog to disappear, then reload services
+    nextTick(async () => {
+      await servicesStore.loadServices();
+    });
   });
   
   socket.value.on("service:error", (data) => {
