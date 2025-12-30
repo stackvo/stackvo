@@ -141,17 +141,16 @@ echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 
 ## 🛠️ Supported Services
 
-| Category                | Count | Services                                                                       |
-| ----------------------- | ----- | ------------------------------------------------------------------------------ |
-| **Databases**           | 8     | MySQL, MariaDB, PostgreSQL, MongoDB, Cassandra, Percona, CouchDB, Couchbase    |
-| **Cache Systems**       | 2     | Redis, Memcached                                                               |
-| **Message Queues**      | 4     | RabbitMQ, Apache ActiveMQ, Kafka, NATS                                         |
-| **Search & Indexing**   | 4     | Elasticsearch, Kibana, Meilisearch, Solr                                       |
-| **Monitoring & QA**     | 5     | Grafana, Netdata, SonarQube, Sentry, Logstash                                  |
-| **Developer Tools**     | 8     | Adminer, PhpMyAdmin, PhpPgAdmin, PhpMongo, MailHog, Ngrok, Selenium, Blackfire |
-| **Application Servers** | 2     | Tomcat, Kong API Gateway                                                       |
+| Category              | Count | Services                                                      |
+| --------------------- | ----- | ------------------------------------------------------------- |
+| **Databases**         | 4     | MySQL, MariaDB, PostgreSQL, MongoDB, Cassandra                |
+| **Cache Systems**     | 2     | Redis, Memcached                                              |
+| **Message Queues**    | 2     | RabbitMQ, Kafka                                               |
+| **Search & Indexing** | 2     | Elasticsearch, Kibana                                         |
+| **Monitoring & QA**   | 1     | Grafana                                                       |
+| **Developer Tools**   | 5     | Adminer, PhpMyAdmin, PhpPgAdmin, PhpMongo, MailHog, Blackfire |
 
-> **Total 33+ services** • For details: [Services Documentation](docs/en/references/services.md)
+> **Total 18+ services** • For details: [Services Documentation](docs/en/references/services.md)
 
 ---
 

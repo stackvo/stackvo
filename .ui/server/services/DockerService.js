@@ -176,6 +176,27 @@ class DockerService {
   }
 
   /**
+   * Check if a service is running
+   * @param {string} serviceName - Service name (e.g., 'elasticsearch', 'kibana')
+   * @returns {Promise<boolean>}
+   */
+  async isServiceRunning(serviceName) {
+    try {
+      const containerName = `stackvo-${serviceName}`;
+      const containers = await this.docker.listContainers({ all: true });
+      
+      const container = containers.find(
+        (c) => c.Names[0] === `/${containerName}` || c.Names[0].includes(containerName)
+      );
+      
+      return container ? container.State === 'running' : false;
+    } catch (error) {
+      console.error(`Error checking service ${serviceName}:`, error.message);
+      return false;
+    }
+  }
+
+  /**
    * List all Stackvo tools
    */
   async listTools() {
@@ -886,17 +907,72 @@ class DockerService {
   async enableService(serviceName, envService) {
     const { execAsync } = await import("../utils/exec.js");
     const path = await import("path");
+    const fs = await import("fs/promises");
+
+    const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
 
     try {
-      // 1. Update .env file
+      // 0. Check and auto-start required dependencies
+      const configPath = path.join(process.cwd(), 'config', 'serviceDependencies.json');
+      let dependencies = {};
+      try {
+        const configData = await fs.readFile(configPath, 'utf-8');
+        dependencies = JSON.parse(configData);
+      } catch (error) {
+        // If config file doesn't exist, continue without dependencies
+        console.log('No service dependencies configured');
+      }
+
+      const serviceDeps = dependencies[serviceName] || { required: [], optional: [] };
+      
+      // Auto-start required dependencies
+      if (serviceDeps.required && serviceDeps.required.length > 0) {
+        console.log(`Checking required dependencies for ${serviceName}:`, serviceDeps.required);
+        
+        for (const dep of serviceDeps.required) {
+          const isRunning = await this.isServiceRunning(dep);
+          if (!isRunning) {
+            console.log(`Auto-starting required dependency: ${dep}`);
+            try {
+              // Recursively enable the dependency
+              await this.enableService(dep, envService);
+              console.log(`Successfully started dependency: ${dep}`);
+            } catch (depError) {
+              console.error(`Failed to start dependency ${dep}:`, depError.message);
+              throw new Error(`Cannot enable ${serviceName}: required dependency ${dep} failed to start`);
+            }
+          } else {
+            console.log(`Dependency ${dep} is already running`);
+          }
+        }
+      }
+
+      // 1. Create log directory for the service
+      const logDir = path.join(rootDir, "logs", "services", serviceName);
+      try {
+        await fs.mkdir(logDir, { recursive: true });
+        console.log(`Created log directory: ${logDir}`);
+        
+        // Set permissions to 777 so container can write logs
+        try {
+          await fs.chmod(logDir, 0o777);
+          console.log(`Set log directory permissions: ${logDir}`);
+        } catch (chmodError) {
+          console.warn(`Could not set log directory permissions: ${chmodError.message}`);
+        }
+      } catch (mkdirError) {
+        console.warn(`Failed to create log directory: ${mkdirError.message}`);
+        // Continue anyway - some services might not need log directories
+      }
+
+      // 2. Update .env file
       await envService.updateServiceEnable(serviceName, true);
       console.log(
         `Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=true`
       );
 
-      // 2. Regenerate docker-compose.dynamic.yml
-    const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
-    console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+      // 3. Regenerate docker-compose.dynamic.yml
+      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
 
       const { stdout, stderr } = await execAsync(
         "./cli/stackvo.sh generate services",
@@ -908,26 +984,36 @@ class DockerService {
       }
       console.log("Generate stdout:", stdout);
 
-      // 3. Build and start the service with all compose files
-      // Note: Redirect stderr to avoid network label warnings
+      // 4. Build and start the service with all compose files
+      // Note: Use --profile to enable services with profiles
       console.log(`Building and starting service: ${serviceName}`);
       const upResult = await execAsync(
-        `docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d --build ${serviceName} 2>&1`,
+        `docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml --profile ${serviceName} up -d --build ${serviceName} 2>&1`,
         { cwd: rootDir }
       );
 
       console.log("Service started:", upResult.stdout);
 
-      // 4. Clear cache
+      // 5. Clear cache
       this.cache.flushAll();
       console.log("Cache cleared");
 
       return {
         success: true,
         message: `Service "${serviceName}" enabled and started successfully`,
+        running: true,
       };
     } catch (error) {
       console.error("Enable service error:", error);
+
+      // Rollback: Disable the service in .env
+      try {
+        await envService.updateServiceEnable(serviceName, false);
+        console.log(`Rolled back .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=false`);
+      } catch (rollbackError) {
+        console.error("Rollback failed:", rollbackError.message);
+      }
+
       throw new Error(`Failed to enable service: ${error.message}`);
     }
   }
@@ -941,11 +1027,25 @@ class DockerService {
   async disableService(serviceName, envService) {
     const { execAsync } = await import("../utils/exec.js");
     const path = await import("path");
+    const fs = await import("fs/promises");
+
+    const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
 
     try {
       const containerName = `stackvo-${serviceName}`;
+      let imageToRemove = null;
 
-      // 1. Stop and remove container
+      // 1. Get image ID from container BEFORE removing it
+      try {
+        const container = this.docker.getContainer(containerName);
+        const containerInfo = await container.inspect();
+        imageToRemove = containerInfo.Image; // This is the image ID
+        console.log(`Found image from container: ${imageToRemove}`);
+      } catch (inspectError) {
+        console.log(`Could not inspect container for image: ${inspectError.message}`);
+      }
+
+      // 2. Stop and remove container
       try {
         const container = this.docker.getContainer(containerName);
 
@@ -970,29 +1070,43 @@ class DockerService {
         // Continue even if container doesn't exist
       }
 
-      // 2. Remove Docker image
+      // 3. Remove Docker image
       try {
-        // Get image name from service
-        const images = await this.docker.listImages({
-          filters: { reference: [`*${serviceName}*`] },
-        });
-
-        if (images.length > 0) {
-          for (const imageInfo of images) {
-            const imageName = imageInfo.RepoTags?.[0] || imageInfo.Id;
-            try {
-              const image = this.docker.getImage(imageName);
-              await image.remove({ force: true });
-              console.log(`Docker image ${imageName} removed`);
-            } catch (imageError) {
-              console.warn(
-                `Could not remove image ${imageName}:`,
-                imageError.message
-              );
-            }
+        // If we got image ID from container, remove it
+        if (imageToRemove) {
+          try {
+            const image = this.docker.getImage(imageToRemove);
+            await image.remove({ force: true });
+            console.log(`Docker image ${imageToRemove} removed`);
+          } catch (imageError) {
+            console.warn(
+              `Could not remove image ${imageToRemove}:`,
+              imageError.message
+            );
           }
         } else {
-          console.log(`No image found for service: ${serviceName}`);
+          // Fallback: Try to find image by service name pattern
+          const images = await this.docker.listImages({
+            filters: { reference: [`*${serviceName}*`] },
+          });
+
+          if (images.length > 0) {
+            for (const imageInfo of images) {
+              const imageName = imageInfo.RepoTags?.[0] || imageInfo.Id;
+              try {
+                const image = this.docker.getImage(imageName);
+                await image.remove({ force: true });
+                console.log(`Docker image ${imageName} removed`);
+              } catch (imageError) {
+                console.warn(
+                  `Could not remove image ${imageName}:`,
+                  imageError.message
+                );
+              }
+            }
+          } else {
+            console.log(`No image found for service: ${serviceName}`);
+          }
         }
       } catch (imageError) {
         console.warn(
@@ -1002,15 +1116,61 @@ class DockerService {
         // Continue even if image removal fails
       }
 
-      // 3. Update .env file
+      // 3. Remove Docker volumes (AGGRESSIVE CLEANUP)
+      try {
+        const volumeList = await this.docker.listVolumes({
+          filters: { name: [`stackvo-${serviceName}`] },
+        });
+
+        if (volumeList.Volumes && volumeList.Volumes.length > 0) {
+          for (const volumeInfo of volumeList.Volumes) {
+            try {
+              const volume = this.docker.getVolume(volumeInfo.Name);
+              await volume.remove({ force: true });
+              console.log(`Docker volume ${volumeInfo.Name} removed`);
+            } catch (volumeError) {
+              console.warn(
+                `Could not remove volume ${volumeInfo.Name}:`,
+                volumeError.message
+              );
+            }
+          }
+        } else {
+          console.log(`No volumes found for service: ${serviceName}`);
+        }
+      } catch (volumeError) {
+        console.warn(
+          `Error removing volumes for ${serviceName}:`,
+          volumeError.message
+        );
+        // Continue even if volume removal fails
+      }
+
+      // 4. Remove log directory (AGGRESSIVE CLEANUP)
+      try {
+        const logDir = path.join(rootDir, "logs", "services", serviceName);
+        try {
+          await fs.rm(logDir, { recursive: true, force: true });
+          console.log(`Log directory removed: ${logDir}`);
+        } catch (rmError) {
+          console.warn(`Could not remove log directory: ${rmError.message}`);
+        }
+      } catch (logError) {
+        console.warn(
+          `Error removing log directory for ${serviceName}:`,
+          logError.message
+        );
+        // Continue even if log removal fails
+      }
+
+      // 5. Update .env file
       await envService.updateServiceEnable(serviceName, false);
       console.log(
         `Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=false`
       );
 
-      // 3. Regenerate docker-compose.dynamic.yml
-    const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
-    console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+      // 6. Regenerate docker-compose.dynamic.yml
+      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
 
       const { stdout, stderr } = await execAsync(
         "./cli/stackvo.sh generate services",
@@ -1022,13 +1182,14 @@ class DockerService {
       }
       console.log("Generate stdout:", stdout);
 
-      // 4. Clear cache
+      // 7. Clear cache
       this.cache.flushAll();
       console.log("Cache cleared");
 
       return {
         success: true,
-        message: `Service "${serviceName}" disabled and stopped successfully`,
+        message: `Service "${serviceName}" disabled and completely removed`,
+        running: false,
       };
     } catch (error) {
       console.error("Disable service error:", error);

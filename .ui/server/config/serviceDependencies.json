@@ -1,0 +1,18 @@
+{
+  "kibana": {
+    "required": ["elasticsearch"],
+    "optional": [],
+    "description": "Kibana requires Elasticsearch to visualize data"
+  },
+  "grafana": {
+    "required": [],
+    "optional": ["prometheus"],
+    "description": "Grafana works better with Prometheus for metrics"
+  },
+  "kafka": {
+    "required": [],
+    "optional": [],
+    "description": "Kafka includes Zookeeper in the same template",
+    "internal": ["zookeeper"]
+  }
+}

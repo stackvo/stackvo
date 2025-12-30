@@ -103,8 +103,6 @@ SERVICE_CASSANDRA_ENABLE=false
 SERVICE_CASSANDRA_VERSION=latest
 ```
 
-### Percona
-
 **Image:** `percona:{version}`  
 **Default Version:** latest  
 **Ports:** 3308 (host), 3306 (container)
@@ -119,8 +117,6 @@ SERVICE_PERCONA_USER=stackvo
 SERVICE_PERCONA_PASSWORD=stackvo
 ```
 
-### CouchDB
-
 **Image:** `couchdb:{version}`  
 **Default Version:** latest  
 **Ports:** 5984
@@ -132,8 +128,6 @@ SERVICE_COUCHDB_VERSION=latest
 SERVICE_COUCHDB_USER=admin
 SERVICE_COUCHDB_PASSWORD=admin
 ```
-
-### Couchbase
 
 **Image:** `couchbase:{version}`  
 **Default Version:** latest  
@@ -217,8 +211,6 @@ SERVICE_KAFKA_VERSION=7.5.0
 
 **Management UI:** `https://kafbat.stackvo.loc`
 
-### ActiveMQ
-
 **Image:** `rmohr/activemq:{version}`  
 **Default Version:** latest  
 **Ports:** 61616, 5673, 61613, 1883, 61614, 8161
@@ -231,8 +223,6 @@ SERVICE_ACTIVEMQ_URL=activemq
 SERVICE_ACTIVEMQ_ADMIN_USER=admin
 SERVICE_ACTIVEMQ_ADMIN_PASSWORD=admin
 ```
-
-### NATS
 
 **Image:** `nats:{version}`  
 **Default Version:** latest  
@@ -274,8 +264,6 @@ SERVICE_KIBANA_VERSION=8.11.3
 
 **Erişim:** `https://kibana.stackvo.loc`
 
-### Meilisearch
-
 **Image:** `getmeili/meilisearch:{version}`  
 **Default Version:** latest  
 **Ports:** 7700
@@ -285,8 +273,6 @@ SERVICE_KIBANA_VERSION=8.11.3
 SERVICE_MEILISEARCH_ENABLE=false
 SERVICE_MEILISEARCH_VERSION=latest
 ```
-
-### Solr
 
 **Image:** `solr:{version}`  
 **Default Version:** latest  
@@ -318,8 +304,6 @@ SERVICE_GRAFANA_ADMIN_PASSWORD=admin
 
 **Erişim:** `https://grafana.stackvo.loc`
 
-### Netdata
-
 **Image:** `netdata/netdata:{version}`  
 **Default Version:** latest  
 **Ports:** 19999
@@ -331,8 +315,6 @@ SERVICE_NETDATA_VERSION=latest
 ```
 
 **Erişim:** `https://netdata.stackvo.loc`
-
-### Logstash
 
 **Image:** `logstash:{version}`  
 **Default Version:** 8.11.3  
@@ -348,8 +330,6 @@ SERVICE_LOGSTASH_VERSION=8.11.3
 
 ## QA Tools
 
-### SonarQube
-
 **Image:** `sonarqube:{version}`  
 **Default Version:** latest  
 **Ports:** 9000
@@ -359,8 +339,6 @@ SERVICE_LOGSTASH_VERSION=8.11.3
 SERVICE_SONARQUBE_ENABLE=false
 SERVICE_SONARQUBE_VERSION=latest
 ```
-
-### Sentry
 
 **Image:** `sentry:{version}`  
 **Default Version:** latest  
@@ -390,8 +368,6 @@ SERVICE_MAILHOG_VERSION=latest
 
 **Erişim:** `https://mailhog.stackvo.loc`
 
-### Ngrok
-
 **Image:** `ngrok/ngrok:{version}`  
 **Default Version:** latest  
 **Ports:** 4040
@@ -401,8 +377,6 @@ SERVICE_MAILHOG_VERSION=latest
 SERVICE_NGROK_ENABLE=false
 SERVICE_NGROK_VERSION=latest
 ```
-
-### Selenium
 
 **Image:** `selenium/standalone-chrome:{version}`  
 **Default Version:** latest  
@@ -430,8 +404,6 @@ SERVICE_BLACKFIRE_VERSION=latest
 
 ## Application Servers
 
-### Tomcat
-
 **Image:** `tomcat:{version}`  
 **Default Version:** latest  
 **Ports:** 8081 (host), 8080 (container)
@@ -441,8 +413,6 @@ SERVICE_BLACKFIRE_VERSION=latest
 SERVICE_TOMCAT_ENABLE=false
 SERVICE_TOMCAT_VERSION=latest
 ```
-
-### Kong
 
 **Image:** `kong:{version}`  
 **Default Version:** latest  

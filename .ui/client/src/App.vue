@@ -90,7 +90,7 @@
     </v-app-bar>
 
     <!-- Left Navigation Drawer -->
-    <v-navigation-drawer location="left" permanent width="220" class="elevation-1 border-0">
+    <v-navigation-drawer location="left" permanent width="190" class="elevation-1 border-0">
       <!-- Top Section: Navigation and System Status -->
       <v-list nav density="compact">
         <v-list-subheader>NAVIGATION</v-list-subheader>

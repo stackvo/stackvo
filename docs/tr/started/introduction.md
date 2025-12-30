@@ -39,9 +39,9 @@ Stackvo 6 farklı programlama dilini destekler:
 |----------|------|----------|
 | **Veritabanı** | 8 | MySQL, PostgreSQL, MongoDB, MariaDB |
 | **Cache** | 2 | Redis, Memcached |
-| **Message Queue** | 4 | RabbitMQ, Kafka, NATS |
-| **Arama** | 4 | Elasticsearch, Meilisearch, Solr |
-| **Monitoring** | 5 | Grafana, Netdata, SonarQube |
+| **Message Queue** | 4 | RabbitMQ, Kafka |
+| **Arama** | 4 | Elasticsearch |
+| **Monitoring** | 5 | Grafana |
 | **Web Server** | 4 | Nginx, Apache, Caddy |
 | **Diğer** | 13+ | Adminer, phpMyAdmin, phpPgAdmin |
 

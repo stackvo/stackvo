@@ -698,8 +698,6 @@
       </v-data-table>
     </v-card>
 
-
-
     <!-- Delete Project Confirmation Dialog -->
     <v-dialog v-model="deleteDialog" max-width="500">
       <v-card>
@@ -859,8 +857,8 @@
               size="small"
               block
             >
-              <v-icon start>{{ showLogs ? 'mdi-eye-off' : 'mdi-eye' }}</v-icon>
-              {{ showLogs ? 'Hide Logs' : 'Show Logs' }}
+              <v-icon start>{{ showLogs ? "mdi-eye-off" : "mdi-eye" }}</v-icon>
+              {{ showLogs ? "Hide Logs" : "Show Logs" }}
             </v-btn>
 
             <v-card
@@ -1110,7 +1108,7 @@ async function confirmDeleteProject() {
 
   deleteLoading.value = true;
   deleteDialog.value = false; // Close confirmation dialog immediately
-  
+
   try {
     // API call will trigger WebSocket events (project:deleting, project:deleted)
     // which will show the progress dialog automatically
@@ -1126,10 +1124,10 @@ async function confirmDeleteProject() {
 
 onMounted(async () => {
   await projectsStore.loadProjects();
-  
+
   // Connect to WebSocket
   socket.value = io();
-  
+
   // Listen to build events
   socket.value.on("build:start", (data) => {
     console.log("Build started:", data.project);
@@ -1146,7 +1144,7 @@ onMounted(async () => {
     showLogs.value = false;
     showBuildProgress.value = true;
   });
-  
+
   socket.value.on("build:progress", (data) => {
     if (!buildLogs.value[data.project]) {
       buildLogs.value[data.project] = [];
@@ -1156,19 +1154,19 @@ onMounted(async () => {
       output: data.output,
       timestamp: new Date(),
     });
-    
+
     // Update progress steps based on log count
     const logCount = buildLogs.value[data.project].length;
-    if (logCount > 50 && progressSteps.value[0]?.status === 'running') {
-      progressSteps.value[0].status = 'done';
-      progressSteps.value[1].status = 'running';
+    if (logCount > 50 && progressSteps.value[0]?.status === "running") {
+      progressSteps.value[0].status = "done";
+      progressSteps.value[1].status = "running";
     }
-    
+
     // Update progress (estimate based on log lines)
     const progress = Math.min(95, logCount * 2);
     buildProgress.value[data.project].progress = progress;
   });
-  
+
   socket.value.on("build:success", (data) => {
     console.log("Build success:", data.project);
     progressSteps.value = [
@@ -1180,8 +1178,18 @@ onMounted(async () => {
       progress: 100,
       message: data.message,
     };
+
+    // Close dialog immediately on success
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
+
+    // Wait for dialog to disappear from DOM, then reload table
+    nextTick(async () => {
+      await projectsStore.loadProjects();
+    });
   });
-  
+
   socket.value.on("build:error", (data) => {
     console.error("Build error:", data.project, data.error);
     buildProgress.value[data.project] = {
@@ -1190,7 +1198,7 @@ onMounted(async () => {
       message: data.error,
     };
   });
-  
+
   // Start/Stop/Restart/Delete events
   socket.value.on("project:starting", (data) => {
     console.log("Project starting:", data.project);
@@ -1202,25 +1210,25 @@ onMounted(async () => {
     showLogs.value = false;
     showBuildProgress.value = true;
   });
-  
+
   socket.value.on("project:started", (data) => {
     console.log("Project started:", data.project);
     progressSteps.value = [
       { message: "Starting containers...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
-    
+
     // Close dialog immediately on success
     showBuildProgress.value = false;
     currentBuildProject.value = null;
     progressSteps.value = [];
-    
+
     // Wait for dialog to disappear from DOM, then reload table
     nextTick(async () => {
       await projectsStore.loadProjects();
     });
   });
-  
+
   socket.value.on("project:stopping", (data) => {
     console.log("Project stopping:", data.project);
     currentBuildProject.value = data.project;
@@ -1231,25 +1239,25 @@ onMounted(async () => {
     showLogs.value = false;
     showBuildProgress.value = true;
   });
-  
+
   socket.value.on("project:stopped", (data) => {
     console.log("Project stopped:", data.project);
     progressSteps.value = [
       { message: "Stopping containers...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
-    
+
     // Close dialog immediately on success
     showBuildProgress.value = false;
     currentBuildProject.value = null;
     progressSteps.value = [];
-    
+
     // Wait for dialog to disappear from DOM, then reload table
     nextTick(async () => {
       await projectsStore.loadProjects();
     });
   });
-  
+
   socket.value.on("project:restarting", (data) => {
     console.log("Project restarting:", data.project);
     currentBuildProject.value = data.project;
@@ -1261,7 +1269,7 @@ onMounted(async () => {
     showLogs.value = false;
     showBuildProgress.value = true;
   });
-  
+
   socket.value.on("project:restarted", (data) => {
     console.log("Project restarted:", data.project);
     progressSteps.value = [
@@ -1269,18 +1277,18 @@ onMounted(async () => {
       { message: "Starting containers...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
-    
+
     // Close dialog immediately on success
     showBuildProgress.value = false;
     currentBuildProject.value = null;
     progressSteps.value = [];
-    
+
     // Wait for dialog to disappear from DOM, then reload table
     nextTick(async () => {
       await projectsStore.loadProjects();
     });
   });
-  
+
   socket.value.on("project:deleting", (data) => {
     console.log("Project deleting:", data.project);
     currentBuildProject.value = data.project;
@@ -1293,7 +1301,7 @@ onMounted(async () => {
     showLogs.value = false;
     showBuildProgress.value = true;
   });
-  
+
   socket.value.on("project:deleted", (data) => {
     console.log("Project deleted:", data.project);
     progressSteps.value = [
@@ -1303,7 +1311,7 @@ onMounted(async () => {
     ];
     buildProgress.value[data.project] = { status: "success" };
   });
-  
+
   socket.value.on("project:creating", (data) => {
     console.log("Project creating:", data.project);
     currentBuildProject.value = data.project;
@@ -1316,7 +1324,7 @@ onMounted(async () => {
     showLogs.value = false;
     showBuildProgress.value = true;
   });
-  
+
   socket.value.on("project:created", (data) => {
     console.log("Project created:", data.project);
     progressSteps.value = [
@@ -1326,16 +1334,16 @@ onMounted(async () => {
     ];
     buildProgress.value[data.project] = { status: "success" };
   });
-  
+
   socket.value.on("project:error", (data) => {
     console.error("Project error:", data.project, data.error);
     buildProgress.value[data.project] = { status: "error" };
-    
+
     // Close dialog on error
     showBuildProgress.value = false;
     currentBuildProject.value = null;
     progressSteps.value = [];
-    
+
     // Show error snackbar
     snackbarMessage.value = `Error: ${data.error}`;
     snackbarColor.value = "error";

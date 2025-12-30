@@ -16,6 +16,8 @@ services:
       - xpack.security.enrollment.enabled={{ ELASTIC_ENROLLMENT | default('false') }}
       - cluster.name=stackvo-es
       - network.host=0.0.0.0
+      # Log'ları stdout/stderr'a yönlendir - Docker logs ile erişilebilir
+      - "logger.level=info"
 
     ulimits:
       memlock: -1
@@ -23,7 +25,7 @@ services:
 
     volumes:
       - stackvo-elasticsearch-data:/usr/share/elasticsearch/data
-      - ../logs/services/elasticsearch:/usr/share/elasticsearch/logs
+      # Log volume mount kaldırıldı - Permission sorunlarını önlemek için
 
     ports:
       - "{{ HOST_PORT_ELASTICSEARCH | default('9200') }}:9200"

@@ -24,9 +24,6 @@ services:
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"
 
-    depends_on:
-      - elasticsearch
-
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
       interval: 30s

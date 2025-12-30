@@ -256,4 +256,62 @@ router.post('/:serviceName/disable', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/services/:serviceName/dependencies
+ * Get service dependencies and their status
+ */
+router.get('/:serviceName/dependencies', async (req, res) => {
+  try {
+    const { serviceName } = req.params;
+    
+    // Load service dependencies configuration
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const configPath = path.join(process.cwd(), 'config', 'serviceDependencies.json');
+    
+    let dependencies = {};
+    try {
+      const configData = await fs.readFile(configPath, 'utf-8');
+      dependencies = JSON.parse(configData);
+    } catch (error) {
+      // If config file doesn't exist, return empty dependencies
+      console.warn('serviceDependencies.json not found, using empty dependencies');
+    }
+    
+    const serviceDeps = dependencies[serviceName] || { required: [], optional: [], internal: [] };
+    
+    // Check which dependencies are already running
+    const status = await Promise.all([
+      ...serviceDeps.required.map(async (dep) => ({
+        name: dep,
+        type: 'required',
+        running: await dockerService.isServiceRunning(dep)
+      })),
+      ...serviceDeps.optional.map(async (dep) => ({
+        name: dep,
+        type: 'optional',
+        running: await dockerService.isServiceRunning(dep)
+      }))
+    ]);
+    
+    const hasUnmetDependencies = status.some(d => d.type === 'required' && !d.running);
+    
+    res.json({
+      success: true,
+      data: {
+        service: serviceName,
+        description: serviceDeps.description || '',
+        dependencies: status,
+        hasUnmetDependencies,
+        internal: serviceDeps.internal || []
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;

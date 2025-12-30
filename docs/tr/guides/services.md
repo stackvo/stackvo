@@ -367,7 +367,6 @@ User: admin
 Password: admin
 ```
 
-### Netdata
 
 **Aktivasyon:**
 ```bash
@@ -403,7 +402,6 @@ sendmail_path = "/usr/sbin/sendmail -S stackvo-mailhog:1025"
 https://mailhog.stackvo.loc
 ```
 
-### Selenium
 
 **Aktivasyon:**
 ```bash

@@ -22,8 +22,6 @@ services:
     image: confluentinc/cp-kafka:{{ SERVICE_KAFKA_VERSION }}
     container_name: stackvo-kafka
     restart: unless-stopped
-    depends_on:
-      - zookeeper
     ports:
       - "{{ HOST_PORT_KAFKA | default('9092') }}:9092"
       - "{{ HOST_PORT_KAFKA_EXTERNAL | default('29092') }}:29092"
