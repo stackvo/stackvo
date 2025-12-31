@@ -50,8 +50,9 @@ venv/
 .env
 
 # Project-specific data (optional - uncomment if you want to ignore project files)
-# projects/*/
-# !projects/.gitkeep
+projects/
+projects/*
+projects/*/
 
 # MkDocs build output
 site/
