@@ -165,6 +165,41 @@ Stackvo provides a modern web interface built with Vue.js 3 and Vuetify 3:
 
 **Access:** `https://stackvo.loc`
 
+### 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="https://github.com/stackvo/stackvo/blob/main/docs/screenshots/1-Dashboard.png?raw=true" alt="Dashboard" />
+      <p align="center"><b>Dashboard</b></p>
+    </td>
+    <td width="50%">
+      <img src="https://github.com/stackvo/stackvo/blob/main/docs/screenshots/2-Projects-list.png?raw=true" alt="Projects List" />
+      <p align="center"><b>Projects List</b></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="https://github.com/stackvo/stackvo/blob/main/docs/screenshots/3-Projects-detail.png?raw=true" alt="Project Detail" />
+      <p align="center"><b>Project Detail</b></p>
+    </td>
+    <td width="50%">
+      <img src="https://github.com/stackvo/stackvo/blob/main/docs/screenshots/4-Projects-new.png?raw=true" alt="New Project" />
+      <p align="center"><b>New Project</b></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="https://github.com/stackvo/stackvo/blob/main/docs/screenshots/5-Services-list.png?raw=true" alt="Services List" />
+      <p align="center"><b>Services List</b></p>
+    </td>
+    <td width="50%">
+      <img src="https://github.com/stackvo/stackvo/blob/main/docs/screenshots/6-Services-detail.png?raw=true" alt="Service Detail" />
+      <p align="center"><b>Service Detail</b></p>
+    </td>
+  </tr>
+</table>
+
 ---
 
 ## 📖 Documentation
