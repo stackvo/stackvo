@@ -1209,26 +1209,35 @@ class DockerService {
 
     try {
       const containerName = "stackvo-tools";
+      const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
 
       // 1. Update .env file
       await envService.updateToolEnable(toolName, true);
       console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=true`);
 
       // 2. Regenerate templates
-      const rootDir = path.join(process.cwd(), "..", "..");
       console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
 
-      const { stdout: genStdout, stderr: genStderr } = await execAsync(
-        "./cli/stackvo.sh generate",
-        { cwd: rootDir }
-      );
+      try {
+        const { stdout: genStdout, stderr: genStderr } = await execAsync(
+          `./cli/stackvo.sh generate`,
+          { cwd: rootDir }
+        );
 
-      if (genStderr) {
-        console.error("Generate stderr:", genStderr);
+        if (genStderr) {
+          console.error("Generate stderr:", genStderr);
+        }
+        console.log("Generate stdout:", genStdout);
+      } catch (genError) {
+        // Ignore hosts file errors - they are not critical
+        if (genError.message && genError.message.includes('Failed to update') && genError.message.includes('hosts file')) {
+          console.warn('Hosts file update failed (expected in container), continuing...');
+        } else {
+          throw genError;
+        }
       }
-      console.log("Generate stdout:", genStdout);
 
-      // 3. Stop and remove tools container
+      // 3. Stop and remove tools container (if running)
       try {
         const container = this.docker.getContainer(containerName);
 
@@ -1248,17 +1257,8 @@ class DockerService {
         );
       }
 
-      // 4. Remove tools image
-      try {
-        const imageName = "stackvo-stackvo-tools";
-        const image = this.docker.getImage(imageName);
-        await image.remove({ force: true });
-        console.log(`Docker image ${imageName} removed`);
-      } catch (imageError) {
-        console.warn(`Could not remove image:`, imageError.message);
-      }
-
-      // 5. Rebuild tools container
+      // 4. Rebuild tools container
+      // Note: Template path is fixed to ./tools so context resolves correctly inside generated dir
       console.log("Rebuilding tools container...");
       const { stdout: buildStdout } = await execAsync(
         "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools",
@@ -1266,7 +1266,7 @@ class DockerService {
       );
       console.log("Build stdout:", buildStdout);
 
-      // 6. Start tools container
+      // 5. Start tools container
       console.log("Starting tools container...");
       const { stdout: upStdout } = await execAsync(
         "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools",
@@ -1274,16 +1274,25 @@ class DockerService {
       );
       console.log("Up stdout:", upStdout);
 
-      // 7. Clear cache
+      // 6. Clear cache
       this.cache.flushAll();
       console.log("Cache cleared");
 
       return {
         success: true,
-        message: `Tool "${toolName}" enabled successfully (container rebuilt)`,
+        message: `Tool "${toolName}" enabled successfully`,
       };
     } catch (error) {
       console.error("Enable tool error:", error);
+
+      // Rollback: Disable the tool in .env
+      try {
+        await envService.updateToolEnable(toolName, false);
+        console.log(`Rolled back .env: TOOLS_${toolName.toUpperCase()}_ENABLE=false`);
+      } catch (rollbackError) {
+        console.error("Rollback failed:", rollbackError.message);
+      }
+
       throw new Error(`Failed to enable tool: ${error.message}`);
     }
   }
@@ -1300,26 +1309,35 @@ class DockerService {
 
     try {
       const containerName = "stackvo-tools";
+      const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
 
       // 1. Update .env file
       await envService.updateToolEnable(toolName, false);
       console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=false`);
 
       // 2. Regenerate templates
-      const rootDir = path.join(process.cwd(), "..", "..");
       console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
 
-      const { stdout: genStdout, stderr: genStderr } = await execAsync(
-        "./cli/stackvo.sh generate",
-        { cwd: rootDir }
-      );
+      try {
+        const { stdout: genStdout, stderr: genStderr } = await execAsync(
+          `./cli/stackvo.sh generate`,
+          { cwd: rootDir }
+        );
 
-      if (genStderr) {
-        console.error("Generate stderr:", genStderr);
+        if (genStderr) {
+          console.error("Generate stderr:", genStderr);
+        }
+        console.log("Generate stdout:", genStdout);
+      } catch (genError) {
+        // Ignore hosts file errors - they are not critical
+        if (genError.message && genError.message.includes('Failed to update') && genError.message.includes('hosts file')) {
+          console.warn('Hosts file update failed (expected in container), continuing...');
+        } else {
+          throw genError;
+        }
       }
-      console.log("Generate stdout:", genStdout);
 
-      // 3. Stop and remove tools container
+      // 3. Stop and remove tools container (if running)
       try {
         const container = this.docker.getContainer(containerName);
 
@@ -1339,39 +1357,40 @@ class DockerService {
         );
       }
 
-      // 4. Remove tools image
+      // 4. Checking if any other tools enabled. If so, rebuild and start.
+      // For now, simpler approach: rebuild and start if tools service is still in compose file.
+      // If no tools enabled, "generate" should have removed stackvo-tools from docker-compose.dynamic.yml
+      // However, we can try to build/up anyway. If service missing, it might warn/error or ignore.
+      
+      // Let's check environment variable from process? No, EnvService updated file but process.env not reloaded here.
+      // But we can blindly run compose up provided generate was correct.
+      
+      console.log("Rebuilding and restarting tools container (if still enabled)...");
       try {
-        const imageName = "stackvo-stackvo-tools";
-        const image = this.docker.getImage(imageName);
-        await image.remove({ force: true });
-        console.log(`Docker image ${imageName} removed`);
-      } catch (imageError) {
-        console.warn(`Could not remove image:`, imageError.message);
+          const { stdout: buildStdout } = await execAsync(
+            "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools",
+            { cwd: rootDir }
+          );
+          console.log("Build stdout:", buildStdout);
+          
+          const { stdout: upStdout } = await execAsync(
+            "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools",
+            { cwd: rootDir }
+          );
+          console.log("Up stdout:", upStdout);
+      } catch (composeError) {
+          // If no services enabled, this might fail or warn.
+          // If the service 'stackvo-tools' is removed from dynamic yaml, it will say "no such service: stackvo-tools"
+          console.log("Compose command output (might be empty/error if no tools enabled):", composeError.message);
       }
 
-      // 5. Rebuild tools container
-      console.log("Rebuilding tools container...");
-      const { stdout: buildStdout } = await execAsync(
-        "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-tools",
-        { cwd: rootDir }
-      );
-      console.log("Build stdout:", buildStdout);
-
-      // 6. Start tools container
-      console.log("Starting tools container...");
-      const { stdout: upStdout } = await execAsync(
-        "docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-tools",
-        { cwd: rootDir }
-      );
-      console.log("Up stdout:", upStdout);
-
-      // 7. Clear cache
+      // 5. Clear cache
       this.cache.flushAll();
       console.log("Cache cleared");
 
       return {
         success: true,
-        message: `Tool "${toolName}" disabled successfully (container rebuilt)`,
+        message: `Tool "${toolName}" disabled successfully`,
       };
     } catch (error) {
       console.error("Disable tool error:", error);

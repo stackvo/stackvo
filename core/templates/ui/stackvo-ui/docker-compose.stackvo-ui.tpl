@@ -22,7 +22,9 @@ services:
       # Generated directory
       GENERATED_DIR: /app/generated
       # Host path for volume mappings when running generate inside container
-      HOST_STACKVO_ROOT: {{ STACKVO_ROOT }}
+      # This is the REAL host path, not the container path
+      # Used for docker-compose commands that need host paths
+      HOST_STACKVO_ROOT: ${PWD}
       # Host user ID for file ownership (fixes permission issues)
       HOST_UID: {{ HOST_UID | default('1000') }}
       HOST_GID: {{ HOST_GID | default('1000') }}

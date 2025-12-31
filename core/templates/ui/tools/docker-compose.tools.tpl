@@ -6,8 +6,8 @@ services:
   stackvo-tools:
     profiles: ["services", "tools"]  # --services ile tümü, --profile tools ile sadece tools
     build:
-      context: ../
-      dockerfile: core/templates/ui/tools/Dockerfile
+      context: ./tools
+      dockerfile: Dockerfile
     container_name: "stackvo-tools"
     restart: unless-stopped
 

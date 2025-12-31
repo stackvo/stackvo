@@ -92,10 +92,17 @@ router.post('/:toolName/enable', async (req, res) => {
   try {
     const { toolName } = req.params;
     const dockerService = req.app.get('dockerService');
+    const io = req.app.get('io');
     const EnvService = (await import('../services/EnvService.js')).default;
     const envService = new EnvService();
     
+    // Emit enabling event
+    io.emit('tool:enabling', { tool: toolName });
+    
     const result = await dockerService.enableTool(toolName, envService);
+    
+    // Emit enabled event
+    io.emit('tool:enabled', { tool: toolName, message: result.message });
     
     res.json({
       success: true,
@@ -103,6 +110,11 @@ router.post('/:toolName/enable', async (req, res) => {
     });
   } catch (error) {
     console.error('Enable tool error:', error);
+    
+    // Emit error event
+    const io = req.app.get('io');
+    io.emit('tool:error', { tool: req.params.toolName, error: error.message });
+    
     res.status(500).json({
       success: false,
       message: error.message
@@ -118,10 +130,17 @@ router.post('/:toolName/disable', async (req, res) => {
   try {
     const { toolName } = req.params;
     const dockerService = req.app.get('dockerService');
+    const io = req.app.get('io');
     const EnvService = (await import('../services/EnvService.js')).default;
     const envService = new EnvService();
     
+    // Emit disabling event
+    io.emit('tool:disabling', { tool: toolName });
+    
     const result = await dockerService.disableTool(toolName, envService);
+    
+    // Emit disabled event
+    io.emit('tool:disabled', { tool: toolName, message: result.message });
     
     res.json({
       success: true,
@@ -129,6 +148,11 @@ router.post('/:toolName/disable', async (req, res) => {
     });
   } catch (error) {
     console.error('Disable tool error:', error);
+    
+    // Emit error event
+    const io = req.app.get('io');
+    io.emit('tool:error', { tool: req.params.toolName, error: error.message });
+    
     res.status(500).json({
       success: false,
       message: error.message
