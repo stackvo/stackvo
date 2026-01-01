@@ -70,21 +70,53 @@ Konfigürasyon dosyalarını üretir.
 
 ### up
 
-Tüm servisleri başlatır.
+Starts services. By default, only starts core services (Traefik + UI).
 
+**Syntax:**
 ```bash
-./cli/stackvo.sh up
+./cli/stackvo.sh up [OPTIONS]
 ```
 
-**Detaylı Çıktı:**
+**Options:**
+- (empty) - Minimal mode: Only core services (Traefik + UI)
+- `--all` - Start all services and projects
+- `--services` - Start core + all services
+- `--projects` - Start core + all projects
+- `--profile <name>` - Start core + specific profile
+
+**Examples:**
+```bash
+# Minimal mode - Only Traefik + UI
+./cli/stackvo.sh up
+
+# Start all services and projects
+./cli/stackvo.sh up --all
+
+# Core + all services
+./cli/stackvo.sh up --services
+
+# Core + all projects
+./cli/stackvo.sh up --projects
+
+# Core + only MySQL
+./cli/stackvo.sh up --profile mysql
+
+# Core + specific project
+./cli/stackvo.sh up --profile project-myproject
+
+# Multiple profiles
+./cli/stackvo.sh up --profile mysql --profile redis
+```
+
+**Verbose Output:**
 ```bash
 # Verbose mode
 STACKVO_VERBOSE=true ./cli/stackvo.sh up
 ```
 
-**Belirli Servisleri Başlatma:**
+**Starting Specific Services:**
 ```bash
-# Docker Compose komutunu doğrudan kullanın
+# Use Docker Compose command directly
 docker compose -f generated/stackvo.yml \
   -f generated/docker-compose.dynamic.yml \
   -f generated/docker-compose.projects.yml \

@@ -124,7 +124,11 @@ echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 ./cli/stackvo.sh generate services     # Generate only services
 
 # Container Management
-./cli/stackvo.sh up                    # Start all services
+./cli/stackvo.sh up                    # Start core services (minimal)
+./cli/stackvo.sh up --all              # Start all services and projects
+./cli/stackvo.sh up --services         # Start core + all services
+./cli/stackvo.sh up --projects         # Start core + all projects
+./cli/stackvo.sh up --profile mysql    # Start core + MySQL
 ./cli/stackvo.sh down                  # Stop all services
 ./cli/stackvo.sh restart               # Restart all services
 ./cli/stackvo.sh ps                    # List running services

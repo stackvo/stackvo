@@ -70,10 +70,42 @@ Konfigürasyon dosyalarını üretir.
 
 ### up
 
-Tüm servisleri başlatır.
+Servisleri başlatır. Varsayılan olarak sadece core servisleri (Traefik + UI) başlatır.
 
+**Syntax:**
 ```bash
+./cli/stackvo.sh up [OPTIONS]
+```
+
+**Options:**
+- (boş) - Minimal mode: Sadece core servisler (Traefik + UI)
+- `--all` - Tüm servisleri ve projeleri başlat
+- `--services` - Core + tüm servisleri başlat
+- `--projects` - Core + tüm projeleri başlat
+- `--profile <name>` - Core + belirli bir profili başlat
+
+**Örnekler:**
+```bash
+# Minimal mode - Sadece Traefik + UI
 ./cli/stackvo.sh up
+
+# Tüm servisleri ve projeleri başlat
+./cli/stackvo.sh up --all
+
+# Core + tüm servisleri başlat
+./cli/stackvo.sh up --services
+
+# Core + tüm projeleri başlat
+./cli/stackvo.sh up --projects
+
+# Core + sadece MySQL başlat
+./cli/stackvo.sh up --profile mysql
+
+# Core + belirli bir proje başlat
+./cli/stackvo.sh up --profile project-myproject
+
+# Birden fazla profile
+./cli/stackvo.sh up --profile mysql --profile redis
 ```
 
 **Detaylı Çıktı:**

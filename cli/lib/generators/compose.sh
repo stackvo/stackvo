@@ -134,9 +134,6 @@ generate_dynamic_compose() {
         "SERVICE_POSTGRES_ENABLE:services/postgres/docker-compose.postgres.tpl"
         "SERVICE_MONGO_ENABLE:services/mongo/docker-compose.mongo.tpl"
         "SERVICE_CASSANDRA_ENABLE:services/cassandra/docker-compose.cassandra.tpl"
-        "SERVICE_PERCONA_ENABLE:services/percona/docker-compose.percona.tpl"
-        "SERVICE_COUCHDB_ENABLE:services/couchdb/docker-compose.couchdb.tpl"
-        "SERVICE_COUCHBASE_ENABLE:services/couchbase/docker-compose.couchbase.tpl"
         
         # Caching
         "SERVICE_REDIS_ENABLE:services/redis/docker-compose.redis.tpl"
@@ -144,34 +141,18 @@ generate_dynamic_compose() {
         
         # Message Queues
         "SERVICE_RABBITMQ_ENABLE:services/rabbitmq/docker-compose.rabbitmq.tpl"
-        "SERVICE_NATS_ENABLE:services/nats/docker-compose.nats.tpl"
         "SERVICE_KAFKA_ENABLE:services/kafka/docker-compose.kafka.tpl"
-        "SERVICE_ACTIVEMQ_ENABLE:services/activemq/docker-compose.activemq.tpl"
         
         # Search
         "SERVICE_ELASTICSEARCH_ENABLE:services/elasticsearch/docker-compose.elasticsearch.tpl"
-        "SERVICE_MEILISEARCH_ENABLE:services/meilisearch/docker-compose.meilisearch.tpl"
-        "SERVICE_SOLR_ENABLE:services/solr/docker-compose.solr.tpl"
         
         # Monitoring
         "SERVICE_KIBANA_ENABLE:services/kibana/docker-compose.kibana.tpl"
         "SERVICE_GRAFANA_ENABLE:services/grafana/docker-compose.grafana.tpl"
-        "SERVICE_LOGSTASH_ENABLE:services/logstash/docker-compose.logstash.tpl"
-        "SERVICE_NETDATA_ENABLE:services/netdata/docker-compose.netdata.tpl"
-        
-        # QA
-        "SERVICE_SONARQUBE_ENABLE:services/sonarqube/docker-compose.sonarqube.tpl"
-        "SERVICE_SENTRY_ENABLE:services/sentry/docker-compose.sentry.tpl"
-        "SERVICE_BLACKFIRE_ENABLE:services/blackfire/docker-compose.blackfire.tpl"
-        
-        # App Servers
-        "SERVICE_TOMCAT_ENABLE:services/tomcat/docker-compose.tomcat.tpl"
-        "SERVICE_KONG_ENABLE:services/kong/docker-compose.kong.tpl"
         
         # Tools
         "SERVICE_MAILHOG_ENABLE:services/mailhog/docker-compose.mailhog.tpl"
-        "SERVICE_NGROK_ENABLE:services/ngrok/docker-compose.ngrok.tpl"
-        "SERVICE_SELENIUM_ENABLE:services/selenium/docker-compose.selenium.tpl"
+        "SERVICE_BLACKFIRE_ENABLE:services/blackfire/docker-compose.blackfire.tpl"
         
         # Stackvo Web UI
         "STACKVO_UI_ENABLE:ui/stackvo-ui/docker-compose.stackvo-ui.tpl"

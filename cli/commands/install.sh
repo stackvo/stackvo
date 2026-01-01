@@ -10,61 +10,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 source "$SCRIPT_DIR/../lib/logger.sh"
 
-# Update /etc/hosts with stackvo domains
-update_hosts_file() {
-    log_info "Checking /etc/hosts configuration..."
-    
-    # Check if stackvo domains already exist
-    if grep -q "stackvo.loc" /etc/hosts 2>/dev/null; then
-        log_success "/etc/hosts already configured"
-        return
-    fi
-    
-    log_info "Adding stackvo domains to /etc/hosts..."
-    
-    # Create hosts entries
-    cat > /tmp/stackvo-hosts <<'EOF'
-
-# Stackvo Domains
-127.0.0.1 stackvo.loc
-127.0.0.1 traefik.stackvo.loc
-127.0.0.1 activemq.stackvo.loc
-127.0.0.1 elasticsearch.stackvo.loc
-127.0.0.1 grafana.stackvo.loc
-127.0.0.1 kafbat.stackvo.loc
-127.0.0.1 kibana.stackvo.loc
-127.0.0.1 kong.stackvo.loc
-127.0.0.1 mailhog.stackvo.loc
-127.0.0.1 mariadb.stackvo.loc
-127.0.0.1 meilisearch.stackvo.loc
-127.0.0.1 mongo.stackvo.loc
-127.0.0.1 mysql.stackvo.loc
-127.0.0.1 netdata.stackvo.loc
-127.0.0.1 postgres.stackvo.loc
-127.0.0.1 rabbitmq.stackvo.loc
-127.0.0.1 redis.stackvo.loc
-127.0.0.1 sentry.stackvo.loc
-127.0.0.1 sonarqube.stackvo.loc
-127.0.0.1 tomcat.stackvo.loc
-127.0.0.1 tools.stackvo.loc
-127.0.0.1 adminer.stackvo.loc
-127.0.0.1 phpmyadmin.stackvo.loc
-127.0.0.1 phppgadmin.stackvo.loc
-127.0.0.1 phpmemcachedadmin.stackvo.loc
-127.0.0.1 phpmongo.stackvo.loc
-127.0.0.1 opcache.stackvo.loc
-EOF
-    
-    # Append to /etc/hosts with sudo
-    if sudo bash -c 'cat /tmp/stackvo-hosts >> /etc/hosts'; then
-        rm /tmp/stackvo-hosts
-        log_success "Added stackvo domains to /etc/hosts"
-    else
-        log_warn "Failed to update /etc/hosts. You may need to add domains manually."
-        rm /tmp/stackvo-hosts
-    fi
-}
-
 # Check Docker Compose version
 validate_docker_compose_version() {
     log_info "Checking Docker Compose version..."
@@ -115,9 +60,6 @@ fi
 
 # Check Docker Compose version first
 validate_docker_compose_version
-
-# Update /etc/hosts
-update_hosts_file
 
 # Make scripts executable
 chmod +x "$CLI_DIR/stackvo.sh"

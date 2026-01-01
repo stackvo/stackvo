@@ -114,10 +114,6 @@ main() {
             generate_dynamic_compose
             generate_projects
             
-            # Update hosts file
-            source "$SCRIPT_DIR/../lib/generators/hosts.sh"
-            generate_hosts
-            
             log_success "Generation completed!"
             ;;
     esac

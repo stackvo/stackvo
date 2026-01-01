@@ -147,7 +147,7 @@ case "$COMMAND" in
         echo "  stackvo logs [srv]            → follow logs"
         echo "  stackvo pull                  → pull Docker images"
         echo "  stackvo doctor                → system health check"
-        echo "  stackvo uninstall             → uninstall Stackvo"
+        echo "  stackvo uninstall             → uninstall Stackvo (removes all Docker resources and files)"
         echo ""
         echo "Examples:"
         echo "  stackvo up                    → Start only Traefik + UI"

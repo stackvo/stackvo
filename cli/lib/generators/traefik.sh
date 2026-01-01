@@ -28,14 +28,6 @@ EOF
     add_router_if_enabled "SERVICE_MAILHOG_ENABLE" "mailhog" "SERVICE_MAILHOG_URL" >> "$output"
     add_router_if_enabled "SERVICE_KIBANA_ENABLE" "kibana" "SERVICE_KIBANA_URL" >> "$output"
     add_router_if_enabled "SERVICE_GRAFANA_ENABLE" "grafana" "SERVICE_GRAFANA_URL" >> "$output"
-    add_router_if_enabled "SERVICE_SONARQUBE_ENABLE" "sonarqube" "SERVICE_SONARQUBE_URL" >> "$output"
-    add_router_if_enabled "SERVICE_SENTRY_ENABLE" "sentry" "SERVICE_SENTRY_URL" >> "$output"
-    add_router_if_enabled "SERVICE_MEILISEARCH_ENABLE" "meilisearch" "SERVICE_MEILISEARCH_URL" >> "$output"
-    add_router_if_enabled "SERVICE_TOMCAT_ENABLE" "tomcat" "SERVICE_TOMCAT_URL" >> "$output"
-    add_router_if_enabled "SERVICE_KONG_ENABLE" "kong-gateway" "SERVICE_KONG_URL" >> "$output"
-    add_router_if_enabled "SERVICE_KONG_ENABLE" "kong-admin" "SERVICE_KONG_ADMIN_URL" >> "$output"
-    add_router_if_enabled "SERVICE_NETDATA_ENABLE" "netdata" "SERVICE_NETDATA_URL" >> "$output"
-    add_router_if_enabled "SERVICE_ACTIVEMQ_ENABLE" "activemq" "SERVICE_ACTIVEMQ_URL" >> "$output"
     
     # Tools container admin tools (subdomain-based routing - no path rewriting needed)
     if [ "${STACKVO_UI_TOOLS_CONTAINER_ENABLE}" = "true" ]; then
@@ -59,25 +51,6 @@ EOF
     add_service_if_enabled "SERVICE_MAILHOG_ENABLE" "mailhog" "8025" >> "$output"
     add_service_if_enabled "SERVICE_KIBANA_ENABLE" "kibana" "5601" >> "$output"
     add_service_if_enabled "SERVICE_GRAFANA_ENABLE" "grafana" "3000" >> "$output"
-    add_service_if_enabled "SERVICE_SONARQUBE_ENABLE" "sonarqube" "9000" >> "$output"
-    add_service_if_enabled "SERVICE_SENTRY_ENABLE" "sentry" "9000" >> "$output"
-    add_service_if_enabled "SERVICE_MEILISEARCH_ENABLE" "meilisearch" "7700" >> "$output"
-    add_service_if_enabled "SERVICE_TOMCAT_ENABLE" "tomcat" "8080" >> "$output"
-    # Kong services - both point to same container but different ports
-    if [ "${SERVICE_KONG_ENABLE}" = "true" ]; then
-        cat >> "$output" <<EOF
-    kong-gateway:
-      loadBalancer:
-        servers:
-          - url: "http://stackvo-kong:8000"
-    kong-admin:
-      loadBalancer:
-        servers:
-          - url: "http://stackvo-kong:8001"
-EOF
-    fi
-    add_service_if_enabled "SERVICE_NETDATA_ENABLE" "netdata" "19999" >> "$output"
-    add_service_if_enabled "SERVICE_ACTIVEMQ_ENABLE" "activemq" "8161" >> "$output"
     
     # Tools container services (subdomain-based, no path rewriting)
     if [ "${STACKVO_UI_TOOLS_CONTAINER_ENABLE}" = "true" ]; then

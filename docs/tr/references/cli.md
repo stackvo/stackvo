@@ -57,36 +57,66 @@ Konfigürasyon dosyalarını üretir.
 
 ### up
 
-Tüm servisleri başlatır.
+Servisleri başlatır. Varsayılan olarak minimal mode (sadece core servisler).
 
 **Syntax:**
 ```bash
-./cli/stackvo.sh up [OPTIONS]
+./cli/stackvo.sh up [MODE_OPTIONS]
 ```
 
-**Options:**
-- `-d, --detach` - Arka planda çalıştır (varsayılan)
-- `--build` - Image'ları yeniden build et
-- `--force-recreate` - Container'ları yeniden oluştur
+**Mode Options:**
+- (boş) - Minimal mode: Sadece core servisler (Traefik + UI)
+- `--all` - Tüm servisleri ve projeleri başlat (eski davranış)
+- `--services` - Core + tüm servisleri başlat
+- `--projects` - Core + tüm projeleri başlat
+- `--profile <name>` - Core + belirli bir profili başlat (birden fazla kullanılabilir)
 
 **Örnekler:**
 ```bash
-# Tüm servisleri başlat
+# Minimal mode - Sadece Traefik + UI
 ./cli/stackvo.sh up
 
-# Build ile başlat
-./cli/stackvo.sh up --build
+# Tüm servisleri ve projeleri başlat
+./cli/stackvo.sh up --all
 
-# Force recreate
-./cli/stackvo.sh up --force-recreate
+# Core + tüm servisleri başlat
+./cli/stackvo.sh up --services
+
+# Core + tüm projeleri başlat
+./cli/stackvo.sh up --projects
+
+# Core + sadece MySQL başlat
+./cli/stackvo.sh up --profile mysql
+
+# Core + MySQL ve Redis başlat
+./cli/stackvo.sh up --profile mysql --profile redis
+
+# Core + belirli bir proje başlat
+./cli/stackvo.sh up --profile project-myproject
 ```
+
+**Profile İsimlendirme:**
+- Servisler için: `mysql`, `redis`, `postgres`, `mongodb`, vb.
+- Projeler için: `project-{proje-adı}` (örn: `project-myproject`)
+
+**Not:** 
+- Varsayılan davranış değişti: Artık `up` komutu sadece core servisleri başlatır
+- Eski davranış için `--all` parametresini kullanın
+- Profile'lar Docker Compose profile özelliğini kullanır
 
 **Eşdeğer Docker Compose:**
 ```bash
+# Minimal mode
 docker compose -f generated/stackvo.yml \
   -f generated/docker-compose.dynamic.yml \
   -f generated/docker-compose.projects.yml \
-  up -d
+  --profile core up -d
+
+# Belirli profile ile
+docker compose -f generated/stackvo.yml \
+  -f generated/docker-compose.dynamic.yml \
+  -f generated/docker-compose.projects.yml \
+  --profile core --profile mysql up -d
 ```
 
 ---
