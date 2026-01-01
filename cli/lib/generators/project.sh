@@ -68,15 +68,15 @@ generate_projects() {
     local output="$GENERATED_DIR/docker-compose.projects.yml"
     local projects_dir="$ROOT_DIR/projects"
     
-    # Start with project name and services
+    # Start with project name
     echo "name: stackvo" > "$output"
-    echo "" >> "$output"
-    echo "services:" >> "$output"
     echo "" >> "$output"
     
     # Check if projects directory exists
     if [ ! -d "$projects_dir" ]; then
         log_info "No projects directory found"
+        # Create valid empty services mapping (required by Docker Compose)
+        echo "services: {}" >> "$output"
         # Still add network definition even if no projects
         echo "" >> "$output"
         echo "networks:" >> "$output"
@@ -84,6 +84,13 @@ generate_projects() {
         echo "    external: true" >> "$output"
         return
     fi
+    
+    # Projects directory exists, start services block
+    echo "services:" >> "$output"
+    echo "" >> "$output"
+    
+    # Track if we processed any valid projects
+    local project_count=0
     
     # Process each project
     for project_path in "$projects_dir"/*; do
@@ -126,7 +133,24 @@ generate_projects() {
         
         # Generate single container (web server + PHP combined)
         generate_single_container "$project_name" "$project_path" "$web_server" "$php_version" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir" >> "$output"
+        
+        # Increment project counter
+        ((project_count++))
     done
+    
+    # If no valid projects were processed, recreate file with empty services mapping
+    if [ $project_count -eq 0 ]; then
+        log_info "No valid projects found (projects directory exists but no stackvo.json files)"
+        # Recreate file with empty services mapping
+        echo "name: stackvo" > "$output"
+        echo "" >> "$output"
+        echo "services: {}" >> "$output"
+        echo "" >> "$output"
+        echo "networks:" >> "$output"
+        echo "  ${DOCKER_DEFAULT_NETWORK:-$CONST_DEFAULT_NETWORK}:" >> "$output"
+        echo "    external: true" >> "$output"
+        return
+    fi
     
     # Add network definition at the end
     echo "" >> "$output"
