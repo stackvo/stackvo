@@ -7,7 +7,7 @@ set -e
 
 # Script dizinini ve proje kök dizinini belirle
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Proje kök dizinine geç
 cd "$PROJECT_ROOT"
@@ -89,38 +89,40 @@ fi
 echo "" >> "$TEMP_FILE_TR"
 echo "" >> "$TEMP_FILE_EN"
 
-# Commit'leri kategorilere ayır
-declare -A categories_tr
-categories_tr=(
-    ["feat"]="### Eklenenler"
-    ["fix"]="### Düzeltmeler"
-    ["docs"]="### Dokümantasyon"
-    ["style"]="### Stil"
-    ["refactor"]="### Yeniden Yapılandırma"
-    ["perf"]="### Performans"
-    ["test"]="### Testler"
-    ["chore"]="### Diğer"
-)
+# Kategori başlıklarını döndüren fonksiyonlar
+get_category_tr() {
+    case "$1" in
+        feat) echo "### Eklenenler" ;;
+        fix) echo "### Düzeltmeler" ;;
+        docs) echo "### Dokümantasyon" ;;
+        style) echo "### Stil" ;;
+        refactor) echo "### Yeniden Yapılandırma" ;;
+        perf) echo "### Performans" ;;
+        test) echo "### Testler" ;;
+        chore) echo "### Diğer" ;;
+    esac
+}
 
-declare -A categories_en
-categories_en=(
-    ["feat"]="### Added"
-    ["fix"]="### Fixed"
-    ["docs"]="### Documentation"
-    ["style"]="### Style"
-    ["refactor"]="### Refactored"
-    ["perf"]="### Performance"
-    ["test"]="### Tests"
-    ["chore"]="### Chore"
-)
+get_category_en() {
+    case "$1" in
+        feat) echo "### Added" ;;
+        fix) echo "### Fixed" ;;
+        docs) echo "### Documentation" ;;
+        style) echo "### Style" ;;
+        refactor) echo "### Refactored" ;;
+        perf) echo "### Performance" ;;
+        test) echo "### Tests" ;;
+        chore) echo "### Chore" ;;
+    esac
+}
 
 # Her kategori için commit'leri topla
-for type in "${!categories_tr[@]}"; do
+for type in feat fix docs style refactor perf test chore; do
     commits=$(git log $COMMIT_RANGE --pretty=format:"%s" --grep="^$type" --no-merges 2>/dev/null || echo "")
     
     if [ -n "$commits" ]; then
-        echo "${categories_tr[$type]}" >> "$TEMP_FILE_TR"
-        echo "${categories_en[$type]}" >> "$TEMP_FILE_EN"
+        echo "$(get_category_tr $type)" >> "$TEMP_FILE_TR"
+        echo "$(get_category_en $type)" >> "$TEMP_FILE_EN"
         
         while IFS= read -r commit; do
             # Commit mesajını parse et
