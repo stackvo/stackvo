@@ -13,6 +13,13 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standardına day
 
 ---
 
+## [1.0.6] - 2026-01-02
+
+---
+
+
+---
+
 ## Bağlantılar
 
 - [GitHub Repository](https://github.com/stackvo/stackvo)
