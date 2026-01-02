@@ -1,41 +1,41 @@
 ---
-title: Servis Konfigürasyonu
-description: Stackvo'da servisleri nasıl yapılandıracağınızı ve kullanacağınızı gösterir.
+title: Service Configuration
+description: Shows how to configure and use services in Stackvo.
 ---
 
-# Servis Konfigürasyonu
+# Service Configuration
 
-Bu kılavuz, Stackvo'da servisleri nasıl yapılandıracağınızı ve kullanacağınızı detaylı olarak göstermektedir. MySQL, PostgreSQL, MongoDB gibi veritabanlarından Redis, Memcached gibi cache sistemlerine, RabbitMQ, Kafka gibi message queue'lardan Elasticsearch, Kibana gibi arama ve indeksleme araçlarına kadar 40+ servisin aktivasyonu, PHP'den bağlantısı, CLI erişimi ve management UI kullanımı açıklanmaktadır.
+This guide shows in detail how to configure and use services in Stackvo. It explains the activation, PHP connection, CLI access, and management UI usage of 14 services, from databases like MySQL, PostgreSQL, MongoDB to cache systems like Redis, Memcached, message queues like RabbitMQ, Kafka to search and indexing tools like Elasticsearch, Kibana.
 
 ---
 
-## Servis Aktivasyonu
+## Service Activation
 
-### .env Dosyasında Aktivasyon
+### Activation in .env File
 
 ```bash
-# .env dosyasını düzenle
+# Edit .env file
 nano .env
 
-# Servisi aktif et
+# Enable service
 SERVICE_MYSQL_ENABLE=true
 SERVICE_REDIS_ENABLE=true
 SERVICE_RABBITMQ_ENABLE=true
 
-# Konfigürasyonları üret
+# Generate configurations
 ./cli/stackvo.sh generate
 
-# Servisleri başlat
+# Start services
 ./cli/stackvo.sh up
 ```
 
 ---
 
-## Veritabanları
+## Databases
 
 ### MySQL
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_MYSQL_ENABLE=true
 SERVICE_MYSQL_VERSION=8.0
@@ -45,7 +45,7 @@ SERVICE_MYSQL_USER=stackvo
 SERVICE_MYSQL_PASSWORD=stackvo
 ```
 
-**PHP'den Bağlantı:**
+**PHP Connection:**
 ```php
 <?php
 $pdo = new PDO(
@@ -55,12 +55,12 @@ $pdo = new PDO(
 );
 ```
 
-**CLI Erişimi:**
+**CLI Access:**
 ```bash
-# Container içinden
+# From container
 docker exec -it stackvo-mysql mysql -u root -proot
 
-# Host'tan
+# From host
 mysql -h 127.0.0.1 -P 3306 -u stackvo -pstackvo stackvo
 ```
 
@@ -71,7 +71,7 @@ https://phpmyadmin.stackvo.loc
 
 ### PostgreSQL
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_POSTGRES_ENABLE=true
 SERVICE_POSTGRES_VERSION=14
@@ -80,7 +80,7 @@ SERVICE_POSTGRES_DB=stackvo
 SERVICE_POSTGRES_USER=stackvo
 ```
 
-**PHP'den Bağlantı:**
+**PHP Connection:**
 ```php
 <?php
 $pdo = new PDO(
@@ -90,12 +90,12 @@ $pdo = new PDO(
 );
 ```
 
-**CLI Erişimi:**
+**CLI Access:**
 ```bash
-# Container içinden
+# From container
 docker exec -it stackvo-postgres psql -U stackvo -d stackvo
 
-# Host'tan
+# From host
 psql -h 127.0.0.1 -p 5433 -U stackvo -d stackvo
 ```
 
@@ -106,7 +106,7 @@ https://phppgadmin.stackvo.loc
 
 ### MongoDB
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_MONGO_ENABLE=true
 SERVICE_MONGO_VERSION=5.0
@@ -114,7 +114,7 @@ SERVICE_MONGO_INITDB_ROOT_USERNAME=root
 SERVICE_MONGO_INITDB_ROOT_PASSWORD=root
 ```
 
-**PHP'den Bağlantı:**
+**PHP Connection:**
 ```php
 <?php
 $client = new MongoDB\Client(
@@ -123,9 +123,9 @@ $client = new MongoDB\Client(
 $db = $client->stackvo;
 ```
 
-**CLI Erişimi:**
+**CLI Access:**
 ```bash
-# Container içinden
+# From container
 docker exec -it stackvo-mongo mongosh -u root -p root --authenticationDatabase admin
 ```
 
@@ -136,18 +136,18 @@ https://phpmongo.stackvo.loc
 
 ---
 
-## Cache Sistemleri
+## Cache Systems
 
 ### Redis
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_REDIS_ENABLE=true
 SERVICE_REDIS_VERSION=7.0
 SERVICE_REDIS_PASSWORD=
 ```
 
-**PHP'den Kullanım:**
+**PHP Usage:**
 ```php
 <?php
 $redis = new Redis();
@@ -163,7 +163,7 @@ $value = $redis->get('key');
 $redis->setex('key', 3600, 'value');
 ```
 
-**Laravel ile:**
+**With Laravel:**
 ```php
 // config/database.php
 'redis' => [
@@ -177,12 +177,12 @@ $redis->setex('key', 3600, 'value');
 ],
 ```
 
-**CLI Erişimi:**
+**CLI Access:**
 ```bash
 # Redis CLI
 docker exec -it stackvo-redis redis-cli
 
-# Komutlar
+# Commands
 > SET key value
 > GET key
 > KEYS *
@@ -191,13 +191,13 @@ docker exec -it stackvo-redis redis-cli
 
 ### Memcached
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_MEMCACHED_ENABLE=true
 SERVICE_MEMCACHED_VERSION=1.6
 ```
 
-**PHP'den Kullanım:**
+**PHP Usage:**
 ```php
 <?php
 $memcached = new Memcached();
@@ -221,7 +221,7 @@ https://phpmemcachedadmin.stackvo.loc
 
 ### RabbitMQ
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_RABBITMQ_ENABLE=true
 SERVICE_RABBITMQ_VERSION=3
@@ -229,7 +229,7 @@ SERVICE_RABBITMQ_DEFAULT_USER=admin
 SERVICE_RABBITMQ_DEFAULT_PASS=admin
 ```
 
-**PHP'den Kullanım:**
+**PHP Usage:**
 ```php
 <?php
 use PhpAmqpLib\Connection\AMQPStreamConnection;
@@ -243,14 +243,14 @@ $connection = new AMQPStreamConnection(
 );
 $channel = $connection->channel();
 
-// Queue oluştur
+// Create queue
 $channel->queue_declare('hello', false, false, false, false);
 
-// Mesaj gönder
+// Send message
 $msg = new AMQPMessage('Hello World!');
 $channel->basic_publish($msg, '', 'hello');
 
-// Mesaj al
+// Receive message
 $callback = function ($msg) {
     echo 'Received: ', $msg->body, "\n";
 };
@@ -266,16 +266,16 @@ Password: admin
 
 ### Kafka
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_KAFKA_ENABLE=true
 SERVICE_KAFKA_VERSION=7.5.0
 ```
 
-**PHP'den Kullanım:**
+**PHP Usage:**
 ```php
 <?php
-// rdkafka extension gerekli
+// rdkafka extension required
 $conf = new RdKafka\Conf();
 $conf->set('metadata.broker.list', 'stackvo-kafka:9092');
 
@@ -293,17 +293,17 @@ https://kafbat.stackvo.loc
 
 ---
 
-## Arama ve İndeksleme
+## Search and Indexing
 
 ### Elasticsearch
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_ELASTICSEARCH_VERSION=8.11.3
 ```
 
-**PHP'den Kullanım:**
+**PHP Usage:**
 ```php
 <?php
 use Elasticsearch\ClientBuilder;
@@ -312,17 +312,17 @@ $client = ClientBuilder::create()
     ->setHosts(['stackvo-elasticsearch:9200'])
     ->build();
 
-// Index oluştur
+// Create index
 $client->indices()->create(['index' => 'my_index']);
 
-// Document ekle
+// Add document
 $client->index([
     'index' => 'my_index',
     'id' => '1',
     'body' => ['title' => 'Test Document']
 ]);
 
-// Arama
+// Search
 $results = $client->search([
     'index' => 'my_index',
     'body' => [
@@ -335,13 +335,13 @@ $results = $client->search([
 
 ### Kibana
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_KIBANA_ENABLE=true
 SERVICE_KIBANA_VERSION=8.11.3
 ```
 
-**Erişim:**
+**Access:**
 ```
 https://kibana.stackvo.loc
 ```
@@ -352,7 +352,7 @@ https://kibana.stackvo.loc
 
 ### Grafana
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_GRAFANA_ENABLE=true
 SERVICE_GRAFANA_VERSION=latest
@@ -360,24 +360,11 @@ SERVICE_GRAFANA_ADMIN_USER=admin
 SERVICE_GRAFANA_ADMIN_PASSWORD=admin
 ```
 
-**Erişim:**
+**Access:**
 ```
 https://grafana.stackvo.loc
 User: admin
 Password: admin
-```
-
-### Netdata
-
-**Aktivasyon:**
-```bash
-SERVICE_NETDATA_ENABLE=true
-SERVICE_NETDATA_VERSION=latest
-```
-
-**Erişim:**
-```
-https://netdata.stackvo.loc
 ```
 
 ---
@@ -386,84 +373,78 @@ https://netdata.stackvo.loc
 
 ### MailHog
 
-**Aktivasyon:**
+**Activation:**
 ```bash
 SERVICE_MAILHOG_ENABLE=true
 SERVICE_MAILHOG_VERSION=latest
 ```
 
-**PHP Konfigürasyonu:**
+**PHP Configuration:**
 ```ini
 ; php.ini
 sendmail_path = "/usr/sbin/sendmail -S stackvo-mailhog:1025"
 ```
 
-**Erişim:**
+**Access:**
 ```
 https://mailhog.stackvo.loc
 ```
 
-### Selenium
+### Blackfire
 
-**Aktivasyon:**
+**Activation:**
 ```bash
-SERVICE_SELENIUM_ENABLE=true
-SERVICE_SELENIUM_VERSION=latest
+SERVICE_BLACKFIRE_ENABLE=true
+SERVICE_BLACKFIRE_VERSION=latest
+SERVICE_BLACKFIRE_SERVER_ID=
+SERVICE_BLACKFIRE_SERVER_TOKEN=
 ```
 
-**PHP'den Kullanım:**
-```php
-<?php
-use Facebook\WebDriver\Remote\RemoteWebDriver;
-use Facebook\WebDriver\Remote\DesiredCapabilities;
-
-$driver = RemoteWebDriver::create(
-    'http://stackvo-selenium:4444/wd/hub',
-    DesiredCapabilities::chrome()
-);
-
-$driver->get('https://example.com');
+**PHP Extension:**
+```bash
+# Blackfire PHP extension is automatically installed
+# Credentials must be set in .env file
 ```
 
 ---
 
-## Servis Yönetimi
+## Service Management
 
-### Servis Başlatma/Durdurma
+### Start/Stop Service
 
 ```bash
-# Belirli servisi başlat
+# Start specific service
 docker compose -f generated/stackvo.yml \
   -f generated/docker-compose.dynamic.yml \
   up -d mysql
 
-# Belirli servisi durdur
+# Stop specific service
 docker compose -f generated/stackvo.yml \
   -f generated/docker-compose.dynamic.yml \
   stop mysql
 
-# Belirli servisi yeniden başlat
+# Restart specific service
 docker compose -f generated/stackvo.yml \
   -f generated/docker-compose.dynamic.yml \
   restart mysql
 ```
 
-### Servis Logları
+### Service Logs
 
 ```bash
-# Servis loglarını izle
+# Watch service logs
 docker logs -f stackvo-mysql
 docker logs -f stackvo-redis
 docker logs -f stackvo-rabbitmq
 ```
 
-### Servis Durumu
+### Service Status
 
 ```bash
-# Çalışan servisleri listele
+# List running services
 docker ps --filter "name=stackvo-"
 
-# Belirli servis detayları
+# Specific service details
 docker inspect stackvo-mysql
 ```
 
@@ -471,37 +452,37 @@ docker inspect stackvo-mysql
 
 ## Troubleshooting
 
-### Servis Başlamıyor
+### Service Not Starting
 
 ```bash
-# Logları kontrol et
+# Check logs
 docker logs stackvo-<service-name>
 
-# Port çakışması kontrolü
+# Check port conflicts
 docker ps --format "table {{.Names}}\t{{.Ports}}"
 
-# Konfigürasyonu yeniden üret
+# Regenerate configuration
 ./cli/stackvo.sh generate
 ./cli/stackvo.sh restart
 ```
 
-### Bağlantı Hatası
+### Connection Error
 
 ```bash
-# Network kontrolü
+# Network check
 docker network inspect stackvo-net
 
-# Ping testi
+# Ping test
 docker exec stackvo-php ping stackvo-mysql
 
-# Port testi
+# Port test
 docker exec stackvo-php nc -zv stackvo-mysql 3306
 ```
 
-### Data Kaybı
+### Data Loss
 
 ```bash
-# Volume'ları listele
+# List volumes
 docker volume ls | grep stackvo
 
 # Volume backup
@@ -510,6 +491,3 @@ docker run --rm -v stackvo_mysql-data:/data -v $(pwd):/backup ubuntu tar czf /ba
 # Volume restore
 docker run --rm -v stackvo_mysql-data:/data -v $(pwd):/backup ubuntu tar xzf /backup/mysql-backup.tar.gz -C /
 ```
-
----
-

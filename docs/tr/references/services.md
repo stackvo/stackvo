@@ -1,17 +1,15 @@
 # Servisler Referansı
 
-40+ desteklenen servislerin detaylı referansı. Bu sayfa, veritabanlarından (MySQL, PostgreSQL, MongoDB) cache sistemlerine (Redis, Memcached), message queue'lardan (RabbitMQ, Kafka) arama ve indeksleme araçlarına (Elasticsearch, Kibana), monitoring araçlarından (Grafana, Netdata) developer tools'a (MailHog, Selenium) kadar tüm servislerin image bilgilerini, port ayarlarını, konfigürasyon parametrelerini ve bağlantı detaylarını içermektedir.
+14 desteklenen servislerin detaylı referansı. Bu sayfa, veritabanlarından (MySQL, PostgreSQL, MongoDB, MariaDB, Cassandra) cache sistemlerine (Redis, Memcached), message queue'lardan (RabbitMQ, Kafka) arama ve indeksleme araçlarına (Elasticsearch, Kibana), monitoring araçlarından (Grafana) developer tools'a (MailHog, Blackfire) kadar tüm servislerin image bilgilerini, port ayarlarını, konfigürasyon parametrelerini ve bağlantı detaylarını içermektedir.
 
 ## Servis Kategorileri
 
-- [Veritabanları](#veritabanlar) (8)
+- [Veritabanları](#veritabanları) (5)
 - [Cache Sistemleri](#cache-sistemleri) (2)
-- [Message Queues](#message-queues) (4)
-- [Arama ve İndeksleme](#arama-ve-indeksleme) (4)
-- [Monitoring](#monitoring) (3)
-- [QA Tools](#qa-tools) (2)
-- [Developer Tools](#developer-tools) (4)
-- [Application Servers](#application-servers) (2)
+- [Message Queues](#message-queues) (2)
+- [Arama ve İndeksleme](#arama-ve-indeksleme) (2)
+- [Monitoring](#monitoring) (1)
+- [Developer Tools](#developer-tools) (2)
 
 ---
 
@@ -103,44 +101,6 @@ SERVICE_CASSANDRA_ENABLE=false
 SERVICE_CASSANDRA_VERSION=latest
 ```
 
-**Image:** `percona:{version}`  
-**Default Version:** latest  
-**Ports:** 3308 (host), 3306 (container)
-
-**Konfigürasyon:**
-```bash
-SERVICE_PERCONA_ENABLE=false
-SERVICE_PERCONA_VERSION=latest
-SERVICE_PERCONA_ROOT_PASSWORD=root
-SERVICE_PERCONA_DATABASE=stackvo
-SERVICE_PERCONA_USER=stackvo
-SERVICE_PERCONA_PASSWORD=stackvo
-```
-
-**Image:** `couchdb:{version}`  
-**Default Version:** latest  
-**Ports:** 5984
-
-**Konfigürasyon:**
-```bash
-SERVICE_COUCHDB_ENABLE=false
-SERVICE_COUCHDB_VERSION=latest
-SERVICE_COUCHDB_USER=admin
-SERVICE_COUCHDB_PASSWORD=admin
-```
-
-**Image:** `couchbase:{version}`  
-**Default Version:** latest  
-**Ports:** 8091, 11210
-
-**Konfigürasyon:**
-```bash
-SERVICE_COUCHBASE_ENABLE=false
-SERVICE_COUCHBASE_VERSION=latest
-SERVICE_COUCHBASE_ADMIN_USER=admin
-SERVICE_COUCHBASE_ADMIN_PASSWORD=admin
-```
-
 ---
 
 ## Cache Sistemleri
@@ -211,29 +171,6 @@ SERVICE_KAFKA_VERSION=7.5.0
 
 **Management UI:** `https://kafbat.stackvo.loc`
 
-**Image:** `rmohr/activemq:{version}`  
-**Default Version:** latest  
-**Ports:** 61616, 5673, 61613, 1883, 61614, 8161
-
-**Konfigürasyon:**
-```bash
-SERVICE_ACTIVEMQ_ENABLE=false
-SERVICE_ACTIVEMQ_VERSION=latest
-SERVICE_ACTIVEMQ_URL=activemq
-SERVICE_ACTIVEMQ_ADMIN_USER=admin
-SERVICE_ACTIVEMQ_ADMIN_PASSWORD=admin
-```
-
-**Image:** `nats:{version}`  
-**Default Version:** latest  
-**Ports:** 4222, 8222, 6222
-
-**Konfigürasyon:**
-```bash
-SERVICE_NATS_ENABLE=false
-SERVICE_NATS_VERSION=latest
-```
-
 ---
 
 ## Arama ve İndeksleme
@@ -264,26 +201,6 @@ SERVICE_KIBANA_VERSION=8.11.3
 
 **Erişim:** `https://kibana.stackvo.loc`
 
-**Image:** `getmeili/meilisearch:{version}`  
-**Default Version:** latest  
-**Ports:** 7700
-
-**Konfigürasyon:**
-```bash
-SERVICE_MEILISEARCH_ENABLE=false
-SERVICE_MEILISEARCH_VERSION=latest
-```
-
-**Image:** `solr:{version}`  
-**Default Version:** latest  
-**Ports:** 8983
-
-**Konfigürasyon:**
-```bash
-SERVICE_SOLR_ENABLE=false
-SERVICE_SOLR_VERSION=latest
-```
-
 ---
 
 ## Monitoring
@@ -304,52 +221,6 @@ SERVICE_GRAFANA_ADMIN_PASSWORD=admin
 
 **Erişim:** `https://grafana.stackvo.loc`
 
-**Image:** `netdata/netdata:{version}`  
-**Default Version:** latest  
-**Ports:** 19999
-
-**Konfigürasyon:**
-```bash
-SERVICE_NETDATA_ENABLE=false
-SERVICE_NETDATA_VERSION=latest
-```
-
-**Erişim:** `https://netdata.stackvo.loc`
-
-**Image:** `logstash:{version}`  
-**Default Version:** 8.11.3  
-**Ports:** 5044, 9600
-
-**Konfigürasyon:**
-```bash
-SERVICE_LOGSTASH_ENABLE=false
-SERVICE_LOGSTASH_VERSION=8.11.3
-```
-
----
-
-## QA Tools
-
-**Image:** `sonarqube:{version}`  
-**Default Version:** latest  
-**Ports:** 9000
-
-**Konfigürasyon:**
-```bash
-SERVICE_SONARQUBE_ENABLE=false
-SERVICE_SONARQUBE_VERSION=latest
-```
-
-**Image:** `sentry:{version}`  
-**Default Version:** latest  
-**Ports:** 9000
-
-**Konfigürasyon:**
-```bash
-SERVICE_SENTRY_ENABLE=false
-SERVICE_SENTRY_VERSION=latest
-```
-
 ---
 
 ## Developer Tools
@@ -368,26 +239,6 @@ SERVICE_MAILHOG_VERSION=latest
 
 **Erişim:** `https://mailhog.stackvo.loc`
 
-**Image:** `ngrok/ngrok:{version}`  
-**Default Version:** latest  
-**Ports:** 4040
-
-**Konfigürasyon:**
-```bash
-SERVICE_NGROK_ENABLE=false
-SERVICE_NGROK_VERSION=latest
-```
-
-**Image:** `selenium/standalone-chrome:{version}`  
-**Default Version:** latest  
-**Ports:** 4444
-
-**Konfigürasyon:**
-```bash
-SERVICE_SELENIUM_ENABLE=false
-SERVICE_SELENIUM_VERSION=latest
-```
-
 ### Blackfire
 
 **Image:** `blackfire/blackfire:{version}`  
@@ -398,31 +249,8 @@ SERVICE_SELENIUM_VERSION=latest
 ```bash
 SERVICE_BLACKFIRE_ENABLE=false
 SERVICE_BLACKFIRE_VERSION=latest
+SERVICE_BLACKFIRE_SERVER_ID=
+SERVICE_BLACKFIRE_SERVER_TOKEN=
 ```
 
 ---
-
-## Application Servers
-
-**Image:** `tomcat:{version}`  
-**Default Version:** latest  
-**Ports:** 8081 (host), 8080 (container)
-
-**Konfigürasyon:**
-```bash
-SERVICE_TOMCAT_ENABLE=false
-SERVICE_TOMCAT_VERSION=latest
-```
-
-**Image:** `kong:{version}`  
-**Default Version:** latest  
-**Ports:** 8000, 8001, 8443, 8444
-
-**Konfigürasyon:**
-```bash
-SERVICE_KONG_ENABLE=false
-SERVICE_KONG_VERSION=latest
-```
-
----
-

@@ -5,7 +5,7 @@ description: Stackvo'da servisleri nasıl yapılandıracağınızı ve kullanaca
 
 # Servis Konfigürasyonu
 
-Bu kılavuz, Stackvo'da servisleri nasıl yapılandıracağınızı ve kullanacağınızı detaylı olarak göstermektedir. MySQL, PostgreSQL, MongoDB gibi veritabanlarından Redis, Memcached gibi cache sistemlerine, RabbitMQ, Kafka gibi message queue'lardan Elasticsearch, Kibana gibi arama ve indeksleme araçlarına kadar 40+ servisin aktivasyonu, PHP'den bağlantısı, CLI erişimi ve management UI kullanımı açıklanmaktadır.
+Bu kılavuz, Stackvo'da servisleri nasıl yapılandıracağınızı ve kullanacağınızı detaylı olarak göstermektedir. MySQL, PostgreSQL, MongoDB gibi veritabanlarından Redis, Memcached gibi cache sistemlerine, RabbitMQ, Kafka gibi message queue'lardan Elasticsearch, Kibana gibi arama ve indeksleme araçlarına kadar 14 servisin aktivasyonu, PHP'den bağlantısı, CLI erişimi ve management UI kullanımı açıklanmaktadır.
 
 ---
 
@@ -367,18 +367,6 @@ User: admin
 Password: admin
 ```
 
-
-**Aktivasyon:**
-```bash
-SERVICE_NETDATA_ENABLE=true
-SERVICE_NETDATA_VERSION=latest
-```
-
-**Erişim:**
-```
-https://netdata.stackvo.loc
-```
-
 ---
 
 ## Developer Tools
@@ -402,25 +390,20 @@ sendmail_path = "/usr/sbin/sendmail -S stackvo-mailhog:1025"
 https://mailhog.stackvo.loc
 ```
 
+### Blackfire
 
 **Aktivasyon:**
 ```bash
-SERVICE_SELENIUM_ENABLE=true
-SERVICE_SELENIUM_VERSION=latest
+SERVICE_BLACKFIRE_ENABLE=true
+SERVICE_BLACKFIRE_VERSION=latest
+SERVICE_BLACKFIRE_SERVER_ID=
+SERVICE_BLACKFIRE_SERVER_TOKEN=
 ```
 
-**PHP'den Kullanım:**
-```php
-<?php
-use Facebook\WebDriver\Remote\RemoteWebDriver;
-use Facebook\WebDriver\Remote\DesiredCapabilities;
-
-$driver = RemoteWebDriver::create(
-    'http://stackvo-selenium:4444/wd/hub',
-    DesiredCapabilities::chrome()
-);
-
-$driver->get('https://example.com');
+**PHP Extension:**
+```bash
+# Blackfire PHP extension otomatik olarak yüklenir
+# .env dosyasında credentials ayarlanmalıdır
 ```
 
 ---
