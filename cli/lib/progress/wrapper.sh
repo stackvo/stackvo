@@ -75,6 +75,18 @@ render_screen() {
             ((line_count++))
         done <<< "$builds"
     fi
+
+    # Container durumu
+    local containers=$(list_containers)
+    if [ -n "$containers" ]; then
+        render_header "${CHAR_ROCKET} CONTAINER DURUMU"
+        ((line_count+=3))
+        while IFS= read -r container; do
+            local status=$(get_container_info "$container")
+            render_container_line "$container" "$status"
+            ((line_count++))
+        done <<< "$containers"
+    fi
     
     # Footer
     render_footer "$START_TIME"
@@ -84,44 +96,64 @@ render_screen() {
 }
 
 ##
-# Docker Compose çıktısını okur ve progress gösterir - OPTIMIZE EDİLMİŞ
+# Docker Compose çıktısını okur ve progress gösterir - TIMEOUT MEKANİZMASI İLE
 ##
 show_docker_progress() {
     local last_render=0
     local line_count=0
     
-    while IFS= read -r line; do
-        # Satırı parse et
-        parse_docker_line "$line"
-        
-        ((line_count++))
-        
-        # OPTİMİZASYON: Bash built-in ile zaman kontrolü
-        local current_time=$SECONDS
-        local elapsed=$((current_time - last_render))
-        
-        # Akıllı refresh stratejisi
-        local should_render=0
-        
-        # Strateji 1: Her 50 satırda bir render et
-        if [ $((line_count % 50)) -eq 0 ]; then
-            should_render=1
-        fi
-        
-        # Strateji 2: Minimum interval geçtiyse render et
-        if [ "$elapsed" -ge "$REFRESH_INTERVAL" ]; then
-            should_render=1
-        fi
-        
-        # Strateji 3: Önemli olaylar anında render et
-        if [[ "$line" =~ (Pull\ complete|Built|Started|Pulled) ]]; then
-            should_render=1
-        fi
-        
-        if [ "$should_render" -eq 1 ]; then
+    while true; do
+        # Timeout ile satır oku (1 saniye)
+        if IFS= read -r -t 1 line; then
+            # Satır geldi, parse et
+            parse_docker_line "$line"
+            
+            ((line_count++))
+            
+            # OPTİMİZASYON: Bash built-in ile zaman kontrolü
+            local current_time=$SECONDS
+            local elapsed=$((current_time - last_render))
+            
+            # Akıllı refresh stratejisi
+            local should_render=0
+            
+            # Strateji 1: Her 50 satırda bir render et
+            if [ $((line_count % 50)) -eq 0 ]; then
+                should_render=1
+            fi
+            
+            # Strateji 2: Minimum interval geçtiyse render et
+            if [ "$elapsed" -ge "$REFRESH_INTERVAL" ]; then
+                should_render=1
+            fi
+            
+            # Strateji 3: Önemli olaylar anında render et
+            if [[ "$line" =~ (Pull\ complete|Built|Started|Pulled|Creating|Created) ]]; then
+                should_render=1
+            fi
+            
+            if [ "$should_render" -eq 1 ]; then
+                render_screen
+                last_render=$current_time
+                line_count=0
+            fi
+        else
+            # Timeout oldu (1 saniye boyunca satır gelmedi)
+            local read_exit=$?
+            
+            # read exit code kontrolü:
+            # 0 = başarılı (satır okundu)
+            # 1 = EOF (pipe kapandı - Docker Compose bitti)
+            # >128 = timeout
+            
+            if [ "$read_exit" -eq 1 ]; then
+                # EOF - Docker Compose bitti, çık
+                break
+            fi
+            
+            # Timeout - sadece render yap, devam et
             render_screen
-            last_render=$current_time
-            line_count=0
+            last_render=$SECONDS
         fi
     done
     

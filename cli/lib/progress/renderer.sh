@@ -191,6 +191,35 @@ render_build_line() {
 }
 
 ##
+# Container satırı render eder
+# Parametreler:
+#   $1 - Container adı
+#   $2 - Durum
+##
+render_container_line() {
+    local container=$1
+    local status=$2
+    
+    # Container adını 35 karaktere sınırla (daha uzun olabilir)
+    local container_display=$(printf "%-35s" "${container:0:35}")
+    
+    case "$status" in
+        Started)
+            echo -e "${CHAR_CHECKMARK} ${COLOR_GREEN}${container_display}${COLOR_RESET} ${COLOR_BOLD}Hazır${COLOR_RESET}"
+            ;;
+        Starting)
+            echo -e "${CHAR_ROCKET} ${COLOR_YELLOW}${container_display}${COLOR_RESET} ${COLOR_DIM}Başlatılıyor...${COLOR_RESET}"
+            ;;
+        Created)
+            echo -e "${CHAR_PACKAGE} ${COLOR_CYAN}${container_display}${COLOR_RESET} ${COLOR_DIM}Oluşturuldu${COLOR_RESET}"
+            ;;
+        *)
+            echo -e "${CHAR_GEAR} ${COLOR_DIM}${container_display}${COLOR_RESET} ${COLOR_DIM}${status}${COLOR_RESET}"
+            ;;
+    esac
+}
+
+##
 # Footer (süre bilgisi) render eder
 # Parametreler:
 #   $1 - Başlangıç zamanı (epoch)

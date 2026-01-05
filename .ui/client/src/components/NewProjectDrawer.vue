@@ -114,7 +114,7 @@
                 </v-card-title>
                 <v-card-text style="max-height: 290px; overflow-y: auto;">
                   <v-row dense>
-                    <v-col cols="6" v-for="ext in phpExtensions" :key="ext">
+                    <v-col cols="3" v-for="ext in phpExtensions" :key="ext">
                       <v-checkbox
                         v-model="formData.extensions"
                         :label="ext"

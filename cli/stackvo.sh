@@ -86,23 +86,15 @@ case "$COMMAND" in
             echo "  + Including profile: $profile"
         done
         
-        # Progress wrapper kullan
-        source "$CLI_DIR/lib/progress/wrapper.sh"
+        # Docker Compose'un kendi progress çıktısını kullan
+        echo ""
+        echo "🚀 Stackvo Başlatılıyor (minimal mod)"
+        echo ""
         
-        # Start with profiles - Optimize edilmiş progress wrapper ile
-        export BUILDKIT_PROGRESS=plain
-        
-        # Önce pull ve build işlemlerini yap (progress wrapper ile)
-        {
-            # Pull images
-            docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS pull 2>&1
-            
-            # Build services
-            docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS build 2>&1
-        } | show_docker_progress
-        
-        # Sonra container'ları başlat (sessizce)
-        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS up -d --remove-orphans > /dev/null 2>&1
+        # Pull, build ve start işlemlerini sırayla yap (quiet mode)
+        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS pull --quiet
+        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS build --quiet
+        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS up -d --remove-orphans
         
         echo ""
         echo "✅ Stackvo started successfully!"

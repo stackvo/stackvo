@@ -53,21 +53,33 @@ parse_docker_line() {
     
     # Image Pulling (en sık görülen)
     # Sadece gerçek image adlarını yakala (layer ID'leri değil)
+    # Image Pulling (en sık görülen)
+    # Sadece gerçek image adlarını yakala (layer ID'leri değil)
+    # Image Pulling (en sık görülen)
+    # Sadece gerçek image adlarını yakala (layer ID'leri değil)
     if [[ "$line" == *" Pulling"* ]]; then
-        if [[ "$line" =~ ([a-zA-Z][a-zA-Z0-9_-]+)\ Pulling ]]; then
+        # Image adını yakala (daha geniş bir regex ile)
+        # Örnek satırlar:
+        # eec0d Pulling
+        # stackvo/traefik Pulling
+        # traefik Pulling
+        if [[ "$line" =~ ([a-zA-Z0-9][a-zA-Z0-9_./-]+)\ Pulling ]]; then
             local image="${BASH_REMATCH[1]}"
-            # Layer ID'leri filtrele (sadece hex karakterler)
-            if [[ ! "$image" =~ ^[0-9a-f]{12}$ ]]; then
-                update_image_status "$image" "downloading" 0 0
-                LAST_IMAGE="$image"
+            
+            # Layer ID filtreleme: Sadece hex karakterlerden oluşanları engelle
+            # Örnek: eec0d, c4e800de571, f2
+            if [[ "$image" =~ ^[0-9a-fA-F]+$ ]]; then
+                return
             fi
+            
+            update_image_status "$image" "downloading" 0 0
+            LAST_IMAGE="$image"
             return
         fi
     fi
     
-    # Downloading progress (en sık görülen #2)
+    # Downloading progress
     if [[ "$line" == *"Downloading"* ]]; then
-        # Basitleştirilmiş regex
         if [[ "$line" =~ ([0-9.]+[KMGT]?B)/([0-9.]+[KMGT]?B) ]]; then
             local current=$(parse_bytes "${BASH_REMATCH[1]}")
             local total=$(parse_bytes "${BASH_REMATCH[2]}")
@@ -96,12 +108,13 @@ parse_docker_line() {
     
     # Pulled (tüm image tamamlandı)
     if [[ "$line" == *" Pulled"* ]]; then
-        if [[ "$line" =~ ([a-zA-Z][a-zA-Z0-9_-]+)\ Pulled ]]; then
+        if [[ "$line" =~ ([a-zA-Z0-9][a-zA-Z0-9_./-]+)\ Pulled ]]; then
             local image="${BASH_REMATCH[1]}"
-            # Layer ID'leri filtrele
-            if [[ ! "$image" =~ ^[0-9a-f]{12}$ ]]; then
-                update_image_status "$image" "complete" 100 100
+            # Layer ID filtreleme
+            if [[ "$image" =~ ^[0-9a-fA-F]+$ ]]; then
+                return
             fi
+            update_image_status "$image" "complete" 100 100
             return
         fi
     fi
@@ -116,9 +129,8 @@ parse_docker_line() {
         fi
     fi
     
-    # Build steps (BuildKit format) - Sadece # ile başlayanlar
+    # Build steps (BuildKit format)
     if [[ "${line:0:1}" == "#" ]]; then
-        # Basitleştirilmiş regex
         if [[ "$line" =~ ^\#([0-9]+) ]]; then
             local step_num="${BASH_REMATCH[1]}"
             [ -n "$LAST_BUILD" ] && update_build_status "$LAST_BUILD" "$step_num" 5 "İşleniyor..."
@@ -131,6 +143,35 @@ parse_docker_line() {
         if [[ "$line" =~ ([a-zA-Z0-9_-]+)\ Built ]]; then
             complete_build "${BASH_REMATCH[1]}"
             return
+        fi
+    fi
+
+    # Container Status (Up komutu çıktıları)
+    # Örnek: Container stackvo-traefik  Created
+    if [[ "$line" == *" Container"* ]]; then
+        # Container stackvo-xxx Created
+        if [[ "$line" == *" Created"* ]]; then
+            # \s+ ile esnek boşluk kontrolü
+            if [[ "$line" =~ Container\s+(stackvo-[a-zA-Z0-9_-]+)\s+Created ]]; then
+                update_container_status "${BASH_REMATCH[1]}" "Created"
+                return
+            fi
+        fi
+        
+        # Container stackvo-xxx Starting
+        if [[ "$line" == *" Starting"* ]]; then
+            if [[ "$line" =~ Container\s+(stackvo-[a-zA-Z0-9_-]+)\s+Starting ]]; then
+                update_container_status "${BASH_REMATCH[1]}" "Starting"
+                return
+            fi
+        fi
+        
+        # Container stackvo-xxx Started
+        if [[ "$line" == *" Started"* ]]; then
+            if [[ "$line" =~ Container\s+(stackvo-[a-zA-Z0-9_-]+)\s+Started ]]; then
+                update_container_status "${BASH_REMATCH[1]}" "Started"
+                return
+            fi
         fi
     fi
 }

@@ -8,10 +8,12 @@
 # State dizileri (normal array)
 STATE_IMAGES=()
 STATE_BUILDS=()
+STATE_CONTAINERS=()
 
 # Maksimum entry sayısı
 MAX_IMAGES=20
 MAX_BUILDS=10
+MAX_CONTAINERS=50
 
 # Son state hash
 LAST_STATE_HASH=""
@@ -116,6 +118,34 @@ update_build_status() {
 }
 
 ##
+# Container durumunu günceller
+##
+update_container_status() {
+    local container=$1
+    local status=$2
+    
+    local entry=$(create_state_entry "$container" "$status" "0" "0" "")
+    
+    # Mevcut entry'yi bul ve güncelle
+    local found=0
+    local i=0
+    for state in "${STATE_CONTAINERS[@]}"; do
+        local name=$(get_state_field "$state" 1)
+        if [ "$name" = "$container" ]; then
+            STATE_CONTAINERS[$i]="$entry"
+            found=1
+            break
+        fi
+        ((i++))
+    done
+    
+    # Yoksa ekle
+    if [ $found -eq 0 ]; then
+        STATE_CONTAINERS+=("$entry")
+    fi
+}
+
+##
 # Build'i tamamlandı olarak işaretle
 ##
 complete_build() {
@@ -214,6 +244,15 @@ list_builds() {
 }
 
 ##
+# Tüm container'ları listeler
+##
+list_containers() {
+    for state in "${STATE_CONTAINERS[@]}"; do
+        get_state_field "$state" 1
+    done | sort
+}
+
+##
 # Image bilgilerini döndürür
 # Çıktı: "status current total"
 ##
@@ -258,16 +297,40 @@ get_build_info() {
 }
 
 ##
+# Container bilgilerini döndürür
+# Çıktı: "status"
+##
+get_container_info() {
+    local container=$1
+    
+    for state in "${STATE_CONTAINERS[@]}"; do
+        local name=$(get_state_field "$state" 1)
+        if [ "$name" = "$container" ]; then
+            local status=$(get_state_field "$state" 2)
+            echo "$status"
+            return
+        fi
+    done
+    
+    # Bulunamadı
+    echo "unknown"
+}
+
+##
 # State hash hesaplar
 ##
 get_state_hash() {
     local hash=""
     hash+="${#STATE_IMAGES[@]}"
     hash+="${#STATE_BUILDS[@]}"
+    hash+="${#STATE_CONTAINERS[@]}"
     for state in "${STATE_IMAGES[@]}"; do
         hash+="$state"
     done
     for state in "${STATE_BUILDS[@]}"; do
+        hash+="$state"
+    done
+    for state in "${STATE_CONTAINERS[@]}"; do
         hash+="$state"
     done
     echo "$hash"
