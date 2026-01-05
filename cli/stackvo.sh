@@ -68,19 +68,15 @@ case "$COMMAND" in
         case "$START_MODE" in
             minimal)
                 PROFILE_ARGS="--profile core"
-                echo "🚀 Starting Stackvo (minimal mode: core services only)..."
                 ;;
             services)
                 PROFILE_ARGS="--profile core --profile services"
-                echo "🚀 Starting Stackvo (core + services)..."
                 ;;
             projects)
                 PROFILE_ARGS="--profile core --profile projects"
-                echo "🚀 Starting Stackvo (core + projects)..."
                 ;;
             all)
                 PROFILE_ARGS="--profile core --profile services --profile projects"
-                echo "🚀 Starting Stackvo (all services and projects)..."
                 ;;
         esac
         
@@ -90,9 +86,25 @@ case "$COMMAND" in
             echo "  + Including profile: $profile"
         done
         
-        # Start with profiles
+        # Progress wrapper kullan
+        source "$CLI_DIR/lib/progress/wrapper.sh"
+        
+        # Start with profiles - Optimize edilmiş progress wrapper ile
         export BUILDKIT_PROGRESS=plain
-        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS up -d --build --pull=missing --remove-orphans 2>&1 | grep -v "^#" | grep -v "^DEPRECATED" || true
+        
+        # Önce pull ve build işlemlerini yap (progress wrapper ile)
+        {
+            # Pull images
+            docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS pull 2>&1
+            
+            # Build services
+            docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS build 2>&1
+        } | show_docker_progress
+        
+        # Sonra container'ları başlat (sessizce)
+        docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS up -d --remove-orphans > /dev/null 2>&1
+        
+        echo ""
         echo "✅ Stackvo started successfully!"
         ;;
 
