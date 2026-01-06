@@ -47,7 +47,3 @@ export GENERATED_TRAEFIK_DYNAMIC_DIR
 export GENERATED_CONFIGS_DIR
 export GENERATED_CERTS_DIR
 
-# Helper function to get compose files as string
-get_compose_files() {
-    echo "${COMPOSE_FILES[@]}"
-}

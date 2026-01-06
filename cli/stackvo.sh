@@ -86,12 +86,12 @@ case "$COMMAND" in
             echo "  + Including profile: $profile"
         done
         
-        # Docker Compose'un kendi progress çıktısını kullan
+        # Use Docker Compose's native progress output
         echo ""
         echo "🚀 Stackvo Başlatılıyor (minimal mod)"
         echo ""
         
-        # Pull, build ve start işlemlerini sırayla yap (quiet mode)
+        # Pull, build and start operations sequentially (quiet mode)
         docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS pull --quiet
         docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS build --quiet
         docker compose "${COMPOSE_FILES[@]}" $PROFILE_ARGS up -d --remove-orphans
@@ -116,9 +116,7 @@ case "$COMMAND" in
         docker compose "${COMPOSE_FILES[@]}" logs -f "$@"
         ;;
 
-    doctor)
-        bash "$CLI_DIR/support/doctor.sh"
-        ;;
+
 
     install)
         sudo bash "$CLI_DIR/commands/install.sh"
@@ -150,7 +148,7 @@ case "$COMMAND" in
         echo "  stackvo ps                    → list running services"
         echo "  stackvo logs [srv]            → follow logs"
         echo "  stackvo pull                  → pull Docker images"
-        echo "  stackvo doctor                → system health check"
+
         echo "  stackvo uninstall             → uninstall Stackvo (removes all Docker resources and files)"
         echo ""
         echo "Examples:"

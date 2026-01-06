@@ -2,7 +2,7 @@
 
 ###################################################################
 # STACKVO UNINSTALLER
-# Stackvo projesine ait tüm Docker kaynaklarını ve dosyaları temizler
+# Removes all Docker resources and files related to Stackvo project
 ###################################################################
 
 # Load common library and logger

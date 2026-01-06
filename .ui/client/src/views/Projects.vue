@@ -1126,10 +1126,26 @@ onMounted(async () => {
   await projectsStore.loadProjects();
 
   // Connect to WebSocket
+  console.log('[SOCKET] Connecting to Socket.IO...');
   socket.value = io();
+  
+  // Connection event handlers
+  socket.value.on('connect', () => {
+    console.log('[SOCKET] Connected to Socket.IO server');
+    console.log('[SOCKET] Socket ID:', socket.value.id);
+  });
+  
+  socket.value.on('disconnect', (reason) => {
+    console.log('[SOCKET] Disconnected from Socket.IO server. Reason:', reason);
+  });
+  
+  socket.value.on('connect_error', (error) => {
+    console.error('[SOCKET] Connection error:', error);
+  });
 
   // Listen to build events
   socket.value.on("build:start", (data) => {
+    console.log("[SOCKET EVENT] build:start received:", data);
     console.log("Build started:", data.project);
     currentBuildProject.value = data.project;
     buildProgress.value[data.project] = {
@@ -1310,6 +1326,16 @@ onMounted(async () => {
       { message: "Deleting project files...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
+
+    // Close dialog immediately on success
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
+
+    // Wait for dialog to disappear from DOM, then reload table
+    nextTick(async () => {
+      await projectsStore.loadProjects();
+    });
   });
 
   socket.value.on("project:creating", (data) => {
@@ -1333,6 +1359,16 @@ onMounted(async () => {
       { message: "Building Docker image...", status: "done" },
     ];
     buildProgress.value[data.project] = { status: "success" };
+
+    // Close dialog immediately on success
+    showBuildProgress.value = false;
+    currentBuildProject.value = null;
+    progressSteps.value = [];
+
+    // Wait for dialog to disappear from DOM, then reload table
+    nextTick(async () => {
+      await projectsStore.loadProjects();
+    });
   });
 
   socket.value.on("project:error", (data) => {

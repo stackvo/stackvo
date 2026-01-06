@@ -169,6 +169,13 @@ router.post('/:projectName/build', async (req, res) => {
     const { projectName } = req.params;
     const io = req.app.get('io');  // Get Socket.io instance
     
+    // Debug: Check if io is available
+    console.log(`[BUILD] Starting build for ${projectName}`);
+    console.log(`[BUILD] Socket.IO instance available:`, !!io);
+    if (io) {
+      console.log(`[BUILD] Socket.IO connected clients:`, io.engine.clientsCount);
+    }
+    
     // Start build in background (don't wait)
     dockerService.buildContainer(projectName, io).catch(error => {
       console.error(`Build error for ${projectName}:`, error);

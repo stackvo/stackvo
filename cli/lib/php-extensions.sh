@@ -1,7 +1,7 @@
 #!/bin/bash
 ###################################################################
 # PHP EXTENSION METADATA
-# Her extension için gerekli sistem bağımlılıklarını tanımlar
+# Defines required system dependencies for each extension
 ###################################################################
 
 ##
@@ -54,7 +54,7 @@ get_extension_packages() {
             echo "libmagickwand-dev"
             ;;
         redis)
-            echo ""  # PECL extension, apt paketi gerektirmez
+            echo ""  # PECL extension, no apt package required
             ;;
         memcached)
             echo "libmemcached-dev zlib1g-dev"
@@ -90,7 +90,7 @@ get_extension_packages() {
             echo "gettext"
             ;;
         *)
-            echo ""  # Bağımlılık gerektirmeyen extension'lar
+            echo ""  # Extensions that don't require dependencies
             ;;
     esac
 }
