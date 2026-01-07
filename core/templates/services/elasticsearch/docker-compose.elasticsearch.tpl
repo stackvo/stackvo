@@ -4,7 +4,7 @@
 
 services:
   elasticsearch:
-    profiles: ["services", "elasticsearch"]  # --services ile tümü, --profile elasticsearch ile sadece bu servis
+    profiles: ["services", "elasticsearch"]  # --services for all, --profile elasticsearch for this service only
     image: "docker.elastic.co/elasticsearch/elasticsearch:{{ SERVICE_ELASTICSEARCH_VERSION }}"
     container_name: "stackvo-elasticsearch"
     restart: unless-stopped
@@ -16,7 +16,7 @@ services:
       - xpack.security.enrollment.enabled={{ ELASTIC_ENROLLMENT | default('false') }}
       - cluster.name=stackvo-es
       - network.host=0.0.0.0
-      # Log'ları stdout/stderr'a yönlendir - Docker logs ile erişilebilir
+      # Redirect logs to stdout/stderr - accessible via Docker logs
       - "logger.level=info"
 
     ulimits:
@@ -25,7 +25,7 @@ services:
 
     volumes:
       - stackvo-elasticsearch-data:/usr/share/elasticsearch/data
-      # Log volume mount kaldırıldı - Permission sorunlarını önlemek için
+      # Log volume mount removed - to prevent permission issues
 
     ports:
       - "{{ HOST_PORT_ELASTICSEARCH | default('9200') }}:9200"

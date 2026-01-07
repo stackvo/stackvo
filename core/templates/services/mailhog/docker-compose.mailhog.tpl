@@ -4,7 +4,7 @@
 
 services:
   mailhog:
-    profiles: ["services", "mailhog"]  # --services ile tümü, --profile mailhog ile sadece bu servis
+    profiles: ["services", "mailhog"]  # --services for all, --profile mailhog for this service only
     image: "mailhog/mailhog:{{ SERVICE_MAILHOG_VERSION }}"
     container_name: "stackvo-mailhog"
     restart: unless-stopped

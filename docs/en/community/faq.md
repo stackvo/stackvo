@@ -67,8 +67,8 @@ cat > projects/myproject/stackvo.json <<EOF
 EOF
 
 # 3. Generate ve start
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 
 # 4. Hosts
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
@@ -86,8 +86,8 @@ SERVICE_REDIS_VERSION=7.0
 Sonra:
 
 ```bash
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 ### PHP versiyonunu nasıl değiştiririm?
@@ -105,8 +105,8 @@ Sonra:
 Sonra:
 
 ```bash
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh restart
 ```
 
 ---
@@ -120,9 +120,9 @@ Sonra:
 docker logs stackvo-mysql
 
 # Yeniden oluştur
-./cli/stackvo.sh down
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh down
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 ### 404 hatası alıyorum
@@ -172,7 +172,7 @@ docker system prune -a
 docker compose build --parallel
 
 # Image'ları önceden çek
-./cli/stackvo.sh pull
+./core/cli/stackvo.sh pull
 ```
 
 ---
@@ -222,8 +222,8 @@ SERVICE_RABBITMQ_DEFAULT_PASS=$(openssl rand -base64 32)
 SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_KIBANA_ENABLE=true
 
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 Erişim:
@@ -298,20 +298,20 @@ docker run --rm \
 git pull origin main
 
 # Yeniden generate
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 
 # Restart
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh restart
 ```
 
 ### Image'lar nasıl güncellenir?
 
 ```bash
 # Tüm image'ları güncelle
-./cli/stackvo.sh pull
+./core/cli/stackvo.sh pull
 
 # Yeniden başlat
-./cli/stackvo.sh up --force-recreate
+./core/cli/stackvo.sh up --force-recreate
 ```
 
 ---
@@ -341,7 +341,7 @@ Evet, `stackvo.json` dosyasında:
 ### SSL sertifikası nasıl oluşturulur?
 
 ```bash
-./cli/utils/generate-ssl-certs.sh
+./core/cli/utils/generate-ssl-certs.sh
 ```
 
 ---

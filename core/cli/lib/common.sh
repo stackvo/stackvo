@@ -17,11 +17,12 @@ if [ -n "${BASH_SOURCE[0]}" ]; then
         readonly CLI_DIR="$CURRENT_SCRIPT_DIR"
     fi
     
-    readonly STACKVO_ROOT="$(cd "$CLI_DIR/.." && pwd)"
+    # CLI is now in core/cli/, so go up two levels to reach stackvo root
+    readonly STACKVO_ROOT="$(cd "$CLI_DIR/../.." && pwd)"
 else
     # Fallback if BASH_SOURCE is not available
     readonly STACKVO_ROOT="$(pwd)"
-    readonly CLI_DIR="$STACKVO_ROOT/cli"
+    readonly CLI_DIR="$STACKVO_ROOT/core/cli"
 fi
 
 # Docker Compose file paths

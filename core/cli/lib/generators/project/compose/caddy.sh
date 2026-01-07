@@ -1,18 +1,18 @@
 #!/bin/bash
 ###################################################################
 # STACKVO CADDY COMPOSE GENERATOR MODULE
-# Caddy compose service oluşturma
+# Caddy compose service generation
 ###################################################################
 
 ##
-# Caddy Single Container compose service oluştur
+# Generate Caddy single container compose service
 #
-# Parametreler:
-#   $1 - Proje adı
-#   $2 - Proje path (container path)
-#   $3 - Proje domain
+# Parameters:
+#   $1 - Project name
+#   $2 - Project path (container path)
+#   $3 - Project domain
 #   $4 - Document root
-#   $5 - Host proje path
+#   $5 - Host project path
 #   $6 - Host logs path
 #   $7 - Host generated configs dir
 #   $8 - Host generated projects dir
@@ -27,12 +27,12 @@ generate_caddy_single_container() {
     local host_generated_configs_dir=$7
     local host_generated_projects_dir=$8
     
-    # Traefik için sanitize edilmiş proje adı
+    # Sanitized project name for Traefik
     local traefik_safe_name=$(sanitize_project_name_for_traefik "$project_name")
     
-    # Caddyfile mount path belirle
-    # Caddyfile Dockerfile içinde generate edildiği için
-    # sadece custom config varsa mount ediyoruz
+    # Determine Caddyfile mount path
+    # Since Caddyfile is generated inside Dockerfile,
+    # we only mount if custom config exists
     local caddy_config_mount=""
     if [ -f "$project_path/.stackvo/Caddyfile" ]; then
         # User has custom Caddyfile in .stackvo/
@@ -42,10 +42,10 @@ generate_caddy_single_container() {
         caddy_config_mount="      - ${host_project_path}/Caddyfile:/etc/caddy/Caddyfile:ro"
     fi
     
-    # Compose service oluştur
+    # Create compose service
     cat <<EOF
   ${project_name}:
-    profiles: ["projects", "project-${project_name}"]  # --projects ile tümü, --profile project-{name} ile sadece bu proje
+    profiles: ["projects", "project-${project_name}"]  # --projects for all, --profile project-{name} for this project only
     build:
       context: ./projects/${project_name}
       dockerfile: Dockerfile

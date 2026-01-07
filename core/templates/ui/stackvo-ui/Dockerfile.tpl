@@ -12,13 +12,13 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 # Copy package files
-COPY .ui/package*.json ./
+COPY core/ui/package*.json ./
 
 # Install all dependencies (including devDependencies for build)
 RUN npm install
 
 # Copy source code
-COPY .ui/ ./
+COPY core/ui/ ./
 
 # Build frontend for production
 RUN npm run build

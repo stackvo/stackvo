@@ -14,10 +14,10 @@ data/
 # .env
 
 # UI files
-.ui/node_modules/
-.ui/yarn-error.log
-.ui/yarn.lock
-.ui/package-lock.json
+core/ui/node_modules/
+core/ui/yarn-error.log
+core/ui/yarn.lock
+core/ui/package-lock.json
 
 # IDE and Editor files
 .vscode/

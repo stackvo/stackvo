@@ -18,7 +18,7 @@ Stackvo CLI, tüm sistem yönetimi için ana araçtır. Bu kılavuz, generate, u
 cd /path/to/stackvo
 
 # CLI'yi kurun
-./cli/stackvo.sh install
+./core/cli/stackvo.sh install
 ```
 
 Bu komut, `stackvo` komutunu `/usr/local/bin/` dizinine sembolik link olarak ekler.
@@ -39,13 +39,13 @@ Konfigürasyon dosyalarını üretir.
 
 ```bash
 # Tüm konfigürasyonları üret
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 
 # Sadece projeleri üret
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 
 # Sadece servisleri üret
-./cli/stackvo.sh generate services
+./core/cli/stackvo.sh generate services
 ```
 
 **Ne yapar:**
@@ -74,7 +74,7 @@ Starts services. By default, only starts core services (Traefik + UI).
 
 **Syntax:**
 ```bash
-./cli/stackvo.sh up [OPTIONS]
+./core/cli/stackvo.sh up [OPTIONS]
 ```
 
 **Options:**
@@ -87,31 +87,31 @@ Starts services. By default, only starts core services (Traefik + UI).
 **Examples:**
 ```bash
 # Minimal mode - Only Traefik + UI
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 
 # Start all services and projects
-./cli/stackvo.sh up --all
+./core/cli/stackvo.sh up --all
 
 # Core + all services
-./cli/stackvo.sh up --services
+./core/cli/stackvo.sh up --services
 
 # Core + all projects
-./cli/stackvo.sh up --projects
+./core/cli/stackvo.sh up --projects
 
 # Core + only MySQL
-./cli/stackvo.sh up --profile mysql
+./core/cli/stackvo.sh up --profile mysql
 
 # Core + specific project
-./cli/stackvo.sh up --profile project-myproject
+./core/cli/stackvo.sh up --profile project-myproject
 
 # Multiple profiles
-./cli/stackvo.sh up --profile mysql --profile redis
+./core/cli/stackvo.sh up --profile mysql --profile redis
 ```
 
 **Verbose Output:**
 ```bash
 # Verbose mode
-STACKVO_VERBOSE=true ./cli/stackvo.sh up
+STACKVO_VERBOSE=true ./core/cli/stackvo.sh up
 ```
 
 **Starting Specific Services:**
@@ -128,17 +128,17 @@ docker compose -f generated/stackvo.yml \
 Tüm servisleri durdurur.
 
 ```bash
-./cli/stackvo.sh down
+./core/cli/stackvo.sh down
 ```
 
 **Volume'ları da Silme:**
 ```bash
-./cli/stackvo.sh down -v
+./core/cli/stackvo.sh down -v
 ```
 
 **Orphan Container'ları Kaldırma:**
 ```bash
-./cli/stackvo.sh down --remove-orphans
+./core/cli/stackvo.sh down --remove-orphans
 ```
 
 ### restart
@@ -147,7 +147,7 @@ Servisleri yeniden başlatır.
 
 ```bash
 # Tüm servisleri yeniden başlat
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh restart
 
 # Belirli servisleri yeniden başlat
 docker compose -f generated/stackvo.yml \
@@ -160,7 +160,7 @@ docker compose -f generated/stackvo.yml \
 Çalışan servisleri listeler.
 
 ```bash
-./cli/stackvo.sh ps
+./core/cli/stackvo.sh ps
 ```
 
 **Örnek Çıktı:**
@@ -180,24 +180,24 @@ Container loglarını görüntüler.
 
 ```bash
 # Tüm logları izle
-./cli/stackvo.sh logs
+./core/cli/stackvo.sh logs
 
 # Belirli servis logunu izle
-./cli/stackvo.sh logs mysql
+./core/cli/stackvo.sh logs mysql
 
 # Follow mode
-./cli/stackvo.sh logs -f mysql
+./core/cli/stackvo.sh logs -f mysql
 
 # Son 100 satır
-./cli/stackvo.sh logs --tail=100 mysql
+./core/cli/stackvo.sh logs --tail=100 mysql
 
 # Birden fazla servis
-./cli/stackvo.sh logs mysql redis
+./core/cli/stackvo.sh logs mysql redis
 ```
 
 **Zaman Damgası ile:**
 ```bash
-./cli/stackvo.sh logs -f --timestamps mysql
+./core/cli/stackvo.sh logs -f --timestamps mysql
 ```
 
 ### pull
@@ -205,7 +205,7 @@ Container loglarını görüntüler.
 Docker image'larını çeker.
 
 ```bash
-./cli/stackvo.sh pull
+./core/cli/stackvo.sh pull
 ```
 
 **Belirli Image'ları Çekme:**
@@ -236,7 +236,7 @@ stackvo doctor
 Stackvo'u kaldırır.
 
 ```bash
-./cli/stackvo.sh uninstall
+./core/cli/stackvo.sh uninstall
 ```
 
 **Ne yapar:**
@@ -254,8 +254,8 @@ Stackvo'u kaldırır.
 Detaylı çıktı için:
 
 ```bash
-STACKVO_VERBOSE=true ./cli/stackvo.sh generate
-STACKVO_VERBOSE=true ./cli/stackvo.sh up
+STACKVO_VERBOSE=true ./core/cli/stackvo.sh generate
+STACKVO_VERBOSE=true ./core/cli/stackvo.sh up
 ```
 
 ### Dry Run
@@ -263,7 +263,7 @@ STACKVO_VERBOSE=true ./cli/stackvo.sh up
 Komutları çalıştırmadan görmek için:
 
 ```bash
-STACKVO_DRY_RUN=true ./cli/stackvo.sh generate
+STACKVO_DRY_RUN=true ./core/cli/stackvo.sh generate
 ```
 
 ### Custom .env Dosyası
@@ -274,7 +274,7 @@ cp .env .env.production
 nano .env.production
 
 # Generate ile kullan
-ENV_FILE=.env.production ./cli/stackvo.sh generate
+ENV_FILE=.env.production ./core/cli/stackvo.sh generate
 ```
 
 ### Belirli Compose Dosyalarıyla Çalışma
@@ -307,10 +307,10 @@ nano .env
 # SERVICE_ELASTICSEARCH_ENABLE=true
 
 # 2. Konfigürasyonları yeniden üret
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 
 # 3. Servisleri yeniden başlat
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 ```
 
 ### Proje Ekleme
@@ -334,10 +334,10 @@ EOF
 echo "<?php phpinfo();" > projects/newproject/public/index.php
 
 # 4. Projeleri yeniden üret
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 
 # 5. Servisleri yeniden başlat
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh restart
 
 # 6. Hosts dosyasını güncelle
 echo "127.0.0.1  newproject.loc" | sudo tee -a /etc/hosts
@@ -353,7 +353,7 @@ nano .env
 # SERVICE_MYSQL_VERSION=8.0 → 8.1
 
 # 2. Konfigürasyonları yeniden üret
-./cli/stackvo.sh generate services
+./core/cli/stackvo.sh generate services
 
 # 3. MySQL container'ını yeniden oluştur
 docker compose -f generated/stackvo.yml \
@@ -365,7 +365,7 @@ docker compose -f generated/stackvo.yml \
 
 ```bash
 # 1. Tüm container'ları durdur ve sil
-./cli/stackvo.sh down -v
+./core/cli/stackvo.sh down -v
 
 # 2. Network'ü sil
 docker network rm stackvo-net
@@ -374,10 +374,10 @@ docker network rm stackvo-net
 rm -rf generated/*
 
 # 4. Yeniden üret
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 
 # 5. Başlat
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 ```
 
 ### Backup Alma
@@ -405,15 +405,15 @@ docker cp stackvo-redis:/data/dump.rdb ./redis-backup.rdb
 
 ```bash
 # Logları kontrol et
-./cli/stackvo.sh logs <container-name>
+./core/cli/stackvo.sh logs <container-name>
 
 # Container detaylarını incele
 docker inspect stackvo-<container-name>
 
 # Konfigürasyonu yeniden üret
-./cli/stackvo.sh generate
-./cli/stackvo.sh down
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh down
+./core/cli/stackvo.sh up
 ```
 
 ### Port Çakışması
@@ -426,8 +426,8 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 nano .env
 
 # Yeniden üret ve başlat
-./cli/stackvo.sh generate
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh restart
 ```
 
 ### Permission Hatası
@@ -438,7 +438,7 @@ sudo usermod -aG docker $USER
 newgrp docker
 
 # Veya sudo ile çalıştır
-sudo ./cli/stackvo.sh up
+sudo ./core/cli/stackvo.sh up
 ```
 
 ---

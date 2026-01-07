@@ -5,14 +5,14 @@
 ###################################################################
 
 ##
-# Proje adını Traefik için sanitize et
+# Sanitize project name for Traefik
 # Replace dots with dashes since Traefik uses dots as separators
 #
-# Parametreler:
-#   $1 - Proje adı
+# Parameters:
+#   $1 - Project name
 #
-# Çıktı:
-#   Sanitize edilmiş proje adı (noktalar tire ile değiştirilmiş)
+# Output:
+#   Sanitized project name (dots replaced with dashes)
 ##
 sanitize_project_name_for_traefik() {
     local project_name=$1
@@ -21,14 +21,14 @@ sanitize_project_name_for_traefik() {
 }
 
 ##
-# Proje JSON konfigürasyonunu parse et
+# Parse project JSON configuration
 #
-# Parametreler:
-#   $1 - stackvo.json dosya yolu
-#   $2 - Proje adı
+# Parameters:
+#   $1 - stackvo.json file path
+#   $2 - Project name
 #
-# Çıktı:
-#   Config değerleri KEY=VALUE formatında
+# Output:
+#   Config values in KEY=VALUE format
 ##
 parse_project_config() {
     local project_json=$1
@@ -54,17 +54,17 @@ parse_project_config() {
     
     # Use defaults for missing values
     if [ -z "$php_version" ]; then
-        log_warn "PHP versiyonu bulunamadı ($project_json), varsayılan kullanılıyor: ${DEFAULT_PHP_VERSION:-$CONST_DEFAULT_PHP_VERSION}"
+        log_warn "PHP version not found ($project_json), using default: ${DEFAULT_PHP_VERSION:-$CONST_DEFAULT_PHP_VERSION}"
         php_version="${DEFAULT_PHP_VERSION:-$CONST_DEFAULT_PHP_VERSION}"
     fi
     
     if [ -z "$web_server" ]; then
-        log_warn "Webserver bulunamadı ($project_json), varsayılan kullanılıyor: ${DEFAULT_WEBSERVER:-$CONST_DEFAULT_WEBSERVER}"
+        log_warn "Webserver not found ($project_json), using default: ${DEFAULT_WEBSERVER:-$CONST_DEFAULT_WEBSERVER}"
         web_server="${DEFAULT_WEBSERVER:-$CONST_DEFAULT_WEBSERVER}"
     fi
     
     if [ -z "$project_domain" ]; then
-        log_error "Domain bulunamadı ($project_json) - proje: $project_name"
+        log_error "Domain not found ($project_json) - project: $project_name"
         return 1
     fi
     
@@ -77,23 +77,23 @@ parse_project_config() {
 }
 
 ##
-# Varsayılan PHP extension listesini döndür
+# Return default PHP extension list
 #
-# Çıktı:
-#   Varsayılan extension listesi (boşlukla ayrılmış)
+# Output:
+#   Default extension list (space-separated)
 ##
 get_default_extensions() {
     echo "pdo pdo_mysql mysqli gd curl zip mbstring"
 }
 
 ##
-# Config değerlerini değişkenlere çıkar
-# parse_project_config() çıktısından değerleri alır
+# Extract config values to variables
+# Gets values from parse_project_config() output
 #
-# Parametreler:
-#   $1 - Config string (parse_project_config çıktısı)
+# Parameters:
+#   $1 - Config string (parse_project_config output)
 #
-# Global Değişkenler:
+# Global Variables:
 #   php_version, web_server, project_domain, document_root, extensions
 ##
 extract_config_values() {
@@ -107,16 +107,16 @@ extract_config_values() {
 }
 
 ##
-# Proje konfigürasyonunu validate et
+# Validate project configuration
 #
-# Parametreler:
-#   $1 - Proje adı
+# Parameters:
+#   $1 - Project name
 #   $2 - PHP version
 #   $3 - Web server
 #   $4 - Domain
 #
-# Çıktı:
-#   0 = geçerli, 1 = geçersiz
+# Output:
+#   0 = valid, 1 = invalid
 ##
 validate_project_config() {
     local project_name=$1
@@ -126,17 +126,17 @@ validate_project_config() {
     
     # Check required fields
     if [ -z "$project_name" ] || [ -z "$php_version" ] || [ -z "$web_server" ] || [ -z "$project_domain" ]; then
-        log_error "Eksik zorunlu alanlar - proje: $project_name"
+        log_error "Missing required fields - project: $project_name"
         return 1
     fi
     
-    # Web server tipini kontrol et
+    # Check web server type
     case "$web_server" in
         nginx|apache|caddy)
             return 0
             ;;
         *)
-            log_warn "Bilinmeyen web server: $web_server (proje: $project_name), nginx kullanılacak"
+            log_warn "Unknown web server: $web_server (project: $project_name), nginx will be used"
             return 0
             ;;
     esac

@@ -403,8 +403,8 @@ TOOLS_KAFBAT_ENABLE=false
 `.env` dosyasını değiştirdikten sonra, konfigürasyonu yeniden oluşturun ve yeniden başlatın:
 
 ```bash
-./cli/stackvo.sh generate
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh restart
 ```
 
 ---

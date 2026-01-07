@@ -62,13 +62,13 @@ cd stackvo
 cp .env.example .env
 
 # 3. CLI'yi kurun
-./cli/stackvo.sh install
+./stackvo.sh install
 
 # 4. Konfigürasyonu oluşturun
-./cli/stackvo.sh generate
+./stackvo.sh generate
 
 # 5. Servisleri başlatın
-./cli/stackvo.sh up
+./stackvo.sh up
 
 # 6. Hosts dosyasını güncelleyin
 echo "127.0.0.1  stackvo.loc" | sudo tee -a /etc/hosts
@@ -101,10 +101,10 @@ EOF
 echo "<?php phpinfo();" > projects/myproject/public/index.php
 
 # Konfigürasyonu yeniden oluşturun
-./cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Servisleri yeniden başlatın
-./cli/stackvo.sh restart
+./stackvo.sh restart
 
 # Hosts dosyasına ekleyin
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
@@ -118,28 +118,35 @@ echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 
 ```bash
 # Kurulum ve Konfigürasyon
-./cli/stackvo.sh install               # CLI'yi sisteme kur
-./cli/stackvo.sh generate              # Tüm konfigürasyonları üret
-./cli/stackvo.sh generate projects     # Sadece projeleri üret
-./cli/stackvo.sh generate services     # Sadece servisleri üret
+./stackvo.sh install               # CLI'yi sisteme kur
+./stackvo.sh generate              # Tüm konfigürasyonları üret
+./stackvo.sh generate projects     # Sadece projeleri üret
+./stackvo.sh generate services     # Sadece servisleri üret
 
 # Container Yönetimi
-./cli/stackvo.sh up                    # Core servisleri başlat (minimal)
-./cli/stackvo.sh up --all              # Tüm servisleri ve projeleri başlat
-./cli/stackvo.sh up --services         # Core + tüm servisleri başlat
-./cli/stackvo.sh up --projects         # Core + tüm projeleri başlat
-./cli/stackvo.sh up --profile mysql    # Core + MySQL başlat
-./cli/stackvo.sh down                  # Tüm servisleri durdur
-./cli/stackvo.sh restart               # Tüm servisleri yeniden başlat
-./cli/stackvo.sh ps                    # Çalışan servisleri listele
+./stackvo.sh up                    # Core servisleri başlat (minimal)
+./stackvo.sh up --all              # Tüm servisleri ve projeleri başlat
+./stackvo.sh up --services         # Core + tüm servisleri başlat
+./stackvo.sh up --projects         # Core + tüm projeleri başlat
+./stackvo.sh up --profile mysql    # Core + MySQL başlat
+./stackvo.sh down                  # Tüm servisleri durdur
+./stackvo.sh restart               # Tüm servisleri yeniden başlat
+./stackvo.sh ps                    # Çalışan servisleri listele
 
 # Loglar ve Diğer
-./cli/stackvo.sh logs                  # Tüm logları izle
-./cli/stackvo.sh logs mysql            # Belirli servis logunu izle
-./cli/stackvo.sh pull                  # Docker image'larını çek
-./cli/stackvo.sh doctor                # Sistem sağlık kontrolü
-./cli/stackvo.sh uninstall             # Stackvo'u kaldır
+./stackvo.sh logs                  # Tüm logları izle
+./stackvo.sh logs mysql            # Belirli servis logunu izle
+./stackvo.sh pull                  # Docker image'larını çek
+./stackvo.sh uninstall             # Stackvo'u kaldır
 ```
+
+> **Not:** `./stackvo.sh install` komutunu çalıştırdıktan sonra, her yerden `stackvo` komutunu kullanabilirsiniz:
+>
+> ```bash
+> stackvo up
+> stackvo generate
+> stackvo logs
+> ```
 
 ---
 
@@ -219,6 +226,101 @@ Detaylı dokümantasyon için [docs](docs/tr) dizinini ziyaret edin:
 - **[Servisler](docs/tr/references/services.md)** - Desteklenen tüm servisler
 - **[Mimari](docs/tr/concepts/architecture.md)** - Sistem mimarisi ve tasarım
 - **[Sorun Giderme](docs/tr/community/troubleshooting.md)** - Sık karşılaşılan sorunlar
+
+---
+
+## 🛠️ Geliştirme Scriptleri
+
+Bu dizin, Stackvo projesinin changelog yönetimi için kullanılan scriptleri içerir.
+
+### generate-changelog.sh
+
+Git commit geçmişinden otomatik changelog oluşturur.
+
+#### Kullanım
+
+**Manuel Kullanım** (Lokal test için):
+
+```bash
+./docs/scripts/generate-changelog.sh [versiyon]
+```
+
+**Otomatik Kullanım** (GitHub Actions):
+
+- GitHub'da yeni bir tag oluşturduğunuzda otomatik çalışır
+- Workflow: `.github/workflows/changelog.yml`
+
+#### Örnekler
+
+```bash
+# Unreleased olarak işaretle
+./docs/scripts/generate-changelog.sh
+
+# Belirli versiyon için
+./docs/scripts/generate-changelog.sh 1.2.0
+```
+
+#### Çıktılar
+
+- `docs/tr/changelog.md` - Türkçe changelog
+- `docs/en/changelog.md` - İngilizce changelog
+
+#### Conventional Commits
+
+Script, aşağıdaki commit tiplerini tanır:
+
+- `feat:` → Eklenenler / Added
+- `fix:` → Düzeltmeler / Fixed
+- `docs:` → Dokümantasyon / Documentation
+- `refactor:` → Yeniden Yapılandırma / Refactored
+- `perf:` → Performans / Performance
+- `test:` → Testler / Tests
+- `chore:` → Diğer / Chore
+
+#### GitHub Release İş Akışı
+
+1. **Kodunuzu geliştirin** ve commit edin (Conventional Commits formatında)
+
+   ```bash
+   git commit -m "feat: yeni özellik eklendi"
+   git commit -m "fix: hata düzeltildi"
+   ```
+
+2. **GitHub'da yeni bir release oluşturun**
+
+   - Releases → Draft a new release
+   - Tag: `1.2.0` (v prefix olmadan!)
+   - Title: `1.2.0`
+   - Description: İsteğe bağlı
+   - Publish release
+
+3. **GitHub Actions otomatik olarak**:
+   - Changelog'u günceller
+   - Değişiklikleri commit eder
+   - GitHub Release'e changelog ekler
+
+#### Tag Formatı
+
+> [!IMPORTANT]
+> Tag oluştururken **"v" prefix kullanmayın**. Doğru format: `1.2.0`, `1.0.5` gibi.
+
+**Doğru**:
+
+- ✅ `1.0.0`
+- ✅ `1.2.5`
+- ✅ `2.0.0`
+
+**Yanlış**:
+
+- ❌ `v1.0.0`
+- ❌ `v1.2.5`
+
+### Notlar
+
+- Bu scriptler dokümantasyon amaçlıdır
+- Ana kullanım GitHub Actions üzerinden yapılır
+- Manuel kullanım sadece test/geliştirme amaçlıdır
+- Tüm commit'ler Conventional Commits formatında olmalıdır
 
 ---
 

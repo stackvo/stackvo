@@ -23,10 +23,10 @@ SERVICE_REDIS_ENABLE=true
 SERVICE_RABBITMQ_ENABLE=true
 
 # Generate configurations
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 
 # Start services
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 ```
 
 ---
@@ -462,8 +462,8 @@ docker logs stackvo-<service-name>
 docker ps --format "table {{.Names}}\t{{.Ports}}"
 
 # Regenerate configuration
-./cli/stackvo.sh generate
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh restart
 ```
 
 ### Connection Error

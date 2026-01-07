@@ -9,7 +9,8 @@ set -eo pipefail
 
 # Global constants
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# CLI is in core/cli/, utils is in core/cli/utils/, so go up 3 levels to reach stackvo root
+readonly ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 readonly CERT_DIR="$ROOT_DIR/generated/certs"
 
 # Load logger library
@@ -131,9 +132,23 @@ generate_certificates() {
     # Create cert directory
     mkdir -p "$CERT_DIR"
     
-    # Fix ownership if running as sudo (macOS compatibility)
+    # Fix ownership if running as sudo
     if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
-        chown -R "$SUDO_USER:staff" "$ROOT_DIR/generated"
+        # Read HOST_UID and HOST_GID from .env
+        if [ -f "$ROOT_DIR/.env" ]; then
+            HOST_UID=$(grep "^HOST_UID=" "$ROOT_DIR/.env" | cut -d= -f2)
+            HOST_GID=$(grep "^HOST_GID=" "$ROOT_DIR/.env" | cut -d= -f2)
+            
+            if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+                chown -R "$HOST_UID:$HOST_GID" "$ROOT_DIR/generated"
+            else
+                # Fallback to SUDO_USER:staff for macOS compatibility
+                chown -R "$SUDO_USER:staff" "$ROOT_DIR/generated"
+            fi
+        else
+            # Fallback to SUDO_USER:staff for macOS compatibility
+            chown -R "$SUDO_USER:staff" "$ROOT_DIR/generated"
+        fi
     fi
     
     # Collect all domains

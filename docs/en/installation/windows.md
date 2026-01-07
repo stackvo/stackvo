@@ -106,8 +106,8 @@ cd stackvo
 cp .env.example .env
 
 # Başlat
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 ### Hosts Dosyası (Windows)

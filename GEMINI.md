@@ -63,7 +63,7 @@ generate_project() {
 
 #### CLI Komutları
 
-- Tüm CLI komutları `./cli/stackvo.sh` ile başlar
+- Tüm CLI komutları `./core/cli/stackvo.sh` ile başlar
 - Ana komutlar:
   - `generate` - Tüm konfigürasyonları oluşturur
   - `generate projects` - Sadece proje containerlarını oluşturur
@@ -76,30 +76,35 @@ generate_project() {
 
 ```
 stackvo/
-├── cli/                    # CLI komutları ve kütüphaneler
-│   ├── commands/          # Ana komutlar (generate.sh, up.sh, etc.)
-│   └── lib/               # Yardımcı kütüphaneler
-│       ├── generators/    # Generator modülleri
-│       ├── constants.sh   # Sabitler
-│       ├── logger.sh      # Log fonksiyonları
-│       └── env-loader.sh  # Environment yükleyici
 ├── core/
-│   ├── compose/           # Base docker-compose dosyaları
-│   └── templates/         # Template dosyaları
-│       ├── servers/       # Web server şablonları (nginx, apache, caddy)
-│       ├── services/      # Servis şablonları (mysql, redis, etc.)
-│       └── ui/            # UI şablonları
-├── generated/             # Otomatik oluşturulan dosyalar (gitignore'da)
-│   ├── projects/          # Proje Dockerfile'ları
-│   ├── configs/           # Nginx/Apache konfigürasyonları
-│   ├── stackvo.yml        # Base compose
+│   ├── cli/                # CLI komutları ve kütüphaneler
+│   │   ├── stackvo.sh      # Ana CLI entry point
+│   │   ├── commands/       # Ana komutlar (generate.sh, up.sh, etc.)
+│   │   └── lib/            # Yardımcı kütüphaneler
+│   │       ├── generators/ # Generator modülleri
+│   │       ├── constants.sh   # Sabitler
+│   │       ├── logger.sh      # Log fonksiyonları
+│   │       └── env-loader.sh  # Environment yükleyici
+│   ├── ui/                 # UI kaynak kodları
+│   │   ├── client/         # Vue.js frontend
+│   │   ├── server/         # Node.js backend
+│   │   └── dist/           # Build output
+│   ├── compose/            # Base docker-compose dosyaları
+│   └── templates/          # Template dosyaları
+│       ├── servers/        # Web server şablonları (nginx, apache, caddy)
+│       ├── services/       # Servis şablonları (mysql, redis, etc.)
+│       └── ui/             # UI şablonları
+├── generated/              # Otomatik oluşturulan dosyalar (gitignore'da)
+│   ├── projects/           # Proje Dockerfile'ları
+│   ├── configs/            # Nginx/Apache konfigürasyonları
+│   ├── stackvo.yml         # Base compose
 │   ├── docker-compose.dynamic.yml    # Dinamik servisler
 │   └── docker-compose.projects.yml   # Proje containerları
-├── projects/              # Kullanıcı projeleri
+├── projects/               # Kullanıcı projeleri
 │   └── {proje-adı}/
-│       ├── stackvo.json   # Proje konfigürasyonu
-│       └── public/        # Document root
-└── .env                   # Ana konfigürasyon dosyası
+│       ├── stackvo.json    # Proje konfigürasyonu
+│       └── public/         # Document root
+└── .env                    # Ana konfigürasyon dosyası
 ```
 
 ### Kod Yazım Kuralları
@@ -387,11 +392,11 @@ output {
 
 #### Generator Modülleri
 
-- `cli/lib/generators/project.sh` - Proje containerları
-- `cli/lib/generators/compose.sh` - Docker Compose dosyaları
-- `cli/lib/generators/traefik.sh` - Traefik konfigürasyonu
-- `cli/lib/generators/config.sh` - Servis konfigürasyonları
-- `cli/lib/generators/tools.sh` - Tools container
+- `core/cli/lib/generators/project.sh` - Proje containerları
+- `core/cli/lib/generators/compose.sh` - Docker Compose dosyaları
+- `core/cli/lib/generators/traefik.sh` - Traefik konfigürasyonu
+- `core/cli/lib/generators/config.sh` - Servis konfigürasyonları
+- `core/cli/lib/generators/tools.sh` - Tools container
 
 #### Dockerfile Oluşturma
 
@@ -541,12 +546,12 @@ Eğer proje dizininde `.stackvo/Dockerfile` varsa, o kullanılır (öncelik sır
 
 ### Best Practices
 
-1. **Her zaman `./cli/stackvo.sh generate` çalıştır** - Değişikliklerden sonra
+1. **Her zaman `./core/cli/stackvo.sh generate` çalıştır** - Değişikliklerden sonra
 2. **Extension değişikliklerinde `--no-cache` kullan** - Temiz build için
 3. **Türkçe mesajlar kullan** - Kullanıcı deneyimi için
 4. **İngilizce inline yorumlar ekle** - Kod okunabilirliği için
 5. **Test et** - Her değişiklikten sonra
-6. **UI değişikliklerinden sonra build et** - `.ui/client` veya `.ui/server` dizinlerinde değişiklik yapıldığında mutlaka aşağıdaki komutu çalıştır:
+6. **UI değişikliklerinden sonra build et** - `core/ui/client` veya `core/ui/server` dizinlerinde değişiklik yapıldığında mutlaka aşağıdaki komutu çalıştır:
    ```bash
    docker compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml build stackvo-ui && docker compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml up -d stackvo-ui
    ```

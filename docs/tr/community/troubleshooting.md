@@ -59,7 +59,7 @@ sudo usermod -aG docker $USER
 newgrp docker
 
 # Veya sudo ile çalıştır
-sudo ./cli/stackvo.sh up
+sudo ./core/cli/stackvo.sh up
 ```
 
 ### Port çakışması
@@ -78,8 +78,8 @@ sudo lsof -i :3306
 nano .env
 # HOST_PORT_MYSQL=3307
 
-./cli/stackvo.sh generate
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh restart
 ```
 
 ---
@@ -96,7 +96,7 @@ Error generating docker-compose files
 **Çözüm:**
 ```bash
 # Verbose mode
-STACKVO_VERBOSE=true ./cli/stackvo.sh generate
+STACKVO_VERBOSE=true ./core/cli/stackvo.sh generate
 
 # Logları kontrol et
 cat core/generator.log
@@ -151,10 +151,10 @@ docker inspect stackvo-mysql | grep -A 10 Networks
 docker exec stackvo-php ping stackvo-mysql
 
 # Network yeniden oluştur
-./cli/stackvo.sh down
+./core/cli/stackvo.sh down
 docker network rm stackvo-net
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 ### DNS çözümleme sorunu
@@ -188,7 +188,7 @@ SSL certificate problem: self signed certificate
 **Çözüm:**
 ```bash
 # Sertifikaları yeniden oluştur
-./cli/utils/generate-ssl-certs.sh
+./core/cli/utils/generate-ssl-certs.sh
 
 # Tarayıcıda sertifikayı kabul et
 # Chrome: Advanced → Proceed to site
@@ -400,17 +400,17 @@ stackvo: command not found
 **Çözüm:**
 ```bash
 # CLI kur
-./cli/stackvo.sh install
+./core/cli/stackvo.sh install
 
 # Veya tam yol kullan
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 ```
 
 ### Script execution hatası
 
 **Semptom:**
 ```
-Permission denied: ./cli/stackvo.sh
+Permission denied: ./core/cli/stackvo.sh
 ```
 
 **Çözüm:**
@@ -473,7 +473,7 @@ volumes:
 
 ```bash
 # 1. Tüm container'ları durdur
-./cli/stackvo.sh down -v
+./core/cli/stackvo.sh down -v
 
 # 2. Network'ü sil
 docker network rm stackvo-net
@@ -482,8 +482,8 @@ docker network rm stackvo-net
 rm -rf generated/*
 
 # 4. Yeniden oluştur
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 ### Backup'tan geri yükle

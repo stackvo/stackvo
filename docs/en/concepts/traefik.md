@@ -193,7 +193,7 @@ Stackvo, local development için self-signed sertifikalar kullanır:
 
 ```bash
 # Sertifika oluşturma
-./cli/utils/generate-ssl-certs.sh
+./core/cli/utils/generate-ssl-certs.sh
 ```
 
 **Oluşturulan Dosyalar:**

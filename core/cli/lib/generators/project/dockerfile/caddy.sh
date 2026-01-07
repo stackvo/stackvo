@@ -1,24 +1,24 @@
 #!/bin/bash
 ###################################################################
-# STACKVO NGINX DOCKERFILE GENERATOR MODULE
-# Nginx + PHP-FPM + Supervisord Dockerfile oluşturma
+# STACKVO CADDY DOCKERFILE GENERATOR MODULE
+# Caddy + PHP-FPM + Supervisord Dockerfile generation
 ###################################################################
 
 ##
-# Nginx Dockerfile oluştur
+# Generate Caddy Dockerfile
 #
-# Parametreler:
+# Parameters:
 #   $1 - Dockerfile path
 #   $2 - PHP version
-#   $3 - APT packages (boşlukla ayrılmış)
+#   $3 - APT packages (space-separated)
 #   $4 - Configure commands
-#   $5 - docker-php-ext-install extension'lar
-#   $6 - PECL extension'lar
-#   $7 - Proje adı
-#   $8 - Proje dizini (config dosyaları için)
+#   $5 - docker-php-ext-install extensions
+#   $6 - PECL extensions
+#   $7 - Project name
+#   $8 - Project directory (for config files)
 #   $9 - Document root
 ##
-generate_nginx_dockerfile() {
+generate_caddy_dockerfile() {
     local dockerfile=$1
     local php_version=$2
     local apt_packages=$3
@@ -35,15 +35,25 @@ generate_nginx_dockerfile() {
     local nodejs_version=${PHP_TOOL_NODEJS_VERSION:-20}
     
     # Dockerfile header
-    generate_dockerfile_header "$project_name" "Nginx + PHP-FPM" "$php_version" "fpm" > "$dockerfile"
+    generate_dockerfile_header "$project_name" "Caddy + PHP-FPM" "$php_version" "fpm" > "$dockerfile"
     
-    # Install Nginx and Supervisord
+    # Install Supervisord and Caddy dependencies
     cat >> "$dockerfile" <<'EOF'
-# Install Nginx and Supervisord
+# Install Supervisord and dependencies
 RUN apt-get update && apt-get install -y \
-    nginx \
+    curl \
+    ca-certificates \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Caddy from official binary (cross-platform compatible, no GPG issues)
+ARG CADDY_VERSION=2.8.4
+RUN curl -o /tmp/caddy.tar.gz -L "https://github.com/caddyserver/caddy/releases/download/v\${CADDY_VERSION}/caddy_\${CADDY_VERSION}_linux_amd64.tar.gz" \
+    && tar -xzf /tmp/caddy.tar.gz -C /usr/bin caddy \
+    && chmod +x /usr/bin/caddy \
+    && rm /tmp/caddy.tar.gz \
+    && caddy version
+
 
 EOF
     
@@ -62,13 +72,13 @@ EOF
     # Development tools
     generate_development_tools_install "$default_tools" "$composer_version" "$nodejs_version" >> "$dockerfile"
     
-    # Generate Nginx config
-    generate_nginx_config "$project_dir" "$document_root"
+    # Generate Caddyfile
+    generate_caddyfile "$project_dir" "$document_root"
     
     # Generate Supervisord config
-    generate_supervisord_config "$project_dir" "nginx" "/usr/sbin/nginx -g 'daemon off;'"
+    generate_supervisord_config "$project_dir" "caddy" "/usr/bin/caddy run --config /etc/caddy/Caddyfile"
     
-    # Nginx ve PHP-FPM konfigürasyonu
+    # Caddy and PHP-FPM configuration
     cat >> "$dockerfile" <<'DOCKEREOF'
 
 DOCKEREOF
@@ -78,14 +88,8 @@ DOCKEREOF
     
     cat >> "$dockerfile" <<'DOCKEREOF'
 
-# Remove 'main' log format reference from Nginx config
-RUN sed -i 's/ main;/;/' /etc/nginx/nginx.conf
-
-# Disable default Nginx site (it conflicts with our config)
-RUN rm -f /etc/nginx/sites-enabled/default
-
-# Copy Nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy Caddyfile
+COPY Caddyfile /etc/caddy/Caddyfile
 
 # Copy Supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -93,9 +97,9 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 DOCKEREOF
     
     # Entrypoint script
-    generate_entrypoint_script "nginx" >> "$dockerfile"
+    generate_entrypoint_script "caddy" >> "$dockerfile"
     
-    # Workdir ve CMD
+    # Workdir and CMD
     cat >> "$dockerfile" <<'DOCKEREOF'
 
 WORKDIR /var/www/html
@@ -107,45 +111,34 @@ DOCKEREOF
 }
 
 ##
-# Nginx konfigürasyon dosyası oluştur
+# Generate Caddyfile
 #
-# Parametreler:
-#   $1 - Proje dizini
+# Parameters:
+#   $1 - Project directory
 #   $2 - Document root
 ##
-generate_nginx_config() {
+generate_caddyfile() {
     local project_dir=$1
     local document_root=$2
     
-    cat > "$project_dir/nginx.conf" <<'NGINXCONF'
-server {
-    listen 80;
-    server_name _;
+    cat > "$project_dir/Caddyfile" <<'CADDYCONF'
+:80 {
+    root * /var/www/html/DOCUMENT_ROOT_PLACEHOLDER
     
-    # Explicit log paths
-    access_log /var/log/nginx/access.log;
-    error_log /var/log/nginx/error.log;
+    # Enable PHP-FPM (localhost - same container)
+    php_fastcgi 127.0.0.1:9000
     
-    root /var/www/html/DOCUMENT_ROOT_PLACEHOLDER;
-    index index.php index.html;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location ~ /\.ht {
-        deny all;
+    # Enable file server
+    file_server
+    
+    # Logging
+    log {
+        output stdout
+        format console
     }
 }
-NGINXCONF
+CADDYCONF
 
     # Replace placeholder with actual document root (cross-platform compatible)
-    sed "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/nginx.conf" > "$project_dir/nginx.conf.tmp" && mv "$project_dir/nginx.conf.tmp" "$project_dir/nginx.conf"
+    sed "s|DOCUMENT_ROOT_PLACEHOLDER|$document_root|g" "$project_dir/Caddyfile" > "$project_dir/Caddyfile.tmp" && mv "$project_dir/Caddyfile.tmp" "$project_dir/Caddyfile"
 }

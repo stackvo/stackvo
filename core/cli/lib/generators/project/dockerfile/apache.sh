@@ -1,20 +1,20 @@
 #!/bin/bash
 ###################################################################
 # STACKVO APACHE DOCKERFILE GENERATOR MODULE
-# Apache + mod_php Dockerfile oluşturma
+# Apache + mod_php Dockerfile generation
 ###################################################################
 
 ##
-# Apache Dockerfile oluştur
+# Generate Apache Dockerfile
 #
-# Parametreler:
+# Parameters:
 #   $1 - Dockerfile path
 #   $2 - PHP version
-#   $3 - APT packages (boşlukla ayrılmış)
+#   $3 - APT packages (space-separated)
 #   $4 - Configure commands
-#   $5 - docker-php-ext-install extension'lar
-#   $6 - PECL extension'lar
-#   $7 - Proje adı
+#   $5 - docker-php-ext-install extensions
+#   $6 - PECL extensions
+#   $7 - Project name
 ##
 generate_apache_dockerfile() {
     local dockerfile=$1
@@ -57,9 +57,9 @@ generate_apache_dockerfile() {
 }
 
 ##
-# Apache modüllerini enable et
+# Enable Apache modules
 #
-# Çıktı:
+# Output:
 #   Dockerfile RUN command
 ##
 generate_apache_modules() {

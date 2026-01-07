@@ -5,10 +5,10 @@
 ###################################################################
 
 ##
-# Container ortamını tespit et
+# Detect container environment
 #
-# Çıktı:
-#   0 = container içinde, 1 = host'ta
+# Output:
+#   0 = inside container, 1 = on host
 ##
 detect_container_environment() {
     if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ]; then
@@ -19,12 +19,12 @@ detect_container_environment() {
 }
 
 ##
-# Host path'lerini çözümle
-# Container içinde mi yoksa host'ta mı çalıştığımızı tespit edip
+# Resolve host paths
+# Detects whether we are running in container or on host
 # Returns correct paths based on execution environment
 #
-# Çıktı:
-#   HOST_ROOT_DIR=<path> formatında
+# Output:
+#   HOST_ROOT_DIR=<path> format
 ##
 resolve_host_paths() {
     local HOST_ROOT_DIR="$ROOT_DIR"
@@ -33,9 +33,9 @@ resolve_host_paths() {
         # We are in container - use host path
         if [ -n "$HOST_STACKVO_ROOT" ]; then
             HOST_ROOT_DIR="$HOST_STACKVO_ROOT"
-            log_info "Container içinde çalışıyor, host path kullanılıyor: $HOST_ROOT_DIR"
+            log_info "Running in container, using host path: $HOST_ROOT_DIR"
         else
-            log_warn "Container içinde çalışıyor ama HOST_STACKVO_ROOT set edilmemiş, volume mount'lar başarısız olabilir"
+            log_warn "Running in container but HOST_STACKVO_ROOT is not set, volume mounts may fail"
         fi
     fi
     
@@ -43,8 +43,8 @@ resolve_host_paths() {
 }
 
 ##
-# Generated dizini için permission'ları düzelt
-# Container içinde mi yoksa host'ta mı çalıştığımıza göre
+# Fix permissions for generated directory
+# Based on whether we are running in container or on host
 # Sets correct ownership based on execution environment
 ##
 fix_generated_permissions() {
@@ -57,29 +57,29 @@ fix_generated_permissions() {
         if [ "$(id -u)" -eq 0 ]; then
             # Running as root
             chown -R 100:101 "$GENERATED_DIR" 2>/dev/null || true
-            log_info "Generated dizini ownership'i nginx user'a ayarlandı (100:101)"
+            log_info "Generated directory ownership set to nginx user (100:101)"
         fi
     else
         # We are on host - use HOST_UID and HOST_GID
         if [ -n "${HOST_UID}" ] && [ -n "${HOST_GID}" ]; then
             sudo chown -R "${HOST_UID}:${HOST_GID}" "$GENERATED_DIR" 2>/dev/null || true
             chmod -R 755 "$GENERATED_DIR" 2>/dev/null || true
-            log_info "Generated dizini ownership'i ${HOST_UID}:${HOST_GID} olarak ayarlandı"
+            log_info "Generated directory ownership set to ${HOST_UID}:${HOST_GID}"
         else
-            log_warn "HOST_UID veya HOST_GID set edilmemiş, chmod 777 kullanılıyor"
+            log_warn "HOST_UID or HOST_GID not set, using chmod 777"
             chmod -R 777 "$GENERATED_DIR" 2>/dev/null || true
         fi
     fi
 }
 
 ##
-# Proje için host path'lerini hesapla
+# Calculate host paths for project
 #
-# Parametreler:
-#   $1 - Proje adı
+# Parameters:
+#   $1 - Project name
 #   $2 - Host root directory
 #
-# Çıktı:
+# Output:
 #   HOST_PROJECT_PATH=<path>
 #   HOST_LOGS_PATH=<path>
 #   HOST_GENERATED_CONFIGS_DIR=<path>
@@ -96,17 +96,17 @@ calculate_project_host_paths() {
 }
 
 ##
-# Custom config dosyası mount path'ini bul
-# Öncelik sırası: .stackvo/config > project_root/config > generated/config
+# Find custom config file mount path
+# Priority order: .stackvo/config > project_root/config > generated/config
 #
-# Parametreler:
-#   $1 - Proje path (container path)
-#   $2 - Host proje path
-#   $3 - Config dosya adı (örn: nginx.conf, apache.conf, Caddyfile)
+# Parameters:
+#   $1 - Project path (container path)
+#   $2 - Host project path
+#   $3 - Config filename (e.g., nginx.conf, apache.conf, Caddyfile)
 #   $4 - Generated config path (fallback)
 #
-# Çıktı:
-#   Config mount satırı (boş string = mount yok, generated kullan)
+# Output:
+#   Config mount line (empty string = no mount, use generated)
 ##
 get_config_mount_path() {
     local project_path=$1

@@ -59,16 +59,16 @@ echo "<h1>Welcome to My Project</h1>" > projects/myproject/public/index.html
 
 ```bash
 # Sadece projeleri üret
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 
 # Veya tümünü üret
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 ```
 
 #### 5. Servisleri Başlatma
 
 ```bash
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 ```
 
 #### 6. Hosts Dosyasını Güncelleme
@@ -138,8 +138,8 @@ nano projects/laravel-app/.env
 # REDIS_PORT=6379
 
 # 4. Generate ve start
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 
 # 5. Hosts
 echo "127.0.0.1  laravel.loc" | sudo tee -a /etc/hosts
@@ -186,8 +186,8 @@ DATABASE_URL="postgresql://stackvo:root@stackvo-postgres:5432/symfony?serverVers
 EOF
 
 # 4. Generate ve start
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 
 # 5. Hosts
 echo "127.0.0.1  symfony.loc" | sudo tee -a /etc/hosts
@@ -236,8 +236,8 @@ nano projects/wordpress-site/wp-config.php
 # define('DB_HOST', 'stackvo-mysql');
 
 # 4. Generate ve start
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 
 # 5. Hosts
 echo "127.0.0.1  wordpress.loc" | sudo tee -a /etc/hosts
@@ -334,8 +334,8 @@ server {
 EOF
 
 # 3. Generate ve restart
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh restart
 ```
 
 ### PHP Konfigürasyonu
@@ -359,7 +359,7 @@ session.save_path = "tcp://stackvo-redis:6379"
 EOF
 
 # Generate ve restart
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 docker restart stackvo-myproject-php
 ```
 
@@ -415,7 +415,7 @@ nano projects/myproject/stackvo.json
 # "version": "8.2" → "8.3"
 
 # 2. Projeleri yeniden üret
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 
 # 3. Container'ı yeniden oluştur
 docker compose -f generated/stackvo.yml \
@@ -433,10 +433,10 @@ nano projects/myproject/stackvo.json
 # "webserver": "nginx" → "apache"
 
 # 2. Projeleri yeniden üret
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 
 # 3. Container'ları yeniden oluştur
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh restart
 ```
 
 ---
@@ -447,16 +447,16 @@ nano projects/myproject/stackvo.json
 
 ```bash
 # 1. Container'ları durdur
-./cli/stackvo.sh down
+./core/cli/stackvo.sh down
 
 # 2. Proje dizinini sil
 rm -rf projects/myproject
 
 # 3. Yeniden üret
-./cli/stackvo.sh generate projects
+./core/cli/stackvo.sh generate projects
 
 # 4. Başlat
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 
 # 5. Hosts dosyasından kaldır
 sudo nano /etc/hosts

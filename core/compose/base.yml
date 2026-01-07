@@ -12,7 +12,7 @@ services:
   # TRAEFIK - GLOBAL REVERSE PROXY FOR ALL PROJECTS
   ###############################################################
   traefik:
-    profiles: ["core"] # Core service - minimal başlatmada otomatik başlar
+    profiles: ["core"] # Core service - starts automatically in minimal setup
     image: traefik:latest
     container_name: stackvo-traefik
     restart: unless-stopped

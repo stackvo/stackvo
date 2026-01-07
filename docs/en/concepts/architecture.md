@@ -211,7 +211,8 @@ PHP → RabbitMQ (stackvo-rabbitmq:5672)
 ```
 stackvo/
 ├── .env                          # Ana konfigürasyon
-├── cli/                          # CLI komutları
+├── core/
+│   ├── cli/                          # CLI komutları
 │   ├── stackvo.sh              # Ana CLI
 │   ├── commands/                 # Komut scriptleri
 │   ├── lib/                      # Kütüphaneler
@@ -219,6 +220,10 @@ stackvo/
 │   └── utils/                    # Yardımcı scriptler
 │
 ├── core/                         # Core dosyalar
+│   ├── ui/                       # Stackvo Web UI
+│   │   ├── client/               # Vue.js frontend
+│   │   ├── server/               # Node.js backend
+│   │   └── dist/                 # Build output
 │   ├── compose/
 │   │   └── base.yml              # Traefik base template
 │   ├── templates/                # Servis ve webserver template'leri
@@ -243,11 +248,6 @@ stackvo/
 │       ├── stackvo.json
 │       ├── .stackvo/
 │       └── public/
-│
-├── .ui/                          # Stackvo Web UI
-│   ├── index.html
-│   ├── api/                      # PHP API endpoints
-│   └── lib/                      # PHP kütüphaneler
 │
 └── logs/                         # Container logları
     ├── services/
@@ -289,7 +289,7 @@ nano .env
 
 ```bash
 # Generator'ı çalıştır
-./cli/stackvo.sh generate
+./core/cli/stackvo.sh generate
 ```
 
 **Generator şunları yapar:**
@@ -306,20 +306,20 @@ nano .env
 
 ```bash
 # Servisleri başlat
-./cli/stackvo.sh up
+./core/cli/stackvo.sh up
 ```
 
 ### 4. Management
 
 ```bash
 # Durumu kontrol et
-./cli/stackvo.sh ps
+./core/cli/stackvo.sh ps
 
 # Logları izle
-./cli/stackvo.sh logs
+./core/cli/stackvo.sh logs
 
 # Yeniden başlat
-./cli/stackvo.sh restart
+./core/cli/stackvo.sh restart
 ```
 
 ---

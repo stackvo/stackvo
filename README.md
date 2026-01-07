@@ -62,13 +62,13 @@ cd stackvo
 cp .env.example .env
 
 # 3. Install CLI
-./cli/stackvo.sh install
+./stackvo.sh install
 
 # 4. Generate configuration
-./cli/stackvo.sh generate
+./stackvo.sh generate
 
 # 5. Start services
-./cli/stackvo.sh up
+./stackvo.sh up
 
 # 6. Update hosts file
 echo "127.0.0.1  stackvo.loc" | sudo tee -a /etc/hosts
@@ -101,10 +101,10 @@ EOF
 echo "<?php phpinfo();" > projects/myproject/public/index.php
 
 # Regenerate configuration
-./cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Restart services
-./cli/stackvo.sh restart
+./stackvo.sh restart
 
 # Add to hosts file
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
@@ -118,28 +118,35 @@ echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 
 ```bash
 # Installation and Configuration
-./cli/stackvo.sh install               # Install CLI to system
-./cli/stackvo.sh generate              # Generate all configurations
-./cli/stackvo.sh generate projects     # Generate only projects
-./cli/stackvo.sh generate services     # Generate only services
+./stackvo.sh install               # Install CLI to system
+./stackvo.sh generate              # Generate all configurations
+./stackvo.sh generate projects     # Generate only projects
+./stackvo.sh generate services     # Generate only services
 
 # Container Management
-./cli/stackvo.sh up                    # Start core services (minimal)
-./cli/stackvo.sh up --all              # Start all services and projects
-./cli/stackvo.sh up --services         # Start core + all services
-./cli/stackvo.sh up --projects         # Start core + all projects
-./cli/stackvo.sh up --profile mysql    # Start core + MySQL
-./cli/stackvo.sh down                  # Stop all services
-./cli/stackvo.sh restart               # Restart all services
-./cli/stackvo.sh ps                    # List running services
+./stackvo.sh up                    # Start core services (minimal)
+./stackvo.sh up --all              # Start all services and projects
+./stackvo.sh up --services         # Start core + all services
+./stackvo.sh up --projects         # Start core + all projects
+./stackvo.sh up --profile mysql    # Start core + MySQL
+./stackvo.sh down                  # Stop all services
+./stackvo.sh restart               # Restart all services
+./stackvo.sh ps                    # List running services
 
 # Logs and Others
-./cli/stackvo.sh logs                  # Watch all logs
-./cli/stackvo.sh logs mysql            # Watch specific service log
-./cli/stackvo.sh pull                  # Pull Docker images
-./cli/stackvo.sh doctor                # System health check
-./cli/stackvo.sh uninstall             # Uninstall Stackvo
+./stackvo.sh logs                  # Watch all logs
+./stackvo.sh logs mysql            # Watch specific service log
+./stackvo.sh pull                  # Pull Docker images
+./stackvo.sh uninstall             # Uninstall Stackvo
 ```
+
+> **Note:** After running `./stackvo.sh install`, you can use `stackvo` command directly from anywhere:
+>
+> ```bash
+> stackvo up
+> stackvo generate
+> stackvo logs
+> ```
 
 ---
 
@@ -218,6 +225,101 @@ Visit the [docs](docs/en) directory for detailed documentation:
 - **[Services](docs/en/references/services.md)** - All supported services
 - **[Architecture](docs/en/concepts/architecture.md)** - System architecture and design
 - **[Troubleshooting](docs/en/community/troubleshooting.md)** - Common issues
+
+---
+
+## 🛠️ Development Scripts
+
+This directory contains scripts used for changelog management of the Stackvo project.
+
+### generate-changelog.sh
+
+Automatically generates a changelog from Git commit history.
+
+#### Usage
+
+**Manual Usage** (For local testing):
+
+```bash
+./docs/scripts/generate-changelog.sh [version]
+```
+
+**Automatic Usage** (GitHub Actions):
+
+- Runs automatically when you create a new tag on GitHub
+- Workflow: `.github/workflows/changelog.yml`
+
+#### Examples
+
+```bash
+# Mark as Unreleased
+./docs/scripts/generate-changelog.sh
+
+# For a specific version
+./docs/scripts/generate-changelog.sh 1.2.0
+```
+
+#### Outputs
+
+- `docs/tr/changelog.md` - Turkish changelog
+- `docs/en/changelog.md` - English changelog
+
+#### Conventional Commits
+
+The script recognizes the following commit types:
+
+- `feat:` → Added
+- `fix:` → Fixed
+- `docs:` → Documentation
+- `refactor:` → Refactored
+- `perf:` → Performance
+- `test:` → Tests
+- `chore:` → Chore
+
+#### GitHub Release Workflow
+
+1. **Develop your code** and commit (in Conventional Commits format)
+
+   ```bash
+   git commit -m "feat: added new feature"
+   git commit -m "fix: fixed bug"
+   ```
+
+2. **Create a new release on GitHub**
+
+   - Releases → Draft a new release
+   - Tag: `1.2.0` (without v prefix!)
+   - Title: `1.2.0`
+   - Description: Optional
+   - Publish release
+
+3. **GitHub Actions automatically**:
+   - Updates the Changelog
+   - Commits changes
+   - Adds changelog to GitHub Release
+
+#### Tag Format
+
+> [!IMPORTANT]
+> Do not use **"v" prefix** when creating tags. Correct format: `1.2.0`, `1.0.5`, etc.
+
+**Correct**:
+
+- ✅ `1.0.0`
+- ✅ `1.2.5`
+- ✅ `2.0.0`
+
+**Incorrect**:
+
+- ❌ `v1.0.0`
+- ❌ `v1.2.5`
+
+### Notes
+
+- These scripts are for documentation purposes
+- Main usage is via GitHub Actions
+- Manual usage is for testing/development purposes only
+- All commits must be in Conventional Commits format
 
 ---
 

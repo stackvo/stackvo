@@ -56,8 +56,8 @@ EOF
 **4. Generate ve Start**
 
 ```bash
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 ```
 
 **5. Hosts Dosyasını Güncelleyin**
@@ -96,8 +96,8 @@ nano .env
 SERVICE_MYSQL_ENABLE=true
 
 # Generate ve start
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 **2. Veritabanı Oluşturun**
@@ -184,8 +184,8 @@ nano .env
 SERVICE_REDIS_ENABLE=true
 
 # Generate ve start
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 **2. PHP Redis Extension Kontrolü**
@@ -311,8 +311,8 @@ docker exec -it stackvo-mysql mysql -u root -proot -e "CREATE DATABASE laravel;"
 **5. Generate ve Start**
 
 ```bash
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 ```
 
 **6. Laravel Key Generate**
@@ -359,8 +359,8 @@ Email gönderme işini asenkron yapmak.
 # .env
 SERVICE_RABBITMQ_ENABLE=true
 
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 **2. php-amqplib Kurun**
@@ -579,8 +579,8 @@ EOF
 **4. Generate ve Start**
 
 ```bash
-./cli/stackvo.sh generate projects
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate projects
+./core/cli/stackvo.sh up
 
 echo "127.0.0.1  auth.loc products.loc api.loc" | sudo tee -a /etc/hosts
 ```

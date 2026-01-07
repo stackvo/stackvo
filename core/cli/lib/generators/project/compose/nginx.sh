@@ -1,17 +1,17 @@
 #!/bin/bash
 ###################################################################
 # STACKVO NGINX COMPOSE GENERATOR MODULE
-# Nginx compose service oluşturma
+# Nginx compose service generation
 ###################################################################
 
 ##
-# Nginx Single Container compose service oluştur
+# Generate Nginx single container compose service
 #
-# Parametreler:
-#   $1 - Proje adı
-#   $2 - Proje path (container path)
-#   $3 - Proje domain
-#   $4 - Host proje path
+# Parameters:
+#   $1 - Project name
+#   $2 - Project path (container path)
+#   $3 - Project domain
+#   $4 - Host project path
 #   $5 - Host logs path
 #   $6 - Host generated configs dir
 #   $7 - Host generated projects dir
@@ -25,12 +25,12 @@ generate_nginx_single_container() {
     local host_generated_configs_dir=$6
     local host_generated_projects_dir=$7
     
-    # Traefik için sanitize edilmiş proje adı
+    # Sanitized project name for Traefik
     local traefik_safe_name=$(sanitize_project_name_for_traefik "$project_name")
     
-    # Nginx config mount path belirle
-    # Nginx config Dockerfile içinde generate edildiği için
-    # sadece custom config varsa mount ediyoruz
+    # Determine Nginx config mount path
+    # Since Nginx config is generated inside Dockerfile,
+    # we only mount if custom config exists
     local nginx_config_mount=""
     if [ -f "$project_path/$CONST_STACKVO_CONFIG_DIR/$CONST_CONFIG_NGINX" ]; then
         # User has custom nginx config in .stackvo/
@@ -40,10 +40,10 @@ generate_nginx_single_container() {
         nginx_config_mount="      - ${host_project_path}/$CONST_CONFIG_NGINX:/etc/nginx/conf.d/default.conf:ro"
     fi
     
-    # Compose service oluştur
+    # Create compose service
     cat <<EOF
   ${project_name}:
-    profiles: ["projects", "project-${project_name}"]  # --projects ile tümü, --profile project-{name} ile sadece bu proje
+    profiles: ["projects", "project-${project_name}"]  # --projects for all, --profile project-{name} for this project only
     build:
       context: ./projects/${project_name}
       dockerfile: Dockerfile

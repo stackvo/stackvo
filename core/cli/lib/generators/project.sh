@@ -5,7 +5,7 @@
 ###################################################################
 
 # Load dependencies
-# Bu dosya cli/lib/generators/project.sh konumunda
+# This file is located at cli/lib/generators/project.sh
 # Modules are in the same directory
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$MODULE_DIR/project/config-parser.sh"
@@ -19,11 +19,11 @@ source "$MODULE_DIR/project/compose/nginx.sh"
 source "$MODULE_DIR/project/compose/caddy.sh"
 
 ##
-# Ana proje generator fonksiyonu
-# Tüm projeleri tarayıp Dockerfile ve compose service'leri oluşturur
+# Main project generator function
+# Scans all projects and creates Dockerfiles and compose services
 ##
 generate_projects() {
-    log_info "Proje containerları oluşturuluyor..."
+    log_info "Generating project containers..."
     
     # Resolve host paths
     local paths=$(resolve_host_paths)
@@ -42,18 +42,21 @@ generate_projects() {
     # Process projects
     local project_count=$(process_all_projects "$HOST_ROOT_DIR")
     
+    # Convert to integer (default to 0 if empty)
+    project_count=${project_count:-0}
+    
     # If no projects, finish with empty services mapping
-    if [ $project_count -eq 0 ]; then
+    if [ "$project_count" -eq 0 ]; then
         finalize_compose_file_empty
     else
         finalize_compose_file
     fi
     
-    log_success "docker-compose.projects.yml oluşturuldu"
+    log_success "docker-compose.projects.yml created"
 }
 
 ##
-# Compose dosyasını başlat
+# Initialize compose file
 ##
 initialize_compose_file() {
     local output="$GENERATED_DIR/docker-compose.projects.yml"
@@ -65,13 +68,13 @@ initialize_compose_file() {
 }
 
 ##
-# Tüm projeleri işle
+# Process all projects
 #
-# Parametreler:
+# Parameters:
 #   $1 - Host root directory
 #
-# Çıktı:
-#   İşlenen proje sayısı
+# Output:
+#   Number of processed projects
 ##
 process_all_projects() {
     local HOST_ROOT_DIR=$1
@@ -81,7 +84,7 @@ process_all_projects() {
     
     # Exit if projects directory doesn't exist
     if [ ! -d "$projects_dir" ]; then
-        log_info "Projects dizini bulunamadı"
+        log_info "Projects directory not found"
         return 0
     fi
     
@@ -92,9 +95,9 @@ process_all_projects() {
         local project_name=$(basename "$project_path")
         local project_json="$project_path/stackvo.json"
         
-        # stackvo.json yoksa atla
+        # Skip if stackvo.json doesn't exist
         if [ ! -f "$project_json" ]; then
-            log_warn "$project_name atlanıyor: stackvo.json bulunamadı"
+            log_warn "$project_name skipped: stackvo.json not found"
             continue
         fi
         
@@ -108,11 +111,11 @@ process_all_projects() {
 }
 
 ##
-# Tek bir projeyi işle
+# Process a single project
 #
-# Parametreler:
-#   $1 - Proje adı
-#   $2 - Proje path
+# Parameters:
+#   $1 - Project name
+#   $2 - Project path
 #   $3 - stackvo.json path
 #   $4 - Host root directory
 ##
@@ -122,25 +125,25 @@ process_single_project() {
     local project_json=$3
     local HOST_ROOT_DIR=$4
     
-    log_info "Proje işleniyor: $project_name"
+    log_info "Processing project: $project_name"
     
-    # Config parse et
+    # Parse config
     local config=$(parse_project_config "$project_json" "$project_name")
     if [ $? -ne 0 ]; then
-        log_error "$project_name için config parse edilemedi"
+        log_error "Failed to parse config for $project_name"
         return 1
     fi
     
     # Extract config values (assigns to global variables)
     extract_config_values "$config"
     
-    # Validate et
+    # Validate
     if ! validate_project_config "$project_name" "$php_version" "$web_server" "$project_domain"; then
-        log_error "$project_name için config geçersiz"
+        log_error "Invalid config for $project_name"
         return 1
     fi
     
-    # Host path'lerini hesapla
+    # Calculate host paths
     local host_paths=$(calculate_project_host_paths "$project_name" "$HOST_ROOT_DIR")
     local host_project_path=$(echo "$host_paths" | grep "^HOST_PROJECT_PATH=" | cut -d= -f2)
     local host_logs_path=$(echo "$host_paths" | grep "^HOST_LOGS_PATH=" | cut -d= -f2)
@@ -158,15 +161,15 @@ process_single_project() {
 }
 
 ##
-# Dockerfile oluştur (dispatcher)
-# Web server tipine göre ilgili modülü çağırır
+# Generate Dockerfile (dispatcher)
+# Calls the appropriate module based on web server type
 #
-# Parametreler:
-#   $1 - Proje adı
+# Parameters:
+#   $1 - Project name
 #   $2 - Web server (nginx/apache/caddy)
 #   $3 - PHP version
-#   $4 - Extensions (boşlukla ayrılmış)
-#   $5 - Proje dockerfile dizini
+#   $4 - Extensions (space-separated)
+#   $5 - Project dockerfile directory
 #   $6 - Document root
 ##
 generate_single_dockerfile() {
@@ -191,19 +194,19 @@ generate_single_dockerfile() {
     local pecl_install=""
     
     for ext in $extensions; do
-        # Sistem paketlerini al
+        # Get system packages
         local packages=$(get_extension_packages "$ext")
         if [ -n "$packages" ]; then
             apt_packages="$apt_packages $packages"
         fi
         
-        # Configure komutunu al
+        # Get configure command
         local configure=$(get_extension_configure "$ext")
         if [ -n "$configure" ]; then
             configure_commands="$configure_commands\\nRUN $configure"
         fi
         
-        # PECL mi yoksa docker-php-ext-install mi?
+        # Is it PECL or docker-php-ext-install?
         if is_pecl_extension "$ext"; then
             pecl_install="$pecl_install $ext"
         else
@@ -226,26 +229,26 @@ generate_single_dockerfile() {
             generate_caddy_dockerfile "$dockerfile" "$php_version" "$apt_packages" "$configure_commands" "$docker_ext_install" "$pecl_install" "$project_name" "$project_dir" "$document_root"
             ;;
         *)
-            log_warn "Bilinmeyen web server: $web_server, nginx kullanılıyor"
+            log_warn "Unknown web server: $web_server, using nginx"
             generate_nginx_dockerfile "$dockerfile" "$php_version" "$apt_packages" "$configure_commands" "$docker_ext_install" "$pecl_install" "$project_name" "$project_dir" "$document_root"
             ;;
     esac
     
-    log_info "$project_name için Dockerfile oluşturuldu: $dockerfile"
+    log_info "Dockerfile created for $project_name: $dockerfile"
 }
 
 ##
-# Compose service oluştur (dispatcher)
-# Web server tipine göre ilgili modülü çağırır
+# Generate compose service (dispatcher)
+# Calls the appropriate module based on web server type
 #
-# Parametreler:
-#   $1 - Proje adı
-#   $2 - Proje path (container path)
+# Parameters:
+#   $1 - Project name
+#   $2 - Project path (container path)
 #   $3 - Web server
 #   $4 - PHP version
-#   $5 - Proje domain
+#   $5 - Project domain
 #   $6 - Document root
-#   $7 - Host proje path
+#   $7 - Host project path
 #   $8 - Host logs path
 #   $9 - Host generated configs dir
 #   $10 - Host generated projects dir
@@ -273,14 +276,14 @@ generate_single_container() {
             generate_caddy_single_container "$project_name" "$project_path" "$project_domain" "$document_root" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir"
             ;;
         *)
-            log_warn "Bilinmeyen web server: $web_server, nginx kullanılıyor"
+            log_warn "Unknown web server: $web_server, using nginx"
             generate_nginx_single_container "$project_name" "$project_path" "$project_domain" "$host_project_path" "$host_logs_path" "$host_generated_configs_dir" "$host_generated_projects_dir"
             ;;
     esac
 }
 
 ##
-# Compose dosyasını sonlandır (network ekle)
+# Finalize compose file (add network)
 ##
 finalize_compose_file() {
     local output="$GENERATED_DIR/docker-compose.projects.yml"
@@ -294,7 +297,7 @@ EOF
 }
 
 ##
-# Compose dosyasını boş services ile sonlandır
+# Finalize compose file with empty services
 ##
 finalize_compose_file_empty() {
     local output="$GENERATED_DIR/docker-compose.projects.yml"

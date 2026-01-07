@@ -61,11 +61,11 @@ cd stackvo
 cp .env.example .env
 
 # 3. Kurulum scriptini çalıştırın
-./cli/stackvo.sh install
+./core/cli/stackvo.sh install
 
 # 4. Başlatın
-./cli/stackvo.sh generate
-./cli/stackvo.sh up
+./core/cli/stackvo.sh generate
+./core/cli/stackvo.sh up
 ```
 
 !!! success "Kurulum Tamamlandı!"
@@ -113,10 +113,10 @@ Kurulumun başarılı olduğunu doğrulayın:
 
 ```bash
 # Tüm servislerin durumu
-./cli/stackvo.sh ps
+./core/cli/stackvo.sh ps
 
 # Logları kontrol et
-./cli/stackvo.sh logs
+./core/cli/stackvo.sh logs
 ```
 
 ### Web UI Kontrolü

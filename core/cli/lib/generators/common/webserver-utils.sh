@@ -1,19 +1,19 @@
 #!/bin/bash
 ###################################################################
 # STACKVO WEBSERVER UTILITIES MODULE
-# Web server'lar için ortak utility fonksiyonlar
+# Common utility functions for web servers
 ###################################################################
 
 ##
-# PHP extension install bloğunu oluştur
-# Apache, Nginx, Caddy için ortak kullanılır
+# Generate PHP extension install block
+# Used commonly for Apache, Nginx, Caddy
 #
-# Parametreler:
-#   $1 - docker-php-ext-install ile kurulacak extension'lar (boşlukla ayrılmış)
-#   $2 - PECL ile kurulacak extension'lar (boşlukla ayrılmış)
+# Parameters:
+#   $1 - Extensions to install with docker-php-ext-install (space-separated)
+#   $2 - Extensions to install with PECL (space-separated)
 #
-# Çıktı:
-#   Dockerfile RUN komutları
+# Output:
+#   Dockerfile RUN commands
 ##
 generate_php_extension_install() {
     local docker_ext_install=$1
@@ -21,14 +21,14 @@ generate_php_extension_install() {
     
     local output=""
     
-    # docker-php-ext-install extension'ları
+    # docker-php-ext-install extensions
     if [ -n "$docker_ext_install" ]; then
         output+="# Install PHP extensions\n"
         output+="RUN docker-php-ext-install$docker_ext_install\n"
         output+="\n"
     fi
     
-    # PECL extension'ları
+    # PECL extensions
     if [ -n "$pecl_install" ]; then
         output+="# Install PECL extensions\n"
         output+="RUN pecl install$pecl_install \\\\\n"
@@ -40,13 +40,13 @@ generate_php_extension_install() {
 }
 
 ##
-# Sistem bağımlılıklarını install bloğunu oluştur
+# Generate system dependencies install block
 #
-# Parametreler:
-#   $1 - APT paketleri (boşlukla ayrılmış)
+# Parameters:
+#   $1 - APT packages (space-separated)
 #
-# Çıktı:
-#   Dockerfile RUN komutu
+# Output:
+#   Dockerfile RUN command
 ##
 generate_system_dependencies_install() {
     local apt_packages=$1
@@ -65,16 +65,16 @@ EOF
 }
 
 ##
-# Development tools install bloğunu oluştur
-# Composer, Node.js, npm, yarn gibi araçlar
+# Generate development tools install block
+# Tools like Composer, Node.js, npm, yarn
 #
-# Parametreler:
-#   $1 - Tool listesi (virgülle ayrılmış, örn: "composer,nodejs")
-#   $2 - Composer version (varsayılan: latest)
-#   $3 - Node.js version (varsayılan: 20)
+# Parameters:
+#   $1 - Tool list (comma-separated, e.g., "composer,nodejs")
+#   $2 - Composer version (default: latest)
+#   $3 - Node.js version (default: 20)
 #
-# Çıktı:
-#   Dockerfile RUN komutları
+# Output:
+#   Dockerfile RUN commands
 ##
 generate_development_tools_install() {
     local default_tools=$1
@@ -98,16 +98,16 @@ generate_development_tools_install() {
 }
 
 ##
-# Supervisord PHP-FPM konfigürasyonunu oluştur
-# Nginx ve Caddy için ortak kullanılır
+# Generate Supervisord PHP-FPM configuration
+# Used commonly for Nginx and Caddy
 #
-# Parametreler:
-#   $1 - Proje dizini (config dosyasının yazılacağı yer)
-#   $2 - Web server adı (nginx veya caddy)
+# Parameters:
+#   $1 - Project directory (where config file will be written)
+#   $2 - Web server name (nginx or caddy)
 #   $3 - Web server command
 #
-# Çıktı:
-#   supervisord.conf dosyası oluşturulur
+# Output:
+#   supervisord.conf file is created
 ##
 generate_supervisord_config() {
     local project_dir=$1
@@ -132,7 +132,7 @@ stderr_logfile_maxbytes=0
 
 SUPERVISORCONF
 
-    # Web server programını ekle
+    # Add web server program
     cat >> "$project_dir/supervisord.conf" <<EOF
 [program:${webserver_name}]
 command=${webserver_command}
@@ -146,15 +146,15 @@ EOF
 }
 
 ##
-# Traefik labels bloğunu oluştur
-# Tüm web server'lar için ortak
+# Generate Traefik labels block
+# Common for all web servers
 #
-# Parametreler:
-#   $1 - Traefik-safe proje adı (sanitize edilmiş)
-#   $2 - Proje domain
+# Parameters:
+#   $1 - Traefik-safe project name (sanitized)
+#   $2 - Project domain
 #
-# Çıktı:
-#   Docker Compose labels bloğu
+# Output:
+#   Docker Compose labels block
 ##
 generate_traefik_labels() {
     local traefik_safe_name=$1
@@ -171,15 +171,15 @@ EOF
 }
 
 ##
-# Ortak volume mounts bloğunu oluştur
+# Generate common volume mounts block
 #
-# Parametreler:
-#   $1 - Host proje path
+# Parameters:
+#   $1 - Host project path
 #   $2 - Host logs path
-#   $3 - Custom config mount (opsiyonel, boş string olabilir)
+#   $3 - Custom config mount (optional, can be empty string)
 #
-# Çıktı:
-#   Docker Compose volumes bloğu
+# Output:
+#   Docker Compose volumes block
 ##
 generate_common_volumes() {
     local host_project_path=$1
@@ -192,18 +192,18 @@ generate_common_volumes() {
       - ${host_logs_path}:/var/log
 EOF
     
-    # Custom config mount varsa ekle
+    # Add custom config mount if exists
     if [ -n "$custom_config_mount" ]; then
         echo "$custom_config_mount"
     fi
 }
 
 ##
-# PHP-FPM'i TCP port'ta dinleyecek şekilde yapılandır
-# Nginx ve Caddy için ortak
+# Configure PHP-FPM to listen on TCP port
+# Common for Nginx and Caddy
 #
-# Çıktı:
-#   Dockerfile RUN komutu
+# Output:
+#   Dockerfile RUN command
 ##
 generate_php_fpm_tcp_config() {
     cat <<'EOF'
@@ -213,14 +213,14 @@ EOF
 }
 
 ##
-# Entrypoint script oluştur
-# Log dizinlerini runtime'da oluşturur
+# Generate entrypoint script
+# Creates log directories at runtime
 #
-# Parametreler:
-#   $1 - Log dizini adı (nginx, caddy, apache)
+# Parameters:
+#   $1 - Log directory name (nginx, caddy, apache)
 #
-# Çıktı:
-#   Dockerfile RUN komutu
+# Output:
+#   Dockerfile RUN command
 ##
 generate_entrypoint_script() {
     local log_dir=$1
@@ -237,16 +237,16 @@ EOF
 }
 
 ##
-# Dockerfile base image bloğunu oluştur
+# Generate Dockerfile base image block
 #
-# Parametreler:
-#   $1 - Proje adı
-#   $2 - Web server adı (Apache, Nginx, Caddy)
+# Parameters:
+#   $1 - Project name
+#   $2 - Web server name (Apache, Nginx, Caddy)
 #   $3 - PHP version
 #   $4 - PHP image variant (apache, fpm)
 #
-# Çıktı:
-#   Dockerfile FROM ve comment satırları
+# Output:
+#   Dockerfile FROM and comment lines
 ##
 generate_dockerfile_header() {
     local project_name=$1

@@ -227,7 +227,7 @@ Stackvo, sistem gereksinimlerini otomatik kontrol eden bir script sağlar:
 
 ```bash
 cd stackvo
-./cli/check-requirements.sh
+./core/cli/check-requirements.sh
 ```
 
 **Örnek Çıktı:**

@@ -1,18 +1,18 @@
 #!/bin/bash
 ###################################################################
 # STACKVO APACHE COMPOSE GENERATOR MODULE
-# Apache compose service oluşturma
+# Apache compose service generation
 ###################################################################
 
 ##
-# Apache Single Container compose service oluştur
+# Generate Apache single container compose service
 #
-# Parametreler:
-#   $1 - Proje adı
-#   $2 - Proje path (container path)
+# Parameters:
+#   $1 - Project name
+#   $2 - Project path (container path)
 #   $3 - PHP version
-#   $4 - Proje domain
-#   $5 - Host proje path
+#   $4 - Project domain
+#   $5 - Host project path
 #   $6 - Host logs path
 #   $7 - Host generated projects dir
 ##
@@ -25,16 +25,16 @@ generate_apache_single_container() {
     local host_logs_path=$6
     local host_generated_projects_dir=$7
     
-    # Traefik için sanitize edilmiş proje adı
+    # Sanitized project name for Traefik
     local traefik_safe_name=$(sanitize_project_name_for_traefik "$project_name")
     
-    # Apache config mount path belirle
+    # Determine Apache config mount path
     local apache_config_mount=$(get_apache_config_mount "$project_path" "$host_project_path")
     
-    # Compose service oluştur
+    # Create compose service
     cat <<EOF
   ${project_name}:
-    profiles: ["projects", "project-${project_name}"]  # --projects ile tümü, --profile project-{name} ile sadece bu proje
+    profiles: ["projects", "project-${project_name}"]  # --projects for all, --profile project-{name} for this project only
     build:
       context: ./projects/${project_name}
       dockerfile: Dockerfile
@@ -62,12 +62,12 @@ EOF
 }
 
 ##
-# Apache volume mounts oluştur
+# Generate Apache volume mounts
 #
-# Parametreler:
-#   $1 - Host proje path
+# Parameters:
+#   $1 - Host project path
 #   $2 - Host logs path
-#   $3 - Apache config mount (opsiyonel)
+#   $3 - Apache config mount (optional)
 ##
 generate_apache_volumes() {
     local host_project_path=$1
@@ -80,40 +80,40 @@ generate_apache_volumes() {
       - ${host_logs_path}:/var/log/apache2
 EOF
     
-    # Custom config mount varsa ekle
+    # Add custom config mount if exists
     if [ -n "$apache_config_mount" ]; then
         echo "$apache_config_mount"
     fi
 }
 
 ##
-# Apache config mount path belirle
+# Determine Apache config mount path
 #
-# Parametreler:
-#   $1 - Proje path (container path)
-#   $2 - Host proje path
+# Parameters:
+#   $1 - Project path (container path)
+#   $2 - Host project path
 #
-# Çıktı:
-#   Config mount satırı veya boş string
+# Output:
+#   Config mount line or empty string
 ##
 get_apache_config_mount() {
     local project_path=$1
     local host_project_path=$2
     
-    # .stackvo/apache.conf var mı?
+    # Does .stackvo/apache.conf exist?
     if [ -f "$project_path/.stackvo/apache.conf" ]; then
         echo "      - ${host_project_path}/.stackvo/apache.conf:/etc/apache2/sites-available/000-default.conf:ro"
         return 0
     fi
     
-    # Proje root'unda apache.conf var mı?
+    # Does apache.conf exist in project root?
     if [ -f "$project_path/apache.conf" ]; then
         echo "      - ${host_project_path}/apache.conf:/etc/apache2/sites-available/000-default.conf:ro"
         return 0
     fi
     
-    # Custom config yok - generated config kullanılacak
-    # Generated config'i oluştur
+    # No custom config - generated config will be used
+    # Create generated config
     mkdir -p "$GENERATED_CONFIGS_DIR"
     local project_name=$(basename "$project_path")
     local template_file="$ROOT_DIR/core/templates/servers/apache/default.conf"

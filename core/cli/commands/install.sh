@@ -86,9 +86,24 @@ if bash "$CLI_DIR/utils/generate-ssl-certs.sh" 2>&1 | grep -E '^\[|^🔐|^✅|^�
     # This ensures normal user can create subdirectories during 'generate' command
     if [ -d "$STACKVO_ROOT/generated" ]; then
         if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
-            # Running as sudo, fix ownership to actual user (macOS uses 'staff' group)
-            chown -R "$SUDO_USER:staff" "$STACKVO_ROOT/generated"
-            log_info "Fixed ownership of generated directory"
+            # Read HOST_UID and HOST_GID from .env
+            if [ -f "$STACKVO_ROOT/.env" ]; then
+                HOST_UID=$(grep "^HOST_UID=" "$STACKVO_ROOT/.env" | cut -d= -f2)
+                HOST_GID=$(grep "^HOST_GID=" "$STACKVO_ROOT/.env" | cut -d= -f2)
+                
+                if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+                    chown -R "$HOST_UID:$HOST_GID" "$STACKVO_ROOT/generated"
+                    log_info "Fixed ownership of generated directory"
+                else
+                    # Fallback to SUDO_USER:staff for macOS compatibility
+                    chown -R "$SUDO_USER:staff" "$STACKVO_ROOT/generated"
+                    log_info "Fixed ownership of generated directory"
+                fi
+            else
+                # Fallback to SUDO_USER:staff for macOS compatibility
+                chown -R "$SUDO_USER:staff" "$STACKVO_ROOT/generated"
+                log_info "Fixed ownership of generated directory"
+            fi
         fi
     fi
 else
@@ -107,27 +122,70 @@ else
     fi
 fi
 
+# Create projects directory if it doesn't exist
+log_info "Creating projects directory..."
+if [ ! -d "$STACKVO_ROOT/projects" ]; then
+    mkdir -p "$STACKVO_ROOT/projects"
+    
+    # Set ownership to HOST_UID:HOST_GID from .env
+    if [ -f "$STACKVO_ROOT/.env" ]; then
+        HOST_UID=$(grep "^HOST_UID=" "$STACKVO_ROOT/.env" | cut -d= -f2)
+        HOST_GID=$(grep "^HOST_GID=" "$STACKVO_ROOT/.env" | cut -d= -f2)
+        
+        if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+            chown -R "$HOST_UID:$HOST_GID" "$STACKVO_ROOT/projects"
+            log_info "Set ownership to $HOST_UID:$HOST_GID"
+        fi
+    fi
+    
+    log_success "Projects directory created"
+else
+    log_success "Projects directory already exists"
+fi
+
+# Create logs directory if it doesn't exist
+log_info "Creating logs directory..."
+if [ ! -d "$STACKVO_ROOT/logs" ]; then
+    mkdir -p "$STACKVO_ROOT/logs/services"
+    mkdir -p "$STACKVO_ROOT/logs/projects"
+    
+    # Set ownership to HOST_UID:HOST_GID from .env
+    if [ -f "$STACKVO_ROOT/.env" ]; then
+        HOST_UID=$(grep "^HOST_UID=" "$STACKVO_ROOT/.env" | cut -d= -f2)
+        HOST_GID=$(grep "^HOST_GID=" "$STACKVO_ROOT/.env" | cut -d= -f2)
+        
+        if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+            chown -R "$HOST_UID:$HOST_GID" "$STACKVO_ROOT/logs"
+            log_info "Set ownership to $HOST_UID:$HOST_GID"
+        fi
+    fi
+    
+    log_success "Logs directory created"
+else
+    log_success "Logs directory already exists"
+fi
+
 echo ""
 log_success "Installation completed. Available commands:"
 echo ""
 echo "📋 Available Commands:"
 echo ""
-echo "  ./cli/stackvo.sh generate          → Generate all configuration files"
-echo "  ./cli/stackvo.sh up                → Start all Stackvo services"
-echo "  ./cli/stackvo.sh down              → Stop all Stackvo services"
-echo "  ./cli/stackvo.sh restart           → Restart all Stackvo services"
-echo "  ./cli/stackvo.sh ps                → List running containers"
-echo "  ./cli/stackvo.sh logs [service]    → View service logs"
-echo "  ./cli/stackvo.sh pull              → Pull latest Docker images"
-echo "  ./cli/stackvo.sh --help            → Show all available commands"
+echo "  ./core/cli/stackvo.sh generate          → Generate all configuration files"
+echo "  ./core/cli/stackvo.sh up                → Start all Stackvo services"
+echo "  ./core/cli/stackvo.sh down              → Stop all Stackvo services"
+echo "  ./core/cli/stackvo.sh restart           → Restart all Stackvo services"
+echo "  ./core/cli/stackvo.sh ps                → List running containers"
+echo "  ./core/cli/stackvo.sh logs [service]    → View service logs"
+echo "  ./core/cli/stackvo.sh pull              → Pull latest Docker images"
+echo "  ./core/cli/stackvo.sh --help            → Show all available commands"
 echo ""
 echo "🚀 Quick Start:"
 echo ""
 echo "  1. Generate configurations:"
-echo "     ./cli/stackvo.sh generate"
+echo "     ./core/cli/stackvo.sh generate"
 echo ""
 echo "  2. Start services:"
-echo "     ./cli/stackvo.sh up"
+echo "     ./core/cli/stackvo.sh up"
 echo ""
 echo "  3. StackVo dashboard:"
 echo "     https://stackvo.loc"
@@ -135,5 +193,5 @@ echo ""
 echo "  4. Traefik dashboard:"
 echo "     https://traefik.stackvo.loc"
 echo ""
-echo "📖 For more information, run: ./cli/stackvo.sh --help"
+echo "📖 For more information, run: ./core/cli/stackvo.sh --help"
 echo ""

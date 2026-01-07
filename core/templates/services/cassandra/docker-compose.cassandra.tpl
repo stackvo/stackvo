@@ -4,7 +4,7 @@
 
 services:
   cassandra:
-    profiles: ["services", "cassandra"]  # --services ile tümü, --profile cassandra ile sadece bu servis
+    profiles: ["services", "cassandra"]  # --services for all, --profile cassandra for this service only
     image: "cassandra:{{ SERVICE_CASSANDRA_VERSION }}"
     container_name: "stackvo-cassandra"
     restart: unless-stopped
