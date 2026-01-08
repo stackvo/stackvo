@@ -5,7 +5,7 @@ description: Shows how to configure and use services in Stackvo.
 
 # Service Configuration
 
-This guide shows in detail how to configure and use services in Stackvo. It explains the activation, PHP connection, CLI access, and management UI usage of 14 services, from databases like MySQL, PostgreSQL, MongoDB to cache systems like Redis, Memcached, message queues like RabbitMQ, Kafka to search and indexing tools like Elasticsearch, Kibana.
+This guide detailedly shows how to configure and use services in Stackvo. It explains activation, connection from PHP, CLI access, and management UI usage for 14 services ranging from databases like MySQL, PostgreSQL, MongoDB to cache systems like Redis, Memcached, message queues like RabbitMQ, Kafka, and search and indexing tools like Elasticsearch, Kibana.
 
 ---
 
@@ -23,10 +23,10 @@ SERVICE_REDIS_ENABLE=true
 SERVICE_RABBITMQ_ENABLE=true
 
 # Generate configurations
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Start services
-./core/cli/stackvo.sh up
+./stackvo.sh up
 ```
 
 ---
@@ -45,7 +45,7 @@ SERVICE_MYSQL_USER=stackvo
 SERVICE_MYSQL_PASSWORD=stackvo
 ```
 
-**PHP Connection:**
+**Connection from PHP:**
 ```php
 <?php
 $pdo = new PDO(
@@ -57,7 +57,7 @@ $pdo = new PDO(
 
 **CLI Access:**
 ```bash
-# From container
+# Inside container
 docker exec -it stackvo-mysql mysql -u root -proot
 
 # From host
@@ -80,7 +80,7 @@ SERVICE_POSTGRES_DB=stackvo
 SERVICE_POSTGRES_USER=stackvo
 ```
 
-**PHP Connection:**
+**Connection from PHP:**
 ```php
 <?php
 $pdo = new PDO(
@@ -92,7 +92,7 @@ $pdo = new PDO(
 
 **CLI Access:**
 ```bash
-# From container
+# Inside container
 docker exec -it stackvo-postgres psql -U stackvo -d stackvo
 
 # From host
@@ -114,7 +114,7 @@ SERVICE_MONGO_INITDB_ROOT_USERNAME=root
 SERVICE_MONGO_INITDB_ROOT_PASSWORD=root
 ```
 
-**PHP Connection:**
+**Connection from PHP:**
 ```php
 <?php
 $client = new MongoDB\Client(
@@ -125,7 +125,7 @@ $db = $client->stackvo;
 
 **CLI Access:**
 ```bash
-# From container
+# Inside container
 docker exec -it stackvo-mongo mongosh -u root -p root --authenticationDatabase admin
 ```
 
@@ -147,7 +147,7 @@ SERVICE_REDIS_VERSION=7.0
 SERVICE_REDIS_PASSWORD=
 ```
 
-**PHP Usage:**
+**Usage from PHP:**
 ```php
 <?php
 $redis = new Redis();
@@ -197,7 +197,7 @@ SERVICE_MEMCACHED_ENABLE=true
 SERVICE_MEMCACHED_VERSION=1.6
 ```
 
-**PHP Usage:**
+**Usage from PHP:**
 ```php
 <?php
 $memcached = new Memcached();
@@ -229,7 +229,7 @@ SERVICE_RABBITMQ_DEFAULT_USER=admin
 SERVICE_RABBITMQ_DEFAULT_PASS=admin
 ```
 
-**PHP Usage:**
+**Usage from PHP:**
 ```php
 <?php
 use PhpAmqpLib\Connection\AMQPStreamConnection;
@@ -243,14 +243,14 @@ $connection = new AMQPStreamConnection(
 );
 $channel = $connection->channel();
 
-// Create queue
+// Declare queue
 $channel->queue_declare('hello', false, false, false, false);
 
-// Send message
+// Publish message
 $msg = new AMQPMessage('Hello World!');
 $channel->basic_publish($msg, '', 'hello');
 
-// Receive message
+// Consume message
 $callback = function ($msg) {
     echo 'Received: ', $msg->body, "\n";
 };
@@ -272,7 +272,7 @@ SERVICE_KAFKA_ENABLE=true
 SERVICE_KAFKA_VERSION=7.5.0
 ```
 
-**PHP Usage:**
+**Usage from PHP:**
 ```php
 <?php
 // rdkafka extension required
@@ -303,7 +303,7 @@ SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_ELASTICSEARCH_VERSION=8.11.3
 ```
 
-**PHP Usage:**
+**Usage from PHP:**
 ```php
 <?php
 use Elasticsearch\ClientBuilder;
@@ -410,7 +410,7 @@ SERVICE_BLACKFIRE_SERVER_TOKEN=
 
 ## Service Management
 
-### Start/Stop Service
+### Starting/Stopping Services
 
 ```bash
 # Start specific service
@@ -432,7 +432,7 @@ docker compose -f generated/stackvo.yml \
 ### Service Logs
 
 ```bash
-# Watch service logs
+# Follow service logs
 docker logs -f stackvo-mysql
 docker logs -f stackvo-redis
 docker logs -f stackvo-rabbitmq
@@ -444,7 +444,7 @@ docker logs -f stackvo-rabbitmq
 # List running services
 docker ps --filter "name=stackvo-"
 
-# Specific service details
+# Inspect specific service
 docker inspect stackvo-mysql
 ```
 
@@ -458,18 +458,18 @@ docker inspect stackvo-mysql
 # Check logs
 docker logs stackvo-<service-name>
 
-# Check port conflicts
+# Check port conflict
 docker ps --format "table {{.Names}}\t{{.Ports}}"
 
 # Regenerate configuration
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh restart
+./stackvo.sh generate
+./stackvo.sh restart
 ```
 
 ### Connection Error
 
 ```bash
-# Network check
+# Check network
 docker network inspect stackvo-net
 
 # Ping test

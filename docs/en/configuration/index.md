@@ -1,17 +1,17 @@
 ---
-title: Konfigürasyon
-description: Stackvo konfigürasyon kılavuzu - Tüm platformlar için adım adım konfigürasyon
+title: Configuration
+description: Stackvo configuration guide - Step-by-step configuration for all platforms
 ---
 
-# Konfigürasyon
+# Configuration
 
-Stackvo'un konfigürasyon sistemi esnek ve katmanlı bir yapıya sahiptir. Bu bölüm, global sistem ayarlarından proje bazlı özelleştirmelere, özel webserver konfigürasyonlarından runtime ayarlarına kadar her seviyede nasıl tam kontrol sağlayabileceğinizi detaylı olarak açıklamaktadır. Üç farklı konfigürasyon seviyesi ile maksimum esneklik ve özelleştirme imkanı sunulmaktadır.
+Stackvo's configuration system has a flexible and multi-layered structure. This section detailedly explains how you can achieve full control at every level, from global system settings to project-based customizations, from custom webserver configurations to runtime settings. With three different configuration levels, maximum flexibility and customization possibilities are offered.
 
 ---
 
-## Konfigürasyon Seviyeleri
+## Configuration Levels
 
-Stackvo, 3 farklı seviyede konfigürasyon sunar. Her seviye farklı bir amaç için tasarlanmıştır ve birlikte çalışarak maksimum esneklik sağlar:
+Stackvo offers configuration at 3 different levels. Each level is designed for a different purpose and works together to provide maximum flexibility:
 
 <div class="grid cards" markdown>
 
@@ -19,23 +19,23 @@ Stackvo, 3 farklı seviyede konfigürasyon sunar. Her seviye farklı bir amaç i
 
     ---
 
-    `.env` dosyası üzerinden yönetilir ve tüm sistemi etkiler
+    Managed via `.env` file and affects the entire system
 
-    [:octicons-arrow-right-24: Global Konfigürasyon](global.md)
+    [:octicons-arrow-right-24: Global Configuration](global.md)
 
--   :material-file-cog:{ .lg .middle } __Proje__
-
-    ---
-
-    `stackvo.json` dosyası ile proje özelinde ayarlar tanımlanır
-
-    [:octicons-arrow-right-24: Proje Konfigürasyonu](project.md)
-
--   :material-file-edit:{ .lg .middle } __Özel__
+-   :material-file-cog:{ .lg .middle } __Project__
 
     ---
 
-    `.stackvo/` dizininde özel webserver ve runtime ayarları
+    Project-specific settings are defined with `stackvo.json` file
 
-    [:octicons-arrow-right-24: Özel Konfigürasyon](custom.md)
+    [:octicons-arrow-right-24: Project Configuration](project.md)
+
+-   :material-file-edit:{ .lg .middle } __Custom__
+
+    ---
+
+    Custom webserver and runtime settings in `.stackvo/` directory
+
+    [:octicons-arrow-right-24: Custom Configuration](custom.md)
 </div>

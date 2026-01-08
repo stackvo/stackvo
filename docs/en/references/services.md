@@ -1,6 +1,6 @@
 # Services Reference
 
-Detailed reference for 14 supported services. This page includes image information, port settings, configuration parameters, and connection details for all services, from databases (MySQL, PostgreSQL, MongoDB, MariaDB, Cassandra) to cache systems (Redis, Memcached), message queues (RabbitMQ, Kafka) to search and indexing tools (Elasticsearch, Kibana), monitoring tools (Grafana) to developer tools (MailHog, Blackfire).
+Detailed reference for 14 supported services. This page includes image information, port settings, configuration parameters, and connection details for all services ranging from databases (MySQL, PostgreSQL, MongoDB, MariaDB, Cassandra) to cache systems (Redis, Memcached), message queues (RabbitMQ, Kafka), search and indexing tools (Elasticsearch, Kibana), monitoring tools (Grafana) to developer tools (MailHog, Blackfire).
 
 ## Service Categories
 

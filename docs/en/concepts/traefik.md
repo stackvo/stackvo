@@ -1,23 +1,23 @@
 ---
 title: Traefik
-description: Stackvo'un reverse proxy ve SSL/TLS yönetim sistemidir. Otomatik servis keşfi ve routing sağlar.
+description: Stackvo's reverse proxy and SSL/TLS management system. Provides automatic service discovery and routing.
 ---
 
 # Traefik
 
-Traefik, Stackvo'un reverse proxy ve SSL/TLS yönetim sistemidir. Bu sayfa, modern reverse proxy ve load balancer olan Traefik'in otomatik servis keşfi, dinamik konfigürasyon, Docker labels ile routing, SSL/TLS sertifika yönetimi, middleware kullanımı ve dashboard özelliklerini detaylı olarak açıklamaktadır. Traefik, container'ları otomatik olarak keşfeder ve route oluşturur.
+Traefik is Stackvo's reverse proxy and SSL/TLS management system. This page detailedly explains Traefik, a modern reverse proxy and load balancer, its automatic service discovery, dynamic configuration, routing with Docker labels, SSL/TLS certificate management, middleware usage, and dashboard features. Traefik automatically discovers containers and creates routes.
 
 ---
 
-## Traefik Nedir?
+## What is Traefik?
 
-Traefik, modern bir reverse proxy ve load balancer'dır. Docker container'larını otomatik olarak keşfeder ve route'lar.
+Traefik is a modern reverse proxy and load balancer. It automatically discovers and routes Docker containers.
 
-**Avantajlar:**
-- Otomatik servis keşfi (Docker labels)
-- Dinamik konfigürasyon (yeniden başlatma gerektirmez)
-- SSL/TLS yönetimi (Let's Encrypt desteği)
-- HTTP → HTTPS yönlendirme
+**Advantages:**
+- Automatic service discovery (Docker labels)
+- Dynamic configuration (no restart required)
+- SSL/TLS management (Let's Encrypt support)
+- HTTP → HTTPS redirection
 - Load balancing
 - Web dashboard
 
@@ -49,11 +49,11 @@ services:
 
 ---
 
-## Konfigürasyon
+## Configuration
 
 ### Static Configuration
 
-**Dosya:** `core/traefik/traefik.yml`
+**File:** `core/traefik/traefik.yml`
 
 ```yaml
 # Entrypoints
@@ -96,12 +96,12 @@ accessLog:
 
 ### Dynamic Configuration
 
-**Dosya:** `core/traefik/dynamic/routes.yml` (auto-generated)
+**File:** `core/traefik/dynamic/routes.yml` (auto-generated)
 
 ```yaml
 http:
   routers:
-    # Servis route'ları
+    # Service routes
     mysql:
       rule: "Host(`mysql.stackvo.loc`)"
       service: mysql
@@ -116,7 +116,7 @@ http:
         - websecure
       tls: {}
     
-    # Proje route'ları
+    # Project routes
     project1:
       rule: "Host(`project1.loc`)"
       service: project1
@@ -151,9 +151,9 @@ tls:
 
 ## Docker Labels
 
-Traefik, Docker container'larındaki label'ları okuyarak otomatik routing yapar.
+Traefik performs automatic routing by reading labels on Docker containers.
 
-### Servis Labels
+### Service Labels
 
 ```yaml
 services:
@@ -168,7 +168,7 @@ services:
       - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
 ```
 
-### Proje Labels
+### Project Labels
 
 ```yaml
 services:
@@ -185,18 +185,18 @@ services:
 
 ---
 
-## SSL/TLS Yönetimi
+## SSL/TLS Management
 
-### Self-Signed Sertifikalar
+### Self-Signed Certificates
 
-Stackvo, local development için self-signed sertifikalar kullanır:
+Stackvo uses self-signed certificates for local development:
 
 ```bash
-# Sertifika oluşturma
+# Generate certificates
 ./core/cli/utils/generate-ssl-certs.sh
 ```
 
-**Oluşturulan Dosyalar:**
+**Generated Files:**
 - `core/certs/stackvo-wildcard.crt`
 - `core/certs/stackvo-wildcard.key`
 
@@ -208,7 +208,7 @@ Stackvo, local development için self-signed sertifikalar kullanır:
 
 ### Let's Encrypt (Production)
 
-Production ortamında Let's Encrypt kullanılabilir:
+Let's Encrypt can be used in production environment:
 
 ```yaml
 # .env
@@ -216,7 +216,7 @@ LETSENCRYPT_ENABLE=true
 LETSENCRYPT_EMAIL=admin@yourdomain.com
 ```
 
-**Not:** Let's Encrypt sadece public domain'ler için çalışır (`.loc` gibi local domain'lerde çalışmaz).
+**Note:** Let's Encrypt only works for public domains (does not work on local domains like `.loc`).
 
 ---
 
@@ -225,7 +225,7 @@ LETSENCRYPT_EMAIL=admin@yourdomain.com
 ### Host-based Routing
 
 ```yaml
-# Domain bazlı routing
+# Domain based routing
 rule: "Host(`project1.loc`)"
 rule: "Host(`mysql.stackvo.loc`)"
 ```
@@ -233,7 +233,7 @@ rule: "Host(`mysql.stackvo.loc`)"
 ### Path-based Routing
 
 ```yaml
-# Path bazlı routing
+# Path based routing
 rule: "Host(`stackvo.loc`) && PathPrefix(`/api`)"
 rule: "Host(`stackvo.loc`) && Path(`/admin`)"
 ```
@@ -241,7 +241,7 @@ rule: "Host(`stackvo.loc`) && Path(`/admin`)"
 ### Multiple Domains
 
 ```yaml
-# Birden fazla domain
+# Multiple domains
 rule: "Host(`project1.loc`) || Host(`www.project1.loc`)"
 ```
 
@@ -290,26 +290,26 @@ http:
 
 ## Dashboard
 
-Traefik dashboard'a erişim:
+Access to Traefik dashboard:
 
 ```
 http://localhost:8080
 ```
 
-**Dashboard Özellikleri:**
-- Aktif router'lar
-- Aktif servisler
-- Middleware'ler
-- TLS sertifikaları
+**Dashboard Features:**
+- Active routers
+- Active services
+- Middlewares
+- TLS certificates
 - Real-time metrics
 
 ---
 
-## Otomatik Servis Keşfi
+## Automatic Service Discovery
 
-Traefik, Docker container'larını otomatik olarak keşfeder:
+Traefik automatically discovers Docker containers:
 
-### 1. Container Başlatma
+### 1. Start Container
 
 ```bash
 docker run -d \
@@ -322,17 +322,17 @@ docker run -d \
   nginx:alpine
 ```
 
-### 2. Traefik Otomatik Keşif
+### 2. Traefik Auto-Discovery
 
-Traefik, container'ı otomatik olarak keşfeder ve route oluşturur.
+Traefik automatically discovers the container and creates a route.
 
-### 3. Erişim
+### 3. Access
 
 ```
 https://my-service.loc
 ```
 
-**Not:** `/etc/hosts` dosyasına domain eklemeyi unutmayın:
+**Note:** Don't forget to add the domain to the `/etc/hosts` file:
 ```
 127.0.0.1  my-service.loc
 ```
@@ -341,7 +341,7 @@ https://my-service.loc
 
 ## Load Balancing
 
-Traefik, birden fazla instance arasında load balancing yapar:
+Traefik balances load between multiple instances:
 
 ```yaml
 services:
@@ -360,61 +360,61 @@ services:
       - "traefik.http.services.myapp.loadbalancer.server.port=80"
 ```
 
-Traefik, `myapp.loc` için gelen istekleri `app-1` ve `app-2` arasında dağıtır.
+Traefik distributes requests for `myapp.loc` between `app-1` and `app-2`.
 
 ---
 
 ## Troubleshooting
 
-### Traefik Logları
+### Traefik Logs
 
 ```bash
-# Container logları
+# Container logs
 docker logs stackvo-traefik
 
-# Access logları
+# Access logs
 cat logs/traefik/access.log
 
-# Error logları
+# Error logs
 docker logs stackvo-traefik 2>&1 | grep ERROR
 ```
 
-### Dashboard Kontrol
+### Dashboard Check
 
 ```
 http://localhost:8080
 ```
 
-Dashboard'da:
-- Router'ların aktif olduğunu kontrol edin
-- Service'lerin healthy olduğunu kontrol edin
-- TLS sertifikalarının yüklendiğini kontrol edin
+In Dashboard:
+- Check if routers are active
+- Check if services are healthy
+- Check if TLS certificates are loaded
 
 ### Route Test
 
 ```bash
-# HTTP isteği
+# HTTP request
 curl -H "Host: project1.loc" http://localhost
 
-# HTTPS isteği
+# HTTPS request
 curl -k -H "Host: project1.loc" https://localhost
 ```
 
-### DNS Kontrol
+### DNS Check
 
 ```bash
-# /etc/hosts kontrolü
+# /etc/hosts check
 cat /etc/hosts | grep stackvo
 cat /etc/hosts | grep project1
 ```
 
-### Container Network Kontrol
+### Container Network Check
 
 ```bash
-# Traefik'in network'e bağlı olduğunu kontrol et
+# Check if Traefik is connected to network
 docker inspect stackvo-traefik | grep -A 10 Networks
 
-# Container'ın Traefik tarafından görüldüğünü kontrol et
+# Check if container is seen by Traefik
 docker exec stackvo-traefik wget -O- http://stackvo-project1-web
 ```
 
@@ -422,9 +422,9 @@ docker exec stackvo-traefik wget -O- http://stackvo-project1-web
 
 ## Best Practices
 
-### 1. Label Kullanımı
+### 1. Label Usage
 
-✅ **Doğru:**
+✅ **Correct:**
 ```yaml
 labels:
   - "traefik.enable=true"
@@ -433,9 +433,9 @@ labels:
   - "traefik.http.routers.myapp.tls=true"
 ```
 
-### 2. Port Belirtme
+### 2. Port Specification
 
-Eğer container birden fazla port expose ediyorsa, port belirtin:
+If container exposes multiple ports, specify the port:
 
 ```yaml
 labels:
@@ -444,21 +444,18 @@ labels:
 
 ### 3. Network
 
-Tüm container'lar `stackvo-net` network'ünde olmalı:
+All containers must be in `stackvo-net` network:
 
 ```yaml
 networks:
   - stackvo-net
 ```
 
-### 4. HTTPS Kullanımı
+### 4. HTTPS Usage
 
-Production'da her zaman HTTPS kullanın:
+Always use HTTPS in production:
 
 ```yaml
 entryPoints:
   - websecure
 ```
-
----
-

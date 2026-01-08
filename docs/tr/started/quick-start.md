@@ -69,10 +69,10 @@ EOF
 
 ```bash
 # Konfigürasyonu yeniden üret
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Container'ları yeniden başlat
-./core/cli/stackvo.sh restart
+./stackvo.sh restart
 
 # Proje container'ını kontrol et
 docker ps | grep mylaravel

@@ -5,7 +5,7 @@ Stackvo CLI komutlarının tam referansı. Bu sayfa, generate, up, down, restart
 ## Kurulum
 
 ```bash
-./core/cli/stackvo.sh install
+./stackvo.sh install
 ```
 
 Kurulumdan sonra `stackvo` komutu sistem genelinde kullanılabilir.
@@ -20,7 +20,7 @@ Konfigürasyon dosyalarını üretir.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh generate [MODE] [OPTIONS]
+./stackvo.sh generate [MODE] [OPTIONS]
 ```
 
 **Modes:**
@@ -34,16 +34,16 @@ Konfigürasyon dosyalarını üretir.
 **Örnekler:**
 ```bash
 # Tümünü üret
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Sadece projeleri üret
-./core/cli/stackvo.sh generate projects
+./stackvo.sh generate projects
 
 # Sadece servisleri üret
-./core/cli/stackvo.sh generate services
+./stackvo.sh generate services
 
 # Tools'u kaldır
-./core/cli/stackvo.sh generate --uninstall-tools
+./stackvo.sh generate --uninstall-tools
 ```
 
 **Çıktı Dosyaları:**
@@ -61,7 +61,7 @@ Servisleri başlatır. Varsayılan olarak minimal mode (sadece core servisler).
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh up [MODE_OPTIONS]
+./stackvo.sh up [MODE_OPTIONS]
 ```
 
 **Mode Options:**
@@ -74,25 +74,25 @@ Servisleri başlatır. Varsayılan olarak minimal mode (sadece core servisler).
 **Örnekler:**
 ```bash
 # Minimal mode - Sadece Traefik + UI
-./core/cli/stackvo.sh up
+./stackvo.sh up
 
 # Tüm servisleri ve projeleri başlat
-./core/cli/stackvo.sh up --all
+./stackvo.sh up --all
 
 # Core + tüm servisleri başlat
-./core/cli/stackvo.sh up --services
+./stackvo.sh up --services
 
 # Core + tüm projeleri başlat
-./core/cli/stackvo.sh up --projects
+./stackvo.sh up --projects
 
 # Core + sadece MySQL başlat
-./core/cli/stackvo.sh up --profile mysql
+./stackvo.sh up --profile mysql
 
 # Core + MySQL ve Redis başlat
-./core/cli/stackvo.sh up --profile mysql --profile redis
+./stackvo.sh up --profile mysql --profile redis
 
 # Core + belirli bir proje başlat
-./core/cli/stackvo.sh up --profile project-myproject
+./stackvo.sh up --profile project-myproject
 ```
 
 **Profile İsimlendirme:**
@@ -127,7 +127,7 @@ Tüm servisleri durdurur.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh down [OPTIONS]
+./stackvo.sh down [OPTIONS]
 ```
 
 **Options:**
@@ -137,13 +137,13 @@ Tüm servisleri durdurur.
 **Örnekler:**
 ```bash
 # Servisleri durdur
-./core/cli/stackvo.sh down
+./stackvo.sh down
 
 # Volume'larla birlikte durdur
-./core/cli/stackvo.sh down -v
+./stackvo.sh down -v
 
 # Orphan'ları kaldır
-./core/cli/stackvo.sh down --remove-orphans
+./stackvo.sh down --remove-orphans
 ```
 
 ---
@@ -154,13 +154,13 @@ Servisleri yeniden başlatır.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh restart [SERVICE...]
+./stackvo.sh restart [SERVICE...]
 ```
 
 **Örnekler:**
 ```bash
 # Tüm servisleri yeniden başlat
-./core/cli/stackvo.sh restart
+./stackvo.sh restart
 
 # Belirli servisleri yeniden başlat
 docker compose -f generated/stackvo.yml \
@@ -176,7 +176,7 @@ docker compose -f generated/stackvo.yml \
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh ps [OPTIONS]
+./stackvo.sh ps [OPTIONS]
 ```
 
 **Options:**
@@ -186,13 +186,13 @@ docker compose -f generated/stackvo.yml \
 **Örnekler:**
 ```bash
 # Çalışan servisleri listele
-./core/cli/stackvo.sh ps
+./stackvo.sh ps
 
 # Tüm container'ları listele
-./core/cli/stackvo.sh ps -a
+./stackvo.sh ps -a
 
 # Custom format
-./core/cli/stackvo.sh ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+./stackvo.sh ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
 **Çıktı:**
@@ -211,7 +211,7 @@ Container loglarını görüntüler.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh logs [OPTIONS] [SERVICE...]
+./stackvo.sh logs [OPTIONS] [SERVICE...]
 ```
 
 **Options:**
@@ -223,19 +223,19 @@ Container loglarını görüntüler.
 **Örnekler:**
 ```bash
 # Tüm logları göster
-./core/cli/stackvo.sh logs
+./stackvo.sh logs
 
 # MySQL loglarını izle
-./core/cli/stackvo.sh logs -f mysql
+./stackvo.sh logs -f mysql
 
 # Son 100 satır
-./core/cli/stackvo.sh logs --tail=100 mysql
+./stackvo.sh logs --tail=100 mysql
 
 # Zaman damgalı
-./core/cli/stackvo.sh logs --timestamps mysql
+./stackvo.sh logs --timestamps mysql
 
 # Son 1 saatteki loglar
-./core/cli/stackvo.sh logs --since=1h mysql
+./stackvo.sh logs --since=1h mysql
 ```
 
 ---
@@ -246,13 +246,13 @@ Docker image'larını çeker.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh pull [SERVICE...]
+./stackvo.sh pull [SERVICE...]
 ```
 
 **Örnekler:**
 ```bash
 # Tüm image'ları çek
-./core/cli/stackvo.sh pull
+./stackvo.sh pull
 
 # Belirli image'ları çek
 docker compose -f generated/stackvo.yml \
@@ -302,7 +302,7 @@ Stackvo CLI'yi sisteme kurar.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh install
+./stackvo.sh install
 ```
 
 **Ne yapar:**
@@ -320,7 +320,7 @@ Stackvo'u kaldırır.
 
 **Syntax:**
 ```bash
-./core/cli/stackvo.sh uninstall
+./stackvo.sh uninstall
 ```
 
 **Ne yapar:**
@@ -342,7 +342,7 @@ CLI davranışını kontrol eden environment variable'lar:
 Detaylı çıktı.
 
 ```bash
-STACKVO_VERBOSE=true ./core/cli/stackvo.sh generate
+STACKVO_VERBOSE=true ./stackvo.sh generate
 ```
 
 ### STACKVO_DRY_RUN
@@ -350,7 +350,7 @@ STACKVO_VERBOSE=true ./core/cli/stackvo.sh generate
 Komutları çalıştırmadan göster.
 
 ```bash
-STACKVO_DRY_RUN=true ./core/cli/stackvo.sh generate
+STACKVO_DRY_RUN=true ./stackvo.sh generate
 ```
 
 ### ENV_FILE
@@ -358,7 +358,7 @@ STACKVO_DRY_RUN=true ./core/cli/stackvo.sh generate
 Farklı .env dosyası kullan.
 
 ```bash
-ENV_FILE=.env.production ./core/cli/stackvo.sh generate
+ENV_FILE=.env.production ./stackvo.sh generate
 ```
 
 ---

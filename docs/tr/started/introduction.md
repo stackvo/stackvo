@@ -86,9 +86,9 @@ Stackvo 6 farklı programlama dilini destekler:
 `.env` dosyanızdaki ayarlara göre Docker Compose, Traefik routing ve Nginx/Apache konfigürasyonlarını otomatik oluşturur.
 
 ```bash
-./core/cli/stackvo.sh generate              # Tüm konfigürasyonları üret
-./core/cli/stackvo.sh generate projects     # Sadece projeleri üret
-./core/cli/stackvo.sh generate services     # Sadece servisleri üret
+./stackvo.sh generate              # Tüm konfigürasyonları üret
+./stackvo.sh generate projects     # Sadece projeleri üret
+./stackvo.sh generate services     # Sadece servisleri üret
 ```
 
 ### Üç Katmanlı Mimari

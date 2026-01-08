@@ -1,32 +1,34 @@
-# Global Konfigürasyon
+# Global Configuration
 
-Global konfigürasyon, `.env` dosyası üzerinden yönetilir ve tüm Stackvo sistemini etkiler. Bu sayfa, 364 satırlık `.env` dosyasının tüm bölümlerini, Traefik ayarlarından servis konfigürasyonlarına, Docker network ayarlarından güvenlik parametrelerine kadar her şeyi detaylı olarak açıklamaktadır. Global ayarlar, tüm projeler ve servisler için varsayılan değerleri belirler.
+Global configuration is managed via the `.env` file and affects the entire Stackvo system. This page detailedly explains all sections of the 364-line `.env` file, from Traefik settings to service configurations, from Docker network settings to security parameters. Global settings determine default values for all projects and services.
 
-## .env Dosyası
+---
 
-`.env` dosyası, Stackvo'un ana konfigürasyon dosyasıdır. 364 satır ve 11 ana bölümden oluşur.
+## .env File
 
-### Dosya Yapısı
+The `.env` file is Stackvo's main configuration file. It consists of 364 lines and 11 main sections.
+
+### File Structure
 
 ```bash
-# 1. Traefik Ayarları (~20 satır)
-# 2. Varsayılan Proje Ayarları (~5 satır)
-# 3. Stackvo UI Ayarları (~10 satır)
-# 4. Docker Network (~5 satır)
-# 5. Host System Mappings (~5 satır)
-# 6. Security Settings (~5 satır)
-# 7. Port Mappings (~10 satır)
-# 8. CLI Behavior (~10 satır)
-# 9. Supported Languages (~30 satır)
-# 10. Stackvo Web UI Tools (~40 satır)
-# 11. Services (~180 satır)
+# 1. Traefik Settings (~20 lines)
+# 2. Default Project Settings (~5 lines)
+# 3. Stackvo UI Settings (~10 lines)
+# 4. Docker Network (~5 lines)
+# 5. Host System Mappings (~5 lines)
+# 6. Security Settings (~5 lines)
+# 7. Port Mappings (~10 lines)
+# 8. CLI Behavior (~10 lines)
+# 9. Supported Languages (~30 lines)
+# 10. Stackvo Web UI Tools (~40 lines)
+# 11. Services (~180 lines)
 ```
 
 ---
 
-## Traefik Ayarları
+## Traefik Settings
 
-Reverse proxy ve SSL/TLS konfigürasyonu.
+Reverse proxy and SSL/TLS configuration.
 
 ```bash
 # Global domain suffix
@@ -36,7 +38,7 @@ DEFAULT_TLD_SUFFIX=stackvo.loc
 SSL_ENABLE=true
 REDIRECT_TO_HTTPS=true
 
-# Let's Encrypt (sadece public domain'ler için)
+# Let's Encrypt (only for public domains)
 LETSENCRYPT_ENABLE=false
 LETSENCRYPT_EMAIL=admin@stackvo.loc
 
@@ -44,17 +46,17 @@ LETSENCRYPT_EMAIL=admin@stackvo.loc
 TRAEFIK_URL=traefik
 ```
 
-**Açıklamalar:**
-- `DEFAULT_TLD_SUFFIX`: Tüm servislerin domain suffix'i (örn: `mysql.stackvo.loc`)
-- `SSL_ENABLE`: SSL/TLS desteğini aktifleştirir
-- `REDIRECT_TO_HTTPS`: HTTP isteklerini HTTPS'e yönlendirir
-- `LETSENCRYPT_ENABLE`: Let's Encrypt sertifikaları (`.loc` gibi local domain'lerde çalışmaz)
+**Explanations:**
+- `DEFAULT_TLD_SUFFIX`: Domain suffix for all services (e.g. `mysql.stackvo.loc`)
+- `SSL_ENABLE`: Enables SSL/TLS support
+- `REDIRECT_TO_HTTPS`: Redirects HTTP requests to HTTPS
+- `LETSENCRYPT_ENABLE`: Let's Encrypt certificates (does not work on local domains like `.loc`)
 
 ---
 
-## Varsayılan Proje Ayarları
+## Default Project Settings
 
-Yeni projeler için varsayılan değerler.
+Default values for new projects.
 
 ```bash
 DEFAULT_PHP_VERSION=8.2
@@ -64,9 +66,9 @@ DEFAULT_DOCUMENT_ROOT=public
 
 ---
 
-## Stackvo UI Ayarları
+## Stackvo UI Settings
 
-Web UI performans ve davranış ayarları.
+Web UI performance and behavior settings.
 
 ```bash
 DEFAULT_TIMEOUT=30
@@ -81,7 +83,7 @@ LOG_LEVEL=DEBUG
 
 ## Docker Network
 
-Docker network ve container ayarları.
+Docker network and container settings.
 
 ```bash
 DOCKER_DEFAULT_NETWORK=stackvo-net
@@ -94,7 +96,7 @@ DOCKER_REMOVE_ORPHANS=true
 
 ## Host System Mappings
 
-Host sistem ile container mapping'leri.
+Host system mappings with container.
 
 ```bash
 HOST_USER_ID=1000
@@ -106,7 +108,7 @@ HOST_TIMEZONE=Europe/Istanbul
 
 ## Security Settings
 
-Güvenlik konfigürasyonları.
+Security configurations.
 
 ```bash
 ALLOW_HTTPD=true
@@ -118,7 +120,7 @@ ALLOWED_PHP_VERSIONS=7.4,8.0,8.1,8.2,8.3,8.4
 
 ## Port Mappings
 
-Host port yönlendirmeleri.
+Host port forwardings.
 
 ```bash
 HOST_PORT_POSTGRES=5433
@@ -132,7 +134,7 @@ HOST_PORT_TOMCAT=8081
 
 ## CLI Behavior
 
-CLI davranış ayarları.
+CLI behavior settings.
 
 ```bash
 STACKVO_VERBOSE=false
@@ -147,21 +149,21 @@ STACKVO_GENERATE_LOG=core/generator.log
 
 ## Supported Languages
 
-Stackvo 6 programlama dilini destekler: **PHP, Python, Go, Ruby, Rust, Node.js**
+Stackvo supports 6 programming languages: **PHP, Python, Go, Ruby, Rust, Node.js**
 
 ```bash
 SUPPORTED_LANGUAGES=php,python,go,ruby,rust,nodejs
 ```
 
-Desteklenen versiyonlar ve detaylar için [Giriş](../guides/projects.md#coklu-dil-destegi) sayfasına bakın.
+See [Introduction](../guides/projects.md#multi-language-support) page for supported versions and details.
 
 ---
 
 ## Stackvo Web UI Tools
 
-Yönetim araçları konfigürasyonu:
+Management tools configuration:
 
-| Tool | Enable | Version | URL | Erişim |
+| Tool | Enable | Version | URL | Access |
 |------|--------|---------|-----|--------|
 | **Adminer** | `TOOLS_ADMINER_ENABLE=true` | `4.8.1` | `adminer` | `https://adminer.stackvo.loc` |
 | **PhpMyAdmin** | `TOOLS_PHPMYADMIN_ENABLE=true` | `5.2.1` | `phpmyadmin` | `https://phpmyadmin.stackvo.loc` |
@@ -175,7 +177,7 @@ Yönetim araçları konfigürasyonu:
 
 ## Services
 
-40+ servis konfigürasyonu. Her servis için `.env` dosyasında `SERVICE_*_ENABLE`, `SERVICE_*_VERSION` ve servise özel parametreler bulunur.
+40+ service configuration. Each service has `SERVICE_*_ENABLE`, `SERVICE_*_VERSION` and service-specific parameters in the `.env` file.
 
 ```bash
 # MySQL
@@ -198,4 +200,4 @@ SERVICE_RABBITMQ_DEFAULT_USER=admin
 SERVICE_RABBITMQ_DEFAULT_PASS=admin
 ```
 
-**Detaylı servis konfigürasyonları ve bağlantı bilgileri için [Servisler Referansı](../references/services.md) sayfasına bakın.**
+**See [Services Reference](../references/services.md) page for detailed service configurations and connection information.**

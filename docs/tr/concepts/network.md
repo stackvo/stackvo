@@ -181,10 +181,10 @@ DOCKER_NETWORK_SUBNET=172.30.0.0/16
 **Not:** Subnet değişikliği için network'ü yeniden oluşturmanız gerekir:
 
 ```bash
-./core/cli/stackvo.sh down
+./stackvo.sh down
 docker network rm stackvo-net
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### Custom Network
@@ -242,14 +242,14 @@ docker exec stackvo-php nc -zv stackvo-redis 6379
 
 ```bash
 # Tüm container'ları durdur
-./core/cli/stackvo.sh down
+./stackvo.sh down
 
 # Network'ü sil
 docker network rm stackvo-net
 
 # Yeniden oluştur
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ---

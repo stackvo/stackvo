@@ -1,19 +1,19 @@
 ---
-title: En İyi Uygulamalar
-description: Production ortamında Stackvo kullanımı için en iyi uygulamalar ve tavsiyeler.
+title: Best Practices
+description: Best practices and recommendations for using Stackvo in production environment.
 ---
 
-# En İyi Uygulamalar
+# Best Practices
 
-Production ortamında Stackvo kullanımı için en iyi uygulamalar ve tavsiyeler. Bu kılavuz, environment separation, version control, secrets management gibi genel ilkelerden Docker resource limits, health checks, logging gibi Docker best practices'e, güvenlik, performans, monitoring, deployment ve maintenance konularında profesyonel yaklaşımları detaylı olarak açıklamaktadır.
+Best practices and recommendations for using Stackvo in production environment. This guide detailedly explains professional approaches on topics from general principles like environment separation, version control, secrets management to Docker best practices like resource limits, health checks, logging, and security, performance, monitoring, deployment, and maintenance.
 
 ---
 
-## Genel İlkeler
+## General Principles
 
 ### 1. Environment Separation
 
-Development, staging ve production ortamları için farklı `.env` dosyaları kullanın.
+Use different `.env` files for development, staging, and production environments.
 
 ```bash
 # Development
@@ -26,19 +26,19 @@ Development, staging ve production ortamları için farklı `.env` dosyaları ku
 .env.production
 ```
 
-**Kullanım:**
+**Usage:**
 ```bash
-# Staging için
+# For Staging
 cp .env .env.staging
 nano .env.staging
 
 # Generate
-ENV_FILE=.env.staging ./core/cli/stackvo.sh generate
+ENV_FILE=.env.staging ./stackvo.sh generate
 ```
 
 ### 2. Version Control
 
-`.env` dosyasını version control'e eklemeyin, sadece `.env.example` ekleyin.
+Do not add `.env` file to version control, only add `.env.example`.
 
 ```bash
 # .gitignore
@@ -46,13 +46,13 @@ ENV_FILE=.env.staging ./core/cli/stackvo.sh generate
 .env.local
 .env.*.local
 
-# Version control'e ekle
+# Add to version control
 .env.example
 ```
 
 ### 3. Secrets Management
 
-Hassas bilgileri environment variable'larda saklayın.
+Store sensitive information in environment variables.
 
 ```bash
 # .env
@@ -66,7 +66,7 @@ SERVICE_RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
 
 ### 1. Resource Limits
 
-Container'lar için resource limitleri belirleyin.
+Set resource limits for containers.
 
 ```yaml
 # docker-compose.yml
@@ -85,7 +85,7 @@ services:
 
 ### 2. Health Checks
 
-Container'lar için health check tanımlayın.
+Define health checks for containers.
 
 ```yaml
 services:
@@ -100,7 +100,7 @@ services:
 
 ### 3. Logging
 
-Container loglarını düzenli olarak temizleyin.
+Clean container logs regularly.
 
 ```bash
 # Log rotation
@@ -112,7 +112,7 @@ docker run --log-driver json-file \
 
 ### 4. Volume Backup
 
-Volume'ları düzenli olarak yedekleyin.
+Backup volumes regularly.
 
 ```bash
 # MySQL backup
@@ -129,9 +129,9 @@ docker run --rm \
 
 ## Security Best Practices
 
-### 1. Güçlü Şifreler
+### 1. Strong Passwords
 
-Tüm servisler için güçlü şifreler kullanın.
+Use strong passwords for all services.
 
 ```bash
 # .env
@@ -139,20 +139,20 @@ SERVICE_MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32)
 SERVICE_RABBITMQ_DEFAULT_PASS=$(openssl rand -base64 32)
 ```
 
-### 2. Network İzolasyonu
+### 2. Network Isolation
 
-Sadece gerekli portları expose edin.
+Expose only necessary ports.
 
 ```yaml
 services:
   mysql:
     ports:
-      - "127.0.0.1:3306:3306"  # Sadece localhost'tan erişim
+      - "127.0.0.1:3306:3306"  # Access only from localhost
 ```
 
 ### 3. SSL/TLS
 
-Production'da her zaman SSL/TLS kullanın.
+Always use SSL/TLS in production.
 
 ```bash
 # .env
@@ -164,13 +164,13 @@ LETSENCRYPT_EMAIL=admin@yourdomain.com
 
 ### 4. Firewall
 
-Gereksiz portları kapatın.
+Close unnecessary ports.
 
 ```bash
-# UFW ile
+# With UFW
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
-sudo ufw deny 3306/tcp  # MySQL'i dışarıdan kapat
+sudo ufw deny 3306/tcp  # Close MySQL to outside
 sudo ufw enable
 ```
 
@@ -180,7 +180,7 @@ sudo ufw enable
 
 ### 1. OPcache
 
-PHP OPcache'i production'da aktif edin.
+Enable PHP OPcache in production.
 
 ```ini
 ; php.ini
@@ -195,7 +195,7 @@ opcache.fast_shutdown=1
 
 ### 2. Redis Cache
 
-Sık kullanılan verileri Redis'te cache'leyin.
+Cache frequently used data in Redis.
 
 ```php
 <?php
@@ -213,10 +213,10 @@ if (!$user) {
 
 ### 3. Database Indexing
 
-Veritabanı sorgularını optimize edin.
+Optimize database queries.
 
 ```sql
--- Sık kullanılan kolonlara index ekle
+-- Add index to frequently used columns
 CREATE INDEX idx_email ON users(email);
 CREATE INDEX idx_created_at ON posts(created_at);
 
@@ -227,7 +227,7 @@ SET GLOBAL long_query_time = 2;
 
 ### 4. Connection Pooling
 
-Database connection pooling kullanın.
+Use database connection pooling.
 
 ```php
 <?php
@@ -246,10 +246,10 @@ $pdo = new PDO(
 
 ### 1. Container Monitoring
 
-Container'ları düzenli olarak izleyin.
+Monitor containers regularly.
 
 ```bash
-# Resource kullanımı
+# Resource usage
 docker stats
 
 # Health check
@@ -261,19 +261,19 @@ docker logs -f --tail=100 stackvo-mysql
 
 ### 2. Grafana Dashboard
 
-Grafana ile görsel monitoring kurun.
+Set up visual monitoring with Grafana.
 
 ```bash
 # .env
 SERVICE_GRAFANA_ENABLE=true
 
-# Prometheus data source ekle
-# Grafana'da dashboard oluştur
+# Add Prometheus data source
+# Create dashboard in Grafana
 ```
 
 ### 3. Alerting
 
-Kritik durumlar için alert kurun.
+Set up alerts for critical situations.
 
 ```yaml
 # Prometheus alert rules
@@ -293,10 +293,10 @@ groups:
 
 ### 1. Zero Downtime Deployment
 
-Rolling update ile zero downtime deployment.
+Zero downtime deployment with rolling update.
 
 ```bash
-# Yeni versiyonu pull et
+# Pull new version
 docker compose pull
 
 # Rolling update
@@ -306,35 +306,35 @@ docker compose up -d --no-deps --scale web=1 --remove-orphans web
 
 ### 2. Blue-Green Deployment
 
-İki ortam arasında geçiş yapın.
+Switch between two environments.
 
 ```bash
 # Blue environment
 docker compose -f docker-compose.blue.yml up -d
 
-# Test et
+# Test
 curl https://blue.example.com
 
-# Green'e geç
+# Switch to Green
 docker compose -f docker-compose.green.yml up -d
 
-# Traefik'te route değiştir
-# Blue'yu kapat
+# Switch route in Traefik
+# Close Blue
 docker compose -f docker-compose.blue.yml down
 ```
 
 ### 3. Database Migrations
 
-Migration'ları dikkatli yapın.
+Perform migrations carefully.
 
 ```bash
-# Backup al
+# Backup
 docker exec stackvo-mysql mysqldump -u root -proot mydb > backup.sql
 
-# Migration çalıştır
+# Run migration
 docker exec stackvo-laravel-app-php php artisan migrate
 
-# Rollback planı hazır olsun
+# Have a rollback plan ready
 docker exec stackvo-laravel-app-php php artisan migrate:rollback
 ```
 
@@ -344,10 +344,10 @@ docker exec stackvo-laravel-app-php php artisan migrate:rollback
 
 ### 1. Regular Updates
 
-Image'ları düzenli güncelleyin.
+Update images regularly.
 
 ```bash
-# Image'ları güncelle
+# Update images
 docker compose pull
 
 # Restart
@@ -356,7 +356,7 @@ docker compose up -d
 
 ### 2. Cleanup
 
-Kullanılmayan kaynakları temizleyin.
+Clean up unused resources.
 
 ```bash
 # Unused images
@@ -368,13 +368,13 @@ docker volume prune
 # Unused networks
 docker network prune
 
-# Tümü
+# All
 docker system prune -a --volumes
 ```
 
 ### 3. Log Rotation
 
-Logları düzenli temizleyin.
+Clean logs regularly.
 
 ```bash
 # Docker log cleanup
@@ -399,7 +399,7 @@ EOF
 
 ### 1. Local Development
 
-Development için ayrı konfigürasyon.
+Separate configuration for development.
 
 ```bash
 # .env.local
@@ -410,7 +410,7 @@ STACKVO_VERBOSE=true
 
 ### 2. Hot Reload
 
-Code değişikliklerini otomatik yansıtın.
+Automatically reflect code changes.
 
 ```yaml
 # docker-compose.override.yml
@@ -422,7 +422,7 @@ services:
 
 ### 3. Debugging
 
-Xdebug ile debugging.
+Debugging with Xdebug.
 
 ```ini
 ; php.ini
@@ -438,7 +438,7 @@ xdebug.client_port=9003
 
 ### 1. Structured Logging
 
-Yapılandırılmış log formatı kullanın.
+Use structured log format.
 
 ```php
 <?php
@@ -452,7 +452,7 @@ error_log(json_encode([
 
 ### 2. Error Tracking
 
-Sentry gibi error tracking servisi kullanın.
+Use an error tracking service like Sentry.
 
 ```php
 <?php
@@ -467,7 +467,7 @@ try {
 
 ### 3. Performance Profiling
 
-Blackfire ile profiling yapın.
+Perform profiling with Blackfire.
 
 ```bash
 # .env

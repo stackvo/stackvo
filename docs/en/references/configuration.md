@@ -1,20 +1,20 @@
-# Konfigürasyon Referansı
+# Configuration Reference
 
-.env dosyası ve tüm konfigürasyon seçeneklerinin detaylı referansı. Bu sayfa, 364 satırlık .env dosyasının 11 ana bölümünü (Traefik, varsayılan proje ayarları, Stackvo UI, Docker network, host system mappings, security, port mappings, CLI behavior, desteklenen diller, tools ve servisler) detaylı olarak açıklamaktadır. Her parametre için tip, varsayılan değer ve açıklama verilmektedir.
+Detailed reference for .env file and all configuration options. This page detailedly explains the 11 main sections of the 364-line .env file (Traefik, default project settings, Stackvo UI, Docker network, host system mappings, security, port mappings, CLI behavior, supported languages, tools, and services). Type, default value and description are provided for each parameter.
 
-## .env Dosyası
+## .env File
 
-Stackvo'un ana konfigürasyon dosyası. 364 satır, 11 ana bölüm.
+Main configuration file of Stackvo. 364 lines, 11 main sections.
 
 ---
 
-## Traefik Ayarları
+## Traefik Settings
 
 ### DEFAULT_TLD_SUFFIX
 
-**Tip:** String  
-**Varsayılan:** `stackvo.loc`  
-**Açıklama:** Tüm servislerin domain suffix'i
+**Type:** String  
+**Default:** `stackvo.loc`  
+**Description:** Domain suffix for all services
 
 ```bash
 DEFAULT_TLD_SUFFIX=stackvo.loc
@@ -22,9 +22,9 @@ DEFAULT_TLD_SUFFIX=stackvo.loc
 
 ### SSL_ENABLE
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** SSL/TLS desteğini aktifleştirir
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Enables SSL/TLS support
 
 ```bash
 SSL_ENABLE=true
@@ -32,9 +32,9 @@ SSL_ENABLE=true
 
 ### REDIRECT_TO_HTTPS
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** HTTP isteklerini HTTPS'e yönlendirir
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Redirects HTTP requests to HTTPS
 
 ```bash
 REDIRECT_TO_HTTPS=true
@@ -42,9 +42,9 @@ REDIRECT_TO_HTTPS=true
 
 ### LETSENCRYPT_ENABLE
 
-**Tip:** Boolean  
-**Varsayılan:** `false`  
-**Açıklama:** Let's Encrypt sertifikaları (production için)
+**Type:** Boolean  
+**Default:** `false`  
+**Description:** Let's Encrypt certificates (for production)
 
 ```bash
 LETSENCRYPT_ENABLE=false
@@ -53,25 +53,25 @@ LETSENCRYPT_EMAIL=admin@stackvo.loc
 
 ### TRAEFIK_URL
 
-**Tip:** String  
-**Varsayılan:** `traefik`  
-**Açıklama:** Traefik dashboard subdomain'i
+**Type:** String  
+**Default:** `traefik`  
+**Description:** Traefik dashboard subdomain
 
 ```bash
 TRAEFIK_URL=traefik
-# Erişim: https://traefik.stackvo.loc
+# Access: https://traefik.stackvo.loc
 ```
 
 ---
 
-## Varsayılan Proje Ayarları
+## Default Project Settings
 
 ### DEFAULT_PHP_VERSION
 
-**Tip:** String  
-**Varsayılan:** `8.2`  
-**Geçerli Değerler:** 5.6, 7.0-7.4, 8.0-8.5  
-**Açıklama:** Yeni projeler için varsayılan PHP versiyonu
+**Type:** String  
+**Default:** `8.2`  
+**Valid Values:** 5.6, 7.0-7.4, 8.0-8.5  
+**Description:** Default PHP version for new projects
 
 ```bash
 DEFAULT_PHP_VERSION=8.2
@@ -79,10 +79,10 @@ DEFAULT_PHP_VERSION=8.2
 
 ### DEFAULT_WEBSERVER
 
-**Tip:** String  
-**Varsayılan:** `nginx`  
-**Geçerli Değerler:** nginx, apache, caddy, ferron  
-**Açıklama:** Yeni projeler için varsayılan webserver
+**Type:** String  
+**Default:** `nginx`  
+**Valid Values:** nginx, apache, caddy, ferron  
+**Description:** Default webserver for new projects
 
 ```bash
 DEFAULT_WEBSERVER=nginx
@@ -90,9 +90,9 @@ DEFAULT_WEBSERVER=nginx
 
 ### DEFAULT_DOCUMENT_ROOT
 
-**Tip:** String  
-**Varsayılan:** `public`  
-**Açıklama:** Yeni projeler için varsayılan document root
+**Type:** String  
+**Default:** `public`  
+**Description:** Default document root for new projects
 
 ```bash
 DEFAULT_DOCUMENT_ROOT=public
@@ -100,14 +100,14 @@ DEFAULT_DOCUMENT_ROOT=public
 
 ---
 
-## Stackvo UI Ayarları
+## Stackvo UI Settings
 
 ### DEFAULT_TIMEOUT
 
-**Tip:** Integer  
-**Varsayılan:** `30`  
-**Birim:** Saniye  
-**Açıklama:** API request timeout
+**Type:** Integer  
+**Default:** `30`  
+**Unit:** Seconds  
+**Description:** API request timeout
 
 ```bash
 DEFAULT_TIMEOUT=30
@@ -115,10 +115,10 @@ DEFAULT_TIMEOUT=30
 
 ### SYSTEM_COMMAND_TIMEOUT
 
-**Tip:** Integer  
-**Varsayılan:** `120`  
-**Birim:** Saniye  
-**Açıklama:** Sistem komutları timeout
+**Type:** Integer  
+**Default:** `120`  
+**Unit:** Seconds  
+**Description:** System commands timeout
 
 ```bash
 SYSTEM_COMMAND_TIMEOUT=120
@@ -126,9 +126,9 @@ SYSTEM_COMMAND_TIMEOUT=120
 
 ### CACHE_ENABLE
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** UI cache'i aktifleştirir
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Enables UI cache
 
 ```bash
 CACHE_ENABLE=true
@@ -137,9 +137,9 @@ CACHE_TTL=5
 
 ### LOG_ENABLE
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Loglama aktifleştirir
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Enables logging
 
 ```bash
 LOG_ENABLE=true
@@ -152,9 +152,9 @@ LOG_LEVEL=DEBUG
 
 ### DOCKER_DEFAULT_NETWORK
 
-**Tip:** String  
-**Varsayılan:** `stackvo-net`  
-**Açıklama:** Docker network adı
+**Type:** String  
+**Default:** `stackvo-net`  
+**Description:** Docker network name
 
 ```bash
 DOCKER_DEFAULT_NETWORK=stackvo-net
@@ -162,9 +162,9 @@ DOCKER_DEFAULT_NETWORK=stackvo-net
 
 ### DOCKER_NETWORK_SUBNET
 
-**Tip:** String (CIDR)  
-**Varsayılan:** `172.30.0.0/16`  
-**Açıklama:** Docker network subnet
+**Type:** String (CIDR)  
+**Default:** `172.30.0.0/16`  
+**Description:** Docker network subnet
 
 ```bash
 DOCKER_NETWORK_SUBNET=172.30.0.0/16
@@ -172,9 +172,9 @@ DOCKER_NETWORK_SUBNET=172.30.0.0/16
 
 ### DOCKER_PRUNE_ON_REBUILD
 
-**Tip:** Boolean  
-**Varsayılan:** `false`  
-**Açıklama:** Rebuild'de prune çalıştır
+**Type:** Boolean  
+**Default:** `false`  
+**Description:** Run prune on rebuild
 
 ```bash
 DOCKER_PRUNE_ON_REBUILD=false
@@ -182,9 +182,9 @@ DOCKER_PRUNE_ON_REBUILD=false
 
 ### DOCKER_FORCE_RECREATE
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Container'ları force recreate
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Force recreate containers
 
 ```bash
 DOCKER_FORCE_RECREATE=true
@@ -192,9 +192,9 @@ DOCKER_FORCE_RECREATE=true
 
 ### DOCKER_REMOVE_ORPHANS
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Orphan container'ları kaldır
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Remove orphan containers
 
 ```bash
 DOCKER_REMOVE_ORPHANS=true
@@ -206,9 +206,9 @@ DOCKER_REMOVE_ORPHANS=true
 
 ### HOST_USER_ID
 
-**Tip:** Integer  
-**Varsayılan:** `1000`  
-**Açıklama:** Host user ID
+**Type:** Integer  
+**Default:** `1000`  
+**Description:** Host user ID
 
 ```bash
 HOST_USER_ID=1000
@@ -216,9 +216,9 @@ HOST_USER_ID=1000
 
 ### HOST_GROUP_ID
 
-**Tip:** Integer  
-**Varsayılan:** `1000`  
-**Açıklama:** Host group ID
+**Type:** Integer  
+**Default:** `1000`  
+**Description:** Host group ID
 
 ```bash
 HOST_GROUP_ID=1000
@@ -226,9 +226,9 @@ HOST_GROUP_ID=1000
 
 ### HOST_TIMEZONE
 
-**Tip:** String  
-**Varsayılan:** `Europe/Istanbul`  
-**Açıklama:** Timezone
+**Type:** String  
+**Default:** `Europe/Istanbul`  
+**Description:** Timezone
 
 ```bash
 HOST_TIMEZONE=Europe/Istanbul
@@ -240,9 +240,9 @@ HOST_TIMEZONE=Europe/Istanbul
 
 ### ALLOW_HTTPD
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Apache kullanımına izin ver
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Allow Apache usage
 
 ```bash
 ALLOW_HTTPD=true
@@ -250,9 +250,9 @@ ALLOW_HTTPD=true
 
 ### ALLOW_NGINX
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Nginx kullanımına izin ver
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Allow Nginx usage
 
 ```bash
 ALLOW_NGINX=true
@@ -260,9 +260,9 @@ ALLOW_NGINX=true
 
 ### ALLOWED_PHP_VERSIONS
 
-**Tip:** String (comma-separated)  
-**Varsayılan:** `7.4,8.0,8.1,8.2,8.3,8.4`  
-**Açıklama:** İzin verilen PHP versiyonları
+**Type:** String (comma-separated)  
+**Default:** `7.4,8.0,8.1,8.2,8.3,8.4`  
+**Description:** Allowed PHP versions
 
 ```bash
 ALLOWED_PHP_VERSIONS=7.4,8.0,8.1,8.2,8.3,8.4
@@ -272,7 +272,7 @@ ALLOWED_PHP_VERSIONS=7.4,8.0,8.1,8.2,8.3,8.4
 
 ## Port Mappings
 
-Host port yönlendirmeleri.
+Host port forwardings.
 
 ```bash
 HOST_PORT_POSTGRES=5433
@@ -288,9 +288,9 @@ HOST_PORT_TOMCAT=8081
 
 ### STACKVO_VERBOSE
 
-**Tip:** Boolean  
-**Varsayılan:** `false`  
-**Açıklama:** Detaylı çıktı
+**Type:** Boolean  
+**Default:** `false`  
+**Description:** Verbose output
 
 ```bash
 STACKVO_VERBOSE=false
@@ -298,9 +298,9 @@ STACKVO_VERBOSE=false
 
 ### STACKVO_STRICT
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Strict mode
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Strict mode
 
 ```bash
 STACKVO_STRICT=true
@@ -308,9 +308,9 @@ STACKVO_STRICT=true
 
 ### STACKVO_SHOW_BANNER
 
-**Tip:** Boolean  
-**Varsayılan:** `true`  
-**Açıklama:** Banner göster
+**Type:** Boolean  
+**Default:** `true`  
+**Description:** Show banner
 
 ```bash
 STACKVO_SHOW_BANNER=true
@@ -318,9 +318,9 @@ STACKVO_SHOW_BANNER=true
 
 ### STACKVO_DRY_RUN
 
-**Tip:** Boolean  
-**Varsayılan:** `false`  
-**Açıklama:** Dry run mode
+**Type:** Boolean  
+**Default:** `false`  
+**Description:** Dry run mode
 
 ```bash
 STACKVO_DRY_RUN=false
@@ -328,9 +328,9 @@ STACKVO_DRY_RUN=false
 
 ### STACKVO_VERSION
 
-**Tip:** String  
-**Varsayılan:** `1.0.0`  
-**Açıklama:** Stackvo versiyonu
+**Type:** String  
+**Default:** `1.0.0`  
+**Description:** Stackvo version
 
 ```bash
 STACKVO_VERSION=1.0.0
@@ -338,9 +338,9 @@ STACKVO_VERSION=1.0.0
 
 ### STACKVO_GENERATE_LOG
 
-**Tip:** String  
-**Varsayılan:** `core/generator.log`  
-**Açıklama:** Generator log dosyası
+**Type:** String  
+**Default:** `core/generator.log`  
+**Description:** Generator log file
 
 ```bash
 STACKVO_GENERATE_LOG=core/generator.log
@@ -352,29 +352,29 @@ STACKVO_GENERATE_LOG=core/generator.log
 
 ### SUPPORTED_LANGUAGES
 
-**Tip:** String (comma-separated)  
-**Varsayılan:** `php,python,go,ruby,rust,nodejs`  
-**Açıklama:** Desteklenen diller
+**Type:** String (comma-separated)  
+**Default:** `php,python,go,ruby,rust,nodejs`  
+**Description:** Supported languages
 
 ```bash
 SUPPORTED_LANGUAGES=php,python,go,ruby,rust,nodejs
 ```
 
-Her dil için:
-- `SUPPORTED_LANGUAGES_{LANG}_VERSIONS` - Versiyonlar
-- `SUPPORTED_LANGUAGES_{LANG}_DEFAULT` - Varsayılan versiyon
-- `SUPPORTED_LANGUAGES_PHP_EXTENSIONS` - PHP extension'ları (sadece PHP için)
+For each language:
+- `SUPPORTED_LANGUAGES_{LANG}_VERSIONS` - Versions
+- `SUPPORTED_LANGUAGES_{LANG}_DEFAULT` - Default version
+- `SUPPORTED_LANGUAGES_PHP_EXTENSIONS` - PHP extensions (only for PHP)
 
 ---
 
 ## Services
 
-Her servis için 3 temel ayar:
+3 basic settings for each service:
 
 ### SERVICE_{NAME}_ENABLE
 
-**Tip:** Boolean  
-**Açıklama:** Servisi aktifleştirir
+**Type:** Boolean  
+**Description:** Enables the service
 
 ```bash
 SERVICE_MYSQL_ENABLE=true
@@ -382,8 +382,8 @@ SERVICE_MYSQL_ENABLE=true
 
 ### SERVICE_{NAME}_VERSION
 
-**Tip:** String  
-**Açıklama:** Servis versiyonu
+**Type:** String  
+**Description:** Service version
 
 ```bash
 SERVICE_MYSQL_VERSION=8.0
@@ -391,15 +391,14 @@ SERVICE_MYSQL_VERSION=8.0
 
 ### SERVICE_{NAME}_URL
 
-**Tip:** String  
-**Açıklama:** Servis subdomain'i
+**Type:** String  
+**Description:** Service subdomain
 
 ```bash
 SERVICE_RABBITMQ_URL=rabbitmq
-# Erişim: https://rabbitmq.stackvo.loc
+# Access: https://rabbitmq.stackvo.loc
 ```
 
-Servis-specific ayarlar için [Servisler Referansı](services.md) sayfasına bakın.
+See [Services Reference](services.md) page for service-specific settings.
 
 ---
-

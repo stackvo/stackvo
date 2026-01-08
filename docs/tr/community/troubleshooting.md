@@ -59,7 +59,7 @@ sudo usermod -aG docker $USER
 newgrp docker
 
 # Veya sudo ile çalıştır
-sudo ./core/cli/stackvo.sh up
+sudo ./stackvo.sh up
 ```
 
 ### Port çakışması
@@ -78,8 +78,8 @@ sudo lsof -i :3306
 nano .env
 # HOST_PORT_MYSQL=3307
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh restart
+./stackvo.sh generate
+./stackvo.sh restart
 ```
 
 ---
@@ -96,7 +96,7 @@ Error generating docker-compose files
 **Çözüm:**
 ```bash
 # Verbose mode
-STACKVO_VERBOSE=true ./core/cli/stackvo.sh generate
+STACKVO_VERBOSE=true ./stackvo.sh generate
 
 # Logları kontrol et
 cat core/generator.log
@@ -151,10 +151,10 @@ docker inspect stackvo-mysql | grep -A 10 Networks
 docker exec stackvo-php ping stackvo-mysql
 
 # Network yeniden oluştur
-./core/cli/stackvo.sh down
+./stackvo.sh down
 docker network rm stackvo-net
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### DNS çözümleme sorunu
@@ -400,17 +400,17 @@ stackvo: command not found
 **Çözüm:**
 ```bash
 # CLI kur
-./core/cli/stackvo.sh install
+./stackvo.sh install
 
 # Veya tam yol kullan
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 ```
 
 ### Script execution hatası
 
 **Semptom:**
 ```
-Permission denied: ./core/cli/stackvo.sh
+Permission denied: ./stackvo.sh
 ```
 
 **Çözüm:**
@@ -473,7 +473,7 @@ volumes:
 
 ```bash
 # 1. Tüm container'ları durdur
-./core/cli/stackvo.sh down -v
+./stackvo.sh down -v
 
 # 2. Network'ü sil
 docker network rm stackvo-net
@@ -482,8 +482,8 @@ docker network rm stackvo-net
 rm -rf generated/*
 
 # 4. Yeniden oluştur
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### Backup'tan geri yükle

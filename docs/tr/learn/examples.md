@@ -166,8 +166,8 @@ SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_KIBANA_ENABLE=true
 SERVICE_RABBITMQ_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### Proje
@@ -466,8 +466,8 @@ deploy:
 SERVICE_GRAFANA_ENABLE=true
 SERVICE_PROMETHEUS_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### Metrics Export

@@ -1,21 +1,21 @@
 ---
-title: Web UI Kullanımı
-description: Stackvo Web UI, servisleri ve projeleri görsel olarak yönetmenizi sağlar.
+title: Web UI Usage
+description: Stackvo Web UI allows you to visually manage services and projects.
 ---
 
-# Web UI Kullanımı
+# Web UI Usage
 
-Stackvo Web UI, servisleri ve projeleri görsel olarak yönetmenizi sağlar. Bu kılavuz, dashboard'ın nasıl kullanılacağını, servis ve proje listelerinin nasıl görüntüleneğini, yeni proje oluşturma, düzenleme ve silme işlemlerini, Adminer, PhpMyAdmin, PhpPgAdmin gibi management araçlarına erişimi, log görüntülemeyi ve API endpoint'lerini detaylı olarak açıklamaktadır. Web UI, CLI'ya alternatif kullanıcı dostu bir arayüz sunar.
+Stackvo Web UI allows you to visually manage services and projects. This guide detailedly explains how to use the dashboard, view service and project lists, create, edit, and delete projects, access management tools like Adminer, PhpMyAdmin, PhpPgAdmin, view logs, and API endpoints. The Web UI offers a user-friendly interface alternative to the CLI.
 
 ---
 
-## Erişim
+## Access
 
 ```
 https://stackvo.loc
 ```
 
-**Not:** `/etc/hosts` dosyasına domain eklemeyi unutmayın:
+**Note:** Don't forget to add the domain to the `/etc/hosts` file:
 ```
 127.0.0.1  stackvo.loc
 ```
@@ -24,43 +24,43 @@ https://stackvo.loc
 
 ## Dashboard
 
-### Ana Sayfa
+### Overview
 
-Dashboard, sistemin genel durumunu gösterir:
+The dashboard shows the general status of the system:
 
-- **Çalışan Servisler:** Aktif container sayısı
-- **Projeler:** Toplam proje sayısı
-- **CPU Kullanımı:** Sistem CPU kullanımı
-- **Memory Kullanımı:** Sistem RAM kullanımı
-- **Disk Kullanımı:** Docker volume disk kullanımı
+- **Running Services:** Number of active containers
+- **Projects:** Total number of projects
+- **CPU Usage:** System CPU usage
+- **Memory Usage:** System RAM usage
+- **Disk Usage:** Docker volume disk usage
 
-### Hızlı Erişim
+### Quick Access
 
-Dashboard'dan hızlıca erişebileceğiniz bölümler:
+Sections you can quickly access from the dashboard:
 
-- **Services:** Servis listesi ve durumları
-- **Projects:** Proje listesi ve yönetimi
-- **Tools:** Management araçları
-- **Logs:** Container logları
-- **Settings:** Sistem ayarları
+- **Services:** Service list and statuses
+- **Projects:** Project list and management
+- **Tools:** Management tools
+- **Logs:** Container logs
+- **Settings:** System settings
 
 ---
 
-## Services Sekmesi
+## Services Tab
 
-### Servis Listesi
+### Service List
 
-Tüm servislerin listesini görüntüler:
+Displays a list of all services:
 
-| Servis | Durum | Version | URL | Actions |
+| Service | Status | Version | URL | Actions |
 |--------|-------|---------|-----|---------|
 | MySQL | Running | 8.0 | mysql.stackvo.loc | Start/Stop/Restart |
 | Redis | Running | 7.0 | - | Start/Stop/Restart |
 | RabbitMQ | Running | 3 | rabbitmq.stackvo.loc | Start/Stop/Restart |
 
-### Servis Detayları
+### Service Details
 
-Bir servise tıklayarak detayları görüntüleyin:
+Click on a service to view details:
 
 - **Container Name:** stackvo-mysql
 - **Image:** mysql:8.0
@@ -68,34 +68,34 @@ Bir servise tıklayarak detayları görüntüleyin:
 - **Ports:** 0.0.0.0:3306->3306/tcp
 - **Network:** stackvo-net
 - **Volumes:** mysql-data
-- **Environment Variables:** MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, vb.
+- **Environment Variables:** MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, etc.
 
-### Servis Kontrolleri
+### Service Controls
 
-Her servis için:
+For each service:
 
-- **Start:** Servisi başlat
-- **Stop:** Servisi durdur
-- **Restart:** Servisi yeniden başlat
-- **Logs:** Logları görüntüle
-- **Stats:** CPU, Memory, Network kullanımı
+- **Start:** Start the service
+- **Stop:** Stop the service
+- **Restart:** Restart the service
+- **Logs:** View logs
+- **Stats:** CPU, Memory, Network usage
 
 ---
 
-## Projects Sekmesi
+## Projects Tab
 
-### Proje Listesi
+### Project List
 
-Tüm projelerin listesini görüntüler:
+Displays a list of all projects:
 
-| Proje | Domain | PHP Version | Webserver | Status | Actions |
+| Project | Domain | PHP Version | Webserver | Status | Actions |
 |-------|--------|-------------|-----------|--------|---------|
 | project1 | project1.loc | 8.2 | nginx | Running | Open/Edit/Delete |
 | laravel-app | laravel.loc | 8.2 | nginx | Running | Open/Edit/Delete |
 
-### Yeni Proje Oluşturma
+### Creating New Project
 
-**New Project** butonuna tıklayın:
+Click on the **New Project** button:
 
 1. **Project Name:** myproject
 2. **Domain:** myproject.loc
@@ -104,50 +104,50 @@ Tüm projelerin listesini görüntüler:
 5. **Document Root:** public
 6. **PHP Extensions:** pdo, pdo_mysql, mysqli, gd, curl, zip, mbstring
 
-**Create** butonuna tıklayın.
+Click on the **Create** button.
 
-**Not:** `/etc/hosts` dosyasını manuel güncellemeniz gerekir:
+**Note:** You need to manually update the `/etc/hosts` file:
 ```bash
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 ```
 
-### Proje Düzenleme
+### Editing Project
 
-Bir projenin **Edit** butonuna tıklayın:
+Click on the **Edit** button of a project:
 
-- PHP versiyonunu değiştirin
-- Webserver'ı değiştirin
-- PHP extension'ları ekleyin/çıkarın
-- Document root'u değiştirin
+- Change PHP version
+- Change webserver
+- Add/remove PHP extensions
+- Change document root
 
-**Save** butonuna tıklayın.
+Click on the **Save** button.
 
-### Proje Silme
+### Deleting Project
 
-Bir projenin **Delete** butonuna tıklayın:
+Click on the **Delete** button of a project:
 
-1. Onay penceresi açılır
-2. **Confirm** butonuna tıklayın
-3. Proje container'ları durdurulur
-4. Proje dizini silinir (opsiyonel)
+1. Confirmation window opens
+2. Click on **Confirm** button
+3. Project containers are stopped
+4. Project directory is deleted (optional)
 
-**Not:** `/etc/hosts` dosyasından domain'i manuel kaldırmanız gerekir.
+**Note:** You need to manually remove the domain from the `/etc/hosts` file.
 
 ---
 
-## Tools Sekmesi
+## Tools Tab
 
-### Management Araçları
+### Management Tools
 
-Stackvo, çeşitli management araçları sunar:
+Stackvo offers various management tools:
 
 #### Adminer
 
 **URL:** `https://adminer.stackvo.loc`
 
-Tüm veritabanları için universal management arayüzü.
+Universal management interface for all databases.
 
-**Bağlantı:**
+**Connection:**
 - System: MySQL / PostgreSQL / MongoDB
 - Server: stackvo-mysql / stackvo-postgres / stackvo-mongo
 - Username: stackvo
@@ -158,9 +158,9 @@ Tüm veritabanları için universal management arayüzü.
 
 **URL:** `https://phpmyadmin.stackvo.loc`
 
-MySQL ve MariaDB için management arayüzü.
+Management interface for MySQL and MariaDB.
 
-**Bağlantı:**
+**Connection:**
 - Server: stackvo-mysql
 - Username: stackvo
 - Password: stackvo
@@ -169,52 +169,52 @@ MySQL ve MariaDB için management arayüzü.
 
 **URL:** `https://phppgadmin.stackvo.loc`
 
-PostgreSQL için management arayüzü.
+Management interface for PostgreSQL.
 
 #### PhpMongo
 
 **URL:** `https://phpmongo.stackvo.loc`
 
-MongoDB için management arayüzü.
+Management interface for MongoDB.
 
 #### PhpMemcachedAdmin
 
 **URL:** `https://phpmemcachedadmin.stackvo.loc`
 
-Memcached için management arayüzü.
+Management interface for Memcached.
 
 #### OpCacheGUI
 
 **URL:** `https://opcache.stackvo.loc`
 
-PHP OPcache istatistikleri ve yönetimi.
+PHP OPcache statistics and management.
 
 #### Kafbat
 
 **URL:** `https://kafbat.stackvo.loc`
 
-Kafka için management arayüzü.
+Management interface for Kafka.
 
 ---
 
-## Logs Sekmesi
+## Logs Tab
 
-### Container Logları
+### Container Logs
 
-Tüm container'ların loglarını görüntüleyin:
+View logs of all containers:
 
-**Filtreler:**
-- **Container:** Belirli container seç
+**Filters:**
+- **Container:** Select specific container
 - **Level:** INFO, WARNING, ERROR
-- **Time Range:** Son 1 saat, 24 saat, 7 gün
+- **Time Range:** Last 1 hour, 24 hours, 7 days
 
-**Özellikler:**
+**Features:**
 - Real-time log streaming
 - Search/filter
 - Download logs
 - Clear logs
 
-### Log Görüntüleme
+### Log Viewing
 
 ```
 [2024-12-16 10:00:00] INFO: MySQL started successfully
@@ -225,13 +225,13 @@ Tüm container'ların loglarını görüntüleyin:
 
 ---
 
-## Settings Sekmesi
+## Settings Tab
 
 ### Global Settings
 
-**.env Dosyası Düzenleme:**
+**Editing .env File:**
 
-UI üzerinden `.env` dosyasını düzenleyin:
+Edit the `.env` file via UI:
 
 - **Traefik Settings**
 - **Default Project Settings**
@@ -240,7 +240,7 @@ UI üzerinden `.env` dosyasını düzenleyin:
 - **Port Mappings**
 - **Service Versions**
 
-**Save** butonuna tıklayın ve `./core/cli/stackvo.sh generate` çalıştırın.
+Click on **Save** button and run `./stackvo.sh generate`.
 
 ### System Information
 
@@ -256,7 +256,7 @@ UI üzerinden `.env` dosyasını düzenleyin:
 
 ## API Endpoints
 
-Web UI, aşağıdaki API endpoint'lerini kullanır:
+Web UI uses the following API endpoints:
 
 ### Services API
 
@@ -264,7 +264,7 @@ Web UI, aşağıdaki API endpoint'lerini kullanır:
 GET /api/services.php
 ```
 
-Tüm servislerin listesini döner.
+Returns list of all services.
 
 ### Projects API
 
@@ -272,7 +272,7 @@ Tüm servislerin listesini döner.
 GET /api/projects.php
 ```
 
-Tüm projelerin listesini döner.
+Returns list of all projects.
 
 ### Docker Stats API
 
@@ -280,7 +280,7 @@ Tüm projelerin listesini döner.
 GET /api/docker-stats.php
 ```
 
-Container istatistiklerini döner.
+Returns container statistics.
 
 ### Control API
 
@@ -288,7 +288,7 @@ Container istatistiklerini döner.
 POST /api/control.php
 ```
 
-Container'ları kontrol eder (start/stop/restart).
+Controls containers (start/stop/restart).
 
 **Payload:**
 ```json
@@ -304,7 +304,7 @@ Container'ları kontrol eder (start/stop/restart).
 POST /api/create-project.php
 ```
 
-Yeni proje oluşturur.
+Creates a new project.
 
 **Payload:**
 ```json
@@ -324,7 +324,7 @@ Yeni proje oluşturur.
 POST /api/delete-project.php
 ```
 
-Projeyi siler.
+Deletes a project.
 
 **Payload:**
 ```json
@@ -337,32 +337,32 @@ Projeyi siler.
 
 ## Troubleshooting
 
-### UI Açılmıyor
+### UI Not Opening
 
 ```bash
-# Container durumunu kontrol et
+# Check container status
 docker ps | grep stackvo-ui
 
-# Logları kontrol et
+# Check logs
 docker logs stackvo-ui
 
-# Hosts dosyasını kontrol et
+# Check hosts file
 cat /etc/hosts | grep stackvo.loc
 
-# Yeniden başlat
+# Restart
 docker restart stackvo-ui
 ```
 
-### API Hataları
+### API Errors
 
 ```bash
-# PHP loglarını kontrol et
+# Check PHP logs
 docker logs stackvo-ui
 
-# API endpoint'i test et
+# Test API endpoint
 curl https://stackvo.loc/api/services.php
 
-# Permissions kontrolü
+# Check permissions
 docker exec stackvo-ui ls -la /var/www/html/api/
 ```
 
@@ -372,13 +372,10 @@ docker exec stackvo-ui ls -la /var/www/html/api/
 # Container stats
 docker stats stackvo-ui
 
-# Resource limitleri artır
-# docker-compose.yml'de:
+# Increase resource limits
+# In docker-compose.yml:
 # resources:
 #   limits:
 #     memory: 512M
 #     cpus: '1.0'
 ```
-
----
-

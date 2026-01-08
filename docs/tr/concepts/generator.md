@@ -335,13 +335,13 @@ esac
 
 ```bash
 # Tüm konfigürasyonları üret
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Sadece projeleri üret
-./core/cli/stackvo.sh generate projects
+./stackvo.sh generate projects
 
 # Sadece servisleri üret
-./core/cli/stackvo.sh generate services
+./stackvo.sh generate services
 ```
 
 ---

@@ -24,7 +24,7 @@ docker --version
 docker compose --version
 
 # CLI kur
-./core/cli/stackvo.sh install
+./stackvo.sh install
 
 # Test et
 stackvo doctor
@@ -47,8 +47,8 @@ git checkout -b fix/bug-description
 nano .env
 
 # Test edin
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### 5. Commit Edin
@@ -153,16 +153,16 @@ stackvo/
 
 ```bash
 # Generator test
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Servisleri başlat
-./core/cli/stackvo.sh up
+./stackvo.sh up
 
 # Logları kontrol et
-./core/cli/stackvo.sh logs
+./stackvo.sh logs
 
 # Temizle
-./core/cli/stackvo.sh down
+./stackvo.sh down
 ```
 
 ### CI/CD

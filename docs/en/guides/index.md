@@ -1,50 +1,50 @@
 ---
-title: Nasıl Yapılır Kılavuzları
-description: Stackvo'u kullanarak günlük geliştirme görevlerinizi nasıl yapacağınızı öğrenin
+title: How-to Guides
+description: Learn how to perform your daily development tasks using Stackvo
 ---
 
-# Nasıl Yapılır Kılavuzları
+# How-to Guides
 
-Stackvo'u günlük geliştirme işlerinizde etkili bir şekilde kullanmanız için pratik kılavuzlar. CLI komutlarından Web UI kullanımına, proje yönetiminden servis konfigürasyonuna kadar tüm temel işlemleri adım adım öğrenin.
+Practical guides for using Stackvo effectively in your daily development work. Learn all basic operations step-by-step, from CLI commands to Web UI usage, from project management to service configuration.
 
 ---
 
-## Kılavuzlar
+## Guides
 
-Stackvo'un temel özelliklerini kullanmak için ihtiyacınız olan tüm kılavuzlar:
+All the guides you need to use Stackvo's core features:
 
 <div class="grid cards" markdown>
 
--   :material-console:{ .lg .middle } __CLI Kullanımı__
+-   :material-console:{ .lg .middle } __CLI Usage__
 
     ---
 
-    Komut satırı araçları ve temel CLI komutları
+    Command line tools and basic CLI commands
 
-    [:octicons-arrow-right-24: CLI Kullanımı](cli.md)
+    [:octicons-arrow-right-24: CLI Usage](cli.md)
 
--   :material-folder-multiple:{ .lg .middle } __Proje Yönetimi__
-
-    ---
-
-    Proje oluşturma, güncelleme ve silme işlemleri
-
-    [:octicons-arrow-right-24: Proje Yönetimi](projects.md)
-
--   :material-cog-outline:{ .lg .middle } __Servis Konfigürasyonu__
+-   :material-folder-multiple:{ .lg .middle } __Project Management__
 
     ---
 
-    Servisleri aktifleştirme ve yapılandırma
+    Project creation, update, and deletion operations
 
-    [:octicons-arrow-right-24: Servis Konfigürasyonu](services.md)
+    [:octicons-arrow-right-24: Project Management](projects.md)
 
--   :material-monitor-dashboard:{ .lg .middle } __Web UI Kullanımı__
+-   :material-cog-outline:{ .lg .middle } __Service Configuration__
 
     ---
 
-    Web arayüzü özellikleri ve kullanımı
+    Activating and configuring services
 
-    [:octicons-arrow-right-24: Web UI Kullanımı](web-ui.md)
+    [:octicons-arrow-right-24: Service Configuration](services.md)
+
+-   :material-monitor-dashboard:{ .lg .middle } __Web UI Usage__
+
+    ---
+
+    Web interface features and usage
+
+    [:octicons-arrow-right-24: Web UI Usage](web-ui.md)
 
 </div>

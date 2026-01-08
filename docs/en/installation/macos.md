@@ -1,69 +1,71 @@
 ---
-title: macOS Kurulumu
-description: macOS'ta Stackvo kurulumu - Intel ve Apple Silicon (M1/M2/M3) desteği
+title: macOS Installation
+description: Stackvo installation on macOS - Intel and Apple Silicon (M1/M2/M3) support
 ---
 
-# macOS Kurulumu
+# macOS Installation
 
-macOS'ta Stackvo kurulumu için Docker Desktop kullanılır. Bu kılavuz, hem Intel işlemcili hem de Apple Silicon (M1/M2/M3) Mac bilgisayarlarda Docker Desktop kurulumu, sistem ayarları ve Stackvo yapılandırmasını detaylı olarak açıklamaktadır. Homebrew ile kolay kurulum seçenekleri de mevcuttur.
-
-!!! tip "Sistem Gereksinimlerini Kontrol Ettiniz mi?"
-    Kuruluma başlamadan önce [Sistem Gereksinimleri](../started/requirements.md) sayfasını kontrol edin.
+Docker Desktop is used for Stackvo installation on macOS. This guide detailedly explains Docker Desktop installation, system settings, and Stackvo configuration on both Intel and Apple Silicon (M1/M2/M3) Mac computers. Easy installation options with Homebrew are also available.
 
 ---
 
-## Docker Desktop Kurulumu
+!!! tip "Checked System Requirements?"
+    Check the [System Requirements](../started/requirements.md) page before starting the installation.
 
-### 1. Docker Desktop İndirme
+---
+
+## Docker Desktop Installation
+
+### 1. Downloading Docker Desktop
 
 === "Apple Silicon (M1/M2/M3)"
 
     ```bash
-    # Tarayıcıda açın:
+    # Open in browser:
     https://desktop.docker.com/mac/main/arm64/Docker.dmg
 
-    # Veya Homebrew ile (önerilir):
+    # Or with Homebrew (recommended):
     brew install --cask docker
     ```
 
 === "Intel"
 
     ```bash
-    # Tarayıcıda açın:
+    # Open in browser:
     https://desktop.docker.com/mac/main/amd64/Docker.dmg
 
-    # Veya Homebrew ile (önerilir):
+    # Or with Homebrew (recommended):
     brew install --cask docker
     ```
 
-### 2. Docker Desktop Kurulumu
+### 2. Installing Docker Desktop
 
-1. DMG dosyasını açın
-2. Docker.app'i Applications'a sürükleyin
-3. Applications klasöründen Docker'ı başlatın
-4. İlk açılışta admin şifresi isteyecek
+1. Open the DMG file
+2. Drag Docker.app to Applications
+3. Start Docker from Applications folder
+4. It will ask for admin password on first launch
 
-!!! warning "İlk Başlatma"
-    Docker Desktop ilk başlatmada birkaç dakika sürebilir.
+!!! warning "First Launch"
+    Docker Desktop may take a few minutes on first launch.
 
-### 3. Docker Desktop Ayarları
+### 3. Docker Desktop Settings
 
-Docker Desktop açıldıktan sonra:
+After Docker Desktop opens:
 
 **Settings** (⚙️) → **Resources**
 
-| Kaynak | Minimum | Önerilen |
+| Resource | Minimum | Recommended |
 |--------|---------|----------|
 | **CPU** | 2 cores | 4 cores |
 | **Memory** | 4 GB | 8 GB |
 | **Disk** | 20 GB | 50 GB |
 
-**Apply & Restart** butonuna tıklayın.
+Click on **Apply & Restart** button.
 
-### 4. Docker Doğrulama
+### 4. Docker Verification
 
 ```bash
-# Versiyon kontrolü
+# Version check
 docker --version
 docker compose version
 
@@ -73,83 +75,83 @@ docker run hello-world
 
 ---
 
-## Homebrew ile Kurulum (Önerilir)
+## Installation with Homebrew (Recommended)
 
 ```bash
-# Homebrew kurulu değilse:
+# If Homebrew is not installed:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Docker Desktop + Gerekli araçlar
+# Docker Desktop + Required tools
 brew install --cask docker
 brew install git jq curl
 
-# Docker Desktop'ı başlat
+# Start Docker Desktop
 open -a Docker
 ```
 
 ---
 
-## Stackvo Kurulumu
+## Stackvo Installation
 
-Docker Desktop kurulumu tamamlandıktan sonra Stackvo'u kurmak için [Hızlı Başlangıç](../started/quick-start.md) sayfasını takip edin.
+After Docker Desktop installation is complete, follow the [Quick Start](../started/quick-start.md) page to install Stackvo.
 
-**Özet:**
+**Summary:**
 
 ```bash
-# Repository klonla
+# Clone repository
 git clone https://github.com/stackvo/stackvo.git
 cd stackvo
 
-# Konfigürasyon
+# Configuration
 cp .env.example .env
 
-# Başlat
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Start
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ---
 
-## Kurulum Doğrulama
+## Installation Verification
 
 ```bash
-# Container durumu
+# Container status
 docker ps
 ```
 
-Tarayıcınızda:
+In your browser:
 
 - **Stackvo Dashboard:** https://stackvo.loc
 - **Traefik Dashboard:** http://traefik.stackvo.loc
 
-!!! success "Kurulum Tamamlandı!"
-    [Hızlı Başlangıç](../started/quick-start.md) sayfasına geçerek ilk projenizi oluşturabilirsiniz.
+!!! success "Installation Completed!"
+    You can now proceed to the [Quick Start](../started/quick-start.md) page to create your first project.
 
 ---
 
-## Yaygın Sorunlar
+## Common Issues
 
-### Docker Desktop Başlamıyor
+### Docker Desktop Not Starting
 
 ```bash
-# Docker Desktop'ı tamamen kapat
+# Completely close Docker Desktop
 pkill -SIGHUP -f Docker
 
-# Yeniden başlat
+# Restart
 open -a Docker
 ```
 
-### Rosetta 2 Gerekli (Apple Silicon)
+### Rosetta 2 Required (Apple Silicon)
 
 ```bash
-# Rosetta 2 kur
+# Install Rosetta 2
 softwareupdate --install-rosetta --agree-to-license
 ```
 
-### Port Çakışması
+### Port Conflict
 
 ```bash
-# Çakışan process'i bul ve durdur
+# Find and stop conflicting process
 sudo lsof -i :80
 sudo kill -9 <PID>
 ```

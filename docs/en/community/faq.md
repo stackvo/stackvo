@@ -1,18 +1,20 @@
-# FAQ - Sık Sorulan Sorular
+# FAQ - Frequently Asked Questions
 
-Stackvo hakkında en sık sorulan sorular ve cevapları. Bu sayfa, genel sorulardan kurulum ve kullanıma, troubleshooting'den performance optimizasyonuna, güvenlikten servislere, Web UI'dan backup ve güncelleme işlemlerine kadar geniş bir yelpazede soruları kapsamaktadır. Hızlı çözümler ve pratik örnekler içerir.
+Frequently asked questions and answers about Stackvo. This page covers a wide range of questions from general inquiries to installation and usage, troubleshooting to performance optimization, security to services, Web UI to backup and update procedures. It includes quick solutions and practical examples.
 
-## Genel Sorular
+---
 
-### Stackvo nedir?
+## General Questions
 
-Stackvo, Docker tabanlı, tamamen özelleştirilebilir ve modüler bir geliştirme ortamı yönetim sistemidir. 40+ servisi destekler ve pure Bash ile yazılmıştır.
+### What is Stackvo?
 
-### Stackvo ücretsiz mi?
+Stackvo is a Docker-based, fully customizable, and modular development environment management system. It supports 40+ services and is written in pure Bash.
 
-Evet, Stackvo tamamen ücretsiz ve açık kaynaklıdır (MIT License).
+### Is Stackvo free?
 
-### Hangi işletim sistemlerinde çalışır?
+Yes, Stackvo is completely free and open source (MIT License).
+
+### Which operating systems does it work on?
 
 - Linux (Ubuntu, Debian, CentOS, Arch)
 - macOS
@@ -20,25 +22,25 @@ Evet, Stackvo tamamen ücretsiz ve açık kaynaklıdır (MIT License).
 
 ---
 
-## Kurulum
+## Installation
 
-### Docker kurulu değilse ne yapmalıyım?
+### What should I do if Docker is not installed?
 
-[Installation Guide](../installation/index.md) sayfasındaki adımları takip edin.
+Follow the steps on the [Installation Guide](../installation/index.md) page.
 
-### Kurulum sırasında hata alıyorum
+### I get an error during installation
 
 ```bash
-# Sistem kontrolü
+# System check
 stackvo doctor
 
-# Logları kontrol et
+# Check logs
 cat core/generator.log
 ```
 
-### Port çakışması hatası alıyorum
+### I get a port conflict error
 
-`.env` dosyasında portları değiştirin:
+Change the ports in the `.env` file:
 
 ```bash
 HOST_PORT_POSTGRES=5433
@@ -47,12 +49,12 @@ HOST_PORT_PERCONA=3308
 
 ---
 
-## Kullanım
+## Usage
 
-### Yeni proje nasıl oluştururum?
+### How do I create a new project?
 
 ```bash
-# 1. Proje dizini
+# 1. Project directory
 mkdir -p projects/myproject/public
 
 # 2. stackvo.json
@@ -66,33 +68,33 @@ cat > projects/myproject/stackvo.json <<EOF
 }
 EOF
 
-# 3. Generate ve start
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+# 3. Generate and start
+./stackvo.sh generate projects
+./stackvo.sh up
 
 # 4. Hosts
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 ```
 
-### Servis nasıl aktif ederim?
+### How do I enable a service?
 
-`.env` dosyasını düzenleyin:
+Edit the `.env` file:
 
 ```bash
 SERVICE_REDIS_ENABLE=true
 SERVICE_REDIS_VERSION=7.0
 ```
 
-Sonra:
+Then:
 
 ```bash
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### PHP versiyonunu nasıl değiştiririm?
+### How do I change the PHP version?
 
-`stackvo.json` dosyasında:
+In the `stackvo.json` file:
 
 ```json
 {
@@ -102,49 +104,49 @@ Sonra:
 }
 ```
 
-Sonra:
+Then:
 
 ```bash
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh restart
+./stackvo.sh generate projects
+./stackvo.sh restart
 ```
 
 ---
 
 ## Troubleshooting
 
-### Container başlamıyor
+### Container is not starting
 
 ```bash
-# Logları kontrol et
+# Check logs
 docker logs stackvo-mysql
 
-# Yeniden oluştur
-./core/cli/stackvo.sh down
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Recreate
+./stackvo.sh down
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### 404 hatası alıyorum
+### I get a 404 error
 
 ```bash
-# Document root kontrolü
+# Document root check
 docker exec stackvo-myproject-web ls -la /var/www/html/public
 
-# Nginx config kontrolü
+# Nginx config check
 docker exec stackvo-myproject-web nginx -t
 ```
 
-### Database bağlantı hatası
+### Database connection error
 
 ```bash
-# Container çalışıyor mu?
+# Is container running?
 docker ps | grep mysql
 
-# Network kontrolü
+# Network check
 docker exec stackvo-php ping stackvo-mysql
 
-# Bağlantı bilgileri
+# Connection details
 Host: stackvo-mysql
 Port: 3306
 User: stackvo
@@ -155,41 +157,41 @@ Password: stackvo
 
 ## Performance
 
-### Sistem yavaş çalışıyor
+### System runs slowly
 
 ```bash
-# Resource kullanımı
+# Resource usage
 docker stats
 
-# Gereksiz container'ları kaldır
+# Remove unused containers
 docker system prune -a
 ```
 
-### Build süresi uzun
+### Build time is long
 
 ```bash
-# Cache kullan
+# Use cache
 docker compose build --parallel
 
-# Image'ları önceden çek
-./core/cli/stackvo.sh pull
+# Pull images beforehand
+./stackvo.sh pull
 ```
 
 ---
 
-## Güvenlik
+## Security
 
-### Production'da kullanabilir miyim?
+### Can I use it in production?
 
-Evet, ancak:
-- Güçlü şifreler kullanın
-- SSL/TLS aktif edin
-- Firewall kuralları ekleyin
-- Gereksiz portları kapatın
+Yes, but:
+- Use strong passwords
+- Enable SSL/TLS
+- Add firewall rules
+- Close unnecessary ports
 
-### Şifreleri nasıl değiştiririm?
+### How do I change passwords?
 
-`.env` dosyasında:
+In the `.env` file:
 
 ```bash
 SERVICE_MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32)
@@ -198,9 +200,9 @@ SERVICE_RABBITMQ_DEFAULT_PASS=$(openssl rand -base64 32)
 
 ---
 
-## Servisler
+## Services
 
-### Hangi veritabanları destekleniyor?
+### Which databases are supported?
 
 - MySQL (5.6 - 8.1)
 - MariaDB (10.6)
@@ -211,22 +213,22 @@ SERVICE_RABBITMQ_DEFAULT_PASS=$(openssl rand -base64 32)
 - CouchDB
 - Couchbase
 
-### Redis Cluster nasıl kurarım?
+### How do I install Redis Cluster?
 
-Şu anda tek node Redis destekleniyor. Cluster için custom konfigürasyon gerekir.
+Currently, single node Redis is supported. Custom configuration is required for Cluster.
 
-### Elasticsearch nasıl kullanırım?
+### How do I use Elasticsearch?
 
 ```bash
 # .env
 SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_KIBANA_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-Erişim:
+Access:
 - Elasticsearch: http://localhost:9200
 - Kibana: https://kibana.stackvo.loc
 
@@ -234,23 +236,23 @@ Erişim:
 
 ## Web UI
 
-### Web UI'a erişemiyorum
+### I cannot access Web UI
 
 ```bash
-# Container kontrolü
+# Container check
 docker ps | grep stackvo-ui
 
-# Hosts kontrolü
+# Hosts check
 cat /etc/hosts | grep stackvo.loc
 
-# Yeniden başlat
+# Restart
 docker restart stackvo-ui
 ```
 
-### API çalışmıyor
+### API is not working
 
 ```bash
-# PHP logları
+# PHP logs
 docker logs stackvo-ui
 
 # Permissions
@@ -261,7 +263,7 @@ docker exec stackvo-ui ls -la /var/www/html/api/
 
 ## Backup
 
-### Veritabanı backup nasıl alırım?
+### How do I backup the database?
 
 **MySQL:**
 ```bash
@@ -278,7 +280,7 @@ docker exec stackvo-postgres pg_dumpall -U stackvo > backup.sql
 docker exec stackvo-mongo mongodump --username root --password root --out /backup
 ```
 
-### Volume backup nasıl alırım?
+### How do I backup volumes?
 
 ```bash
 docker run --rm \
@@ -289,42 +291,42 @@ docker run --rm \
 
 ---
 
-## Güncelleme
+## Updates
 
-### Stackvo nasıl güncellenir?
+### How do I update Stackvo?
 
 ```bash
 # Pull
 git pull origin main
 
-# Yeniden generate
-./core/cli/stackvo.sh generate
+# Re-generate
+./stackvo.sh generate
 
 # Restart
-./core/cli/stackvo.sh restart
+./stackvo.sh restart
 ```
 
-### Image'lar nasıl güncellenir?
+### How do I update images?
 
 ```bash
-# Tüm image'ları güncelle
-./core/cli/stackvo.sh pull
+# Update all images
+./stackvo.sh pull
 
-# Yeniden başlat
-./core/cli/stackvo.sh up --force-recreate
+# Restart
+./stackvo.sh up --force-recreate
 ```
 
 ---
 
-## Diğer
+## Other
 
-### Birden fazla proje çalıştırabilir miyim?
+### Can I run multiple projects?
 
-Evet, sınırsız proje çalıştırabilirsiniz.
+Yes, you can run unlimited projects.
 
-### Custom domain kullanabilir miyim?
+### Can I use a custom domain?
 
-Evet, `stackvo.json` dosyasında:
+Yes, in the `stackvo.json` file:
 
 ```json
 {
@@ -332,13 +334,13 @@ Evet, `stackvo.json` dosyasında:
 }
 ```
 
-`/etc/hosts` dosyasına ekleyin:
+Add to `/etc/hosts` file:
 
 ```
 127.0.0.1  myapp.local
 ```
 
-### SSL sertifikası nasıl oluşturulur?
+### How to generate SSL certificate?
 
 ```bash
 ./core/cli/utils/generate-ssl-certs.sh
@@ -346,7 +348,7 @@ Evet, `stackvo.json` dosyasında:
 
 ---
 
-## Hala Sorunuz mu Var?
+## Still have questions?
 
 - [GitHub Discussions](https://github.com/stackvo/stackvo/discussions)
 - [GitHub Issues](https://github.com/stackvo/stackvo/issues)

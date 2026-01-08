@@ -1,35 +1,37 @@
 # Support
 
-Stackvo için destek alma yolları. Bu sayfa, GitHub Discussions, GitHub Issues ve dokümantasyon gibi destek kanallarını, iyi soru sorma rehberini, bug report ve feature request şablonlarını, yanıt sürelerini ve iletişim bilgilerini detaylı olarak açıklamaktadır. Community bazlı destek sisteminin nasıl çalıştığını ve en hızlı şekilde yardım almanın yollarını içerir.
+Ways to get support for Stackvo. This page explains in detail support channels such as GitHub Discussions, GitHub Issues, and documentation, the guide for asking good questions, bug report and feature request templates, response times, and contact information. It covers how the community-based support system works and ways to get help fastest.
 
-## 🆘 Destek Kanalları
+---
 
-### 1. GitHub Discussions (Önerilen)
+## Support Channels
 
-**En iyi seçenek:** Soru sormak, fikir paylaşmak, tartışmak için.
+### 1. GitHub Discussions (Recommended)
 
-[💬 Discussions'a git →](https://github.com/stackvo/stackvo/discussions)
+**Best option:** To ask questions, share ideas, and discuss.
 
-**Kategoriler:**
-- 💡 **Ideas** - Özellik önerileri
-- 🙏 **Q&A** - Sorular ve cevaplar
-- 📣 **Announcements** - Duyurular
-- 💬 **General** - Genel tartışmalar
+[💬 Go to Discussions →](https://github.com/stackvo/stackvo/discussions)
+
+**Categories:**
+- 💡 **Ideas** - Feature suggestions
+- 🙏 **Q&A** - Questions and answers
+- 📣 **Announcements** - Announcements
+- 💬 **General** - General discussions
 
 ### 2. GitHub Issues
 
-**Bug reports ve feature requests için.**
+**For bug reports and feature requests.**
 
-[🐛 Issue aç →](https://github.com/stackvo/stackvo/issues/new)
+[Open Issue →](https://github.com/stackvo/stackvo/issues/new)
 
-**Ne zaman kullanılır:**
-- Bug bulduğunuzda
-- Yeni özellik önerdiğinizde
-- Dokümantasyon hatası gördüğünüzde
+**When to use:**
+- When you find a bug
+- When you suggest a new feature
+- When you see a documentation error
 
 ### 3. Documentation
 
-**Önce dokümantasyona bakın:**
+**Check the documentation first:**
 
 - [Getting Started](../started/index.md)
 - [Installation](../installation/index.md)
@@ -40,120 +42,120 @@ Stackvo için destek alma yolları. Bu sayfa, GitHub Discussions, GitHub Issues 
 
 ---
 
-## 📝 Soru Sorma Rehberi
+## Question Asking Guide
 
-### İyi Soru Nasıl Sorulur?
+### How to Ask a Good Question?
 
-#### ✅ İyi Örnek
+#### ✅ Good Example
 
 ```markdown
-## Sorun: MySQL container başlamıyor
+## Problem: MySQL container is not starting
 
 **Environment:**
 - OS: Ubuntu 22.04
 - Docker: 24.0.7
 - Stackvo: 1.0.0
 
-**Adımlar:**
-1. ./core/cli/stackvo.sh generate
-2. ./core/cli/stackvo.sh up
+**Steps:**
+1. ./stackvo.sh generate
+2. ./stackvo.sh up
 
-**Hata:**
+**Error:**
 ```
 Error: MySQL container exited with code 1
 ```
 
-**Loglar:**
+**Logs:**
 ```
 docker logs stackvo-mysql
 [ERROR] InnoDB: Cannot allocate memory
 ```
 
-**Denediklerim:**
+**What I tried:**
 - Docker restart
-- ./core/cli/stackvo.sh down && ./core/cli/stackvo.sh up
+- ./stackvo.sh down && ./stackvo.sh up
 ```
 
-#### ❌ Kötü Örnek
+#### ❌ Bad Example
 
 ```
-MySQL çalışmıyor yardım edin
+MySQL is not working help me
 ```
 
-### Soru Şablonu
+### Question Template
 
 ```markdown
-## Sorun Başlığı
+## Problem Title
 
 **Environment:**
 - OS: [Ubuntu/macOS/Windows]
 - Docker: [version]
 - Stackvo: [version]
 
-**Sorun Açıklaması:**
-[Detaylı açıklama]
+**Problem Description:**
+[Detailed description]
 
-**Adımlar:**
-1. [Adım 1]
-2. [Adım 2]
+**Steps:**
+1. [Step 1]
+2. [Step 2]
 
-**Beklenen Davranış:**
-[Ne olmasını bekliyordunuz?]
+**Expected Behavior:**
+[What did you expect to happen?]
 
-**Gerçek Davranış:**
-[Ne oldu?]
+**Actual Behavior:**
+[What happened?]
 
-**Hata Mesajı:**
+**Error Message:**
 ```
-[Hata mesajı]
-```
-
-**Loglar:**
-```
-[İlgili loglar]
+[Error message]
 ```
 
-**Denediklerim:**
-- [Deneme 1]
-- [Deneme 2]
+**Logs:**
+```
+[Relevant logs]
+```
+
+**What I tried:**
+- [Trial 1]
+- [Trial 2]
 ```
 
 ---
 
-## 🐛 Bug Report Rehberi
+## Bug Report Guide
 
-### Bug Nasıl Raporlanır?
+### How to Report a Bug?
 
-1. **Önce arayın:** Aynı bug daha önce raporlanmış mı?
-2. **Reproduce edin:** Bug'ı tekrar oluşturabilir misiniz?
-3. **Minimal örnek:** En basit haliyle gösterin
-4. **Environment:** Sistem bilgilerini ekleyin
-5. **Loglar:** İlgili logları paylaşın
+1. **Search first:** Has the same bug been reported before?
+2. **Reproduce:** Can you reproduce the bug?
+3. **Minimal example:** Show it in the simplest way
+4. **Environment:** Add system information
+5. **Logs:** Share relevant logs
 
-### Bug Report Şablonu
+### Bug Report Template
 
 ```markdown
-## Bug Açıklaması
+## Bug Description
 
-[Kısa ve net açıklama]
+[Short and clear description]
 
-## Reproduce Adımları
+## Reproduction Steps
 
-1. [Adım 1]
-2. [Adım 2]
-3. [Adım 3]
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
 
-## Beklenen Davranış
+## Expected Behavior
 
-[Ne olmalıydı?]
+[What should have happened?]
 
-## Gerçek Davranış
+## Actual Behavior
 
-[Ne oldu?]
+[What happened?]
 
 ## Screenshots
 
-[Varsa ekran görüntüleri]
+[Screenshots if available]
 
 ## Environment
 
@@ -161,91 +163,91 @@ MySQL çalışmıyor yardım edin
 - **Docker:** 24.0.7
 - **Docker Compose:** 2.23.0
 - **Stackvo:** 1.0.0
-- **Browser:** Chrome 120 (Web UI için)
+- **Browser:** Chrome 120 (For Web UI)
 
-## Loglar
+## Logs
 
 ```bash
 # stackvo doctor
-[Çıktı]
+[Output]
 
 # Container logs
 docker logs stackvo-mysql
-[Loglar]
+[Logs]
 
 # Generator log
 cat core/generator.log
-[Loglar]
+[Logs]
 ```
 
-## Ek Bilgiler
+## Additional Information
 
-[Diğer ilgili bilgiler]
+[Other relevant information]
 ```
 
 ---
 
-## 💡 Feature Request Rehberi
+## 💡 Feature Request Guide
 
-### Özellik Nasıl Önerilir?
+### How to Suggest a Feature?
 
-1. **Arayın:** Benzer öneri var mı?
-2. **Use case:** Neden gerekli?
-3. **Çözüm:** Nasıl implement edilmeli?
-4. **Alternatifler:** Başka çözümler?
+1. **Search:** Is there a similar suggestion?
+2. **Use case:** Why is it necessary?
+3. **Solution:** How should it be implemented?
+4. **Alternatives:** Other solutions?
 
-### Feature Request Şablonu
+### Feature Request Template
 
 ```markdown
-## Özellik Açıklaması
+## Feature Description
 
-[Özelliği kısaca açıklayın]
+[Briefly describe the feature]
 
-## Motivasyon
+## Motivation
 
-[Neden bu özellik gerekli?]
+[Why is this feature necessary?]
 
 ## Use Case
 
-[Hangi senaryolarda kullanılacak?]
+[In which scenarios will it be used?]
 
-**Örnek:**
+**Example:**
 ```
-[Kod örneği]
+[Code example]
 ```
 
-## Önerilen Çözüm
+## Proposed Solution
 
-[Nasıl implement edilmeli?]
+[How should it be implemented?]
 
-## Alternatifler
+## Alternatives
 
-[Başka çözüm yolları?]
+[Other ways of solution?]
 
-## Ek Bilgiler
+## Additional Information
 
-[Diğer ilgili bilgiler]
+[Other relevant information]
 ```
 
 ---
 
-## 🤝 Katkıda Bulunma
+## Contributing
 
-Stackvo'a katkıda bulunmak ister misiniz?
+Do you want to contribute to Stackvo?
 
 [Contributing Guide →](contributing.md)
 
-**Katkı Alanları:**
-- 💻 Kod
-- 📝 Dokümantasyon
+**Contribution Areas:**
+- 💻 Code
+- 📝 Documentation
 - 🧪 Testing
-- 🌍 Çeviri
+- 🌍 Translation
 - 🎨 Design
 - 📢 Community
 
 ---
 
-## 📊 Destek İstatistikleri
+## Support Stats
 
 <div class="grid cards" markdown>
 
@@ -257,19 +259,19 @@ Stackvo'a katkıda bulunmak ister misiniz?
 
 -   **💬 Discussions**
     
-    Aktif tartışmalar
+    Active discussions
     
     [Discussions →](https://github.com/stackvo/stackvo/discussions)
 
 -   **👥 Contributors**
     
-    Topluluk desteği
+    Community support
     
     [Contributors →](index.md#contributors)
 
 -   **📖 Documentation**
     
-    Kapsamlı rehberler
+    Comprehensive guides
     
     [Docs →](../index.md)
 
@@ -277,27 +279,27 @@ Stackvo'a katkıda bulunmak ister misiniz?
 
 ---
 
-## ⏱️ Yanıt Süreleri
+## Response Times
 
 **GitHub Issues:**
-- İlk yanıt: 24-48 saat
-- Çözüm: Karmaşıklığa bağlı
+- First response: 24-48 hours
+- Resolution: Depends on complexity
 
 **GitHub Discussions:**
-- Community desteği: Değişken
-- Maintainer desteği: 1-3 gün
+- Community support: Variable
+- Maintainer support: 1-3 days
 
-**Not:** Stackvo açık kaynak bir projedir. Yanıt süreleri garanti değildir.
-
----
-
-## 🌟 Premium Support
-
-Şu anda premium support sunulmamaktadır. Tüm destek community bazlıdır.
+**Note:** Stackvo is an open source project. Response times are not guaranteed.
 
 ---
 
-## 📞 İletişim
+## Premium Support
+
+Currently, premium support is not offered. All support is community-based.
+
+---
+
+## Contact
 
 ### GitHub
 
@@ -318,23 +320,13 @@ Stackvo'a katkıda bulunmak ister misiniz?
 
 ---
 
-## 🔒 Security Issues
+## Security Issues
 
-Güvenlik açığı bulduysanız:
+If you found a security vulnerability:
 
-1. **Public issue açmayın**
-2. **Email gönderin:** security@stackvo.example.com
-3. **Detay verin:** Açık, impact, reproduce
-4. **Bekleyin:** 48 saat içinde yanıt
-
----
-
-## 📚 Ek Kaynaklar
-
-- [Documentation](../index.md)
-- [FAQ](faq.md)
-- [Troubleshooting](troubleshooting.md)
-- [Contributing](contributing.md)
-- [Changelog](../changelog.md)
+1. **Do not open a public issue**
+2. **Send an email:** security@stackvo.example.com
+3. **Provide details:** Vulnerability, impact, reproduce
+4. **Wait:** Response within 48 hours
 
 ---

@@ -1,95 +1,97 @@
 ---
-title: Stackvo'a Giriş
-description: Learn what Stackvo is, explore the core features of this Docker-based development environment management system, discover 40+ service support, multi-language capabilities, and understand why it's better than other alternatives in detail.
+title: Introduction to Stackvo
+description: Learn in detail what Stackvo is, the key features of the Docker-based development environment management system, 40+ service support, multi-language capabilities, and why it is better than other alternatives.
 ---
 
-# Stackvo'a Giriş
+# Introduction to Stackvo
 
-Stackvo, modern web geliştirme süreçlerinizi hızlandıran ve kolaylaştıran Docker tabanlı bir geliştirme ortamı yönetim sistemidir. Bu sayfa, Stackvo'un ne olduğunu, hangi sorunları çözdüğünü, temel özelliklerini ve neden diğer alternatiflerden daha iyi olduğunu detaylı olarak açıklamaktadır.
-
-## Stackvo Nedir?
-
-**Stackvo**, modern web geliştirme projeleriniz için **Docker tabanlı**, tamamen **özelleştirilebilir** ve **modüler** bir geliştirme ortamı yönetim sistemidir.
-
-!!! quote "Tek Komutla Tam Stack"
-Stackvo ile 40+ servisi tek bir komutla başlatın, yönetin ve ölçeklendirin.
+Stackvo is a Docker-based development environment management system that accelerates and simplifies your modern web development processes. This page explains in detail what Stackvo is, what problems it solves, its key features, and why it is better than other alternatives.
 
 ---
 
-## Temel Özellikler
+## What is Stackvo?
 
-### Multi-Language Desteği
+**Stackvo** is a **Docker-based**, fully **customizable**, and **modular** development environment management system for your modern web development projects.
 
-Stackvo 6 farklı programlama dilini destekler:
+!!! quote "Full Stack with One Command"
+Stackvo allows you to start, manage, and scale 40+ services with a single command.
 
-| Dil | Versiyon Desteği | Özellikler |
+---
+
+## Key Features
+
+### Multi-Language Support
+
+Stackvo supports 6 different programming languages:
+
+| Language | Version Support | Features |
 |-----|------------------|------------|
-| **PHP** | 5.6 - 8.5 | 70+ extension, Composer, Xdebug |
+| **PHP** | 5.6 - 8.5 | 70+ extensions, Composer, Xdebug |
 | **Node.js** | 12+ | npm, yarn, PM2, TypeScript |
 | **Python** | 2.7 - 3.14 | pip, virtualenv, Django, Flask |
 | **Go** | 1.11+ | Modern Go toolchain |
 | **Ruby** | 2.4 - 3.3 | Bundler, Rails ready |
 | **Rust** | 1.56+ | Cargo package manager |
 
-### 40+ Hazır Servis
+### 40+ Ready-to-Use Services
 
-| Kategori | Adet | Örnekler |
+| Category | Count | Examples |
 |----------|------|----------|
-| **Veritabanı** | 8 | MySQL, PostgreSQL, MongoDB, MariaDB |
+| **Database** | 8 | MySQL, PostgreSQL, MongoDB, MariaDB |
 | **Cache** | 2 | Redis, Memcached |
-| **Message Queue** | 4 | RabbitMQ, Kafka, NATS |
-| **Arama** | 4 | Elasticsearch, Meilisearch, Solr |
-| **Monitoring** | 5 | Grafana, Netdata, SonarQube |
+| **Message Queue** | 4 | RabbitMQ, Kafka |
+| **Search** | 4 | Elasticsearch |
+| **Monitoring** | 5 | Grafana |
 | **Web Server** | 4 | Nginx, Apache, Caddy |
-| **Diğer** | 13+ | Adminer, phpMyAdmin, phpPgAdmin |
+| **Other** | 13+ | Adminer, phpMyAdmin, phpPgAdmin |
 
-!!! info "Tüm Servisler"
-    Detaylı servis listesi için [Servisler](../references/services.md) sayfasını inceleyin.
-
----
-
-## Neden Stackvo?
-
-=== "Geleneksel Yöntem"
-
-    **❌ Sorunlar:**
-
-    - Her servis için ayrı kurulum
-    - Versiyon çakışmaları
-    - Port çakışmaları
-    - Karmaşık konfigürasyon
-    - Platform bağımlılığı
-    - Takım içi tutarsızlıklar
-
-=== "Stackvo ile"
-
-    **✅ Çözümler:**
-
-    - Tek komutla tüm stack
-    - İzole ortamlar
-    - Otomatik port yönetimi
-    - Tek dosyada konfigürasyon (.env)
-    - Platform bağımsız
-    - Takım içi tutarlılık
+!!! info "All Services"
+    Check the [Services](../references/services.md) page for a detailed list of services.
 
 ---
 
-## Temel Kavramlar
+## Why Stackvo?
 
-### Generator Sistemi
+=== "Traditional Method"
+
+    **❌ Problems:**
+
+    - Separate installation for each service
+    - Version conflicts
+    - Port conflicts
+    - Complex configuration
+    - Platform dependence
+    - Inconsistencies within the team
+
+=== "With Stackvo"
+
+    **✅ Solutions:**
+
+    - Entire stack with one command
+    - Isolated environments
+    - Automatic port management
+    - Configuration in a single file (.env)
+    - Platform independent
+    - Consistency within the team
+
+---
+
+## Key Concepts
+
+### Generator System
 
 !!! info "Pure Bash Implementation"
-    Stackvo'un generator sistemi tamamen **Bash** ile yazılmıştır.
+    Stackvo's generator system is written entirely in **Bash**.
 
-`.env` dosyanızdaki ayarlara göre Docker Compose, Traefik routing ve Nginx/Apache konfigürasyonlarını otomatik oluşturur.
+It automatically generates Docker Compose, Traefik routing, and Nginx/Apache configurations based on settings in your `.env` file.
 
 ```bash
-./core/cli/stackvo.sh generate              # Tüm konfigürasyonları üret
-./core/cli/stackvo.sh generate projects     # Sadece projeleri üret
-./core/cli/stackvo.sh generate services     # Sadece servisleri üret
+./stackvo.sh generate              # Generate all configurations
+./stackvo.sh generate projects     # Generate only projects
+./stackvo.sh generate services     # Generate only services
 ```
 
-### Üç Katmanlı Mimari
+### Three-Layer Architecture
 
 ```mermaid
 graph TB
@@ -101,7 +103,7 @@ graph TB
         B[MySQL]
         C[Redis]
         D[RabbitMQ]
-        E[40+ Servis]
+        E[40+ Services]
     end
 
     subgraph "Layer 3: Projects"
@@ -126,9 +128,9 @@ graph TB
     style H fill:#9C27B0,stroke:#7B1FA2,color:#fff
 ```
 
-### Proje Sistemi
+### Project System
 
-Her proje bir `stackvo.json` dosyası ile tanımlanır:
+Each project is defined by a `stackvo.json` file:
 
 ```json title="stackvo.json"
 {
@@ -145,37 +147,36 @@ Her proje bir `stackvo.json` dosyası ile tanımlanır:
 
 ### Traefik Reverse Proxy
 
-Traefik, tüm servisleri ve projeleri otomatik olarak route eder:
+Traefik automatically calculates routing for all services and projects:
 
-- ✅ Otomatik SSL sertifikaları
-- ✅ HTTP → HTTPS yönlendirme
-- ✅ Docker label bazlı routing
+- ✅ Automatic SSL certificates
+- ✅ HTTP → HTTPS redirection
+- ✅ Docker label-based routing
 - ✅ Dashboard: `http://traefik.stackvo.loc`
 
 ---
 
-## Stackvo vs Alternatifler
+## Stackvo vs Alternatives
 
-| Özellik | Stackvo | Devilbox | Lando | DDEV | Herd |
+| Feature | Stackvo | Devilbox | Lando | DDEV | Herd |
 |---------|-----------|----------|-------|------|------|
-| **Fiyat** | 🆓 Ücretsiz | 🆓 Ücretsiz | 🆓 Ücretsiz | 🆓 Ücretsiz | 💎 Freemium |
-| **Open Source** | ✅ Evet | ✅ Evet | ✅ Evet | ✅ Evet | ❌ Hayır |
-| **Multi-Language** | ✅ 6 dil | ✅ Evet | ✅ Evet | ✅ Evet | ⚠️ PHP only |
-| **Servis Sayısı** | ✅ 40+ | ✅ 30+ | ⚠️ ~20 | ⚠️ ~15 | ⚠️ ~5 |
-| **Web UI** | ✅ Vue.js 3 | ✅ Evet | ❌ Yok | ❌ Yok | ✅ Evet |
-| **RESTful API** | ✅ 9 endpoint | ❌ Yok | ❌ Yok | ❌ Yok | ❌ Yok |
+| **Price** | 🆓 Free | 🆓 Free | 🆓 Free | 🆓 Free | 💎 Freemium |
+| **Open Source** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
+| **Multi-Language** | ✅ 6 languages | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ PHP only |
+| **Service Count** | ✅ 40+ | ✅ 30+ | ⚠️ ~20 | ⚠️ ~15 | ⚠️ ~5 |
+| **Web UI** | ✅ Vue.js 3 | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+| **RESTful API** | ✅ 9 endpoints | ❌ No | ❌ No | ❌ No | ❌ No |
 | **Reverse Proxy** | ✅ Traefik | ✅ Nginx | ✅ Traefik | ✅ Traefik | ✅ Nginx |
-| **Öğrenme Eğrisi** | 🟢 Kolay | 🟡 Orta | 🟡 Orta | 🟡 Orta | 🟢 Kolay |
+| **Learning Curve** | 🟢 Easy | 🟡 Medium | 🟡 Medium | 🟡 Medium | 🟢 Easy |
 
-### 🎯 Stackvo'un Farkı
+### 🎯 Stackvo's Difference
 
-- ✅ **Tamamen ücretsiz** ve open source
-- ✅ **En fazla servis desteği** (40+)
+- ✅ **Completely free** and open source
+- ✅ **Largest service support** (40+)
 - ✅ **Modern Web UI** (Vue.js 3 + Vuetify)
-- ✅ **RESTful API** ile otomasyon
-- ✅ **Multi-language** desteği (6 dil)
-- ✅ **Pure Bash** generator (bağımlılık yok)
+- ✅ **RESTful API** for automation
+- ✅ **Multi-language** support (6 languages)
+- ✅ **Pure Bash** generator (no dependencies)
 
-!!! tip "Daha Fazla Bilgi"
-    Detaylı kurulum için [Hızlı Başlangıç](quick-start.md) sayfasını inceleyin.
-
+!!! tip "More Information"
+    Check the [Quick Start](quick-start.md) page for detailed installation.

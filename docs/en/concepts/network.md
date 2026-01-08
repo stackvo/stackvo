@@ -1,21 +1,21 @@
 ---
 title: Network
-description: Stackvo network mimarisi ve çalışma prensiplerini anlamak için bu bölümü inceleyin.
+description: Examine this section to understand Stackvo network architecture and operating principles.
 ---
 
 # Network
 
-Stackvo, tüm container'ları tek bir Docker network üzerinde çalıştırır: `stackvo-net`. Bu sayfa, 172.30.0.0/16 subnet'ındaki bridge network'ün nasıl çalıştığını, container'lar arası hostname bazlı iletişimi, port mapping'ı, network izolasyonunu ve troubleshooting yöntemlerini detaylı olarak açıklamaktadır. Tüm servisler ve projeler aynı network üzerinde kolay iletişim kurar.
+Stackvo runs all containers on a single Docker network: `stackvo-net`. This page details how the bridge network in the 172.30.0.0/16 subnet works, hostname-based communication between containers, port mapping, network isolation, and troubleshooting methods. All services and projects can easily communicate on the same network.
 
 ---
 
 ## stackvo-net
 
-**Tip:** Bridge  
-**Subnet:** 172.30.0.0/16  
+**Type:** Bridge
+**Subnet:** 172.30.0.0/16
 **Gateway:** 172.30.0.1
 
-### Network Tanımı
+### Network Definition
 
 ```yaml
 networks:
@@ -28,7 +28,7 @@ networks:
 
 ---
 
-## Network Mimarisi
+## Network Architecture
 
 ```
 stackvo-net (172.30.0.0/16)
@@ -47,7 +47,7 @@ stackvo-net (172.30.0.0/16)
 │   ├── RabbitMQ (stackvo-rabbitmq:5672)
 │   ├── Kafka (stackvo-kafka:9092)
 │   ├── Elasticsearch (stackvo-elasticsearch:9200)
-│   └── ... (diğer servisler)
+│   └── ... (other services)
 │
 ├── Stackvo UI
 │   ├── stackvo-ui (Web UI)
@@ -65,15 +65,15 @@ stackvo-net (172.30.0.0/16)
 
 ---
 
-## Container İletişimi
+## Container Communication
 
-### Hostname Bazlı İletişim
+### Hostname Based Communication
 
-Container'lar birbirlerini hostname ile bulabilir:
+Containers can find each other via hostname:
 
 ```php
 <?php
-// PHP'den MySQL'e bağlantı
+// Connection from PHP to MySQL
 $host = 'stackvo-mysql';  // Container hostname
 $port = 3306;
 
@@ -82,14 +82,14 @@ $pdo = new PDO("mysql:host=$host;port=$port;dbname=stackvo", 'stackvo', 'stackvo
 
 ```php
 <?php
-// PHP'den Redis'e bağlantı
+// Connection from PHP to Redis
 $redis = new Redis();
 $redis->connect('stackvo-redis', 6379);
 ```
 
 ```php
 <?php
-// PHP'den RabbitMQ'ya bağlantı
+// Connection from PHP to RabbitMQ
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 
 $connection = new AMQPStreamConnection(
@@ -102,9 +102,9 @@ $connection = new AMQPStreamConnection(
 
 ### Port Mapping
 
-Container'lar arasında iletişim için **internal port** kullanılır:
+**Internal port** is used for communication between containers:
 
-| Servis | Container Hostname | Internal Port | Host Port |
+| Service | Container Hostname | Internal Port | Host Port |
 |--------|-------------------|---------------|-----------|
 | MySQL | stackvo-mysql | 3306 | 3306 |
 | PostgreSQL | stackvo-postgres | 5432 | 5433 |
@@ -113,11 +113,11 @@ Container'lar arasında iletişim için **internal port** kullanılır:
 | RabbitMQ | stackvo-rabbitmq | 5672 | 5672 |
 | Kafka | stackvo-kafka | 9092 | 9094 |
 
-**Not:** Container'lar arası iletişimde **internal port** kullanılır, host'tan erişimde **host port** kullanılır.
+**Note:** **Internal port** is used for communication between containers, **host port** is used for access from host.
 
 ---
 
-## İletişim Akışı
+## Communication Flow
 
 ### External → Application
 
@@ -147,49 +147,49 @@ PHP-FPM
 
 ---
 
-## Network İzolasyonu
+## Network Isolation
 
-### Avantajlar
+### Advantages
 
-1. **Güvenlik:** Container'lar izole ortamda çalışır
-2. **Kolay Servis Keşfi:** Hostname bazlı iletişim
-3. **Port Çakışması Yok:** Her container kendi portunu kullanır
-4. **Basit Yönetim:** Tek network, kolay troubleshooting
+1. **Security:** Containers run in an isolated environment
+2. **Easy Service Discovery:** Hostname based communication
+3. **No Port Conflicts:** Each container uses its own port
+4. **Simple Management:** Single network, easy troubleshooting
 
-### Dış Dünyaya Erişim
+### Access to Outside World
 
-Container'lar internet erişimine sahiptir:
+Containers have internet access:
 
 ```bash
-# Container içinden
+# Inside container
 docker exec -it stackvo-mysql ping google.com
 docker exec -it stackvo-php curl https://api.example.com
 ```
 
 ---
 
-## Network Konfigürasyonu
+## Network Configuration
 
-### Subnet Değiştirme
+### Changing Subnet
 
-`.env` dosyasında subnet değiştirilebilir:
+Subnet can be changed in `.env` file:
 
 ```bash
 DOCKER_NETWORK_SUBNET=172.30.0.0/16
 ```
 
-**Not:** Subnet değişikliği için network'ü yeniden oluşturmanız gerekir:
+**Note:** You must recreate the network to change the subnet:
 
 ```bash
-./core/cli/stackvo.sh down
+./stackvo.sh down
 docker network rm stackvo-net
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### Custom Network
 
-Özel network ayarları için `core/compose/base.yml` template'ini düzenleyin:
+Edit `core/compose/base.yml` template for custom network settings:
 
 ```yaml
 networks:
@@ -209,23 +209,23 @@ networks:
 
 ## Network Troubleshooting
 
-### Container'lar Birbirini Görmüyor
+### Containers Cannot See Each Other
 
 ```bash
-# Network'ü kontrol et
+# Check network
 docker network inspect stackvo-net
 
-# Container'ın network'e bağlı olduğunu doğrula
+# Verify container is connected to network
 docker inspect stackvo-mysql | grep -A 10 Networks
 
-# Ping testi
+# Ping test
 docker exec stackvo-php ping stackvo-mysql
 ```
 
-### DNS Çözümleme Sorunu
+### DNS Resolution Issue
 
 ```bash
-# Container içinden DNS testi
+# DNS test inside container
 docker exec stackvo-php nslookup stackvo-mysql
 docker exec stackvo-php cat /etc/resolv.conf
 ```
@@ -233,47 +233,47 @@ docker exec stackvo-php cat /etc/resolv.conf
 ### Network Connectivity
 
 ```bash
-# Container'dan servis erişimi testi
+# Service access test from container
 docker exec stackvo-php nc -zv stackvo-mysql 3306
 docker exec stackvo-php nc -zv stackvo-redis 6379
 ```
 
-### Network Yeniden Oluşturma
+### Recreating Network
 
 ```bash
-# Tüm container'ları durdur
-./core/cli/stackvo.sh down
+# Stop all containers
+./stackvo.sh down
 
-# Network'ü sil
+# Remove network
 docker network rm stackvo-net
 
-# Yeniden oluştur
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Recreate
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ---
 
 ## Network Monitoring
 
-### Aktif Bağlantılar
+### Active Connections
 
 ```bash
-# Network'teki tüm container'ları listele
+# List all containers in network
 docker network inspect stackvo-net --format '{{range .Containers}}{{.Name}} - {{.IPv4Address}}{{"\n"}}{{end}}'
 ```
 
-### Network İstatistikleri
+### Network Statistics
 
 ```bash
-# Container network istatistikleri
+# Container network statistics
 docker stats --no-stream --format "table {{.Container}}\t{{.NetIO}}"
 ```
 
 ### Traffic Monitoring
 
 ```bash
-# tcpdump ile network trafiği izleme
+# Monitor network traffic with tcpdump
 docker run --rm --net=container:stackvo-mysql nicolaka/netshoot tcpdump -i any port 3306
 ```
 
@@ -281,33 +281,33 @@ docker run --rm --net=container:stackvo-mysql nicolaka/netshoot tcpdump -i any p
 
 ## Best Practices
 
-### 1. Hostname Kullanımı
+### 1. Hostname Usage
 
-❌ **Yanlış:**
+❌ **Incorrect:**
 ```php
-$host = '172.30.0.5';  // IP adresi kullanma
+$host = '172.30.0.5';  // Using IP address
 ```
 
-✅ **Doğru:**
+✅ **Correct:**
 ```php
-$host = 'stackvo-mysql';  // Hostname kullan
+$host = 'stackvo-mysql';  // Use hostname
 ```
 
-### 2. Internal Port Kullanımı
+### 2. Internal Port Usage
 
-❌ **Yanlış:**
+❌ **Incorrect:**
 ```php
 $port = 5433;  // Host port
 ```
 
-✅ **Doğru:**
+✅ **Correct:**
 ```php
 $port = 5432;  // Internal port
 ```
 
 ### 3. Connection String
 
-✅ **Doğru:**
+✅ **Correct:**
 ```php
 // MySQL
 $dsn = 'mysql:host=stackvo-mysql;port=3306;dbname=stackvo';
@@ -321,6 +321,3 @@ $uri = 'mongodb://root:root@stackvo-mongo:27017/stackvo?authSource=admin';
 // Redis
 $redis->connect('stackvo-redis', 6379);
 ```
-
----
-

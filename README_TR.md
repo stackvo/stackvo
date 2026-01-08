@@ -45,37 +45,84 @@
 
 ### Gereksinimler
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- Bash 3.2+
-- 4GB+ RAM
-- 10GB+ Disk alanı
+**Sistem Gereksinimleri:**
+
+- **Docker:** 20.10+ (macOS/Windows'ta Docker Desktop, Linux'ta Docker Engine)
+- **Docker Compose:** 2.0+ (v2 plugin formatı - `docker compose` komutu, `docker-compose` değil)
+- **Bash:** 3.2+ (macOS ve Linux'ta varsayılan olarak yüklü, Windows'ta WSL2 veya Git Bash kullanın)
+- **RAM:** Minimum 4GB, önerilen 8GB+
+- **Disk Alanı:** 10GB+ boş alan
+
+**Desteklenen İşletim Sistemleri:**
+
+- ✅ **macOS** 10.15+ (Catalina veya sonrası) - Intel & Apple Silicon
+- ✅ **Linux** - Ubuntu 20.04+, Debian 11+, Fedora 35+, Arch Linux
+- ✅ **Windows** 10/11 ile WSL2 (WSL içinde Ubuntu 20.04+)
+
+**Desteklenmeyen:**
+
+- ❌ Native Windows (WSL2 olmadan)
+- ❌ macOS < 10.15
+- ❌ Docker Compose v1 (kullanımdan kaldırıldı)
 
 ### Kurulum
 
+**Adım 1: Projeyi Klonlama ve Kurulum**
+
 ```bash
-# 1. Projeyi klonlayın
+# Projeyi klonlayın
 git clone https://github.com/stackvo/stackvo.git
 cd stackvo
 
-# 2. Environment dosyasını kopyalayın
+# Environment dosyasını kopyalayın
 cp .env.example .env
+```
 
-# 3. CLI'yi kurun
+**Adım 2: CLI Kurulumu**
+
+```bash
+# Stackvo CLI'yi global olarak kurun
 ./stackvo.sh install
 
-# 4. Konfigürasyonu oluşturun
-./stackvo.sh generate
-
-# 5. Servisleri başlatın
-./stackvo.sh up
-
-# 6. Hosts dosyasını güncelleyin
-echo "127.0.0.1  stackvo.loc" | sudo tee -a /etc/hosts
-
-# 7. Web UI'ya erişin
-# https://stackvo.loc
+# Kurulumu doğrulayın
+stackvo --help
 ```
+
+**Adım 3: Konfigürasyon Oluşturma**
+
+```bash
+# Tüm konfigürasyonları oluşturun
+stackvo generate
+
+# Bu komut şunları oluşturur:
+# - generated/stackvo.yml (Traefik + UI)
+# - generated/docker-compose.dynamic.yml (Servisler)
+# - generated/docker-compose.projects.yml (Projeler)
+```
+
+**Adım 4: Servisleri Başlatma**
+
+```bash
+# Core servisleri başlatın (Traefik + UI)
+stackvo up
+
+# Servislerin başlamasını bekleyin (~30 saniye)
+# Durumu kontrol edin
+stackvo ps
+```
+
+**Adım 5: Hosts Dosyası Ayarı**
+
+```bash
+# Stackvo UI domain'ini hosts dosyasına ekleyin
+echo "127.0.0.1  stackvo.loc" | sudo tee -a /etc/hosts
+```
+
+**Adım 6: Web UI'ya Erişim**
+
+Tarayıcınızda şu adresi açın: **https://stackvo.loc**
+
+> **Not:** Development ortamında self-signed sertifika kullandığımız için SSL uyarısı göreceksiniz. "Gelişmiş" → "Siteye git" seçeneklerini kullanarak devam edebilirsiniz.
 
 ### İlk Projenizi Oluşturun
 
@@ -140,29 +187,20 @@ echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 ./stackvo.sh uninstall             # Stackvo'u kaldır
 ```
 
-> **Not:** `./stackvo.sh install` komutunu çalıştırdıktan sonra, her yerden `stackvo` komutunu kullanabilirsiniz:
->
-> ```bash
-> stackvo up
-> stackvo generate
-> stackvo logs
-> ```
-
 ---
 
 ## 🛠️ Desteklenen Servisler
 
-| Kategori                | Adet | Servisler                                                                      |
-| ----------------------- | ---- | ------------------------------------------------------------------------------ |
-| **Veritabanları**       | 8    | MySQL, MariaDB, PostgreSQL, MongoDB, Cassandra, Percona, CouchDB, Couchbase    |
-| **Cache Sistemleri**    | 2    | Redis, Memcached                                                               |
-| **Message Queues**      | 4    | RabbitMQ, Apache ActiveMQ, Kafka, NATS                                         |
-| **Arama ve İndeksleme** | 4    | Elasticsearch, Kibana, Meilisearch, Solr                                       |
-| **Monitoring ve QA**    | 5    | Grafana, Netdata, SonarQube, Sentry, Logstash                                  |
-| **Developer Tools**     | 8    | Adminer, PhpMyAdmin, PhpPgAdmin, PhpMongo, MailHog, Ngrok, Selenium, Blackfire |
-| **Application Servers** | 2    | Tomcat, Kong API Gateway                                                       |
+| Kategori                | Adet | Servisler                                      |
+| ----------------------- | ---- | ---------------------------------------------- |
+| **Veritabanları**       | 5    | MySQL, MariaDB, PostgreSQL, MongoDB, Cassandra |
+| **Cache Sistemleri**    | 2    | Redis, Memcached                               |
+| **Message Queues**      | 2    | RabbitMQ, Kafka                                |
+| **Arama ve İndeksleme** | 2    | Elasticsearch, Kibana                          |
+| **Monitoring**          | 1    | Grafana                                        |
+| **Developer Tools**     | 2    | MailHog, Blackfire                             |
 
-> **Toplam 33+ servis** • Detaylı bilgi için: [Servisler Dokümantasyonu](docs/tr/references/services.md)
+> **Toplam 14 servis** • Detaylı bilgi için: [Servisler Dokümantasyonu](docs/tr/references/services.md)
 
 ---
 
@@ -229,112 +267,19 @@ Detaylı dokümantasyon için [docs](docs/tr) dizinini ziyaret edin:
 
 ---
 
-## 🛠️ Geliştirme Scriptleri
-
-Bu dizin, Stackvo projesinin changelog yönetimi için kullanılan scriptleri içerir.
-
-### generate-changelog.sh
-
-Git commit geçmişinden otomatik changelog oluşturur.
-
-#### Kullanım
-
-**Manuel Kullanım** (Lokal test için):
-
-```bash
-./docs/scripts/generate-changelog.sh [versiyon]
-```
-
-**Otomatik Kullanım** (GitHub Actions):
-
-- GitHub'da yeni bir tag oluşturduğunuzda otomatik çalışır
-- Workflow: `.github/workflows/changelog.yml`
-
-#### Örnekler
-
-```bash
-# Unreleased olarak işaretle
-./docs/scripts/generate-changelog.sh
-
-# Belirli versiyon için
-./docs/scripts/generate-changelog.sh 1.2.0
-```
-
-#### Çıktılar
-
-- `docs/tr/changelog.md` - Türkçe changelog
-- `docs/en/changelog.md` - İngilizce changelog
-
-#### Conventional Commits
-
-Script, aşağıdaki commit tiplerini tanır:
-
-- `feat:` → Eklenenler / Added
-- `fix:` → Düzeltmeler / Fixed
-- `docs:` → Dokümantasyon / Documentation
-- `refactor:` → Yeniden Yapılandırma / Refactored
-- `perf:` → Performans / Performance
-- `test:` → Testler / Tests
-- `chore:` → Diğer / Chore
-
-#### GitHub Release İş Akışı
-
-1. **Kodunuzu geliştirin** ve commit edin (Conventional Commits formatında)
-
-   ```bash
-   git commit -m "feat: yeni özellik eklendi"
-   git commit -m "fix: hata düzeltildi"
-   ```
-
-2. **GitHub'da yeni bir release oluşturun**
-
-   - Releases → Draft a new release
-   - Tag: `1.2.0` (v prefix olmadan!)
-   - Title: `1.2.0`
-   - Description: İsteğe bağlı
-   - Publish release
-
-3. **GitHub Actions otomatik olarak**:
-   - Changelog'u günceller
-   - Değişiklikleri commit eder
-   - GitHub Release'e changelog ekler
-
-#### Tag Formatı
-
-> [!IMPORTANT]
-> Tag oluştururken **"v" prefix kullanmayın**. Doğru format: `1.2.0`, `1.0.5` gibi.
-
-**Doğru**:
-
-- ✅ `1.0.0`
-- ✅ `1.2.5`
-- ✅ `2.0.0`
-
-**Yanlış**:
-
-- ❌ `v1.0.0`
-- ❌ `v1.2.5`
-
-### Notlar
-
-- Bu scriptler dokümantasyon amaçlıdır
-- Ana kullanım GitHub Actions üzerinden yapılır
-- Manuel kullanım sadece test/geliştirme amaçlıdır
-- Tüm commit'ler Conventional Commits formatında olmalıdır
-
----
-
 ## 🤝 Katkıda Bulunma
 
 Stackvo açık kaynaklı bir projedir ve katkılarınızı bekliyoruz!
+
+Kod standartları, commit mesaj formatı ve changelog generation workflow dahil detaylı katkı kılavuzu için [Katkıda Bulunma Rehberi](CONTRIBUTING.md)'ni inceleyin.
+
+### Hızlı Katkı Adımları
 
 1. Bu repository'yi fork edin
 2. Feature branch'i oluşturun (`git checkout -b feature/amazing-feature`)
 3. Değişikliklerinizi commit edin (`git commit -m 'feat: add amazing feature'`)
 4. Branch'inizi push edin (`git push origin feature/amazing-feature`)
 5. Pull Request oluşturun
-
-Detaylı bilgi için [Katkıda Bulunma Kılavuzu](docs/tr/community/contributing.md)'nu inceleyin.
 
 ---
 

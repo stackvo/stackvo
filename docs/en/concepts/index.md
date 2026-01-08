@@ -1,33 +1,33 @@
 ---
-title: Konseptler
-description: Stackvo konseptlerini ve çalışma prensiplerini anlamak için bu bölümü inceleyin.
+title: Concepts
+description: Examine this section to understand Stackvo concepts and operating principles.
 ---
 
-# Konseptler
+# Concepts
 
-Stackvo'un temel konseptlerini ve çalışma prensiplerini anlamak, sistemi etkili kullanmanız için kritik öneme sahiptir. Bu bölüm, üç katmanlı Docker Compose mimarisinden network yapısına, Pure Bash ile yazılmış generator sisteminden Traefik reverse proxy entegrasyonuna kadar tüm yapıyı detaylı şekilde açıklamaktadır. Her konsept, Stackvo'ın nasıl çalıştığını anlamak için gerekli bilgileri içerir.
+Understanding Stackvo's core concepts and operating principles is critical for using the system effectively. This section provides detailed explanations of the entire structure, from the three-layer Docker Compose architecture to the network structure, from the Pure Bash generator system to Traefik reverse proxy integration. Each concept contains the necessary information to understand how Stackvo works.
 
 ---
 
-## Temel Konseptler
+## Core Concepts
 
-Stackvo'un temel yapı taşlarını ve çalışma prensiplerini anlamak için bu konseptleri inceleyin:
+Explore these concepts to understand Stackvo's fundamental building blocks and operating principles:
 
 <div class="grid cards" markdown>
 
--   :material-sitemap:{ .lg .middle } __Mimari__
+-   :material-sitemap:{ .lg .middle } __Architecture__
 
     ---
 
-    Stackvo'un katmanlı mimarisi ve bileşenleri
+    Stackvo's layered architecture and components
 
-    [:octicons-arrow-right-24: Mimari](architecture.md)
+    [:octicons-arrow-right-24: Architecture](architecture.md)
 
 -   :material-cog-refresh:{ .lg .middle } __Generator__
 
     ---
 
-    Pure Bash ile yazılmış dinamik konfigürasyon üretim sistemi
+    Dynamic configuration generation system written in Pure Bash
 
     [:octicons-arrow-right-24: Generator](generator.md)
 
@@ -35,7 +35,7 @@ Stackvo'un temel yapı taşlarını ve çalışma prensiplerini anlamak için bu
 
     ---
 
-    Docker network yapısı ve container iletişimi
+    Docker network structure and container communication
 
     [:octicons-arrow-right-24: Network](network.md)
 
@@ -43,7 +43,7 @@ Stackvo'un temel yapı taşlarını ve çalışma prensiplerini anlamak için bu
 
     ---
 
-    Reverse proxy ve SSL/TLS yönetimi
+    Reverse proxy and SSL/TLS management
 
     [:octicons-arrow-right-24: Traefik](traefik.md)
 

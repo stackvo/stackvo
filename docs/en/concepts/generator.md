@@ -1,11 +1,11 @@
 ---
-title: Generator Sistemi
-description: Stackvo generator sistemi ve çalışma prensiplerini anlamak için bu bölümü inceleyin.
+title: Generator System
+description: Examine this section to understand Stackvo generator system and operating principles.
 ---
 
-# Generator Sistemi
+# Generator System
 
-Stackvo'un generator sistemi, Pure Bash ile yazılmıştır ve PHP bağımlılığı gerektirmez. Bu sayfa, Bash 3.x+ uyumlu generator'ın nasıl çalıştığını, 5 ana modülünü (compose.sh, project.sh, traefik.sh, tools.sh, config.sh), template processor'ı, akıllı volume yönetimini ve dinamik route generation'ı detaylı olarak açıklamaktadır. Generator, .env dosyasından Docker Compose dosyalarını otomatik oluşturur.
+Stackvo's generator system is written in Pure Bash and does not require PHP dependencies. This page detailedly explains how the Bash 3.x+ compatible generator works, its 5 main modules (compose.sh, project.sh, traefik.sh, tools.sh, config.sh), template processor, smart volume management, and dynamic route generation. The generator automatically creates Docker Compose files from the .env file.
 
 ---
 
@@ -13,7 +13,7 @@ Stackvo'un generator sistemi, Pure Bash ile yazılmıştır ve PHP bağımlılı
 
 ```bash
 ┌─────────────┐
-│   .env      │  → Konfigürasyon kaynağı
+│   .env      │  → Configuration source
 └──────┬──────┘
        │
        ↓
@@ -21,7 +21,7 @@ Stackvo'un generator sistemi, Pure Bash ile yazılmıştır ve PHP bağımlılı
 │     cli/commands/generate.sh                     │
 │     (Orchestrator)                               │
 │                                                  │
-│  1. load_env()           → .env yükle           │
+│  1. load_env()           → Load .env            │
 │  2. generate_tools_configs()                    │
 │  3. generate_module_configs()                   │
 │  4. generate_base_compose()                     │
@@ -55,58 +55,58 @@ Stackvo'un generator sistemi, Pure Bash ile yazılmıştır ve PHP bağımlılı
 
 ---
 
-## Generator Modülleri
+## Generator Modules
 
-Generator sistemi 5 ana modülden oluşur:
+The generator system consists of 5 main modules:
 
 ### 1. compose.sh
 
-**Konum:** `cli/lib/generators/compose.sh`  
-**Boyut:** 6.2 KB
+**Location:** `cli/lib/generators/compose.sh`
+**Size:** 6.2 KB
 
-**Sorumluluklar:**
-- `generated/docker-compose.dynamic.yml` oluşturma
-- Aktif servisleri `.env` dosyasından okuma
-- Servis template'lerini işleme
-- Volume tanımlarını otomatik oluşturma
+**Responsibilities:**
+- Creating `generated/docker-compose.dynamic.yml`
+- Reading active services from `.env` file
+- Processing service templates
+- Creating volume definitions automatically
 
-**Ana Fonksiyonlar:**
+**Main Functions:**
 ```bash
-generate_dynamic_compose()    # Ana fonksiyon
-generate_service()            # Tek bir servis için compose entry
-process_service_template()    # Template işleme
-create_volume_definitions()   # Volume tanımları
+generate_dynamic_compose()    # Main function
+generate_service()            # Compose entry for a single service
+process_service_template()    # Template processing
+create_volume_definitions()   # Volume definitions
 ```
 
-**Örnek Çıktı:**
+**Example Output:**
 ```yaml
 services:
   mysql:
     image: mysql:8.0
     container_name: stackvo-mysql
-    # ... (template'ten gelen konfigürasyon)
+    # ... (configuration from template)
 
 volumes:
   mysql-data:
   redis-data:
-  # ... (sadece aktif servislerin volume'ları)
+  # ... (volumes for active services only)
 ```
 
 ### 2. project.sh
 
-**Konum:** `cli/lib/generators/project.sh`  
-**Boyut:** 14.6 KB
+**Location:** `cli/lib/generators/project.sh`
+**Size:** 14.6 KB
 
-**Sorumluluklar:**
-- `generated/docker-compose.projects.yml` oluşturma
-- `projects/` dizinindeki tüm projeleri tarama
-- Her proje için `stackvo.json` okuma
-- PHP-FPM ve webserver container'ları oluşturma
-- Özel konfigürasyonları tespit etme
+**Responsibilities:**
+- Creating `generated/docker-compose.projects.yml`
+- Scanning all projects in `projects/` directory
+- Reading `stackvo.json` for each project
+- Creating PHP-FPM and webserver containers
+- Detecting special configurations
 
-**Ana Fonksiyonlar:**
+**Main Functions:**
 ```bash
-generate_projects()              # Ana fonksiyon
+generate_projects()              # Main function
 parse_project_config()           # stackvo.json parse
 generate_php_container()         # PHP-FPM container
 generate_web_container()         # Webserver container
@@ -116,32 +116,32 @@ generate_caddy_container()       # Caddy specific
 generate_ferron_container()      # Ferron specific
 ```
 
-**Konfigürasyon Önceliği:**
-1. `projects/myproject/.stackvo/nginx.conf` (özel)
-2. `projects/myproject/nginx.conf` (proje root)
+**Configuration Priority:**
+1. `projects/myproject/.stackvo/nginx.conf` (custom)
+2. `projects/myproject/nginx.conf` (project root)
 3. `core/generated/configs/myproject-nginx.conf` (auto-generated)
 
 ### 3. traefik.sh
 
-**Konum:** `cli/lib/generators/traefik.sh`  
-**Boyut:** 7 KB
+**Location:** `cli/lib/generators/traefik.sh`
+**Size:** 7 KB
 
-**Sorumluluklar:**
-- `generated/stackvo.yml` oluşturma (Traefik base)
-- `core/traefik/dynamic/routes.yml` oluşturma
-- Servis ve proje route'larını otomatik oluşturma
-- SSL/TLS konfigürasyonu
+**Responsibilities:**
+- Creating `generated/stackvo.yml` (Traefik base)
+- Creating `core/traefik/dynamic/routes.yml`
+- Creating service and project routes automatically
+- SSL/TLS configuration
 
-**Ana Fonksiyonlar:**
+**Main Functions:**
 ```bash
 generate_base_compose()          # Traefik base compose
 generate_traefik_config()        # Traefik static config
 generate_traefik_routes()        # Dynamic routes
-generate_service_route()         # Servis route'u
-generate_project_route()         # Proje route'u
+generate_service_route()         # Service route
+generate_project_route()         # Project route
 ```
 
-**Örnek Route:**
+**Example Route:**
 ```yaml
 http:
   routers:
@@ -161,56 +161,56 @@ http:
 
 ### 4. tools.sh
 
-**Konum:** `cli/lib/generators/tools.sh`  
-**Boyut:** 4.8 KB
+**Location:** `cli/lib/generators/tools.sh`
+**Size:** 4.8 KB
 
-**Sorumluluklar:**
-- Stackvo UI Tools container konfigürasyonu
-- Adminer, PhpMyAdmin, PhpPgAdmin, vb. araçlar
-- Tools container için Nginx konfigürasyonu
+**Responsibilities:**
+- Stackvo UI Tools container configuration
+- Tools like Adminer, PhpMyAdmin, PhpPgAdmin, etc.
+- Nginx configuration for Tools container
 
-**Ana Fonksiyonlar:**
+**Main Functions:**
 ```bash
-generate_tools_configs()         # Ana fonksiyon
-generate_tool_config()           # Tek bir tool için config
+generate_tools_configs()         # Main function
+generate_tool_config()           # Config for a single tool
 generate_tools_nginx_conf()      # Tools Nginx config
 ```
 
 ### 5. config.sh
 
-**Konum:** `cli/lib/generators/config.sh`  
-**Boyut:** 2.8 KB
+**Location:** `cli/lib/generators/config.sh`
+**Size:** 2.8 KB
 
-**Sorumluluklar:**
-- Servis-specific konfigürasyon dosyaları
-- `core/generated/configs/` dizininde dosya oluşturma
+**Responsibilities:**
+- Service-specific configuration files
+- Creating files in `core/generated/configs/` directory
 
-**Ana Fonksiyonlar:**
+**Main Functions:**
 ```bash
-generate_module_configs()        # Ana fonksiyon
-generate_service_config()        # Servis config
+generate_module_configs()        # Main function
+generate_service_config()        # Service config
 ```
 
 ---
 
 ## Template Processor
 
-**Konum:** `cli/lib/template-processor.sh`  
-**Boyut:** 4 KB
+**Location:** `cli/lib/template-processor.sh`
+**Size:** 4 KB
 
-Template işleme için `envsubst` kullanılır:
+`envsubst` is used for template processing:
 
 ```bash
 process_template() {
     local template_file=$1
     local output_file=$2
     
-    # Environment değişkenlerini template'e uygula
+    # Apply environment variables to template
     envsubst < "$template_file" > "$output_file"
 }
 ```
 
-**Template Örneği:**
+**Template Example:**
 ```yaml
 # core/templates/services/mysql/docker-compose.yml
 services:
@@ -224,7 +224,7 @@ services:
       MYSQL_PASSWORD: ${SERVICE_MYSQL_PASSWORD}
 ```
 
-**İşlenmiş Çıktı:**
+**Processed Output:**
 ```yaml
 services:
   mysql:
@@ -239,32 +239,32 @@ services:
 
 ---
 
-## Akıllı Volume Yönetimi
+## Smart Volume Management
 
-Generator, sadece aktif servislerin volume'larını oluşturur:
+The generator creates volumes only for active services:
 
 ```bash
 # .env
 SERVICE_MYSQL_ENABLE=true
 SERVICE_REDIS_ENABLE=true
-SERVICE_POSTGRES_ENABLE=false  # Devre dışı
+SERVICE_POSTGRES_ENABLE=false  # Disabled
 ```
 
-**Oluşturulan Volumes:**
+**Generated Volumes:**
 ```yaml
 volumes:
-  mysql-data:      # ✅ Aktif
-  redis-data:      # ✅ Aktif
-  # postgres-data  # ❌ Oluşturulmaz (devre dışı)
+  mysql-data:      # ✅ Active
+  redis-data:      # ✅ Active
+  # postgres-data  # ❌ Not created (disabled)
 ```
 
 ---
 
-## Dinamik Route Generation
+## Dynamic Route Generation
 
-Traefik route'ları otomatik oluşturulur:
+Traefik routes are automatically generated:
 
-### Servis Route'ları
+### Service Routes
 
 ```bash
 # .env
@@ -273,7 +273,7 @@ SERVICE_RABBITMQ_ENABLE=true
 SERVICE_RABBITMQ_URL=rabbitmq
 ```
 
-**Oluşturulan Route:**
+**Generated Route:**
 ```yaml
 http:
   routers:
@@ -285,7 +285,7 @@ http:
       tls: {}
 ```
 
-### Proje Route'ları
+### Project Routes
 
 ```json
 // projects/project1/stackvo.json
@@ -295,7 +295,7 @@ http:
 }
 ```
 
-**Oluşturulan Route:**
+**Generated Route:**
 ```yaml
 http:
   routers:
@@ -309,12 +309,12 @@ http:
 
 ---
 
-## CLI Entegrasyonu
+## CLI Integration
 
-### Ana CLI
+### Main CLI
 
-**Konum:** `cli/stackvo.sh`  
-**Boyut:** 98 satır
+**Location:** `cli/stackvo.sh`
+**Size:** 98 lines
 
 ```bash
 case "$COMMAND" in
@@ -331,51 +331,50 @@ case "$COMMAND" in
 esac
 ```
 
-### Generate Komutları
+### Generate Commands
 
 ```bash
-# Tüm konfigürasyonları üret
-./core/cli/stackvo.sh generate
+# Generate all configurations
+./stackvo.sh generate
 
-# Sadece projeleri üret
-./core/cli/stackvo.sh generate projects
+# Generate projects only
+./stackvo.sh generate projects
 
-# Sadece servisleri üret
-./core/cli/stackvo.sh generate services
+# Generate services only
+./stackvo.sh generate services
 ```
 
 ---
 
-## Hata Yönetimi
+## Error Management
 
-Generator, hata durumlarında bilgilendirici mesajlar verir:
+The generator gives informative messages in error situations:
 
 ```bash
-# stackvo.json bulunamadı
+# stackvo.json not found
 log_warn "Skipping $project_name: stackvo.json not found"
 
-# PHP versiyonu belirtilmemiş
+# PHP version not specified
 log_warn "PHP version not found, using default: ${DEFAULT_PHP_VERSION}"
 
-# Template bulunamadı
+# Template not found
 log_error "Template not found: $template_file"
 ```
 
 ---
 
-## Performans
+## Performance
 
-Generator, hızlı çalışmak için optimize edilmiştir:
+The generator is optimized to run fast:
 
-- **Pure Bash:** PHP interpreter gerekmez
-- **Paralel İşleme:** Bağımsız işlemler paralel çalışır
-- **Cache:** Değişmeyen dosyalar yeniden oluşturulmaz
-- **Minimal I/O:** Sadece gerekli dosyalar yazılır
+- **Pure Bash:** No PHP interpreter required
+- **Parallel Processing:** Independent processes run in parallel
+- **Cache:** Unchanged files are not regenerated
+- **Minimal I/O:** Only necessary files are written
 
-**Örnek Çalışma Süresi:**
-- 5 servis + 3 proje: ~2 saniye
-- 20 servis + 10 proje: ~5 saniye
-- 40 servis + 20 proje: ~10 saniye
+**Example Execution Time:**
+- 5 services + 3 projects: ~2 seconds
+- 20 services + 10 projects: ~5 seconds
+- 40 services + 20 projects: ~10 seconds
 
 ---
-

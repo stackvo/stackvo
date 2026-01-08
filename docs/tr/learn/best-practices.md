@@ -33,7 +33,7 @@ cp .env .env.staging
 nano .env.staging
 
 # Generate
-ENV_FILE=.env.staging ./core/cli/stackvo.sh generate
+ENV_FILE=.env.staging ./stackvo.sh generate
 ```
 
 ### 2. Version Control

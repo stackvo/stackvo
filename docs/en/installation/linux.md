@@ -1,20 +1,22 @@
 ---
-title: Linux Kurulumu
-description: Ubuntu, Debian, CentOS, Arch ve diğer Linux dağıtımlarında Stackvo kurulumu
+title: Linux Installation
+description: Stackvo installation on Ubuntu, Debian, CentOS, Arch, and other Linux distributions
 ---
 
-# Linux Kurulumu
+# Linux Installation
 
-Linux, Stackvo için en iyi performansı ve en sorunsuz deneyimi sunar. Bu kılavuz, Ubuntu, Debian, CentOS, Rocky Linux, Arch ve diğer popüler Linux dağıtımlarında Docker ve Stackvo kurulumunu adım adım anlatmaktadır. Native Docker desteği sayesinde Windows ve macOS'a göre daha hızlı ve verimli çalışır.
-
-!!! tip "Sistem Gereksinimlerini Kontrol Ettiniz mi?"
-    Kuruluma başlamadan önce [Sistem Gereksinimleri](../started/requirements.md) sayfasını kontrol edin.
+Linux offers the best performance and most seamless experience for Stackvo. This guide explains step-by-step Docker and Stackvo installation on Ubuntu, Debian, CentOS, Rocky Linux, Arch, and other popular Linux distributions. Thanks to native Docker support, it runs faster and more efficiently than Windows and macOS.
 
 ---
 
-## Docker Kurulumu
+!!! tip "Checked System Requirements?"
+    Check the [System Requirements](../started/requirements.md) page before starting the installation.
 
-### 1. Sistem Güncellemesi
+---
+
+## Docker Installation
+
+### 1. System Update
 
 ```bash
 # Ubuntu/Debian
@@ -30,12 +32,12 @@ sudo dnf update -y
 sudo pacman -Syu
 ```
 
-### 2. Docker Kurulumu
+### 2. Docker Installation
 
 === "Ubuntu/Debian"
 
     ```bash
-    # Gerekli paketler
+    # Required packages
     sudo apt install -y apt-transport-https ca-certificates curl gnupg git jq
     
     # Docker GPG key
@@ -47,7 +49,7 @@ sudo pacman -Syu
       https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
       sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     
-    # Docker kur
+    # Install Docker
     sudo apt update
     sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     ```
@@ -55,57 +57,57 @@ sudo pacman -Syu
 === "CentOS/RHEL"
 
     ```bash
-    # Gerekli paketler
+    # Required packages
     sudo yum install -y yum-utils git jq
     
     # Docker repository
     sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
     
-    # Docker kur
+    # Install Docker
     sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     ```
 
 === "Rocky/Alma"
 
     ```bash
-    # Gerekli paketler
+    # Required packages
     sudo dnf install -y dnf-plugins-core git jq
     
     # Docker repository
     sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
     
-    # Docker kur
+    # Install Docker
     sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     ```
 
 === "Arch/Manjaro"
 
     ```bash
-    # Docker kur (repository'de mevcut)
+    # Install Docker (available in repository)
     sudo pacman -S docker docker-compose git jq
     ```
 
-### 3. Docker Servisini Başlat
+### 3. Start Docker Service
 
 ```bash
 sudo systemctl start docker
 sudo systemctl enable docker
 ```
 
-### 4. Kullanıcı İzinleri
+### 4. User Permissions
 
 ```bash
-# Docker grubuna ekle
+# Add to Docker group
 sudo usermod -aG docker $USER
 
-# Oturumu yenile
+# Reload session
 newgrp docker
 ```
 
-### 5. Docker Doğrulama
+### 5. Docker Verification
 
 ```bash
-# Versiyon kontrolü
+# Version check
 docker --version
 docker compose version
 
@@ -115,60 +117,60 @@ docker run hello-world
 
 ---
 
-## Stackvo Kurulumu
+## Stackvo Installation
 
-Docker kurulumu tamamlandıktan sonra Stackvo'u kurmak için [Hızlı Başlangıç](../started/quick-start.md) sayfasını takip edin.
+After Docker installation is complete, follow the [Quick Start](../started/quick-start.md) page to install Stackvo.
 
-**Özet:**
+**Summary:**
 
 ```bash
-# Repository klonla
+# Clone repository
 git clone https://github.com/stackvo/stackvo.git
 cd stackvo
 
-# Konfigürasyon
+# Configuration
 cp .env.example .env
 
-# Başlat
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Start
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ---
 
-## Kurulum Doğrulama
+## Installation Verification
 
 ```bash
-# Container durumu
+# Container status
 docker ps
 
-# Web UI'yı aç
+# Open Web UI
 ```
 
-Tarayıcınızda:
+In your browser:
 
 - **Stackvo Dashboard:** https://stackvo.loc
 - **Traefik Dashboard:** http://traefik.stackvo.loc
 
-!!! success "Kurulum Tamamlandı!"
-    [Hızlı Başlangıç](../started/quick-start.md) sayfasına geçerek ilk projenizi oluşturabilirsiniz.
+!!! success "Installation Completed!"
+    You can now proceed to the [Quick Start](../started/quick-start.md) page to create your first project.
 
 ---
 
-## Yaygın Sorunlar
+## Common Issues
 
 ### Permission Denied
 
 ```bash
-# Docker grubuna ekle
+# Add to Docker group
 sudo usermod -aG docker $USER
 newgrp docker
 ```
 
-### Port Çakışması
+### Port Conflict
 
 ```bash
-# Çakışan servisi durdur
+# Stop conflicting service
 sudo systemctl stop apache2
 sudo systemctl stop nginx
 ```

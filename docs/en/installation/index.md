@@ -1,17 +1,17 @@
 ---
-title: Kurulum
-description: Stackvo kurulum kılavuzu - Tüm platformlar için adım adım kurulum
+title: Installation
+description: Stackvo installation guide - Step-by-step installation for all platforms
 ---
 
-# Kurulum
+# Installation
 
-Stackvo'u bilgisayarınıza kurmak oldukça kolaydır ve tüm major işletim sistemlerinde desteklenmektedir. Bu bölüm, Linux, macOS ve Windows platformlarında Docker kurulumundan Stackvo yapılandırmasına kadar tüm adımları detaylı olarak açıklamaktadır. Her işletim sistemi için özel olarak hazırlanmış kılavuzlar, sistem gereksinimlerinden kurulum doğrulamasına kadar her şeyi kapsamaktadır.
+Installing Stackvo on your computer is quite easy and supported on all major operating systems. This section details all steps from Docker installation to Stackvo configuration on Linux, macOS, and Windows platforms. Guides specifically prepared for each operating system cover everything from system requirements to installation verification.
 
 ---
 
-## İşletim Sistemi Seçimi
+## Operating System Selection
 
-Stackvo tüm major işletim sistemlerinde çalışır. İşletim sisteminizi seçin:
+Stackvo works on all major operating systems. Select your operating system:
 
 <div class="grid cards" markdown>
 
@@ -19,63 +19,63 @@ Stackvo tüm major işletim sistemlerinde çalışır. İşletim sisteminizi se�
 
     ---
 
-    Tüm popüler Linux dağıtımları için geçerli kurulum adımları
+    Valid installation steps for all popular Linux distributions
 
-    [:octicons-arrow-right-24: Linux Kurulumu](linux.md)
+    [:octicons-arrow-right-24: Linux Installation](linux.md)
 
 -   :fontawesome-brands-apple:{ .lg .middle } __macOS__
 
     ---
 
-    Intel ve Apple Silicon (M serisi) işlemciler için uyumlu
+    Compatible for Intel and Apple Silicon (M series) processors
 
-    [:octicons-arrow-right-24: macOS Kurulumu](macos.md)
+    [:octicons-arrow-right-24: macOS Installation](macos.md)
 
 -   :fontawesome-brands-windows:{ .lg .middle } __Windows__
 
     ---
 
-    WSL2 (Windows Subsystem for Linux) üzerinde çalışır
+    Runs on WSL2 (Windows Subsystem for Linux)
 
-    [:octicons-arrow-right-24: Windows Kurulumu](windows.md)
+    [:octicons-arrow-right-24: Windows Installation](windows.md)
 
 </div>
 
 ---
 
-!!! tip "Sistem Gereksinimlerini Kontrol Ettiniz mi?"
-    Kuruluma başlamadan önce [Sistem Gereksinimleri](../started/requirements.md) sayfasını kontrol edin.
+!!! tip "Checked System Requirements?"
+    Check the [System Requirements](../started/requirements.md) page before starting the installation.
 
 ---
 
-## Hızlı Kurulum Yolu
+## Quick Installation Way
 
-Sisteminizde Docker zaten kuruluysa:
+If Docker is already installed on your system:
 
 ```bash
-# 1. Repository'yi klonlayın
+# 1. Clone the repository
 git clone https://github.com/stackvo/stackvo.git
 cd stackvo
 
-# 2. Konfigürasyon
+# 2. Configuration
 cp .env.example .env
 
-# 3. Kurulum scriptini çalıştırın
-./core/cli/stackvo.sh install
+# 3. Run installation script
+./stackvo.sh install
 
-# 4. Başlatın
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# 4. Start
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-!!! success "Kurulum Tamamlandı!"
+!!! success "Installation Completed!"
 Web UI: [https://stackvo.loc](https://stackvo.loc)
 
 ---
 
-## Kurulum Sonrası Ayarlar
+## Post-Installation Settings
 
-### Hosts Dosyası Düzenleme
+### Editing Hosts File
 
 === "Linux/macOS"
 
@@ -83,7 +83,7 @@ Web UI: [https://stackvo.loc](https://stackvo.loc)
     sudo nano /etc/hosts
     ```
 
-    Ekleyin:
+    Add:
     ```
     127.0.0.1  stackvo.loc
     127.0.0.1  traefik.stackvo.loc
@@ -91,12 +91,12 @@ Web UI: [https://stackvo.loc](https://stackvo.loc)
 
 === "Windows"
 
-    Yönetici olarak:
+    As administrator:
     ```
     notepad C:\Windows\System32\drivers\etc\hosts
     ```
 
-    Ekleyin:
+    Add:
     ```
     127.0.0.1  stackvo.loc
     127.0.0.1  traefik.stackvo.loc
@@ -105,26 +105,26 @@ Web UI: [https://stackvo.loc](https://stackvo.loc)
 
 ---
 
-## Kurulum Doğrulama
+## Installation Verification
 
-Kurulumun başarılı olduğunu doğrulayın:
+Verify that the installation was successful:
 
-### Servis Kontrolü
+### Service Check
 
 ```bash
-# Tüm servislerin durumu
-./core/cli/stackvo.sh ps
+# Status of all services
+./stackvo.sh ps
 
-# Logları kontrol et
-./core/cli/stackvo.sh logs
+# Check logs
+./stackvo.sh logs
 ```
 
-### Web UI Kontrolü
+### Web UI Check
 
-Tarayıcınızda açın:
+Open in your browser:
 
 - **Stackvo Dashboard:** https://stackvo.loc/
 - **Traefik Dashboard:** http://traefik.stackvo.loc
 
-!!! success "Kurulum Tamamlandı!"
-    Artık [Hızlı Başlangıç](../started/quick-start.md) sayfasına geçerek ilk projenizi oluşturabilirsiniz.
+!!! success "Installation Completed!"
+    You can now proceed to the [Quick Start](../started/quick-start.md) page to create your first project.

@@ -1,10 +1,12 @@
-# Örnekler
+# Examples
 
-Gerçek dünya kullanım senaryoları ve örnek projeler. Bu bölüm, e-ticaret platformundan blog platformuna, SaaS uygulamasından mikroservis mimarisine, real-time chat uygulamasından CI/CD pipeline'a kadar gerçek dünya senaryolarında Stackvo'un nasıl kullanılacağını detaylı kod örnekleriyle göstermektedir. Her örnek, tam çalışan bir proje mimarisi sunmaktadır.
+Real-world usage scenarios and example projects. This section detailedly demonstrates how to use Stackvo in real-world scenarios ranging from e-commerce platforms to blog platforms, SaaS applications to microservice architectures, real-time chat applications to CI/CD pipelines with detailed code examples. Each example presents a fully working project architecture.
 
-## E-Ticaret Platformu
+---
 
-### Mimari
+## E-Commerce Platform
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -28,7 +30,7 @@ Gerçek dünya kullanım senaryoları ve örnek projeler. Bu bölüm, e-ticaret 
     └─────────┘   └────────┘   └────────┘
 ```
 
-### Servisler
+### Services
 
 **1. MySQL**
 ```bash
@@ -48,7 +50,7 @@ SERVICE_RABBITMQ_ENABLE=true
 SERVICE_RABBITMQ_VERSION=3
 ```
 
-### Projeler
+### Projects
 
 **1. Web Frontend (Vue.js)**
 
@@ -117,10 +119,10 @@ $channel->queue_declare('orders', false, true, false, false);
 $callback = function ($msg) {
     $order = json_decode($msg->body, true);
     
-    // Sipariş işleme
+    // Process order
     processOrder($order);
     
-    // Email gönder
+    // Send email
     sendOrderEmail($order);
     
     $msg->ack();
@@ -136,15 +138,15 @@ EOF
 
 ---
 
-## Blog Platformu
+## Blog Platform
 
-### Özellikler
+### Features
 
-- Multi-tenant blog sistemi
-- Markdown desteği
+- Multi-tenant blog system
+- Markdown support
 - Full-text search (Elasticsearch)
 - Image optimization
-- CDN entegrasyonu
+- CDN integration
 
 ### Stack
 
@@ -154,7 +156,7 @@ EOF
 - **Search:** Elasticsearch
 - **Queue:** RabbitMQ
 
-### Konfigürasyon
+### Configuration
 
 ```bash
 # .env
@@ -164,11 +166,11 @@ SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_KIBANA_ENABLE=true
 SERVICE_RABBITMQ_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### Proje
+### Project
 
 ```bash
 symfony new projects/blog-platform --webapp
@@ -187,7 +189,7 @@ cat > projects/blog-platform/stackvo.json <<EOF
 EOF
 ```
 
-### Elasticsearch Entegrasyonu
+### Elasticsearch Integration
 
 ```php
 <?php
@@ -209,20 +211,20 @@ fos_elastica:
 
 ---
 
-## SaaS Uygulaması
+## SaaS Application
 
-### Mimari
+### Architecture
 
-Multi-tenant SaaS uygulaması:
+Multi-tenant SaaS application:
 
 - Tenant isolation (database per tenant)
 - Subscription management
 - Usage tracking
 - Billing integration
 
-### Database Stratejisi
+### Database Strategy
 
-Her tenant için ayrı database:
+Separate database for each tenant:
 
 ```php
 <?php
@@ -256,16 +258,16 @@ class ProvisionTenant
 {
     public function provision($tenantId, $plan)
     {
-        // 1. Database oluştur
+        // 1. Create database
         $this->createDatabase($tenantId);
         
-        // 2. Migration çalıştır
+        // 2. Run migration
         $this->runMigrations($tenantId);
         
         // 3. Seed data
         $this->seedData($tenantId, $plan);
         
-        // 4. Cache hazırla
+        // 4. Warmup cache
         $this->warmupCache($tenantId);
     }
     
@@ -279,15 +281,15 @@ class ProvisionTenant
 
 ---
 
-## Mikroservis Mimarisi
+## Microservice Architecture
 
-### Servisler
+### Services
 
-1. **API Gateway** - Routing ve authentication
-2. **User Service** - Kullanıcı yönetimi
-3. **Product Service** - Ürün kataloğu
-4. **Order Service** - Sipariş yönetimi
-5. **Payment Service** - Ödeme işlemleri
+1. **API Gateway** - Routing and authentication
+2. **User Service** - User management
+3. **Product Service** - Product catalog
+4. **Order Service** - Order management
+5. **Payment Service** - Payment processing
 6. **Notification Service** - Email/SMS
 
 ### Service Discovery
@@ -316,7 +318,7 @@ class ServiceRegistry
     }
 }
 
-// Kullanım
+// Usage
 $registry = new ServiceRegistry();
 $registry->register('user-service', 'http://stackvo-user-service-web');
 $registry->register('product-service', 'http://stackvo-product-service-web');
@@ -350,14 +352,14 @@ class HttpClient
     }
 }
 
-// Kullanım
+// Usage
 $client = new HttpClient($registry);
 $user = $client->call('user-service', 'users/123');
 ```
 
 ---
 
-## Real-time Chat Uygulaması
+## Real-time Chat Application
 
 ### Stack
 
@@ -394,15 +396,15 @@ class ChatServer implements MessageComponentInterface
     {
         $data = json_decode($msg, true);
         
-        // Mesajı MongoDB'ye kaydet
+        // Save message to MongoDB
         $this->saveMessage($data);
         
-        // Tüm client'lara gönder
+        // Send to all clients
         foreach ($this->clients as $client) {
             $client->send($msg);
         }
         
-        // Redis'e publish (scaling için)
+        // Publish to Redis (for scaling)
         $this->redis->publish('chat', $msg);
     }
 }
@@ -464,8 +466,8 @@ deploy:
 SERVICE_GRAFANA_ENABLE=true
 SERVICE_PROMETHEUS_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### Metrics Export

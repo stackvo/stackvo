@@ -1,59 +1,61 @@
 ---
-title: Windows Kurulumu
-description: Windows 10/11'de WSL2 ile Stackvo kurulumu
+title: Windows Installation
+description: Stackvo installation on Windows 10/11 with WSL2
 ---
 
-# Windows Kurulumu
+# Windows Installation
 
-Windows'ta Stackvo, **WSL2 (Windows Subsystem for Linux 2)** üzerinde çalışır. Bu kılavuz, Windows 10 ve Windows 11'de WSL2 kurulumu, Docker Desktop yapılandırması ve Stackvo'un WSL2 içinde çalıştırılması için gereken tüm adımları detaylı olarak anlatmaktadır. WSL2 sayesinde Linux benzeri bir deneyim elde edersiniz.
-
-!!! tip "Sistem Gereksinimlerini Kontrol Ettiniz mi?"
-    Kuruluma başlamadan önce [Sistem Gereksinimleri](../started/requirements.md) sayfasını kontrol edin.
-
-!!! warning "WSL2 Gerekli"
-    Windows 10 Pro/Enterprise (Build 19041+) veya Windows 11 gereklidir.
+Stackvo runs on **WSL2 (Windows Subsystem for Linux 2)** on Windows. This guide detailedly explains the steps for WSL2 installation, Docker Desktop configuration, and running Stackvo within WSL2 on Windows 10 and Windows 11. Thanks to WSL2, you get a Linux-like experience.
 
 ---
 
-## WSL2 Kurulumu
+!!! tip "Checked System Requirements?"
+    Check the [System Requirements](../started/requirements.md) page before starting the installation.
 
-### Otomatik Kurulum (Önerilir)
+!!! warning "WSL2 Required"
+    Windows 10 Pro/Enterprise (Build 19041+) or Windows 11 is required.
 
-**PowerShell'i Yönetici Olarak Açın:**
+---
+
+## WSL2 Installation
+
+### Automatic Installation (Recommended)
+
+**Open PowerShell as Administrator:**
 
 ```powershell
-# WSL2'yi kur (tek komut)
+# Install WSL2 (single command)
 wsl --install
 
-# Bilgisayarı yeniden başlatın
+# Restart computer
 Restart-Computer
 ```
 
-!!! success "Tek Komut!"
-    Bu komut WSL2, Ubuntu ve tüm gereksinimleri otomatik kurar.
+!!! success "Single Command!"
+    This command automatically installs WSL2, Ubuntu, and all requirements.
 
-### İlk Başlatma
+### First Launch
 
-1. Başlat menüsünden "Ubuntu" açın
-2. Kullanıcı adı girin (küçük harf, boşluksuz)
-3. Şifre belirleyin (2 kez)
+1. Open "Ubuntu" from Start menu
+2. Enter username (lowercase, no spaces)
+3. Set password (2 times)
 
 ---
 
-## Docker Desktop Kurulumu
+## Docker Desktop Installation
 
-### 1. Docker Desktop İndirme
+### 1. Downloading Docker Desktop
 
-[Docker Desktop for Windows](https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe) indirin.
+Download [Docker Desktop for Windows](https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe).
 
-### 2. Kurulum
+### 2. Installation
 
-1. İndirilen `.exe` dosyasını çalıştırın
-2. **"Use WSL 2 instead of Hyper-V"** seçeneğini işaretleyin
-3. "Install" tıklayın
-4. Kurulum tamamlandığında bilgisayarı yeniden başlatın
+1. Run the downloaded `.exe` file
+2. Check **"Use WSL 2 instead of Hyper-V"** option
+3. Click "Install"
+4. Restart computer when installation is complete
 
-### 3. Docker Desktop Ayarları
+### 3. Docker Desktop Settings
 
 **Settings** → **General:**
 - ✅ Use the WSL 2 based engine
@@ -64,7 +66,7 @@ Restart-Computer
 
 **Settings** → **Resources:**
 
-| Kaynak | Minimum | Önerilen |
+| Resource | Minimum | Recommended |
 |--------|---------|----------|
 | **CPU** | 2 cores | 4 cores |
 | **Memory** | 4 GB | 8 GB |
@@ -74,51 +76,51 @@ Restart-Computer
 
 ---
 
-## Stackvo Kurulumu (WSL2 İçinde)
+## Stackvo Installation (Inside WSL2)
 
-### WSL2'ye Giriş
+### Login to WSL2
 
 ```powershell
-# PowerShell'den WSL2'ye geç
+# Switch to WSL2 from PowerShell
 wsl
 ```
 
-### Sistem Güncellemesi
+### System Update
 
 ```bash
-# Ubuntu içinde
+# Inside Ubuntu
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y git curl jq
 ```
 
-### Stackvo Kurulumu
+### Stackvo Installation
 
-Docker Desktop kurulumu tamamlandıktan sonra Stackvo'u kurmak için [Hızlı Başlangıç](../started/quick-start.md) sayfasını takip edin.
+After Docker Desktop installation is complete, follow the [Quick Start](../started/quick-start.md) page to install Stackvo.
 
-**Özet:**
+**Summary:**
 
 ```bash
-# WSL2 içinde
+# Inside WSL2
 git clone https://github.com/stackvo/stackvo.git
 cd stackvo
 
-# Konfigürasyon
+# Configuration
 cp .env.example .env
 
-# Başlat
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Start
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### Hosts Dosyası (Windows)
+### Hosts File (Windows)
 
-**Windows'ta** Notepad'i yönetici olarak açın:
+Open Notepad as administrator **on Windows**:
 
 ```
 C:\Windows\System32\drivers\etc\hosts
 ```
 
-Ekleyin:
+Add:
 
 ```
 127.0.0.1  stackvo.loc
@@ -127,67 +129,67 @@ Ekleyin:
 
 ---
 
-## Kurulum Doğrulama
+## Installation Verification
 
-### WSL2 Kontrolü
+### WSL2 Check
 
 ```powershell
-# PowerShell'de
+# In PowerShell
 wsl --list --verbose
 
-# Çıktı:
+# Output:
 #   NAME            STATE           VERSION
 # * Ubuntu-22.04    Running         2
 ```
 
-### Docker Kontrolü
+### Docker Check
 
 ```bash
-# WSL2 içinde
+# Inside WSL2
 docker --version
 docker compose version
 docker ps
 ```
 
-### Web UI Kontrolü
+### Web UI Check
 
-**Windows tarayıcısında** açın:
+Open in **Windows browser**:
 
 - **Stackvo Dashboard:** https://stackvo.loc
 - **Traefik Dashboard:** http://traefik.stackvo.loc
 
-!!! success "Kurulum Tamamlandı!"
-    [Hızlı Başlangıç](../started/quick-start.md) sayfasına geçerek ilk projenizi oluşturabilirsiniz.
+!!! success "Installation Completed!"
+    You can now proceed to the [Quick Start](../started/quick-start.md) page to create your first project.
 
 ---
 
-## Yaygın Sorunlar
+## Common Issues
 
-### WSL2 Başlamıyor
+### WSL2 Not Starting
 
-**Hata:** `WslRegisterDistribution failed with error: 0x80370102`
+**Error:** `WslRegisterDistribution failed with error: 0x80370102`
 
-**Çözüm:** BIOS'ta Virtualization aktif olmalı
+**Solution:** Virtualization must be enabled in BIOS
 
 ```powershell
-# Hyper-V'yi aktif et
+# Enable Hyper-V
 Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
 Restart-Computer
 ```
 
-### Docker Daemon Bağlanamıyor
+### Docker Daemon Cannot Connect
 
-**Çözüm:**
-1. Docker Desktop çalışıyor mu kontrol edin
-2. Settings → Resources → WSL Integration aktif mi?
-3. WSL2'yi yeniden başlatın: `wsl --shutdown` → `wsl`
+**Solution:**
+1. Check if Docker Desktop is running
+2. Is Settings → Resources → WSL Integration enabled?
+3. Restart WSL2: `wsl --shutdown` → `wsl`
 
-### Port Çakışması
+### Port Conflict
 
 ```powershell
-# Windows'ta çakışan servisi bul
+# Find conflicting service on Windows
 netstat -ano | findstr :80
 
-# Process'i durdur
+# Stop process
 taskkill /PID <PID> /F
 ```

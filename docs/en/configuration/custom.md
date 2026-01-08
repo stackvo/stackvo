@@ -1,28 +1,30 @@
-# Özel Konfigürasyonlar
+# Custom Configurations
 
-Her proje için `.stackvo/` dizininde özel webserver ve runtime konfigürasyonları oluşturabilirsiniz. Bu sayfa, Nginx, Apache, Caddy gibi webserver'lar için özel konfigürasyon dosyalarının nasıl oluşturulacağını, PHP ve PHP-FPM ayarlarının nasıl özelleştirileceğini ve konfigürasyon öncelik sırasını detaylı olarak açıklamaktadır. Özel konfigürasyonlar, auto-generated ayarları geçersiz kılar.
+You can create custom webserver and runtime configurations for each project in the `.stackvo/` directory. This page details how to create custom configuration files for webservers like Nginx, Apache, Caddy, how to customize PHP and PHP-FPM settings, and configuration priority order. Custom configurations override auto-generated settings.
 
-## Konfigürasyon Önceliği
+---
 
-Generator, konfigürasyon dosyalarını şu sırayla arar:
+## Configuration Priority
 
-1. **Özel konfigürasyon:** `projects/myproject/.stackvo/nginx.conf`
-2. **Proje root'ta:** `projects/myproject/nginx.conf`
+The generator searches for configuration files in the following order:
+
+1. **Custom configuration:** `projects/myproject/.stackvo/nginx.conf`
+2. **In Project root:** `projects/myproject/nginx.conf`
 3. **Auto-generated:** `core/generated/configs/myproject-nginx.conf`
 
 ---
 
-## .stackvo/ Dizini
+## .stackvo/ Directory
 
 ```
 projects/myproject/
-├── .stackvo/             # Özel konfigürasyonlar (opsiyonel)
-│   ├── nginx.conf          # Özel Nginx konfigürasyonu
-│   ├── apache.conf         # Özel Apache konfigürasyonu
-│   ├── Caddyfile           # Özel Caddy konfigürasyonu
-│   ├── ferron.yaml         # Özel Ferron konfigürasyonu
-│   ├── php.ini             # Özel PHP konfigürasyonu
-│   └── php-fpm.conf        # Özel PHP-FPM konfigürasyonu
+├── .stackvo/             # Custom configurations (optional)
+│   ├── nginx.conf          # Custom Nginx configuration
+│   ├── apache.conf         # Custom Apache configuration
+│   ├── Caddyfile           # Custom Caddy configuration
+│   ├── ferron.yaml         # Custom Ferron configuration
+│   ├── php.ini             # Custom PHP configuration
+│   └── php-fpm.conf        # Custom PHP-FPM configuration
 ├── stackvo.json
 └── public/
     └── index.php
@@ -30,16 +32,16 @@ projects/myproject/
 
 ---
 
-## Nginx Konfigürasyonu
+## Nginx Configuration
 
-### Özel Nginx Config Oluşturma
+### Creating Custom Nginx Config
 
 ```bash
 mkdir -p projects/myproject/.stackvo
 nano projects/myproject/.stackvo/nginx.conf
 ```
 
-### Örnek Nginx Konfigürasyonu
+### Example Nginx Configuration
 
 ```nginx
 server {
@@ -89,7 +91,7 @@ server {
 }
 ```
 
-### Laravel için Nginx
+### Nginx for Laravel
 
 ```nginx
 server {
@@ -126,16 +128,16 @@ server {
 
 ---
 
-## Apache Konfigürasyonu
+## Apache Configuration
 
-### Özel Apache Config Oluşturma
+### Creating Custom Apache Config
 
 ```bash
 mkdir -p projects/myproject/.stackvo
 nano projects/myproject/.stackvo/apache.conf
 ```
 
-### Örnek Apache Konfigürasyonu
+### Example Apache Configuration
 
 ```apache
 <VirtualHost *:80>
@@ -177,16 +179,16 @@ nano projects/myproject/.stackvo/apache.conf
 
 ---
 
-## Caddy Konfigürasyonu
+## Caddy Configuration
 
-### Özel Caddyfile Oluşturma
+### Creating Custom Caddyfile
 
 ```bash
 mkdir -p projects/myproject/.stackvo
 nano projects/myproject/.stackvo/Caddyfile
 ```
 
-### Örnek Caddyfile
+### Example Caddyfile
 
 ```caddy
 :80 {
@@ -215,16 +217,16 @@ nano projects/myproject/.stackvo/Caddyfile
 
 ---
 
-## PHP Konfigürasyonu
+## PHP Configuration
 
-### Özel php.ini Oluşturma
+### Creating Custom php.ini
 
 ```bash
 mkdir -p projects/myproject/.stackvo
 nano projects/myproject/.stackvo/php.ini
 ```
 
-### Örnek php.ini (Development)
+### Example php.ini (Development)
 
 ```ini
 ; Memory
@@ -296,16 +298,16 @@ opcache.fast_shutdown = 1
 
 ---
 
-## PHP-FPM Konfigürasyonu
+## PHP-FPM Configuration
 
-### Özel php-fpm.conf Oluşturma
+### Creating Custom php-fpm.conf
 
 ```bash
 mkdir -p projects/myproject/.stackvo
 nano projects/myproject/.stackvo/php-fpm.conf
 ```
 
-### Örnek php-fpm.conf
+### Example php-fpm.conf
 
 ```ini
 [www]
@@ -343,25 +345,25 @@ env[TEMP] = /tmp
 
 ---
 
-## Konfigürasyonları Uygulama
+## Applying Configurations
 
-Özel konfigürasyonlar oluşturduktan sonra:
+After creating custom configurations:
 
 ```bash
-# 1. Projeleri yeniden üret
-./core/cli/stackvo.sh generate projects
+# 1. Regenerate projects
+./stackvo.sh generate projects
 
-# 2. Container'ları yeniden başlat
-./core/cli/stackvo.sh restart
+# 2. Restart containers
+./stackvo.sh restart
 
-# 3. Veya sadece ilgili projeyi yeniden başlat
+# 3. Or restart only the relevant project
 docker restart stackvo-myproject-web
 docker restart stackvo-myproject-php
 ```
 
 ---
 
-## Konfigürasyon Doğrulama
+## Configuration Verification
 
 ### Nginx Syntax Check
 
@@ -384,26 +386,26 @@ docker exec stackvo-myproject-php php -i | grep "memory_limit"
 
 ---
 
-## Sorun Giderme
+## Troubleshooting
 
-### Konfigürasyon Yüklenmiyor
+### Configuration Not Loading
 
 ```bash
-# Volume mount'ları kontrol et
+# Check volume mounts
 docker inspect stackvo-myproject-web | grep Mounts -A 20
 
-# Dosya izinlerini kontrol et
+# Check file permissions
 ls -la projects/myproject/.stackvo/
 ```
 
-### Syntax Hatası
+### Syntax Error
 
 ```bash
-# Logları kontrol et
+# Check logs
 docker logs stackvo-myproject-web
 docker logs stackvo-myproject-php
 
-# Container içine gir
+# Enter container
 docker exec -it stackvo-myproject-web sh
 cat /etc/nginx/conf.d/default.conf
 ```

@@ -1,15 +1,15 @@
 ---
-title: Mimari
-description: Stackvo mimarisi ve çalışma prensiplerini anlamak için bu bölümü inceleyin.
+title: Architecture
+description: Examine this section to understand Stackvo architecture and operating principles.
 ---
 
-# Mimari
+# Architecture
 
-Stackvo, üç katmanlı Docker Compose mimarisi ile modüler ve esnek bir yapı sunar. Bu sayfa, base layer (Traefik), services layer (infrastructure) ve projects layer (applications) olmak üzere üç katmanın nasıl çalıştığını, birbirleriyle nasıl etkileştiğini ve compose merge stratejisini detaylı olarak açıklamaktadır. Katmanlı mimari, kolay bakım ve bağımsız güncelleme imkanı sağlar.
+Stackvo offers a modular and flexible structure with a three-layer Docker Compose architecture. This page details how the three layers—base layer (Traefik), services layer (infrastructure), and projects layer (applications)—work, interact with each other, and the compose merge strategy. The layered architecture provides ease of maintenance and independent updates.
 
 ---
 
-## Üç Katmanlı Docker Compose Sistemi
+## Three-Layer Docker Compose System
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -17,16 +17,16 @@ Stackvo, üç katmanlı Docker Compose mimarisi ile modüler ve esnek bir yapı 
 │              (Base Layer - Traefik)                     │
 │  • Traefik Reverse Proxy                                │
 │  • stackvo-net Network (172.30.0.0/16)                │
-│  • Temel routing ve SSL yapılandırması                  │
+│  • Basic routing and SSL configuration                  │
 │  • Template: core/compose/base.yml                      │
 └─────────────────────────────────────────────────────────┘
                          ↓ merge
 ┌─────────────────────────────────────────────────────────┐
 │      generated/docker-compose.dynamic.yml               │
 │      (Services Layer - Infrastructure)                  │
-│  • 40+ Servis (MySQL, Redis, RabbitMQ, etc.)            │
+│  • 40+ Services (MySQL, Redis, RabbitMQ, etc.)          │
 │  • Templates: core/templates/services/*/                │
-│  • Otomatik volume tanımları                            │
+│  • Automatic volume definitions                         │
 │  • Generator: cli/lib/generators/compose.sh             │
 └─────────────────────────────────────────────────────────┘
                          ↓ merge
@@ -40,26 +40,26 @@ Stackvo, üç katmanlı Docker Compose mimarisi ile modüler ve esnek bir yapı 
 │  • Generator: cli/lib/generators/project.sh             │
 └─────────────────────────────────────────────────────────┘
                          ↓
-              ✅ Tam Entegre Stack
+              ✅ Fully Integrated Stack
 ```
 
 ---
 
-## Katmanlar
+## Layers
 
 ### 1. Base Layer (Traefik)
 
-**Dosya:** `generated/stackvo.yml`
+**File:** `generated/stackvo.yml`
 
-**Sorumluluklar:**
-- Traefik reverse proxy container'ı
-- `stackvo-net` Docker network oluşturma
-- Temel SSL/TLS konfigürasyonu
-- HTTP → HTTPS yönlendirme
+**Responsibilities:**
+- Traefik reverse proxy container
+- `stackvo-net` Docker network creation
+- Basic SSL/TLS configuration
+- HTTP → HTTPS redirection
 
 **Template:** `core/compose/base.yml`
 
-**Örnek:**
+**Example:**
 ```yaml
 services:
   traefik:
@@ -88,19 +88,19 @@ networks:
 
 ### 2. Services Layer (Infrastructure)
 
-**Dosya:** `generated/docker-compose.dynamic.yml`
+**File:** `generated/docker-compose.dynamic.yml`
 
-**Sorumluluklar:**
-- 40+ altyapı servisi (MySQL, PostgreSQL, Redis, RabbitMQ, vb.)
-- Servis-specific volume tanımları
+**Responsibilities:**
+- 40+ infrastructure services (MySQL, PostgreSQL, Redis, RabbitMQ, etc.)
+- Service-specific volume definitions
 - Traefik routing labels
-- Servisler arası bağımlılıklar
+- Inter-service dependencies
 
 **Generator:** `cli/lib/generators/compose.sh`
 
 **Templates:** `core/templates/services/*/`
 
-**Örnek:**
+**Example:**
 ```yaml
 services:
   mysql:
@@ -126,17 +126,17 @@ volumes:
 
 ### 3. Projects Layer (Applications)
 
-**Dosya:** `generated/docker-compose.projects.yml`
+**File:** `generated/docker-compose.projects.yml`
 
-**Sorumluluklar:**
-- Kullanıcı projelerinin container'ları
-- PHP-FPM ve webserver (Nginx/Apache/Caddy/Ferron) container'ları
-- Proje-specific volume mount'ları
+**Responsibilities:**
+- User project containers
+- PHP-FPM and webserver (Nginx/Apache/Caddy/Ferron) containers
+- Project-specific volume mounts
 - Domain routing (Traefik labels)
 
 **Generator:** `cli/lib/generators/project.sh`
 
-**Örnek:**
+**Example:**
 ```yaml
 services:
   project1-php:
@@ -169,11 +169,11 @@ services:
 
 ---
 
-## Network Mimarisi
+## Network Architecture
 
 ### stackvo-net
 
-Tüm container'lar tek bir Docker network üzerinde çalışır:
+All containers run on a single Docker network:
 
 ```
 stackvo-net (172.30.0.0/16)
@@ -187,16 +187,16 @@ stackvo-net (172.30.0.0/16)
 ├── Tools Container (stackvo-tools)
 ├── Project1-PHP (stackvo-project1-php)
 ├── Project1-Web (stackvo-project1-web)
-└── ... (diğer servisler)
+└── ... (other services)
 ```
 
-**Avantajlar:**
-- Container'lar birbirlerini hostname ile bulabilir
-- İzolasyon ve güvenlik
-- Kolay servis keşfi
-- Basit network yönetimi
+**Advantages:**
+- Containers can find each other via hostname
+- Isolation and security
+- Easy service discovery
+- Simple network management
 
-**İletişim Örneği:**
+**Communication Example:**
 ```
 External → Traefik (80/443) → Nginx → PHP-FPM
 PHP → MySQL (stackvo-mysql:3306)
@@ -206,35 +206,35 @@ PHP → RabbitMQ (stackvo-rabbitmq:5672)
 
 ---
 
-## Dizin Yapısı
+## Directory Structure
 
 ```
 stackvo/
-├── .env                          # Ana konfigürasyon
+├── .env                          # Main configuration
 ├── core/
-│   ├── cli/                          # CLI komutları
-│   ├── stackvo.sh              # Ana CLI
-│   ├── commands/                 # Komut scriptleri
-│   ├── lib/                      # Kütüphaneler
-│   │   └── generators/           # Generator modülleri
-│   └── utils/                    # Yardımcı scriptler
+│   ├── cli/                          # CLI commands
+│   ├── stackvo.sh              # Main CLI
+│   ├── commands/                 # Command scripts
+│   ├── lib/                      # Libraries
+│   │   └── generators/           # Generator modules
+│   └── utils/                    # Utility scripts
 │
-├── core/                         # Core dosyalar
+├── core/                         # Core files
 │   ├── ui/                       # Stackvo Web UI
 │   │   ├── client/               # Vue.js frontend
 │   │   ├── server/               # Node.js backend
 │   │   └── dist/                 # Build output
 │   ├── compose/
 │   │   └── base.yml              # Traefik base template
-│   ├── templates/                # Servis ve webserver template'leri
-│   │   ├── services/             # 40+ servis template
-│   │   ├── servers/              # Webserver template'leri
-│   │   └── ui/                   # UI template'leri
-│   ├── traefik/                  # Traefik konfigürasyonu
+│   ├── templates/                # Service and webserver templates
+│   │   ├── services/             # 40+ service templates
+│   │   ├── servers/              # Webserver templates
+│   │   └── ui/                   # UI templates
+│   ├── traefik/                  # Traefik configuration
 │   │   ├── traefik.yml
 │   │   └── dynamic/
 │   │       └── routes.yml        # Auto-generated routes
-│   ├── certs/                    # SSL sertifikaları
+│   ├── certs/                    # SSL certificates
 │   └── generated/                # Auto-generated configs
 │       └── configs/
 │
@@ -243,22 +243,22 @@ stackvo/
 │   ├── docker-compose.dynamic.yml
 │   └── docker-compose.projects.yml
 │
-├── projects/                     # Kullanıcı projeleri
+├── projects/                     # User projects
 │   └── project1/
 │       ├── stackvo.json
 │       ├── .stackvo/
 │       └── public/
 │
-└── logs/                         # Container logları
+└── logs/                         # Container logs
     ├── services/
     └── projects/
 ```
 
 ---
 
-## Compose Merge Stratejisi
+## Compose Merge Strategy
 
-Stackvo, üç compose dosyasını merge ederek çalışır:
+Stackvo works by merging three compose files:
 
 ```bash
 docker compose \
@@ -268,59 +268,56 @@ docker compose \
   up -d
 ```
 
-**Avantajlar:**
-- Modüler yapı
-- Kolay bakım
-- Bağımsız güncelleme
-- Temiz separation of concerns
+**Advantages:**
+- Modular structure
+- Easy maintenance
+- Independent updates
+- Clean separation of concerns
 
 ---
 
 ## Lifecycle
 
-### 1. Konfigürasyon
+### 1. Configuration
 
 ```bash
-# .env dosyasını düzenle
+# Edit .env file
 nano .env
 ```
 
 ### 2. Generation
 
 ```bash
-# Generator'ı çalıştır
-./core/cli/stackvo.sh generate
+# Run generator
+./stackvo.sh generate
 ```
 
-**Generator şunları yapar:**
+**Generator does the following:**
 
-1. `.env` dosyasını okur
-2. SSL sertifikaları oluşturur (yoksa)
-3. `generated/stackvo.yml` oluşturur
-4. `generated/docker-compose.dynamic.yml` oluşturur
-5. `generated/docker-compose.projects.yml` oluşturur
-6. `core/traefik/dynamic/routes.yml` oluşturur
-7. `core/generated/configs/` dizininde servis konfigürasyonları oluşturur
+1. Reads `.env` file
+2. Generates SSL certificates (if nonexistent)
+3. Generates `generated/stackvo.yml`
+4. Generates `generated/docker-compose.dynamic.yml`
+5. Generates `generated/docker-compose.projects.yml`
+6. Generates `core/traefik/dynamic/routes.yml`
+7. Generates service configurations in `core/generated/configs/` directory
 
 ### 3. Deployment
 
 ```bash
-# Servisleri başlat
-./core/cli/stackvo.sh up
+# Start services
+./stackvo.sh up
 ```
 
 ### 4. Management
 
 ```bash
-# Durumu kontrol et
-./core/cli/stackvo.sh ps
+# Check status
+./stackvo.sh ps
 
-# Logları izle
-./core/cli/stackvo.sh logs
+# Monitor logs
+./stackvo.sh logs
 
-# Yeniden başlat
-./core/cli/stackvo.sh restart
+# Restart
+./stackvo.sh restart
 ```
-
----
-

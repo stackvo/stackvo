@@ -289,7 +289,7 @@ nano .env
 
 ```bash
 # Generator'ı çalıştır
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 ```
 
 **Generator şunları yapar:**
@@ -306,18 +306,18 @@ nano .env
 
 ```bash
 # Servisleri başlat
-./core/cli/stackvo.sh up
+./stackvo.sh up
 ```
 
 ### 4. Management
 
 ```bash
 # Durumu kontrol et
-./core/cli/stackvo.sh ps
+./stackvo.sh ps
 
 # Logları izle
-./core/cli/stackvo.sh logs
+./stackvo.sh logs
 
 # Yeniden başlat
-./core/cli/stackvo.sh restart
+./stackvo.sh restart
 ```

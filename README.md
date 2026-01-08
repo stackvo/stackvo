@@ -45,37 +45,84 @@
 
 ### Requirements
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- Bash 3.2+
-- 4GB+ RAM
-- 10GB+ Disk space
+**System Requirements:**
+
+- **Docker:** 20.10+ (Docker Desktop on macOS/Windows, Docker Engine on Linux)
+- **Docker Compose:** 2.0+ (v2 plugin format - `docker compose` not `docker-compose`)
+- **Bash:** 3.2+ (pre-installed on macOS and Linux, use WSL2 or Git Bash on Windows)
+- **RAM:** 4GB minimum, 8GB+ recommended
+- **Disk Space:** 10GB+ free space
+
+**Supported Operating Systems:**
+
+- ✅ **macOS** 10.15+ (Catalina or later) - Intel & Apple Silicon
+- ✅ **Linux** - Ubuntu 20.04+, Debian 11+, Fedora 35+, Arch Linux
+- ✅ **Windows** 10/11 with WSL2 (Ubuntu 20.04+ in WSL)
+
+**Not Supported:**
+
+- ❌ Native Windows (without WSL2)
+- ❌ macOS < 10.15
+- ❌ Docker Compose v1 (deprecated)
 
 ### Installation
 
+**Step 1: Clone and Setup**
+
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/stackvo/stackvo.git
 cd stackvo
 
-# 2. Copy environment file
+# Copy environment file
 cp .env.example .env
+```
 
-# 3. Install CLI
+**Step 2: Install CLI**
+
+```bash
+# Install Stackvo CLI globally
 ./stackvo.sh install
 
-# 4. Generate configuration
-./stackvo.sh generate
-
-# 5. Start services
-./stackvo.sh up
-
-# 6. Update hosts file
-echo "127.0.0.1  stackvo.loc" | sudo tee -a /etc/hosts
-
-# 7. Access Web UI
-# https://stackvo.loc
+# Verify installation
+stackvo --help
 ```
+
+**Step 3: Generate Configuration**
+
+```bash
+# Generate all configurations
+stackvo generate
+
+# This will create:
+# - generated/stackvo.yml (Traefik + UI)
+# - generated/docker-compose.dynamic.yml (Services)
+# - generated/docker-compose.projects.yml (Projects)
+```
+
+**Step 4: Start Services**
+
+```bash
+# Start core services (Traefik + UI)
+stackvo up
+
+# Wait for services to start (~30 seconds)
+# Check status
+stackvo ps
+```
+
+**Step 5: Configure Hosts File**
+
+```bash
+# Add Stackvo UI domain to hosts file
+echo "127.0.0.1  stackvo.loc" | sudo tee -a /etc/hosts
+```
+
+**Step 6: Access Web UI**
+
+Open your browser and visit: **https://stackvo.loc**
+
+> **Note:** You'll see a SSL warning because we use self-signed certificates in development. Click "Advanced" → "Proceed to site" to continue.
 
 ### Create Your First Project
 
@@ -152,16 +199,16 @@ echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 
 ## 🛠️ Supported Services
 
-| Category              | Count | Services                                                      |
-| --------------------- | ----- | ------------------------------------------------------------- |
-| **Databases**         | 4     | MySQL, MariaDB, PostgreSQL, MongoDB, Cassandra                |
-| **Cache Systems**     | 2     | Redis, Memcached                                              |
-| **Message Queues**    | 2     | RabbitMQ, Kafka                                               |
-| **Search & Indexing** | 2     | Elasticsearch, Kibana                                         |
-| **Monitoring & QA**   | 1     | Grafana                                                       |
-| **Developer Tools**   | 5     | Adminer, PhpMyAdmin, PhpPgAdmin, PhpMongo, MailHog, Blackfire |
+| Category              | Count | Services                                       |
+| --------------------- | ----- | ---------------------------------------------- |
+| **Databases**         | 5     | MySQL, MariaDB, PostgreSQL, MongoDB, Cassandra |
+| **Cache Systems**     | 2     | Redis, Memcached                               |
+| **Message Queues**    | 2     | RabbitMQ, Kafka                                |
+| **Search & Indexing** | 2     | Elasticsearch, Kibana                          |
+| **Monitoring**        | 1     | Grafana                                        |
+| **Developer Tools**   | 2     | MailHog, Blackfire                             |
 
-> **Total 18+ services** • For details: [Services Documentation](docs/en/references/services.md)
+> **Total 14 services** • For details: [Services Documentation](docs/en/references/services.md)
 
 ---
 
@@ -228,112 +275,19 @@ Visit the [docs](docs/en) directory for detailed documentation:
 
 ---
 
-## 🛠️ Development Scripts
-
-This directory contains scripts used for changelog management of the Stackvo project.
-
-### generate-changelog.sh
-
-Automatically generates a changelog from Git commit history.
-
-#### Usage
-
-**Manual Usage** (For local testing):
-
-```bash
-./docs/scripts/generate-changelog.sh [version]
-```
-
-**Automatic Usage** (GitHub Actions):
-
-- Runs automatically when you create a new tag on GitHub
-- Workflow: `.github/workflows/changelog.yml`
-
-#### Examples
-
-```bash
-# Mark as Unreleased
-./docs/scripts/generate-changelog.sh
-
-# For a specific version
-./docs/scripts/generate-changelog.sh 1.2.0
-```
-
-#### Outputs
-
-- `docs/tr/changelog.md` - Turkish changelog
-- `docs/en/changelog.md` - English changelog
-
-#### Conventional Commits
-
-The script recognizes the following commit types:
-
-- `feat:` → Added
-- `fix:` → Fixed
-- `docs:` → Documentation
-- `refactor:` → Refactored
-- `perf:` → Performance
-- `test:` → Tests
-- `chore:` → Chore
-
-#### GitHub Release Workflow
-
-1. **Develop your code** and commit (in Conventional Commits format)
-
-   ```bash
-   git commit -m "feat: added new feature"
-   git commit -m "fix: fixed bug"
-   ```
-
-2. **Create a new release on GitHub**
-
-   - Releases → Draft a new release
-   - Tag: `1.2.0` (without v prefix!)
-   - Title: `1.2.0`
-   - Description: Optional
-   - Publish release
-
-3. **GitHub Actions automatically**:
-   - Updates the Changelog
-   - Commits changes
-   - Adds changelog to GitHub Release
-
-#### Tag Format
-
-> [!IMPORTANT]
-> Do not use **"v" prefix** when creating tags. Correct format: `1.2.0`, `1.0.5`, etc.
-
-**Correct**:
-
-- ✅ `1.0.0`
-- ✅ `1.2.5`
-- ✅ `2.0.0`
-
-**Incorrect**:
-
-- ❌ `v1.0.0`
-- ❌ `v1.2.5`
-
-### Notes
-
-- These scripts are for documentation purposes
-- Main usage is via GitHub Actions
-- Manual usage is for testing/development purposes only
-- All commits must be in Conventional Commits format
-
----
-
 ## 🤝 Contributing
 
 Stackvo is an open source project and we welcome your contributions!
+
+For detailed contribution guidelines, including coding standards, commit message format, and changelog generation workflow, see the [Contributing Guide](CONTRIBUTING.md).
+
+### Quick Contribution Steps
 
 1. Fork this repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push your branch (`git push origin feature/amazing-feature`)
 5. Create a Pull Request
-
-For details, see the [Contributing Guide](docs/en/community/contributing.md).
 
 ---
 

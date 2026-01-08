@@ -1,33 +1,33 @@
 ---
-title: Eğitimler    
-description: Stackvo'u öğrenmek için eğitimler
+title: Tutorials
+description: Tutorials to learn Stackvo
 ---
 
-# Eğitimler
+# Tutorials
 
-Stackvo'u adım adım öğrenmek için eğitimler. Bu bölüm, başlangıç seviyesinden ileri seviyeye kadar pratik örneklerle Stackvo kullanımını öğretmektedir. İlk PHP projesinden MySQL ve Redis kullanımına, Laravel kurulumundan RabbitMQ ile asenkron işlere, mikroservis mimarisine kadar gerçek dünya senaryolarıyla uygulamalı eğitimler sunulmaktadır.
+Tutorials to learn Stackvo step-by-step. This section teaches Stackvo usage with practical examples from beginner to advanced levels. Hands-on tutorials with real-world scenarios are provided, ranging from your first PHP project to using MySQL and Redis, installing Laravel, asynchronous jobs with RabbitMQ, and microservice architecture.
 
 ---
 
-## Başlangıç Seviyesi
+## Beginner Level
 
-### 1. İlk Projenizi Oluşturun
+### 1. Create Your First Project
 
-Bu eğitim, sıfırdan bir PHP projesi oluşturmanızı gösterir.
+This tutorial shows you how to create a PHP project from scratch.
 
-#### Hedef
+#### Goal
 
-Basit bir PHP projesi oluşturmak ve tarayıcıda çalıştırmak.
+Create a simple PHP project and run it in the browser.
 
-#### Adımlar
+#### Steps
 
-**1. Proje Dizini Oluşturun**
+**1. Create Project Directory**
 
 ```bash
 mkdir -p projects/hello-world/public
 ```
 
-**2. stackvo.json Oluşturun**
+**2. Create stackvo.json**
 
 ```bash
 cat > projects/hello-world/stackvo.json <<EOF
@@ -43,7 +43,7 @@ cat > projects/hello-world/stackvo.json <<EOF
 EOF
 ```
 
-**3. index.php Oluşturun**
+**3. Create index.php**
 
 ```bash
 cat > projects/hello-world/public/index.php <<'EOF'
@@ -53,54 +53,54 @@ echo "<p>PHP Version: " . phpversion() . "</p>";
 EOF
 ```
 
-**4. Generate ve Start**
+**4. Generate and Start**
 
 ```bash
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+./stackvo.sh generate projects
+./stackvo.sh up
 ```
 
-**5. Hosts Dosyasını Güncelleyin**
+**5. Update Hosts File**
 
 ```bash
 echo "127.0.0.1  hello.loc" | sudo tee -a /etc/hosts
 ```
 
-**6. Tarayıcıda Açın**
+**6. Open in Browser**
 
 ```
 https://hello.loc
 ```
 
-**Sonuç:** "Hello, Stackvo!" mesajını görmelisiniz.
+**Result:** You should see the "Hello, Stackvo!" message.
 
 ---
 
-### 2. MySQL ile Çalışma
+### 2. Working with MySQL
 
-Bu eğitim, MySQL veritabanına bağlanmayı ve veri eklemeyi gösterir.
+This tutorial shows how to connect to a MySQL database and insert data.
 
-#### Hedef
+#### Goal
 
-MySQL veritabanı kullanarak basit bir TODO uygulaması yapmak.
+Make a simple TODO application using a MySQL database.
 
-#### Adımlar
+#### Steps
 
-**1. MySQL'i Aktif Edin**
+**1. Enable MySQL**
 
 ```bash
-# .env dosyasını düzenle
+# Edit .env file
 nano .env
 
-# MySQL'i aktif et
+# Enable MySQL
 SERVICE_MYSQL_ENABLE=true
 
-# Generate ve start
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Generate and start
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-**2. Veritabanı Oluşturun**
+**2. Create Database**
 
 ```bash
 docker exec -it stackvo-mysql mysql -u root -proot <<EOF
@@ -112,12 +112,12 @@ CREATE TABLE tasks (
     completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO tasks (title) VALUES ('İlk görev');
-INSERT INTO tasks (title) VALUES ('İkinci görev');
+INSERT INTO tasks (title) VALUES ('First task');
+INSERT INTO tasks (title) VALUES ('Second task');
 EOF
 ```
 
-**3. PHP Kodunu Yazın**
+**3. Write PHP Code**
 
 ```bash
 cat > projects/hello-world/public/todo.php <<'EOF'
@@ -128,7 +128,7 @@ $pdo = new PDO(
     'root'
 );
 
-// Tüm görevleri al
+// Get all tasks
 $stmt = $pdo->query('SELECT * FROM tasks ORDER BY id DESC');
 $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -154,47 +154,47 @@ $tasks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 EOF
 ```
 
-**4. Tarayıcıda Açın**
+**4. Open in Browser**
 
 ```
 https://hello.loc/todo.php
 ```
 
-**Sonuç:** TODO listesini görmelisiniz.
+**Result:** You should see the TODO list.
 
 ---
 
-### 3. Redis Cache Kullanımı
+### 3. Using Redis Cache
 
-Bu eğitim, Redis ile cache kullanımını gösterir.
+This tutorial shows how to use cache with Redis.
 
-#### Hedef
+#### Goal
 
-Redis kullanarak sayfa yükleme süresini azaltmak.
+Reduce page load time using Redis.
 
-#### Adımlar
+#### Steps
 
-**1. Redis'i Aktif Edin**
+**1. Enable Redis**
 
 ```bash
-# .env dosyasını düzenle
+# Edit .env file
 nano .env
 
-# Redis'i aktif et
+# Enable Redis
 SERVICE_REDIS_ENABLE=true
 
-# Generate ve start
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Generate and start
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-**2. PHP Redis Extension Kontrolü**
+**2. Check PHP Redis Extension**
 
 ```bash
 docker exec stackvo-hello-world-php php -m | grep redis
 ```
 
-**3. Cache Örneği**
+**3. Cache Example**
 
 ```bash
 cat > projects/hello-world/public/cache.php <<'EOF'
@@ -209,11 +209,11 @@ if ($cachedData) {
     echo "<h1>From Cache</h1>";
     echo "<p>Data: $cachedData</p>";
 } else {
-    // Pahalı işlem simülasyonu
+    // Expensive operation simulation
     sleep(2);
     $data = "Expensive calculation result: " . time();
     
-    // Cache'e kaydet (60 saniye)
+    // Save to cache (60 seconds)
     $redis->setex($cacheKey, 60, $data);
     
     echo "<h1>Fresh Data (Cached for 60s)</h1>";
@@ -224,35 +224,35 @@ echo "<p><a href='cache.php'>Refresh</a></p>";
 EOF
 ```
 
-**4. Test Edin**
+**4. Test It**
 
 ```
 https://hello.loc/cache.php
 ```
 
-**Sonuç:** İlk yükleme 2 saniye sürer, sonraki yüklemeler anında olur.
+**Result:** First load takes 2 seconds, subsequent loads are instant.
 
 ---
 
-## Orta Seviye
+## Intermediate Level
 
-### 4. Laravel Projesi Kurulumu
+### 4. Laravel Project Installation
 
-Bu eğitim, Laravel projesi oluşturmayı gösterir.
+This tutorial shows how to create a Laravel project.
 
-#### Hedef
+#### Goal
 
-Tam fonksiyonel bir Laravel projesi kurmak.
+Install a fully functional Laravel project.
 
-#### Adımlar
+#### Steps
 
-**1. Composer ile Laravel Kurun**
+**1. Install Laravel with Composer**
 
 ```bash
 composer create-project laravel/laravel projects/laravel-app
 ```
 
-**2. stackvo.json Oluşturun**
+**2. Create stackvo.json**
 
 ```bash
 cat > projects/laravel-app/stackvo.json <<EOF
@@ -279,7 +279,7 @@ cat > projects/laravel-app/stackvo.json <<EOF
 EOF
 ```
 
-**3. .env Dosyasını Düzenleyin**
+**3. Edit .env File**
 
 ```bash
 cat > projects/laravel-app/.env <<EOF
@@ -302,74 +302,74 @@ REDIS_PORT=6379
 EOF
 ```
 
-**4. Veritabanı Oluşturun**
+**4. Create Database**
 
 ```bash
 docker exec -it stackvo-mysql mysql -u root -proot -e "CREATE DATABASE laravel;"
 ```
 
-**5. Generate ve Start**
+**5. Generate and Start**
 
 ```bash
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+./stackvo.sh generate projects
+./stackvo.sh up
 ```
 
-**6. Laravel Key Generate**
+**6. Generate Laravel Key**
 
 ```bash
 docker exec stackvo-laravel-app-php php artisan key:generate
 ```
 
-**7. Migration Çalıştırın**
+**7. Run Migration**
 
 ```bash
 docker exec stackvo-laravel-app-php php artisan migrate
 ```
 
-**8. Hosts Dosyasını Güncelleyin**
+**8. Update Hosts File**
 
 ```bash
 echo "127.0.0.1  laravel.loc" | sudo tee -a /etc/hosts
 ```
 
-**9. Tarayıcıda Açın**
+**9. Open in Browser**
 
 ```
 https://laravel.loc
 ```
 
-**Sonuç:** Laravel welcome sayfasını görmelisiniz.
+**Result:** You should see the Laravel welcome page.
 
 ---
 
-### 5. RabbitMQ ile Asenkron İşler
+### 5. Asynchronous Jobs with RabbitMQ
 
-Bu eğitim, RabbitMQ kullanarak asenkron iş kuyruğu oluşturmayı gösterir.
+This tutorial shows how to create an asynchronous job queue using RabbitMQ.
 
-#### Hedef
+#### Goal
 
-Email gönderme işini asenkron yapmak.
+Make sending emails asynchronous.
 
-#### Adımlar
+#### Steps
 
-**1. RabbitMQ'yu Aktif Edin**
+**1. Enable RabbitMQ**
 
 ```bash
 # .env
 SERVICE_RABBITMQ_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-**2. php-amqplib Kurun**
+**2. Install php-amqplib**
 
 ```bash
 docker exec stackvo-laravel-app-php composer require php-amqplib/php-amqplib
 ```
 
-**3. Producer Oluşturun**
+**3. Create Producer**
 
 ```bash
 cat > projects/laravel-app/public/send-email.php <<'EOF'
@@ -405,7 +405,7 @@ $connection->close();
 EOF
 ```
 
-**4. Consumer Oluşturun**
+**4. Create Consumer**
 
 ```bash
 cat > projects/laravel-app/email-worker.php <<'EOF'
@@ -430,7 +430,7 @@ $callback = function ($msg) {
     $emailData = json_decode($msg->body, true);
     echo "Sending email to: " . $emailData['to'] . "\n";
     
-    // Email gönderme simülasyonu
+    // Email sending simulation
     sleep(2);
     
     echo "Email sent!\n";
@@ -446,40 +446,40 @@ while ($channel->is_consuming()) {
 EOF
 ```
 
-**5. Worker'ı Çalıştırın**
+**5. Run Worker**
 
 ```bash
 docker exec -d stackvo-laravel-app-php php email-worker.php
 ```
 
-**6. Test Edin**
+**6. Test It**
 
 ```
 https://laravel.loc/send-email.php
 ```
 
-**Sonuç:** "Email queued successfully!" mesajı görünür, worker arka planda email'i işler.
+**Result:** You will see "Email queued successfully!" message, worker processes the email in the background.
 
 ---
 
-## İleri Seviye
+## Advanced Level
 
-### 6. Mikroservis Mimarisi
+### 6. Microservice Architecture
 
-Bu eğitim, birden fazla servisin birlikte çalıştığı bir mikroservis mimarisi oluşturmayı gösterir.
+This tutorial shows how to create a microservice architecture where multiple services work together.
 
-#### Hedef
+#### Goal
 
-API Gateway, Auth Service ve Product Service oluşturmak.
+Create API Gateway, Auth Service, and Product Service.
 
-#### Mimari
+#### Architecture
 
 ```
 Client → API Gateway → Auth Service
                     → Product Service → MySQL
 ```
 
-#### Adımlar
+#### Steps
 
 **1. Auth Service**
 
@@ -560,7 +560,7 @@ header('Content-Type: application/json');
 
 $token = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
-// Auth kontrolü
+// Auth check
 $authResponse = file_get_contents("http://stackvo-auth-service-web/index.php?token=$token");
 $auth = json_decode($authResponse, true);
 
@@ -570,32 +570,29 @@ if (!$auth['valid']) {
     exit;
 }
 
-// Products'ı al
+// Get Products
 $productsResponse = file_get_contents("http://stackvo-product-service-web/index.php");
 echo $productsResponse;
 EOF
 ```
 
-**4. Generate ve Start**
+**4. Generate and Start**
 
 ```bash
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+./stackvo.sh generate projects
+./stackvo.sh up
 
 echo "127.0.0.1  auth.loc products.loc api.loc" | sudo tee -a /etc/hosts
 ```
 
-**5. Test Edin**
+**5. Test It**
 
 ```bash
-# Geçersiz token
+# Invalid token
 curl -H "Authorization: invalid" https://api.loc
 # {"error":"Unauthorized"}
 
-# Geçerli token
+# Valid token
 curl -H "Authorization: valid-token" https://api.loc
 # [{"id":1,"name":"Product 1","price":100},{"id":2,"name":"Product 2","price":200}]
 ```
-
----
-

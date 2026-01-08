@@ -1,40 +1,42 @@
 ---
-title: Hızlı Başlangıç
-description: Step-by-step guide to creating your first project with Stackvo. Covers everything from Docker setup to project configuration, hosts file editing, and testing in the browser with detailed instructions.
+title: Quick Start
+description: Step-by-step guide to create your first project with Stackvo. Detailed explanation of the entire process from Docker installation to project configuration, hosts file editing to testing in the browser.
 ---
 
-# Hızlı Başlangıç
+# Quick Start
 
-Bu kılavuz, Stackvo ile ilk projenizi oluşturmanız için gereken tüm adımları detaylı olarak anlatmaktadır. Docker kurulumundan proje yapılandırmasına, hosts dosyası düzenlemeden tarayıcıda test etmeye kadar her şeyi adım adım öğreneceksiniz.
-
-!!! warning "Kurulum Gerekli"
-    Bu kılavuz **kurulumun tamamlandığını** varsayar. Henüz kurmadıysanız önce [Kurulum](../installation/index.md) sayfasını takip edin.
-
-**Kurulum tamamlandıysa devam edin:**
+This guide detailedly explains all the steps required to create your first project with Stackvo. You will learn everything step-by-step, from Docker installation to project configuration, hosts file editing to testing in the browser.
 
 ---
 
-## İlk Projenizi Oluşturun
+!!! warning "Installation Required"
+    This guide assumes **installation is complete**. If you haven't installed it yet, follow the [Installation](../installation/index.md) page first.
 
-### Laravel Projesi Örneği
+**If installation is complete, continue:**
 
-#### 1. Proje Klasörünü Oluşturun
+---
+
+## Create Your First Project
+
+### Laravel Project Example
+
+#### 1. Create Project Directory
 
 ```bash
-# Proje klasörü
+# Project folder
 mkdir -p projects/mylaravel/public
 
-# İçine basit bir index.php ekleyin
+# Add a simple index.php inside
 cat > projects/mylaravel/public/index.php <<'EOF'
 <?php
 phpinfo();
 EOF
 ```
 
-#### 2. Proje Konfigürasyonu
+#### 2. Project Configuration
 
 ```bash
-# stackvo.json oluşturun
+# Create stackvo.json
 cat > projects/mylaravel/stackvo.json <<'EOF'
 {
   "name": "mylaravel",
@@ -56,29 +58,29 @@ cat > projects/mylaravel/stackvo.json <<'EOF'
 EOF
 ```
 
-#### 3. Hosts Dosyasına Ekleyin
+#### 3. Add to Hosts File
 
 ```bash
-# /etc/hosts (Linux/macOS) veya C:\Windows\System32\drivers\etc\hosts (Windows)
+# /etc/hosts (Linux/macOS) or C:\Windows\System32\drivers\etc\hosts (Windows)
 127.0.0.1  mylaravel.loc
 ```
 
-#### 4. Projeyi Başlatın
+#### 4. Start Project
 
 ```bash
-# Konfigürasyonu yeniden üret
-./core/cli/stackvo.sh generate
+# Regenerate configuration
+./stackvo.sh generate
 
-# Container'ları yeniden başlat
-./core/cli/stackvo.sh restart
+# Restart containers
+./stackvo.sh restart
 
-# Proje container'ını kontrol et
+# Check project container
 docker ps | grep mylaravel
 ```
 
-#### 5. Tarayıcıda Açın
+#### 5. Open in Browser
 
 [https://mylaravel.loc](https://mylaravel.loc)
 
-!!! success "İlk Projeniz Hazır!"
-    PHP bilgi sayfasını görmelisiniz! 🎉
+!!! success "Your First Project is Ready!"
+    You should see the PHP info page! 🎉

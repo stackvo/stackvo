@@ -106,8 +106,8 @@ cd stackvo
 cp .env.example .env
 
 # Başlat
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ---

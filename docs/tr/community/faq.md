@@ -69,8 +69,8 @@ cat > projects/myproject/stackvo.json <<EOF
 EOF
 
 # 3. Generate ve start
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+./stackvo.sh generate projects
+./stackvo.sh up
 
 # 4. Hosts
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
@@ -88,8 +88,8 @@ SERVICE_REDIS_VERSION=7.0
 Sonra:
 
 ```bash
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### PHP versiyonunu nasıl değiştiririm?
@@ -107,8 +107,8 @@ Sonra:
 Sonra:
 
 ```bash
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh restart
+./stackvo.sh generate projects
+./stackvo.sh restart
 ```
 
 ---
@@ -122,9 +122,9 @@ Sonra:
 docker logs stackvo-mysql
 
 # Yeniden oluştur
-./core/cli/stackvo.sh down
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh down
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 ### 404 hatası alıyorum
@@ -174,7 +174,7 @@ docker system prune -a
 docker compose build --parallel
 
 # Image'ları önceden çek
-./core/cli/stackvo.sh pull
+./stackvo.sh pull
 ```
 
 ---
@@ -224,8 +224,8 @@ SERVICE_RABBITMQ_DEFAULT_PASS=$(openssl rand -base64 32)
 SERVICE_ELASTICSEARCH_ENABLE=true
 SERVICE_KIBANA_ENABLE=true
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
 Erişim:
@@ -300,20 +300,20 @@ docker run --rm \
 git pull origin main
 
 # Yeniden generate
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Restart
-./core/cli/stackvo.sh restart
+./stackvo.sh restart
 ```
 
 ### Image'lar nasıl güncellenir?
 
 ```bash
 # Tüm image'ları güncelle
-./core/cli/stackvo.sh pull
+./stackvo.sh pull
 
 # Yeniden başlat
-./core/cli/stackvo.sh up --force-recreate
+./stackvo.sh up --force-recreate
 ```
 
 ---

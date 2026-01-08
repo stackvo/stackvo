@@ -1,15 +1,15 @@
 # Tools Reference
 
-Comprehensive reference for all administrative and management tools available in Stackvo. These web-based tools provide graphical interfaces for managing databases, cache systems, message queues, and monitoring PHP performance. All tools are accessible via the Stackvo Web UI and run within the tools container.
+Comprehensive reference for all management and admin tools available in Stackvo. These web-based tools provide graphical interfaces for managing databases, cache systems, message queues, and PHP performance. All tools are accessible via Stackvo Web UI and run inside the tools container.
 
 ---
 
 ## Tool Categories
 
-- [Database Management Tools](#database-management-tools) (4)
-- [Cache Management Tools](#cache-management-tools) (1)
-- [Message Queue Management Tools](#message-queue-management-tools) (1)
-- [Performance Monitoring Tools](#performance-monitoring-tools) (1)
+- Database Management Tools (4)
+- Cache Management Tools (1)
+- Message Queue Management Tools (1)
+- Performance Monitoring Tools (1)
 
 ---
 
@@ -22,7 +22,7 @@ Comprehensive reference for all administrative and management tools available in
 **Environment Variable:** `TOOLS_ADMINER_ENABLE`
 
 **Description:**  
-Adminer is a full-featured database management tool written in PHP. It's a lightweight alternative to phpMyAdmin with support for multiple database systems in a single interface.
+Adminer is a full-featured database management tool written in PHP. It is a lightweight alternative to phpMyAdmin and supports multiple database systems in a single interface.
 
 **Supported Databases:**
 - MySQL
@@ -36,10 +36,10 @@ Adminer is a full-featured database management tool written in PHP. It's a light
 
 **Key Features:**
 - Universal database interface
-- Lightweight (single PHP file)
+- Lightweight structure (single PHP file)
 - Support for multiple database systems
-- Export/Import data in various formats (SQL, CSV, XML)
-- Execute custom SQL queries
+- Import/export data in various formats (SQL, CSV, XML)
+- Run custom SQL queries
 - Manage tables, views, triggers, and stored procedures
 - User and privilege management
 - Database schema visualization
@@ -89,7 +89,7 @@ TOOLS_ADMINER_URL=adminer
 **Environment Variable:** `TOOLS_PHPMYADMIN_ENABLE`
 
 **Description:**  
-PhpMyAdmin is the most popular web-based administration tool for MySQL and MariaDB databases. It provides a comprehensive interface for database management with advanced features.
+PhpMyAdmin is the most popular web-based management tool for MySQL and MariaDB databases. It provides a comprehensive database management interface with advanced features.
 
 **Supported Databases:**
 - MySQL
@@ -97,15 +97,15 @@ PhpMyAdmin is the most popular web-based administration tool for MySQL and Maria
 
 **Key Features:**
 - Intuitive web interface for MySQL/MariaDB
-- Browse, create, and modify databases, tables, fields, and indexes
+- View, create, and modify databases, tables, fields, and indexes
 - Execute SQL statements and batch queries
-- Import/Export data (SQL, CSV, XML, PDF, Excel, etc.)
+- Import/export data (SQL, CSV, XML, PDF, Excel, etc.)
 - User and privilege management
 - Server configuration and status monitoring
 - Visual query builder
 - Database search and replace
 - Bookmark frequently used queries
-- Multiple server management
+- Manage multiple servers
 
 **Connection:**
 ```
@@ -136,21 +136,21 @@ TOOLS_PHPMYADMIN_URL=phpmyadmin
 **Environment Variable:** `TOOLS_PHPPGADMIN_ENABLE`
 
 **Description:**  
-PhpPgAdmin is a web-based administration tool for PostgreSQL databases. It provides a user-friendly interface for managing PostgreSQL servers, databases, and objects.
+PhpPgAdmin is a web-based management tool for PostgreSQL databases. It provides a user-friendly interface to manage PostgreSQL servers, databases, and objects.
 
 **Supported Databases:**
 - PostgreSQL
 
 **Key Features:**
 - Complete PostgreSQL database management
-- Browse and modify databases, schemas, tables, and views
+- View and modify databases, schemas, tables, and views
 - Execute SQL queries with syntax highlighting
-- Import/Export data
-- Manage users, groups, and privileges
+- Import/export data
+- User, group, and privilege management
 - Create and manage functions, triggers, and sequences
 - Visual schema browser
-- Advanced search capabilities
-- Support for PostgreSQL-specific features (arrays, JSON, etc.)
+- Advanced search features
+- Support for PostgreSQL-specific features (array, JSON, etc.)
 
 **Connection:**
 ```
@@ -176,7 +176,7 @@ TOOLS_PHPPGADMIN_URL=phppgadmin
 **Environment Variable:** `TOOLS_PHPMONGO_ENABLE`
 
 **Description:**  
-PhpMongo is a web-based MongoDB administration tool that provides an intuitive interface for managing MongoDB databases, collections, and documents.
+PhpMongo is a web-based MongoDB management tool that provides an intuitive interface to manage MongoDB databases, collections, and documents.
 
 **Supported Databases:**
 - MongoDB
@@ -186,7 +186,7 @@ PhpMongo is a web-based MongoDB administration tool that provides an intuitive i
 - Document CRUD operations (Create, Read, Update, Delete)
 - JSON document viewer and editor
 - Execute MongoDB queries
-- Import/Export collections
+- Import/export collections
 - Index management
 - User and role management
 - Database statistics and monitoring
@@ -220,7 +220,7 @@ TOOLS_PHPMONGO_URL=phpmongo
 **Environment Variable:** `TOOLS_PHPMEMCACHEDADMIN_ENABLE`
 
 **Description:**  
-PhpMemcachedAdmin is a web-based administration tool for Memcached servers. It provides real-time monitoring and management capabilities for your cache infrastructure.
+PhpMemcachedAdmin is a web-based management tool for Memcached servers. It provides real-time monitoring and management capabilities for your cache infrastructure.
 
 **Supported Systems:**
 - Memcached
@@ -228,10 +228,10 @@ PhpMemcachedAdmin is a web-based administration tool for Memcached servers. It p
 **Key Features:**
 - Real-time Memcached server monitoring
 - View cache statistics (hit rate, memory usage, connections)
-- Browse cached items and their values
+- View cached items and their values
 - Delete individual cache items or flush entire cache
 - Multiple server support
-- Visual graphs for cache performance
+- Visual charts for cache performance
 - Memory usage visualization
 - Connection monitoring
 
@@ -259,7 +259,7 @@ TOOLS_PHPMEMCACHEDADMIN_URL=phpmemcachedadmin
 **Environment Variable:** `TOOLS_KAFBAT_ENABLE`
 
 **Description:**  
-Kafbat (formerly known as Kafka UI) is a modern web interface for managing and monitoring Apache Kafka clusters. It provides comprehensive tools for working with topics, messages, consumer groups, and cluster configuration.
+Kafbat (formerly Kafka UI) is a modern web interface to manage and monitor Apache Kafka clusters. It provides comprehensive tools to work with topics, messages, consumer groups, and cluster configuration.
 
 **Supported Systems:**
 - Apache Kafka
@@ -269,8 +269,8 @@ Kafbat (formerly known as Kafka UI) is a modern web interface for managing and m
 **Key Features:**
 - Kafka cluster monitoring and management
 - Topic creation, configuration, and deletion
-- Browse and search messages in topics
-- Produce messages to topics
+- View and search messages in topics
+- Send messages to topics
 - Consumer group monitoring and management
 - Partition and replica management
 - Kafka Connect connector management
@@ -306,7 +306,7 @@ SERVICE_KAFKA_ENABLE=true
 **Environment Variable:** `TOOLS_OPCACHE_ENABLE`
 
 **Description:**  
-OpCache GUI is a web-based interface for monitoring and managing PHP OPcache. It provides detailed statistics about cached scripts, memory usage, and cache performance.
+OpCache GUI is a web-based interface to monitor and manage PHP OPcache. It provides detailed statistics about cached scripts, memory usage, and cache performance.
 
 **Supported Systems:**
 - PHP OPcache
@@ -314,16 +314,16 @@ OpCache GUI is a web-based interface for monitoring and managing PHP OPcache. It
 **Key Features:**
 - Real-time OPcache statistics
 - Memory usage visualization
-- Cached files list with details
-- Cache hit/miss ratio monitoring
+- Detailed cached file list
+- Cache hit/miss rate monitoring
 - Invalidate specific cached files
 - Reset entire cache
-- Configuration overview
+- Configuration summary
 - Performance graphs and charts
 - Memory fragmentation analysis
 
 **Usage:**
-- Access the URL to view OPcache statistics
+- Access URL to view OPcache statistics
 - Monitor cache efficiency and memory usage
 - Identify frequently cached scripts
 - Clear cache when needed during development
@@ -335,7 +335,7 @@ TOOLS_OPCACHE_VERSION=3.6.0
 TOOLS_OPCACHE_URL=opcache
 ```
 
-**Note:** OpCache statistics are collected from all PHP project containers running in Stackvo.
+**Note:** OPcache statistics are collected from all PHP project containers running in Stackvo.
 
 ---
 
@@ -344,12 +344,12 @@ TOOLS_OPCACHE_URL=opcache
 ### Via Web UI
 
 1. Open Stackvo Web UI: `https://stackvo.loc`
-2. Navigate to the **Tools** tab
-3. Click on the desired tool to open it in a new tab
+2. Go to **Tools** tab
+3. Click on the desired tool to open in a new tab
 
 ### Direct Access
 
-All tools are accessible directly via their URLs:
+All tools can be accessed directly via their URLs:
 
 ```
 https://adminer.stackvo.loc
@@ -377,9 +377,9 @@ https://kafbat.stackvo.loc
 
 ## Enabling/Disabling Tools
 
-### Enable a Tool
+### Enabling a Tool
 
-Edit the `.env` file and set the tool's enable flag to `true`:
+Edit `.env` file and set the tool's enable flag to `true`:
 
 ```bash
 # Enable Adminer
@@ -389,22 +389,22 @@ TOOLS_ADMINER_ENABLE=true
 TOOLS_PHPMYADMIN_ENABLE=true
 ```
 
-### Disable a Tool
+### Disabling a Tool
 
-Set the enable flag to `false`:
+Set enable flag to `false`:
 
 ```bash
 # Disable Kafbat
 TOOLS_KAFBAT_ENABLE=false
 ```
 
-### Apply Changes
+### Applying Changes
 
-After modifying the `.env` file, regenerate the configuration and restart:
+After changing `.env` file, regenerate configuration and restart:
 
 ```bash
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh restart
+./stackvo.sh generate
+./stackvo.sh restart
 ```
 
 ---
@@ -430,7 +430,7 @@ docker restart stackvo-tools
 ### Connection Errors
 
 ```bash
-# Verify the service is running
+# Verify service is running
 docker ps | grep stackvo-mysql
 
 # Check network connectivity
@@ -449,7 +449,7 @@ docker stats stackvo-tools
 # View detailed logs
 docker logs -f stackvo-tools
 
-# Restart the container
+# Restart container
 docker restart stackvo-tools
 ```
 
@@ -457,18 +457,18 @@ docker restart stackvo-tools
 
 ## Security Considerations
 
-1. **Production Use:** These tools are designed for development environments. For production, consider:
+1. **Production Usage:** These tools are designed for development environments. For production consider:
    - Disabling tools or restricting access
    - Using strong authentication
-   - Implementing IP whitelisting
+   - Applying IP whitelisting
    - Using VPN or SSH tunneling
 
-2. **Credentials:** Default credentials are set in the `.env` file. Change them for production:
+2. **Credentials:** Default credentials are set in `.env` file. Change them for production:
    ```bash
    SERVICE_MYSQL_ROOT_PASSWORD=strong_password_here
    SERVICE_POSTGRES_PASSWORD=strong_password_here
    ```
 
-3. **SSL/TLS:** All tools are accessible via HTTPS when `SSL_ENABLE=true` in `.env`
+3. **SSL/TLS:** When `SSL_ENABLE=true` in `.env` file, all tools are accessible via HTTPS
 
 ---

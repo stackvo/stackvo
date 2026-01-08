@@ -23,10 +23,10 @@ SERVICE_REDIS_ENABLE=true
 SERVICE_RABBITMQ_ENABLE=true
 
 # Konfigürasyonları üret
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
 # Servisleri başlat
-./core/cli/stackvo.sh up
+./stackvo.sh up
 ```
 
 ---
@@ -462,8 +462,8 @@ docker logs stackvo-<service-name>
 docker ps --format "table {{.Names}}\t{{.Ports}}"
 
 # Konfigürasyonu yeniden üret
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh restart
+./stackvo.sh generate
+./stackvo.sh restart
 ```
 
 ### Bağlantı Hatası

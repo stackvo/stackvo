@@ -240,7 +240,7 @@ UI üzerinden `.env` dosyasını düzenleyin:
 - **Port Mappings**
 - **Service Versions**
 
-**Save** butonuna tıklayın ve `./core/cli/stackvo.sh generate` çalıştırın.
+**Save** butonuna tıklayın ve `./stackvo.sh generate` çalıştırın.
 
 ### System Information
 

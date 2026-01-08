@@ -1,12 +1,14 @@
-# Proje Konfigürasyonu
+# Project Configuration
 
-Her Stackvo projesi için `stackvo.json` dosyası gereklidir. Bu sayfa, proje bazlı konfigürasyon dosyasının tüm alanlarını, PHP ve diğer runtime versiyonlarını, webserver seçeneklerini, document root ayarlarını ve çoklu dil desteğini detaylı olarak açıklamaktadır. Proje konfigürasyonu, her projenin bağımsız olarak özelleştirilmesini sağlar.
+A `stackvo.json` file is required for every Stackvo project. This page detailedly explains all fields of the project-based configuration file, PHP and other runtime versions, webserver options, document root settings, and multi-language support. Project configuration allows each project to be customized independently.
 
-## stackvo.json Dosyası
+---
 
-Proje konfigürasyonu, `projects/` dizinindeki her proje için `stackvo.json` dosyası ile yapılır.
+## stackvo.json File
 
-### Minimum Konfigürasyon
+Project configuration is done with a `stackvo.json` file for each project in the `projects/` directory.
+
+### Minimum Configuration
 
 ```json
 {
@@ -20,7 +22,7 @@ Proje konfigürasyonu, `projects/` dizinindeki her proje için `stackvo.json` do
 }
 ```
 
-### Tam Konfigürasyon
+### Full Configuration
 
 ```json
 {
@@ -48,11 +50,11 @@ Proje konfigürasyonu, `projects/` dizinindeki her proje için `stackvo.json` do
 
 ---
 
-## Konfigürasyon Alanları
+## Configuration Fields
 
-### name (zorunlu)
+### name (required)
 
-Proje adı. Container isimleri için kullanılır.
+Project name. Used for container names.
 
 ```json
 {
@@ -60,13 +62,13 @@ Proje adı. Container isimleri için kullanılır.
 }
 ```
 
-**Container isimleri:**
+**Container names:**
 - `stackvo-myproject-php`
 - `stackvo-myproject-web`
 
-### domain (zorunlu)
+### domain (required)
 
-Projenin erişileceği domain.
+The domain where the project will be accessed.
 
 ```json
 {
@@ -74,14 +76,14 @@ Projenin erişileceği domain.
 }
 ```
 
-**Not:** `/etc/hosts` dosyasına eklenmeli:
+**Note:** Should be added to `/etc/hosts` file:
 ```
 127.0.0.1  myproject.loc
 ```
 
-### php (opsiyonel)
+### php (optional)
 
-PHP runtime konfigürasyonu.
+PHP runtime configuration.
 
 ```json
 {
@@ -92,13 +94,13 @@ PHP runtime konfigürasyonu.
 }
 ```
 
-**Desteklenen versiyonlar:** 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5
+**Supported versions:** 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5
 
-**Varsayılan:** `.env` dosyasındaki `DEFAULT_PHP_VERSION` (8.2)
+**Default:** `DEFAULT_PHP_VERSION` in `.env` file (8.2)
 
-### webserver (opsiyonel)
+### webserver (optional)
 
-Webserver seçimi.
+Webserver selection.
 
 ```json
 {
@@ -106,14 +108,14 @@ Webserver seçimi.
 }
 ```
 
-**Seçenekler:**
-- `nginx` (varsayılan)
+**Options:**
+- `nginx` (default)
 - `apache`
 - `caddy`
 
-### document_root (opsiyonel)
+### document_root (optional)
 
-Document root dizini.
+Document root directory.
 
 ```json
 {
@@ -121,11 +123,11 @@ Document root dizini.
 }
 ```
 
-**Varsayılan:** `public`
+**Default:** `public`
 
 ---
 
-## Çoklu Dil Desteği
+## Multi-Language Support
 
 ### PHP + Node.js
 
@@ -161,7 +163,7 @@ Document root dizini.
 }
 ```
 
-### Tüm Diller
+### All Languages
 
 ```json
 {
@@ -192,7 +194,7 @@ Document root dizini.
 
 ---
 
-## Webserver Seçenekleri
+## Webserver Options
 
 ### Nginx
 
@@ -203,7 +205,7 @@ Document root dizini.
 ```
 
 - **Image:** `nginx:alpine`
-- **Config:** `.stackvo/nginx.conf` veya auto-generated
+- **Config:** `.stackvo/nginx.conf` or auto-generated
 - **Template:** `core/templates/servers/nginx/default.conf`
 
 ### Apache
@@ -215,7 +217,7 @@ Document root dizini.
 ```
 
 - **Image:** `php:{version}-apache`
-- **Config:** `.stackvo/apache.conf` veya auto-generated
+- **Config:** `.stackvo/apache.conf` or auto-generated
 - **Template:** `core/templates/servers/apache/default.conf`
 
 ### Caddy
@@ -227,34 +229,34 @@ Document root dizini.
 ```
 
 - **Image:** `caddy:latest`
-- **Config:** `.stackvo/Caddyfile` veya auto-generated
+- **Config:** `.stackvo/Caddyfile` or auto-generated
 - **Template:** `core/templates/servers/caddy/Caddyfile`
 
 ---
 
-## Proje Dizin Yapısı
+## Project Directory Structure
 
-### Temel Yapı
+### Basic Structure
 
 ```
 projects/myproject/
-├── stackvo.json          # Proje konfigürasyonu (ZORUNLU)
+├── stackvo.json          # Project configuration (REQUIRED)
 ├── public/                 # Document root
 │   └── index.php
-├── src/                    # Kaynak kodlar
+├── src/                    # Source codes
 ├── vendor/                 # Composer dependencies
 └── composer.json
 ```
 
-### Özel Konfigürasyonlarla
+### With Custom Configurations
 
 ```
 projects/myproject/
 ├── stackvo.json
-├── .stackvo/             # Özel konfigürasyonlar (opsiyonel)
-│   ├── nginx.conf          # Özel Nginx config
-│   ├── php.ini             # Özel PHP config
-│   └── php-fpm.conf        # Özel PHP-FPM config
+├── .stackvo/             # Custom configurations (optional)
+│   ├── nginx.conf          # Custom Nginx config
+│   ├── php.ini             # Custom PHP config
+│   └── php-fpm.conf        # Custom PHP-FPM config
 ├── public/
 │   └── index.php
 └── ...

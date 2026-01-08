@@ -1,81 +1,81 @@
 ---
-title: Sistem Gereksinimleri
-description: Comprehensive guide to system requirements for running Stackvo smoothly. Includes minimum, recommended, and professional hardware specifications, supported operating systems (Linux, macOS, Windows), Docker and Docker Compose versions, network ports, and system verification details.
+title: System Requirements
+description: Detailed information about minimum, recommended, and professional hardware requirements, supported operating systems (Linux, macOS, Windows), Docker and Docker Compose versions, network ports, and system check to run Stackvo smoothly.
 ---
 
-# Sistem Gereksinimleri
+# System Requirements
 
-Stackvo'u sorunsuz ve verimli bir şekilde çalıştırabilmek için sisteminizin belirli donanım ve yazılım gereksinimlerini karşılaması gerekmektedir. Bu sayfa, minimum, önerilen ve profesyonel kullanım için gereken tüm sistem gereksinimlerini, desteklenen işletim sistemlerini, Docker versiyonlarını ve network ayarlarını detaylı olarak açıklamaktadır.
+To run Stackvo smoothly and efficiently, your system must meet certain hardware and software requirements. This page detailedly explains all system requirements for minimum, recommended, and professional usage, supported operating systems, Docker versions, and network settings.
 
 ---
 
-## Donanım Gereksinimleri
+## Hardware Requirements
 
-### Minimum Gereksinimler
+### Minimum Requirements
 
-!!! warning "Minimum Konfigürasyon"
-Bu konfigürasyon ile sadece temel servisleri çalıştırabilirsiniz.
+!!! warning "Minimum Configuration"
+You can only run basic services with this configuration.
 
-| Bileşen      | Minimum | Açıklama                 |
+| Component    | Minimum | Description              |
 | ------------ | ------- | ------------------------ |
-| **CPU**      | 2 Core  | Dual-core işlemci        |
-| **RAM**      | 4 GB    | Sistem + Docker için     |
-| **Disk**     | 20 GB   | Boş disk alanı           |
-| **İnternet** | Var     | İlk kurulum için gerekli |
+| **CPU**      | 2 Core  | Dual-core processor      |
+| **RAM**      | 4 GB    | For System + Docker      |
+| **Disk**     | 20 GB   | Free disk space          |
+| **Internet** | Yes     | Required for first install|
 
-**Çalıştırılabilir Servisler:**
+**Runnable Services:**
 
-- MySQL veya PostgreSQL (1 adet)
+- MySQL or PostgreSQL (1 unit)
 - Redis
 - Nginx
-- 1-2 küçük proje
+- 1-2 small projects
 
-### Önerilen Gereksinimler
+### Recommended Requirements
 
-!!! success "Önerilen Konfigürasyon"
-Rahat geliştirme için önerilen konfigürasyon.
+!!! success "Recommended Configuration"
+Recommended configuration for comfortable development.
 
-| Bileşen      | Önerilen | Açıklama              |
-| ------------ | -------- | --------------------- |
-| **CPU**      | 4 Core   | Quad-core işlemci     |
-| **RAM**      | 8 GB     | Çoklu servis için     |
-| **Disk**     | 50 GB    | SSD önerilir          |
-| **İnternet** | Hızlı    | İmaj indirmeleri için |
+| Component    | Recommended | Description           |
+| ------------ | ----------- | --------------------- |
+| **CPU**      | 4 Core      | Quad-core processor   |
+| **RAM**      | 8 GB        | For multiple services |
+| **Disk**     | 50 GB       | SSD recommended       |
+| **Internet** | Fast        | For image downloads   |
 
-**Çalıştırılabilir Servisler:**
+**Runnable Services:**
 
-- 10-15 servis eşzamanlı
-- 3-5 orta ölçekli proje
-- Monitoring araçları
+- 10-15 services concurrently
+- 3-5 medium-sized projects
+- Monitoring tools
 
-### Profesyonel Gereksinimler
+### Professional Requirements
 
-!!! tip "Profesyonel Konfigürasyon"
-Tüm servisleri ve çoklu projeleri rahatça çalıştırın.
+!!! tip "Professional Configuration"
+Run all services and multiple projects comfortably.
 
-| Bileşen      | Profesyonel | Açıklama           |
-| ------------ | ----------- | ------------------ |
-| **CPU**      | 8+ Core     | Multi-core işlemci |
-| **RAM**      | 16+ GB      | Tüm servisler için |
-| **Disk**     | 100+ GB     | NVMe SSD önerilir  |
-| **İnternet** | Çok Hızlı   | Fiber bağlantı     |
+| Component    | Professional | Description        |
+| ------------ | ------------ | ------------------ |
+| **CPU**      | 8+ Core      | Multi-core processor|
+| **RAM**      | 16+ GB       | For all services   |
+| **Disk**     | 100+ GB      | NVMe SSD recommended|
+| **Internet** | Very Fast    | Fiber connection   |
 
-**Çalıştırılabilir Servisler:**
+**Runnable Services:**
 
-- 40+ servis eşzamanlı
-- 10+ proje
-- Tüm monitoring ve logging araçları
+- 40+ services concurrently
+- 10+ projects
+- All monitoring and logging tools
 
 ---
 
-## İşletim Sistemi Gereksinimleri
+## Operating System Requirements
 
 ### Linux
 
-!!! success "En İyi Performans"
-    Linux, Docker için en iyi performansı sunar.
+!!! success "Best Performance"
+    Linux offers the best performance for Docker.
 
-| Dağıtım | Minimum Versiyon | Kernel |
+| Distribution | Minimum Version | Kernel |
 |---------|------------------|--------|
 | **Ubuntu** | 20.04 LTS+ | 4.4+ |
 | **Debian** | 10+ | 4.4+ |
@@ -86,100 +86,100 @@ Tüm servisleri ve çoklu projeleri rahatça çalıştırın.
 
 ### macOS
 
-!!! info "Docker Desktop Gerekli"
-    macOS'ta Docker Desktop kullanılması gerekmektedir.
+!!! info "Docker Desktop Required"
+    Docker Desktop must be used on macOS.
 
-| Versiyon | Chip Desteği |
+| Version | Chip Support |
 |----------|--------------|
 | **macOS 12+** (Monterey, Ventura, Sonoma) | Intel x86_64, Apple Silicon (M1/M2/M3) |
 
-**Not:** Apple Silicon için Rosetta 2 gerekebilir.
+**Note:** Rosetta 2 might be required for Apple Silicon.
 
 ### Windows
 
-!!! warning "WSL2 Zorunlu"
-    Windows'ta WSL2 (Windows Subsystem for Linux 2) kullanılması zorunludur.
+!!! warning "WSL2 Mandatory"
+    WSL2 (Windows Subsystem for Linux 2) must be used on Windows.
 
-| Versiyon | Gereksinim |
+| Version | Requirement |
 |----------|------------|
 | **Windows 10 Pro/Enterprise** | Build 19041+ |
-| **Windows 11 Pro/Enterprise** | Tüm versiyonlar |
+| **Windows 11 Pro/Enterprise** | All versions |
 
-**Gereksinimler:** WSL2 aktif + Ubuntu 20.04+ WSL dağıtımı + Docker Desktop 4.0+
+**Requirements:** WSL2 enabled + Ubuntu 20.04+ WSL distro + Docker Desktop 4.0+
 
 ---
 
-## Docker Gereksinimleri
+## Docker Requirements
 
 ### Docker Engine
 
-!!! danger "Kritik Gereksinim"
-Docker Engine kurulu olmalıdır!
+!!! danger "Critical Requirement"
+Docker Engine must be installed!
 
-**Minimum Versiyon:**
+**Minimum Version:**
 
 ```bash
 Docker Engine: 20.10.0+
 ```
 
-**Önerilen Versiyon:**
+**Recommended Version:**
 
 ```bash
 Docker Engine: 24.0.0+
 ```
 
-**Kontrol:**
+**Check:**
 
 ```bash
 docker --version
-# Çıktı: Docker version 24.0.7, build afdd53b
+# Output: Docker version 24.0.7, build afdd53b
 ```
 
 ### Docker Compose
 
-!!! danger "Kritik Gereksinim"
-Docker Compose kurulu olmalıdır!
+!!! danger "Critical Requirement"
+Docker Compose must be installed!
 
-**Minimum Versiyon:**
+**Minimum Version:**
 
 ```bash
 Docker Compose: 2.0.0+
 ```
 
-**Önerilen Versiyon:**
+**Recommended Version:**
 
 ```bash
 Docker Compose: 2.20.0+
 ```
 
-**Kontrol:**
+**Check:**
 
 ```bash
 docker compose version
-# Çıktı: Docker Compose version v2.23.0
+# Output: Docker Compose version v2.23.0
 ```
 
-!!! warning "Eski Versiyon Uyarısı"
-`docker-compose` (v1.x) yerine `docker compose` (v2.x) kullanılmalıdır!
+!!! warning "Old Version Warning"
+Use `docker compose` (v2.x) instead of `docker-compose` (v1.x)!
 
 ---
 
-## Network Gereksinimleri
+## Network Requirements
 
-### Kritik Portlar
+### Critical Ports
 
-Stackvo'un çalışması için gerekli portlar:
+Ports required for Stackvo to run:
 
-| Port | Servis | Açıklama |
+| Port | Service | Description |
 |------|--------|----------|
 | **80** | Traefik | HTTP |
 | **443** | Traefik | HTTPS |
-| **8080** | Traefik Dashboard | Yönetim paneli |
+| **8080** | Traefik Dashboard | Management panel |
 
-!!! warning "Port Çakışması"
-    Bu portlar başka bir uygulama tarafından kullanılmamalıdır!
+!!! warning "Port Conflict"
+    These ports must not be used by another application!
 
-**Port Kontrolü:**
+**Port Check:**
 ```bash
 # Linux/macOS
 sudo lsof -i :80
@@ -189,16 +189,16 @@ sudo lsof -i :443
 netstat -ano | findstr :80
 ```
 
-### İnternet Bağlantısı
+### Internet Connection
 
-- **İlk Kurulum:** Docker imajları için ~5-10 GB indirme
-- **Normal Kullanım:** Opsiyonel (sadece güncellemeler için)
+- **First Install:** ~5-10 GB download for Docker images
+- **Normal Usage:** Optional (only for updates)
 
 ---
 
-## Yazılım Gereksinimleri
+## Software Requirements
 
-### Zorunlu Yazılımlar
+### Mandatory Software
 
 ```bash
 # Bash 4.0+
@@ -214,36 +214,36 @@ curl --version
 jq --version
 ```
 
-### Opsiyonel Araçlar
+### Optional Tools
 
 - **IDE:** VS Code, PhpStorm, WebStorm
 - **Terminal:** htop, ncdu, lazydocker
 
 ---
 
-## Sistem Kontrolü
+## System Check
 
-Stackvo, sistem gereksinimlerini otomatik kontrol eden bir script sağlar:
+Stackvo provides a script that automatically checks system requirements:
 
 ```bash
 cd stackvo
 ./core/cli/check-requirements.sh
 ```
 
-**Örnek Çıktı:**
+**Example Output:**
 
 ```
-✅ İşletim Sistemi: Ubuntu 22.04 LTS
+✅ Operating System: Ubuntu 22.04 LTS
 ✅ Docker Engine: 24.0.7
 ✅ Docker Compose: 2.23.0
 ✅ Bash: 5.1.16
 ✅ Git: 2.34.1
-✅ RAM: 16 GB (Yeterli)
-✅ Disk: 120 GB boş (Yeterli)
-⚠️  Port 80: Kullanımda (Apache çalışıyor)
+✅ RAM: 16 GB (Sufficient)
+✅ Disk: 120 GB free (Sufficient)
+⚠️  Port 80: In use (Apache running)
 
-Toplam: 8/9 kontrol başarılı
+Total: 8/9 checks passed
 ```
 
-!!! tip "Kuruluma Hazır mısınız?"
-    Tüm kontroller başarılıysa [Kurulum](../installation/index.md) sayfasına geçebilirsiniz.
+!!! tip "Ready to Install?"
+    If all checks are successful, you can proceed to the [Installation](../installation/index.md) page.

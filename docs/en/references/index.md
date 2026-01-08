@@ -1,49 +1,49 @@
 ---
-title: Referans Dokümantasyonu
-description: Stackvo API, CLI komutları, konfigürasyon ve servisler için detaylı referans
+title: Reference Documentation
+description: Detailed reference for Stackvo API, CLI commands, configuration, and services
 ---
 
-# Referans Dokümantasyonu
+# Reference Documentation
 
-Stackvo'un tüm özellikleri için detaylı teknik referans dokümantasyonu. Bu bölüm, CLI komutlarının tam syntax'ından konfigürasyon parametrelerine, 40+ servisin detaylı bilgilerinden bağlantı ayarlarına kadar her şeyi kapsamaktadır. Hızlı referans için kullanılabilecek teknik dokümantasyon merkezi.
+Detailed technical reference documentation for all features of Stackvo. This section covers everything from the full syntax of CLI commands to configuration parameters, detailed information on 40+ services, and connection settings. A technical documentation center that can be used for quick reference.
 
 ---
 
-## Referanslar
+## References
 
-Stackvo'un tüm teknik detayları için kapsamlı referans dökümanları:
+Comprehensive reference documents for all technical details of Stackvo:
 
 <div class="grid cards" markdown>
 
--   :material-console-line:{ .lg .middle } __CLI Komutları__
+-   :material-console-line:{ .lg .middle } __CLI Commands__
 
     ---
 
-    Tüm CLI komutları ve parametreleri
+    All CLI commands and parameters
 
-    [:octicons-arrow-right-24: CLI Komutları](cli.md)
+    [:octicons-arrow-right-24: CLI Commands](cli.md)
 
--   :material-cog:{ .lg .middle } __Konfigürasyon__
-
-    ---
-
-    Tüm konfigürasyon parametreleri ve açıklamaları
-
-    [:octicons-arrow-right-24: Konfigürasyon](configuration.md)
-
--   :material-server:{ .lg .middle } __Servisler__
+-   :material-cog:{ .lg .middle } __Configuration__
 
     ---
 
-    Desteklenen servisler ve bağlantı bilgileri
+    All configuration parameters and descriptions
 
-    [:octicons-arrow-right-24: Servisler](services.md)
+    [:octicons-arrow-right-24: Configuration](configuration.md)
+
+-   :material-server:{ .lg .middle } __Services__
+
+    ---
+
+    Supported services and connection information
+
+    [:octicons-arrow-right-24: Services](services.md)
 
 -   :material-tools:{ .lg .middle } __Tools__
 
     ---
 
-    Yönetim ve admin araçları referansı
+    Management and admin tools reference
 
     [:octicons-arrow-right-24: Tools](tools.md)
 

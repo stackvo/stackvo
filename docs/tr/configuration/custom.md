@@ -351,10 +351,10 @@ env[TEMP] = /tmp
 
 ```bash
 # 1. Projeleri yeniden üret
-./core/cli/stackvo.sh generate projects
+./stackvo.sh generate projects
 
 # 2. Container'ları yeniden başlat
-./core/cli/stackvo.sh restart
+./stackvo.sh restart
 
 # 3. Veya sadece ilgili projeyi yeniden başlat
 docker restart stackvo-myproject-web

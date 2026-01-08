@@ -57,8 +57,8 @@ Stackvo için destek alma yolları. Bu sayfa, GitHub Discussions, GitHub Issues 
 - Stackvo: 1.0.0
 
 **Adımlar:**
-1. ./core/cli/stackvo.sh generate
-2. ./core/cli/stackvo.sh up
+1. ./stackvo.sh generate
+2. ./stackvo.sh up
 
 **Hata:**
 ```
@@ -73,7 +73,7 @@ docker logs stackvo-mysql
 
 **Denediklerim:**
 - Docker restart
-- ./core/cli/stackvo.sh down && ./core/cli/stackvo.sh up
+- ./stackvo.sh down && ./stackvo.sh up
 ```
 
 #### ❌ Kötü Örnek

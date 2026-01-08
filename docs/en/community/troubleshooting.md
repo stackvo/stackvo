@@ -1,36 +1,38 @@
 # Troubleshooting
 
-Yaygın sorunlar ve çözümleri. Bu sayfa, Docker sorunlarından (daemon, permission, port çakışması) generator ve network sorunlarına, SSL/TLS ve container sorunlarından database ve web server sorunlarına, CLI ve volume sorunlarından acil durum senaryolarına kadar tüm yaygın sorunları ve adım adım çözümlerini detaylı olarak açıklamaktadır. Her sorun için semptom ve çözüm örnekleri içerir.
+Common causes and solutions. This page details all common problems and their step-by-step solutions, ranging from Docker problems (daemon, permission, port conflict) to generator and network problems, SSL/TLS and container problems to database and web server problems, CLI and volume problems to emergency scenarios. It includes symptoms and solution examples for each problem.
 
-## 🔍 Genel Sorun Giderme
+---
 
-### Sistem Kontrolü
+## General Troubleshooting
+
+### System Check
 
 ```bash
 # Stackvo doctor
 stackvo doctor
 
-# Docker kontrolü
+# Docker check
 docker --version
 docker compose --version
 docker ps
 
-# Logları kontrol et
+# Check logs
 cat core/generator.log
 ```
 
 ---
 
-## 🐳 Docker Sorunları
+## Docker Issues
 
-### Docker daemon çalışmıyor
+### Docker daemon is not running
 
-**Semptom:**
+**Symptom:**
 ```
 Cannot connect to the Docker daemon
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
 # Linux
 sudo systemctl start docker
@@ -43,80 +45,80 @@ open -a Docker
 sudo service docker start
 ```
 
-### Permission hatası
+### Permission error
 
-**Semptom:**
+**Symptom:**
 ```
 permission denied while trying to connect to the Docker daemon socket
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Kullanıcıyı docker grubuna ekle
+# Add user to docker group
 sudo usermod -aG docker $USER
 newgrp docker
 
-# Veya sudo ile çalıştır
-sudo ./core/cli/stackvo.sh up
+# Or run with sudo
+sudo ./stackvo.sh up
 ```
 
-### Port çakışması
+### Port conflict
 
-**Semptom:**
+**Symptom:**
 ```
 Bind for 0.0.0.0:3306 failed: port is already allocated
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Hangi process kullanıyor?
+# Which process is using it?
 sudo lsof -i :3306
 
-# .env'de port değiştir
+# Change port in .env
 nano .env
 # HOST_PORT_MYSQL=3307
 
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh restart
+./stackvo.sh generate
+./stackvo.sh restart
 ```
 
 ---
 
-## 🚀 Generator Sorunları
+## Generator Issues
 
-### Generate hatası
+### Generate error
 
-**Semptom:**
+**Symptom:**
 ```
 Error generating docker-compose files
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
 # Verbose mode
-STACKVO_VERBOSE=true ./core/cli/stackvo.sh generate
+STACKVO_VERBOSE=true ./stackvo.sh generate
 
-# Logları kontrol et
+# Check logs
 cat core/generator.log
 
-# Template kontrolü
+# Template check
 ls -la core/compose/
 ls -la core/templates/
 ```
 
-### stackvo.json parse hatası
+### stackvo.json parse error
 
-**Semptom:**
+**Symptom:**
 ```
 Error parsing stackvo.json
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# JSON syntax kontrolü
+# JSON syntax check
 cat projects/myproject/stackvo.json | jq .
 
-# Örnek geçerli format
+# Example valid format
 {
   "name": "myproject",
   "domain": "myproject.loc",
@@ -128,43 +130,43 @@ cat projects/myproject/stackvo.json | jq .
 
 ---
 
-## 🌐 Network Sorunları
+## Network Issues
 
-### Container'lar birbirini görmüyor
+### Containers cannot see each other
 
-**Semptom:**
+**Symptom:**
 ```
 Could not connect to stackvo-mysql
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Network kontrolü
+# Network check
 docker network inspect stackvo-net
 
-# Container network'e bağlı mı?
+# Is container connected to network?
 docker inspect stackvo-mysql | grep -A 10 Networks
 
-# Ping testi
+# Ping test
 docker exec stackvo-php ping stackvo-mysql
 
-# Network yeniden oluştur
-./core/cli/stackvo.sh down
+# Recreate network
+./stackvo.sh down
 docker network rm stackvo-net
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### DNS çözümleme sorunu
+### DNS resolution issue
 
-**Semptom:**
+**Symptom:**
 ```
 Name or service not known
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Container içinden DNS testi
+# DNS test inside container
 docker exec stackvo-php nslookup stackvo-mysql
 docker exec stackvo-php cat /etc/resolv.conf
 
@@ -174,38 +176,38 @@ sudo systemctl restart docker
 
 ---
 
-## 🔒 SSL/TLS Sorunları
+## SSL/TLS Issues
 
-### SSL sertifikası hatası
+### SSL certificate error
 
-**Semptom:**
+**Symptom:**
 ```
 SSL certificate problem: self signed certificate
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Sertifikaları yeniden oluştur
+# Regenerate certificates
 ./core/cli/utils/generate-ssl-certs.sh
 
-# Tarayıcıda sertifikayı kabul et
+# Accept certificate in browser
 # Chrome: Advanced → Proceed to site
 # Firefox: Advanced → Accept the Risk
 ```
 
-### Traefik SSL hatası
+### Traefik SSL error
 
-**Semptom:**
+**Symptom:**
 ```
 Traefik cannot find SSL certificates
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Sertifika yolunu kontrol et
+# Check certificate path
 ls -la core/certs/
 
-# Traefik config kontrol et
+# Check Traefik config
 cat core/traefik/traefik.yml
 
 # Traefik restart
@@ -214,125 +216,125 @@ docker restart stackvo-traefik
 
 ---
 
-## 📦 Container Sorunları
+## Container Issues
 
-### Container başlamıyor
+### Container is not starting
 
-**Semptom:**
+**Symptom:**
 ```
 Container exited with code 1
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Logları kontrol et
+# Check logs
 docker logs stackvo-mysql
 
-# Container detayları
+# Container details
 docker inspect stackvo-mysql
 
-# Yeniden oluştur
+# Recreate
 docker compose up -d --force-recreate stackvo-mysql
 ```
 
-### Container sürekli restart oluyor
+### Container is restarting continuously
 
-**Semptom:**
+**Symptom:**
 ```
 Container is restarting continuously
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Son 100 log satırı
+# Last 100 log lines
 docker logs --tail=100 stackvo-mysql
 
 # Health check
 docker inspect --format='{{.State.Health.Status}}' stackvo-mysql
 
-# Container'ı durdur ve logları incele
+# Stop container and inspect logs
 docker stop stackvo-mysql
 docker logs stackvo-mysql
 ```
 
 ---
 
-## 🗄️ Database Sorunları
+## Database Issues
 
-### MySQL bağlantı hatası
+### MySQL connection error
 
-**Semptom:**
+**Symptom:**
 ```
 SQLSTATE[HY000] [2002] Connection refused
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Container çalışıyor mu?
+# Is container running?
 docker ps | grep mysql
 
-# Bağlantı bilgileri
+# Connection details
 Host: stackvo-mysql  # NOT localhost!
 Port: 3306             # Internal port
 User: stackvo
 Password: stackvo
 
-# Network testi
+# Network test
 docker exec stackvo-php nc -zv stackvo-mysql 3306
 ```
 
-### PostgreSQL authentication hatası
+### PostgreSQL authentication error
 
-**Semptom:**
+**Symptom:**
 ```
 FATAL: password authentication failed
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# .env kontrolü
+# Check .env
 cat .env | grep POSTGRES
 
-# Doğru credentials
+# Correct credentials
 Host: stackvo-postgres
 Port: 5432
 User: stackvo
-Password: root  # .env'deki POSTGRES_PASSWORD
+Password: root  # POSTGRES_PASSWORD in .env
 ```
 
 ### MongoDB connection timeout
 
-**Semptom:**
+**Symptom:**
 ```
 MongoNetworkError: connection timed out
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Container kontrolü
+# Check container
 docker ps | grep mongo
 
 # Connection string
 mongodb://root:root@stackvo-mongo:27017/dbname?authSource=admin
 
-# Network testi
+# Network test
 docker exec stackvo-php nc -zv stackvo-mongo 27017
 ```
 
 ---
 
-## 🌍 Web Server Sorunları
+## Web Server Issues
 
 ### 404 Not Found
 
-**Semptom:**
+**Symptom:**
 ```
 404 Not Found - nginx
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Document root kontrolü
+# Document root check
 docker exec stackvo-myproject-web ls -la /var/www/html/public
 
 # Nginx config
@@ -347,20 +349,20 @@ docker exec stackvo-myproject-web nginx -s reload
 
 ### 502 Bad Gateway
 
-**Semptom:**
+**Symptom:**
 ```
 502 Bad Gateway - nginx
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# PHP-FPM çalışıyor mu?
+# Is PHP-FPM running?
 docker ps | grep php
 
-# PHP-FPM logları
+# PHP-FPM logs
 docker logs stackvo-myproject-php
 
-# FastCGI bağlantısı
+# FastCGI connection
 docker exec stackvo-myproject-web nc -zv myproject-php 9000
 
 # PHP-FPM restart
@@ -369,51 +371,51 @@ docker restart stackvo-myproject-php
 
 ### Permission denied
 
-**Semptom:**
+**Symptom:**
 ```
 Permission denied: /var/www/html/storage
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Host'ta permissions
+# Permissions on Host
 sudo chown -R $USER:$USER projects/myproject
 
-# Container içinde
+# Inside Container
 docker exec stackvo-myproject-php chown -R www-data:www-data /var/www/html
 docker exec stackvo-myproject-php chmod -R 775 /var/www/html/storage
 ```
 
 ---
 
-## 🔧 CLI Sorunları
+## CLI Issues
 
 ### Command not found
 
-**Semptom:**
+**Symptom:**
 ```
 stackvo: command not found
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# CLI kur
-./core/cli/stackvo.sh install
+# Install CLI
+./stackvo.sh install
 
-# Veya tam yol kullan
-./core/cli/stackvo.sh generate
+# Or use full path
+./stackvo.sh generate
 ```
 
-### Script execution hatası
+### Script execution error
 
-**Semptom:**
+**Symptom:**
 ```
-Permission denied: ./core/cli/stackvo.sh
+Permission denied: ./stackvo.sh
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Executable yap
+# Make executable
 chmod +x cli/stackvo.sh
 chmod +x cli/commands/*.sh
 chmod +x cli/lib/generators/*.sh
@@ -421,70 +423,70 @@ chmod +x cli/lib/generators/*.sh
 
 ---
 
-## 💾 Volume Sorunları
+## Volume Issues
 
-### Data kaybı
+### Data loss
 
-**Semptom:**
+**Symptom:**
 ```
 All database data is lost after restart
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Volume'ları kontrol et
+# Check volumes
 docker volume ls | grep stackvo
 
-# Volume inspect
+# Inspect volume
 docker volume inspect stackvo_mysql-data
 
-# Backup al
+# Backup
 docker run --rm \
   -v stackvo_mysql-data:/data \
   -v $(pwd):/backup \
   ubuntu tar czf /backup/mysql-backup.tar.gz /data
 ```
 
-### Volume mount hatası
+### Volume mount error
 
-**Semptom:**
+**Symptom:**
 ```
 Error response from daemon: invalid mount config
 ```
 
-**Çözüm:**
+**Solution:**
 ```bash
-# Absolute path kullan
+# Use absolute path
 volumes:
   - /absolute/path/to/projects:/var/www/html
 
-# Relative path yerine
+# Instead of relative path
 volumes:
-  - ./projects:/var/www/html  # ❌ Yanlış
+  - ./projects:/var/www/html  # ❌ Incorrect
 ```
 
 ---
 
-## 🚨 Acil Durum
+## Emergency
 
-### Tüm sistemi sıfırla
+### Reset entire system
 
 ```bash
-# 1. Tüm container'ları durdur
-./core/cli/stackvo.sh down -v
+# 1. Stop all containers
+./stackvo.sh down -v
 
-# 2. Network'ü sil
+# 2. Remove network
 docker network rm stackvo-net
 
-# 3. Generated dosyaları sil
+# 3. Remove generated files
 rm -rf generated/*
 
-# 4. Yeniden oluştur
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# 4. Recreate
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### Backup'tan geri yükle
+### Restore from backup
 
 ```bash
 # MySQL
@@ -502,14 +504,14 @@ docker run --rm \
 
 ---
 
-## 📞 Hala Çözülmedi mi?
+## Still unresolved?
 
-1. **GitHub Issues:** [Sorun bildir](https://github.com/stackvo/stackvo/issues/new)
-2. **Discussions:** [Tartışmalara katıl](https://github.com/stackvo/stackvo/discussions)
-3. **Support:** [Destek al](support.md)
+1. **GitHub Issues:** [Report issue](https://github.com/stackvo/stackvo/issues/new)
+2. **Discussions:** [Join discussions](https://github.com/stackvo/stackvo/discussions)
+3. **Support:** [Get support](support.md)
 
-**Issue açarken:**
-- Hata mesajını ekleyin
-- `stackvo doctor` çıktısını paylaşın
-- Logları ekleyin
-- Environment bilgilerini verin
+**When opening an Issue:**
+- Add error message
+- Share `stackvo doctor` output
+- Add logs
+- Provide Environment information

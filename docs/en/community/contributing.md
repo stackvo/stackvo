@@ -1,34 +1,36 @@
 # Contributing Guide
 
-Stackvo'a katkıda bulunmak için teşekkürler! 🎉 Bu kılavuz, repository fork etmeden pull request göndermeye, conventional commits kullanımından code style'a, bug report ve feature request açmaktan testing ve CI/CD süreçlerine kadar katkıda bulunma sürecinin tüm adımlarını detaylı olarak açıklamaktadır. Kod, dokümantasyon, testing ve community desteği gibi farklı katkı alanları hakkında bilgi içerir.
+Thanks for contributing to Stackvo! 🎉 This guide explains the entire contribution process in detail, from forking the repository to submitting a pull request, using conventional commits, code style, opening bug reports and feature requests, to testing and CI/CD processes. It includes information about different contribution areas such as code, documentation, testing, and community support.
 
-## Hızlı Başlangıç
+---
 
-### 1. Repository'yi Fork Edin
+## Quick Start
+
+### 1. Fork the Repository
 
 ```bash
-# Fork edin: https://github.com/stackvo/stackvo/fork
+# Fork: https://github.com/stackvo/stackvo/fork
 
-# Clone edin
+# Clone
 git clone https://github.com/YOUR_USERNAME/stackvo.git
 cd stackvo
 ```
 
-### 2. Development Environment Kurun
+### 2. Setup Development Environment
 
 ```bash
 # Dependencies
 docker --version
 docker compose --version
 
-# CLI kur
-./core/cli/stackvo.sh install
+# Install CLI
+./stackvo.sh install
 
-# Test et
+# Test
 stackvo doctor
 ```
 
-### 3. Branch Oluşturun
+### 3. Create a Branch
 
 ```bash
 # Feature branch
@@ -38,20 +40,20 @@ git checkout -b feat/my-feature
 git checkout -b fix/bug-description
 ```
 
-### 4. Değişikliklerinizi Yapın
+### 4. Make Your Changes
 
 ```bash
-# Kod değişiklikleri
+# Code changes
 nano .env
 
-# Test edin
-./core/cli/stackvo.sh generate
-./core/cli/stackvo.sh up
+# Test
+./stackvo.sh generate
+./stackvo.sh up
 ```
 
-### 5. Commit Edin
+### 5. Commit
 
-**Conventional Commits** formatını kullanın:
+Use the **Conventional Commits** format:
 
 ```bash
 git commit -m "feat(mysql): add MySQL 8.1 support"
@@ -60,86 +62,86 @@ git commit -m "docs(readme): update installation guide"
 ```
 
 **Commit Types:**
-- `feat`: Yeni özellik
-- `fix`: Bug düzeltme
-- `docs`: Dokümantasyon
-- `style`: Kod formatı
-- `refactor`: Kod refactoring
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation
+- `style`: Code formatting
+- `refactor`: Code refactoring
 - `perf`: Performance
 - `test`: Test
-- `chore`: Diğer
+- `chore`: Chores
 
-### 6. Push ve Pull Request
+### 6. Push and Pull Request
 
 ```bash
 # Push
 git push origin feat/my-feature
 
-# GitHub'da Pull Request oluşturun
+# Create a Pull Request on GitHub
 ```
 
 ---
 
 ## Contribution Checklist
 
-Pull Request göndermeden önce:
+Before submitting a Pull Request:
 
-- [ ] Kod değişiklikleri test edildi
-- [ ] Dokümantasyon güncellendi
-- [ ] Conventional commits kullanıldı
-- [ ] Conflict yok
-- [ ] CI/CD testleri geçti
+- [ ] Code changes tested
+- [ ] Documentation updated
+- [ ] Conventional commits used
+- [ ] No conflicts
+- [ ] CI/CD tests passed
 
 ---
 
-## Katkı Alanları
+## Contribution Areas
 
-### 1. Kod Katkıları
+### 1. Code Contributions
 
-- **Yeni Servisler:** PostgreSQL 16, Redis 7.2, vb.
-- **Yeni Özellikler:** Monitoring, backup, vb.
-- **Bug Fixes:** Issue'lardaki bugları düzeltin
-- **Performance:** Optimizasyon yapın
+- **New Services:** PostgreSQL 16, Redis 7.2, etc.
+- **New Features:** Monitoring, backup, etc.
+- **Bug Fixes:** Fix bugs from issues
+- **Performance:** Optimization
 
-### 2. Dokümantasyon
+### 2. Documentation
 
-- **Guides:** Yeni kılavuzlar yazın
-- **Examples:** Örnek projeler ekleyin
-- **Translations:** Çeviriler yapın
-- **Tutorials:** Eğitimler oluşturun
+- **Guides:** Write new guides
+- **Examples:** Add example projects
+- **Translations:** Make translations
+- **Tutorials:** Create tutorials
 
 ### 3. Testing
 
-- **Unit Tests:** Test coverage artırın
-- **Integration Tests:** Entegrasyon testleri
-- **E2E Tests:** End-to-end testler
+- **Unit Tests:** Increase test coverage
+- **Integration Tests:** Integration tests
+- **E2E Tests:** End-to-end tests
 
 ### 4. Community
 
-- **Issue Triage:** Issue'ları kategorize edin
-- **Support:** Sorulara cevap verin
-- **Reviews:** PR'ları review edin
+- **Issue Triage:** Categorize issues
+- **Support:** Answer questions
+- **Reviews:** Review PRs
 
 ---
 
-## Proje Yapısı
+## Project Structure
 
 ```
 stackvo/
-├── cli/                    # CLI komutları
-│   ├── stackvo.sh       # Ana CLI
-│   ├── commands/          # Alt komutlar
-│   └── lib/               # Kütüphaneler
-│       └── generators/    # Generator modülleri
-├── core/                  # Core dosyalar
+├── cli/                    # CLI commands
+│   ├── stackvo.sh       # Main CLI
+│   ├── commands/          # Subcommands
+│   └── lib/               # Libraries
+│       └── generators/    # Generator modules
+├── core/                  # Core files
 │   ├── compose/           # Docker Compose templates
-│   ├── traefik/           # Traefik konfigürasyonu
-│   └── templates/         # Servis templates
-├── projects/              # Kullanıcı projeleri
+│   ├── traefik/           # Traefik configuration
+│   └── templates/         # Service templates
+├── projects/              # User projects
 ├── .ui/                   # Web UI
-│   ├── index.html         # Ana sayfa
+│   ├── index.html         # Main page
 │   └── api/               # API endpoints
-├── docs/                  # Dokümantasyon
+├── docs/                  # Documentation
 └── scripts/               # Utility scripts
 ```
 
@@ -151,22 +153,22 @@ stackvo/
 
 ```bash
 # Generator test
-./core/cli/stackvo.sh generate
+./stackvo.sh generate
 
-# Servisleri başlat
-./core/cli/stackvo.sh up
+# Start services
+./stackvo.sh up
 
-# Logları kontrol et
-./core/cli/stackvo.sh logs
+# Check logs
+./stackvo.sh logs
 
-# Temizle
-./core/cli/stackvo.sh down
+# Clean up
+./stackvo.sh down
 ```
 
 ### CI/CD
 
-GitHub Actions otomatik çalışır:
-- Syntax kontrolü
+GitHub Actions runs automatically:
+- Syntax check
 - Docker build
 - Integration tests
 
@@ -177,13 +179,13 @@ GitHub Actions otomatik çalışır:
 ### Bash
 
 ```bash
-# ✅ Doğru
+# ✅ Correct
 function my_function() {
     local var="value"
     echo "$var"
 }
 
-# ❌ Yanlış
+# ❌ Incorrect
 function myFunction {
     var=value
     echo $var
@@ -193,12 +195,12 @@ function myFunction {
 ### Python
 
 ```python
-# ✅ Doğru
+# ✅ Correct
 def my_function(param: str) -> str:
     """Docstring"""
     return param.upper()
 
-# ❌ Yanlış
+# ❌ Incorrect
 def myFunction(param):
     return param.upper()
 ```
@@ -207,31 +209,31 @@ def myFunction(param):
 
 ## Bug Reports
 
-Issue açarken:
+When opening an Issue:
 
 **Template:**
 ```markdown
-## Bug Açıklaması
-[Açıklama]
+## Bug Description
+[Description]
 
-## Adımlar
-1. [Adım 1]
-2. [Adım 2]
+## Steps
+1. [Step 1]
+2. [Step 2]
 
-## Beklenen Davranış
-[Beklenen]
+## Expected Behavior
+[Expected]
 
-## Gerçek Davranış
-[Gerçek]
+## Actual Behavior
+[Actual]
 
 ## Environment
 - OS: Ubuntu 22.04
 - Docker: 24.0.7
 - Stackvo: 1.0.0
 
-## Loglar
+## Logs
 ```
-[Loglar]
+[Logs]
 ```
 ```
 
@@ -239,21 +241,21 @@ Issue açarken:
 
 ## Feature Requests
 
-Yeni özellik önerirken:
+When proposing a new feature:
 
 **Template:**
 ```markdown
-## Özellik Açıklaması
-[Açıklama]
+## Feature Description
+[Description]
 
-## Motivasyon
-[Neden gerekli?]
+## Motivation
+[Why is it necessary?]
 
-## Önerilen Çözüm
-[Nasıl implement edilmeli?]
+## Proposed Solution
+[How should it be implemented?]
 
-## Alternatifler
-[Başka çözümler?]
+## Alternatives
+[Other solutions?]
 ```
 
 ---
@@ -261,20 +263,20 @@ Yeni özellik önerirken:
 ## Recognition
 
 Contributors:
-- README.md'de listelenir
-- GitHub contributors sayfasında görünür
-- Release notes'ta mention edilir
+- Listed in README.md
+- Visible on GitHub contributors page
+- Mentioned in Release notes
 
 ---
 
-## İletişim
+## Contact
 
-Sorularınız için:
-- **GitHub Discussions:** [Tartışmalara katıl](https://github.com/stackvo/stackvo/discussions)
-- **Issues:** [Soru sor](https://github.com/stackvo/stackvo/issues/new)
+For your questions:
+- **GitHub Discussions:** [Join discussions](https://github.com/stackvo/stackvo/discussions)
+- **Issues:** [Ask a question](https://github.com/stackvo/stackvo/issues/new)
 
 ---
 
 ## License
 
-Katkılarınız [MIT License](https://github.com/stackvo/stackvo/blob/main/LICENSE) altında yayınlanır.
+Your contributions are published under the [MIT License](https://github.com/stackvo/stackvo/blob/main/LICENSE).

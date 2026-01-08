@@ -1,26 +1,26 @@
 ---
-title: Proje Yönetimi
-description: Stackvo ile proje oluşturma, yapılandırma ve yönetme işlemlerini adım adım açıklar.
+title: Project Management
+description: Step-by-step description of creating, configuring, and managing projects with Stackvo.
 ---
 
-# Proje Yönetimi
+# Project Management
 
-Bu kılavuz, Stackvo ile proje oluşturma, yapılandırma ve yönetme işlemlerini adım adım açıklamaktadır. Yeni proje oluşturmadan Laravel, Symfony, WordPress gibi framework projelerine, webserver seçiminden çoklu dil desteğine, özel konfigürasyonlardan proje güncelleme ve silme işlemlerine kadar tüm süreçleri kapsamaktadır. Her proje için stackvo.json konfigürasyonu ve best practices açıklanmaktadır.
+This guide explains step-by-step how to create, configure, and manage projects with Stackvo. It covers all processes from creating a new project to framework projects like Laravel, Symfony, WordPress, from webserver selection to multi-language support, from custom configurations to project update and deletion operations. stackvo.json configuration and best practices are explained for each project.
 
 ---
 
-## Yeni Proje Oluşturma
+## Creating a New Project
 
-### CLI ile Proje Oluşturma
+### Creating a Project via CLI
 
-#### 1. Proje Dizini Oluşturma
+#### 1. Create Project Directory
 
 ```bash
-# Proje dizini ve document root oluştur
+# Create project directory and document root
 mkdir -p projects/myproject/public
 ```
 
-#### 2. stackvo.json Oluşturma
+#### 2. Create stackvo.json
 
 ```bash
 cat > projects/myproject/stackvo.json <<EOF
@@ -45,43 +45,43 @@ cat > projects/myproject/stackvo.json <<EOF
 EOF
 ```
 
-#### 3. Test Dosyası Oluşturma
+#### 3. Create Test File
 
 ```bash
-# Basit PHP dosyası
+# Simple PHP file
 echo "<?php phpinfo();" > projects/myproject/public/index.php
 
-# Veya HTML dosyası
+# Or HTML file
 echo "<h1>Welcome to My Project</h1>" > projects/myproject/public/index.html
 ```
 
-#### 4. Generator Çalıştırma
+#### 4. Run Generator
 
 ```bash
-# Sadece projeleri üret
-./core/cli/stackvo.sh generate projects
+# Generate only projects
+./stackvo.sh generate projects
 
-# Veya tümünü üret
-./core/cli/stackvo.sh generate
+# Or generate all
+./stackvo.sh generate
 ```
 
-#### 5. Servisleri Başlatma
+#### 5. Start Services
 
 ```bash
-./core/cli/stackvo.sh up
+./stackvo.sh up
 ```
 
-#### 6. Hosts Dosyasını Güncelleme
+#### 6. Update Hosts File
 
 ```bash
 # Linux/macOS
 echo "127.0.0.1  myproject.loc" | sudo tee -a /etc/hosts
 
-# Windows (PowerShell - Yönetici olarak)
+# Windows (PowerShell - Run as Administrator)
 Add-Content C:\Windows\System32\drivers\etc\hosts "127.0.0.1  myproject.loc"
 ```
 
-#### 7. Tarayıcıda Açma
+#### 7. Open in Browser
 
 ```
 https://myproject.loc
@@ -89,15 +89,15 @@ https://myproject.loc
 
 ---
 
-## Framework Projeleri
+## Framework Projects
 
-### Laravel Projesi
+### Laravel Project
 
 ```bash
-# 1. Composer ile Laravel kur
+# 1. Install Laravel via Composer
 composer create-project laravel/laravel projects/laravel-app
 
-# 2. stackvo.json oluştur
+# 2. Create stackvo.json
 cat > projects/laravel-app/stackvo.json <<EOF
 {
   "name": "laravel-app",
@@ -121,10 +121,10 @@ cat > projects/laravel-app/stackvo.json <<EOF
 }
 EOF
 
-# 3. .env dosyasını düzenle
+# 3. Edit .env file
 nano projects/laravel-app/.env
 
-# Database ayarları
+# Database settings
 # DB_CONNECTION=mysql
 # DB_HOST=stackvo-mysql
 # DB_PORT=3306
@@ -132,14 +132,14 @@ nano projects/laravel-app/.env
 # DB_USERNAME=stackvo
 # DB_PASSWORD=stackvo
 
-# Cache ayarları
+# Cache settings
 # CACHE_DRIVER=redis
 # REDIS_HOST=stackvo-redis
 # REDIS_PORT=6379
 
-# 4. Generate ve start
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+# 4. Generate and start
+./stackvo.sh generate projects
+./stackvo.sh up
 
 # 5. Hosts
 echo "127.0.0.1  laravel.loc" | sudo tee -a /etc/hosts
@@ -151,13 +151,13 @@ docker exec stackvo-laravel-app-php php artisan key:generate
 docker exec stackvo-laravel-app-php php artisan migrate
 ```
 
-### Symfony Projesi
+### Symfony Project
 
 ```bash
-# 1. Symfony CLI ile proje oluştur
+# 1. Create project via Symfony CLI
 symfony new projects/symfony-app --webapp
 
-# 2. stackvo.json oluştur
+# 2. Create stackvo.json
 cat > projects/symfony-app/stackvo.json <<EOF
 {
   "name": "symfony-app",
@@ -180,28 +180,28 @@ cat > projects/symfony-app/stackvo.json <<EOF
 }
 EOF
 
-# 3. .env.local oluştur
+# 3. Create .env.local
 cat > projects/symfony-app/.env.local <<EOF
 DATABASE_URL="postgresql://stackvo:root@stackvo-postgres:5432/symfony?serverVersion=14&charset=utf8"
 EOF
 
-# 4. Generate ve start
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+# 4. Generate and start
+./stackvo.sh generate projects
+./stackvo.sh up
 
 # 5. Hosts
 echo "127.0.0.1  symfony.loc" | sudo tee -a /etc/hosts
 ```
 
-### WordPress Projesi
+### WordPress Project
 
 ```bash
-# 1. WordPress indir
+# 1. Download WordPress
 wget https://wordpress.org/latest.tar.gz
 tar -xzf latest.tar.gz
 mv wordpress projects/wordpress-site
 
-# 2. stackvo.json oluştur
+# 2. Create stackvo.json
 cat > projects/wordpress-site/stackvo.json <<EOF
 {
   "name": "wordpress-site",
@@ -225,32 +225,32 @@ cat > projects/wordpress-site/stackvo.json <<EOF
 }
 EOF
 
-# 3. wp-config.php oluştur
+# 3. Create wp-config.php
 cp projects/wordpress-site/wp-config-sample.php projects/wordpress-site/wp-config.php
 nano projects/wordpress-site/wp-config.php
 
-# Database ayarları
+# Database settings
 # define('DB_NAME', 'wordpress');
 # define('DB_USER', 'stackvo');
 # define('DB_PASSWORD', 'stackvo');
 # define('DB_HOST', 'stackvo-mysql');
 
-# 4. Generate ve start
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh up
+# 4. Generate and start
+./stackvo.sh generate projects
+./stackvo.sh up
 
 # 5. Hosts
 echo "127.0.0.1  wordpress.loc" | sudo tee -a /etc/hosts
 
-# 6. Kurulumu tamamla
-# https://wordpress.loc adresini açın
+# 6. Complete installation
+# Open https://wordpress.loc
 ```
 
 ---
 
-## Webserver Seçimi
+## Webserver Selection
 
-### Nginx (Varsayılan)
+### Nginx (Default)
 
 ```json
 {
@@ -258,10 +258,10 @@ echo "127.0.0.1  wordpress.loc" | sudo tee -a /etc/hosts
 }
 ```
 
-**Avantajlar:**
-- Yüksek performans
-- Düşük bellek kullanımı
-- Reverse proxy desteği
+**Advantages:**
+- High performance
+- Low memory usage
+- Reverse proxy support
 
 ### Apache
 
@@ -271,10 +271,10 @@ echo "127.0.0.1  wordpress.loc" | sudo tee -a /etc/hosts
 }
 ```
 
-**Avantajlar:**
-- .htaccess desteği
-- Modüler yapı
-- Geniş topluluk
+**Advantages:**
+- .htaccess support
+- Modular structure
+- Large community
 
 ### Caddy
 
@@ -284,10 +284,10 @@ echo "127.0.0.1  wordpress.loc" | sudo tee -a /etc/hosts
 }
 ```
 
-**Avantajlar:**
-- Otomatik HTTPS
-- Modern konfigürasyon
-- HTTP/3 desteği
+**Advantages:**
+- Automatic HTTPS
+- Modern configuration
+- HTTP/3 support
 
 ### Ferron
 
@@ -297,22 +297,22 @@ echo "127.0.0.1  wordpress.loc" | sudo tee -a /etc/hosts
 }
 ```
 
-**Avantajlar:**
-- Hafif ve hızlı
-- YAML konfigürasyon
-- Modern mimari
+**Advantages:**
+- Lightweight and fast
+- YAML configuration
+- Modern architecture
 
 ---
 
-## Özel Konfigürasyonlar
+## Custom Configurations
 
-### Nginx Konfigürasyonu
+### Nginx Configuration
 
 ```bash
-# 1. .stackvo dizini oluştur
+# 1. Create .stackvo directory
 mkdir -p projects/myproject/.stackvo
 
-# 2. nginx.conf oluştur
+# 2. Create nginx.conf
 cat > projects/myproject/.stackvo/nginx.conf <<'EOF'
 server {
     listen 80;
@@ -333,15 +333,15 @@ server {
 }
 EOF
 
-# 3. Generate ve restart
-./core/cli/stackvo.sh generate projects
-./core/cli/stackvo.sh restart
+# 3. Generate and restart
+./stackvo.sh generate projects
+./stackvo.sh restart
 ```
 
-### PHP Konfigürasyonu
+### PHP Configuration
 
 ```bash
-# php.ini oluştur
+# Create php.ini
 cat > projects/myproject/.stackvo/php.ini <<EOF
 memory_limit = 256M
 upload_max_filesize = 64M
@@ -358,14 +358,14 @@ session.save_handler = redis
 session.save_path = "tcp://stackvo-redis:6379"
 EOF
 
-# Generate ve restart
-./core/cli/stackvo.sh generate projects
+# Generate and restart
+./stackvo.sh generate projects
 docker restart stackvo-myproject-php
 ```
 
 ---
 
-## Çoklu Dil Desteği
+## Multi-Language Support
 
 ### PHP + Node.js
 
@@ -403,106 +403,103 @@ docker restart stackvo-myproject-php
 
 ---
 
-## Proje Güncelleme
+## Updating Projects
 
-### Konfigürasyon Değiştirme
+### Changing Configuration
 
 ```bash
-# 1. stackvo.json düzenle
+# 1. Edit stackvo.json
 nano projects/myproject/stackvo.json
 
-# PHP versiyonunu değiştir
+# Change PHP version
 # "version": "8.2" → "8.3"
 
-# 2. Projeleri yeniden üret
-./core/cli/stackvo.sh generate projects
+# 2. Regenerate projects
+./stackvo.sh generate projects
 
-# 3. Container'ı yeniden oluştur
+# 3. Recreate container
 docker compose -f generated/stackvo.yml \
   -f generated/docker-compose.dynamic.yml \
   -f generated/docker-compose.projects.yml \
   up -d --force-recreate stackvo-myproject-php
 ```
 
-### Webserver Değiştirme
+### Changing Webserver
 
 ```bash
-# 1. stackvo.json düzenle
+# 1. Edit stackvo.json
 nano projects/myproject/stackvo.json
 
 # "webserver": "nginx" → "apache"
 
-# 2. Projeleri yeniden üret
-./core/cli/stackvo.sh generate projects
+# 2. Regenerate projects
+./stackvo.sh generate projects
 
-# 3. Container'ları yeniden oluştur
-./core/cli/stackvo.sh restart
+# 3. Recreate containers
+./stackvo.sh restart
 ```
 
 ---
 
-## Proje Silme
+## Deleting Projects
 
-### CLI ile
+### Via CLI
 
 ```bash
-# 1. Container'ları durdur
-./core/cli/stackvo.sh down
+# 1. Stop containers
+./stackvo.sh down
 
-# 2. Proje dizinini sil
+# 2. Delete project directory
 rm -rf projects/myproject
 
-# 3. Yeniden üret
-./core/cli/stackvo.sh generate projects
+# 3. Regenerate
+./stackvo.sh generate projects
 
-# 4. Başlat
-./core/cli/stackvo.sh up
+# 4. Start
+./stackvo.sh up
 
-# 5. Hosts dosyasından kaldır
+# 5. Remove from hosts file
 sudo nano /etc/hosts
-# 127.0.0.1  myproject.loc satırını sil
+# Remove line: 127.0.0.1  myproject.loc
 ```
 
 ---
 
 ## Troubleshooting
 
-### Container Başlamıyor
+### Container Not Starting
 
 ```bash
-# Logları kontrol et
+# Check logs
 docker logs stackvo-myproject-web
 docker logs stackvo-myproject-php
 
-# stackvo.json'ı kontrol et
+# Check stackvo.json
 cat projects/myproject/stackvo.json
 
-# Syntax kontrolü
+# Syntax check
 docker exec stackvo-myproject-web nginx -t
 ```
 
-### 404 Hatası
+### 404 Error
 
 ```bash
-# Document root kontrolü
+# Document root check
 docker exec stackvo-myproject-web ls -la /var/www/html/public
 
-# Nginx konfigürasyonu kontrolü
+# Nginx configuration check
 docker exec stackvo-myproject-web cat /etc/nginx/conf.d/default.conf
 
-# PHP-FPM bağlantısı kontrolü
+# PHP-FPM connection check
 docker exec stackvo-myproject-web nc -zv myproject-php 9000
 ```
 
-### Permission Hatası
+### Permission Error
 
 ```bash
-# Dosya sahipliğini düzelt
+# Fix file ownership
 sudo chown -R $USER:$USER projects/myproject
 
-# Container içinde
+# Inside container
 docker exec stackvo-myproject-php chown -R www-data:www-data /var/www/html
 ```
-
----
-
