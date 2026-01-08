@@ -13,7 +13,18 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standardına day
 
 ---
 
+<<<<<<< Updated upstream
 ## [1.0.8] - 2026-01-08
+=======
+## [1.0.9-test] - 2026-01-08
+
+---
+
+
+### Documentation
+- docs en
+- update changelog for 1.0.7
+>>>>>>> Stashed changes
 
 ---
 

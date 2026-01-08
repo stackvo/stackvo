@@ -35,12 +35,28 @@ fi
 NEW_VERSION=${1:-"Unreleased"}
 RELEASE_DATE=$(date +%Y-%m-%d)
 
-# Temporary files
-TEMP_FILE_TR=$(mktemp)
-TEMP_FILE_EN=$(mktemp)
+# Temporary files for detailed changelogs (MkDocs)
+TEMP_FILE_DOCS_TR=$(mktemp)
+TEMP_FILE_DOCS_EN=$(mktemp)
 
-# Turkish Changelog header
-cat > "$TEMP_FILE_TR" << EOF
+# Temporary file for root CHANGELOG.md (simple, version list only)
+TEMP_FILE_ROOT=$(mktemp)
+
+# Root CHANGELOG.md header (simple, English only)
+cat > "$TEMP_FILE_ROOT" << EOF
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+EOF
+
+# docs/tr/changelog.md header (detailed, Turkish titles, English content, MkDocs format)
+cat > "$TEMP_FILE_DOCS_TR" << EOF
 ---
 title: Değişiklikler
 description: Stackvo projesindeki tüm önemli değişiklikler bu dosyada dokümante edilir. Bu sayfa, her versiyonda eklenen yeni özellikler, değiştirilen fonksiyonlar, düzeltilen hatalar ve güvenlik güncellemelerini içermektedir. Semantic Versioning ve Keep a Changelog standartlarına uygun olarak düzenlenmektedir.
@@ -58,8 +74,8 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standardına day
 
 EOF
 
-# English Changelog header
-cat > "$TEMP_FILE_EN" << EOF
+# docs/en/changelog.md header (detailed, English content, MkDocs format)
+cat > "$TEMP_FILE_DOCS_EN" << EOF
 ---
 title: Changelog
 description: All notable changes to the Stackvo project are documented in this file. This page includes new features, changed functions, bug fixes, and security updates for each version. It follows the Semantic Versioning and Keep a Changelog standards.
@@ -79,31 +95,21 @@ EOF
 
 # New version header
 if [ "$NEW_VERSION" = "Unreleased" ]; then
-    echo "## [Unreleased]" >> "$TEMP_FILE_TR"
-    echo "## [Unreleased]" >> "$TEMP_FILE_EN"
+    echo "## [Unreleased]" >> "$TEMP_FILE_ROOT"
+    echo "## [Unreleased]" >> "$TEMP_FILE_DOCS_TR"
+    echo "## [Unreleased]" >> "$TEMP_FILE_DOCS_EN"
 else
-    echo "## [$NEW_VERSION] - $RELEASE_DATE" >> "$TEMP_FILE_TR"
-    echo "## [$NEW_VERSION] - $RELEASE_DATE" >> "$TEMP_FILE_EN"
+    echo "## [$NEW_VERSION] - $RELEASE_DATE" >> "$TEMP_FILE_ROOT"
+    echo "## [$NEW_VERSION] - $RELEASE_DATE" >> "$TEMP_FILE_DOCS_TR"
+    echo "## [$NEW_VERSION] - $RELEASE_DATE" >> "$TEMP_FILE_DOCS_EN"
 fi
 
-echo "" >> "$TEMP_FILE_TR"
-echo "" >> "$TEMP_FILE_EN"
+echo "" >> "$TEMP_FILE_ROOT"
+echo "" >> "$TEMP_FILE_DOCS_TR"
+echo "" >> "$TEMP_FILE_DOCS_EN"
 
-# Functions returning category headers
-get_category_tr() {
-    case "$1" in
-        feat) echo "### Eklenenler" ;;
-        fix) echo "### Düzeltmeler" ;;
-        docs) echo "### Dokümantasyon" ;;
-        style) echo "### Stil" ;;
-        refactor) echo "### Yeniden Yapılandırma" ;;
-        perf) echo "### Performans" ;;
-        test) echo "### Testler" ;;
-        chore) echo "### Diğer" ;;
-    esac
-}
-
-get_category_en() {
+# Function returning category headers (English only)
+get_category() {
     case "$1" in
         feat) echo "### Added" ;;
         fix) echo "### Fixed" ;;
@@ -116,13 +122,15 @@ get_category_en() {
     esac
 }
 
-# Collect commits for each category
+# Collect commits for each category (English only)
 for type in feat fix docs style refactor perf test chore; do
     commits=$(git log $COMMIT_RANGE --pretty=format:"%s" --grep="^$type" --no-merges 2>/dev/null || echo "")
     
     if [ -n "$commits" ]; then
-        echo "$(get_category_tr $type)" >> "$TEMP_FILE_TR"
-        echo "$(get_category_en $type)" >> "$TEMP_FILE_EN"
+        category=$(get_category $type)
+        echo "$category" >> "$TEMP_FILE_ROOT"
+        echo "$category" >> "$TEMP_FILE_DOCS_TR"
+        echo "$category" >> "$TEMP_FILE_DOCS_EN"
         
         while IFS= read -r commit; do
             # Parse commit message
@@ -131,85 +139,106 @@ for type in feat fix docs style refactor perf test chore; do
             scope=$(echo "$commit" | sed -nE 's/^[a-z]+\(([^)]+)\):.*/\1/p')
             
             if [ -n "$scope" ]; then
-                echo "- **$scope**: $message" >> "$TEMP_FILE_TR"
-                echo "- **$scope**: $message" >> "$TEMP_FILE_EN"
+                echo "- **$scope**: $message" >> "$TEMP_FILE_ROOT"
+                echo "- **$scope**: $message" >> "$TEMP_FILE_DOCS_TR"
+                echo "- **$scope**: $message" >> "$TEMP_FILE_DOCS_EN"
             else
-                echo "- $message" >> "$TEMP_FILE_TR"
-                echo "- $message" >> "$TEMP_FILE_EN"
+                echo "- $message" >> "$TEMP_FILE_ROOT"
+                echo "- $message" >> "$TEMP_FILE_DOCS_TR"
+                echo "- $message" >> "$TEMP_FILE_DOCS_EN"
             fi
         done <<< "$commits"
         
-        echo "" >> "$TEMP_FILE_TR"
-        echo "" >> "$TEMP_FILE_EN"
+        echo "" >> "$TEMP_FILE_ROOT"
+        echo "" >> "$TEMP_FILE_DOCS_TR"
+        echo "" >> "$TEMP_FILE_DOCS_EN"
     fi
 done
 
-# Breaking changes
+# Breaking changes (English only)
 breaking=$(git log $COMMIT_RANGE --pretty=format:"%s%n%b" --grep="BREAKING CHANGE" --no-merges 2>/dev/null || echo "")
 if [ -n "$breaking" ]; then
-    echo "### ⚠️ KIRILAMAYAN DEĞİŞİKLİKLER" >> "$TEMP_FILE_TR"
-    echo "### ⚠️ BREAKING CHANGES" >> "$TEMP_FILE_EN"
-    echo "" >> "$TEMP_FILE_TR"
-    echo "" >> "$TEMP_FILE_EN"
-    echo "$breaking" | grep -A 10 "BREAKING CHANGE" | sed 's/BREAKING CHANGE: /- /' >> "$TEMP_FILE_TR"
-    echo "$breaking" | grep -A 10 "BREAKING CHANGE" | sed 's/BREAKING CHANGE: /- /' >> "$TEMP_FILE_EN"
-    echo "" >> "$TEMP_FILE_TR"
-    echo "" >> "$TEMP_FILE_EN"
+    echo "### ⚠️ BREAKING CHANGES" >> "$TEMP_FILE_ROOT"
+    echo "### ⚠️ BREAKING CHANGES" >> "$TEMP_FILE_DOCS_TR"
+    echo "### ⚠️ BREAKING CHANGES" >> "$TEMP_FILE_DOCS_EN"
+    echo "" >> "$TEMP_FILE_ROOT"
+    echo "" >> "$TEMP_FILE_DOCS_TR"
+    echo "" >> "$TEMP_FILE_DOCS_EN"
+    breaking_content=$(echo "$breaking" | grep -A 10 "BREAKING CHANGE" | sed 's/BREAKING CHANGE: /- /')
+    echo "$breaking_content" >> "$TEMP_FILE_ROOT"
+    echo "$breaking_content" >> "$TEMP_FILE_DOCS_TR"
+    echo "$breaking_content" >> "$TEMP_FILE_DOCS_EN"
+    echo "" >> "$TEMP_FILE_ROOT"
+    echo "" >> "$TEMP_FILE_DOCS_TR"
+    echo "" >> "$TEMP_FILE_DOCS_EN"
 fi
 
-echo "---" >> "$TEMP_FILE_TR"
-echo "" >> "$TEMP_FILE_TR"
-echo "---" >> "$TEMP_FILE_EN"
-echo "" >> "$TEMP_FILE_EN"
+echo "---" >> "$TEMP_FILE_ROOT"
+echo "" >> "$TEMP_FILE_ROOT"
+echo "---" >> "$TEMP_FILE_DOCS_TR"
+echo "" >> "$TEMP_FILE_DOCS_TR"
+echo "---" >> "$TEMP_FILE_DOCS_EN"
+echo "" >> "$TEMP_FILE_DOCS_EN"
 
-# Append old changelog (if exists) - Turkish
+# Append old changelog (if exists) - Root CHANGELOG.md
+if [ -f "CHANGELOG.md" ]; then
+    # Get old content - only versioned sections (in ## [x.x.x] format)
+    # Skip the new version
+    OLD_CONTENT_ROOT=$(sed -n '/^## \[[0-9]/,/^---$/p' CHANGELOG.md | grep -v "^## \[$NEW_VERSION\]" || true)
+    if [ -n "$OLD_CONTENT_ROOT" ]; then
+        echo "$OLD_CONTENT_ROOT" >> "$TEMP_FILE_ROOT"
+    fi
+fi
+
+# Append old changelog (if exists) - docs/tr/changelog.md
 if [ -f "docs/tr/changelog.md" ]; then
     # Get old content - only versioned sections (in ## [x.x.x] format)
-    # Skip sections like Unreleased, Planned, Links
-    OLD_CONTENT_TR=$(sed -n '/^## \[[0-9]/,/^## Bağlantılar/p' docs/tr/changelog.md | grep -v "^## Bağlantılar" || true)
-    if [ -n "$OLD_CONTENT_TR" ]; then
-        echo "$OLD_CONTENT_TR" >> "$TEMP_FILE_TR"
+    # Skip sections like Bağlantılar and the new version
+    OLD_CONTENT_DOCS_TR=$(sed -n '/^## \[[0-9]/,/^## Bağlantılar/p' docs/tr/changelog.md | grep -v "^## Bağlantılar" | grep -v "^## \[$NEW_VERSION\]" || true)
+    if [ -n "$OLD_CONTENT_DOCS_TR" ]; then
+        echo "$OLD_CONTENT_DOCS_TR" >> "$TEMP_FILE_DOCS_TR"
     fi
 fi
 
-# Append old changelog (if exists) - English
+# Append old changelog (if exists) - docs/en/changelog.md
 if [ -f "docs/en/changelog.md" ]; then
     # Get old content - only versioned sections (in ## [x.x.x] format)
-    # Skip sections like Unreleased, Planned, Links
-    OLD_CONTENT_EN=$(sed -n '/^## \[[0-9]/,/^## Links/p' docs/en/changelog.md | grep -v "^## Links" || true)
-    if [ -n "$OLD_CONTENT_EN" ]; then
-        echo "$OLD_CONTENT_EN" >> "$TEMP_FILE_EN"
+    # Skip sections like Links and the new version
+    OLD_CONTENT_DOCS_EN=$(sed -n '/^## \[[0-9]/,/^## Links/p' docs/en/changelog.md | grep -v "^## Links" | grep -v "^## \[$NEW_VERSION\]" || true)
+    if [ -n "$OLD_CONTENT_DOCS_EN" ]; then
+        echo "$OLD_CONTENT_DOCS_EN" >> "$TEMP_FILE_DOCS_EN"
     fi
 fi
 
-# Add version links - Turkish
-echo "" >> "$TEMP_FILE_TR"
-echo "---" >> "$TEMP_FILE_TR"
-echo "" >> "$TEMP_FILE_TR"
-echo "## Bağlantılar" >> "$TEMP_FILE_TR"
-echo "" >> "$TEMP_FILE_TR"
-echo "- [GitHub Repository](https://github.com/stackvo/stackvo)" >> "$TEMP_FILE_TR"
-echo "- [Dokümantasyon](https://stackvo.github.io/stackvo/)" >> "$TEMP_FILE_TR"
-echo "- [Sorunlar](https://github.com/stackvo/stackvo/issues)" >> "$TEMP_FILE_TR"
-echo "- [Sürümler](https://github.com/stackvo/stackvo/releases)" >> "$TEMP_FILE_TR"
+# Add links to docs changelogs only (not root CHANGELOG.md)
+echo "" >> "$TEMP_FILE_DOCS_TR"
+echo "---" >> "$TEMP_FILE_DOCS_TR"
+echo "" >> "$TEMP_FILE_DOCS_TR"
+echo "## Bağlantılar" >> "$TEMP_FILE_DOCS_TR"
+echo "" >> "$TEMP_FILE_DOCS_TR"
+echo "- [GitHub Repository](https://github.com/stackvo/stackvo)" >> "$TEMP_FILE_DOCS_TR"
+echo "- [Dokümantasyon](https://stackvo.github.io/stackvo/)" >> "$TEMP_FILE_DOCS_TR"
+echo "- [Sorunlar](https://github.com/stackvo/stackvo/issues)" >> "$TEMP_FILE_DOCS_TR"
+echo "- [Sürümler](https://github.com/stackvo/stackvo/releases)" >> "$TEMP_FILE_DOCS_TR"
 
-# Add version links - English
-echo "" >> "$TEMP_FILE_EN"
-echo "---" >> "$TEMP_FILE_EN"
-echo "" >> "$TEMP_FILE_EN"
-echo "## Links" >> "$TEMP_FILE_EN"
-echo "" >> "$TEMP_FILE_EN"
-echo "- [GitHub Repository](https://github.com/stackvo/stackvo)" >> "$TEMP_FILE_EN"
-echo "- [Documentation](https://stackvo.github.io/stackvo/)" >> "$TEMP_FILE_EN"
-echo "- [Issues](https://github.com/stackvo/stackvo/issues)" >> "$TEMP_FILE_EN"
-echo "- [Releases](https://github.com/stackvo/stackvo/releases)" >> "$TEMP_FILE_EN"
+echo "" >> "$TEMP_FILE_DOCS_EN"
+echo "---" >> "$TEMP_FILE_DOCS_EN"
+echo "" >> "$TEMP_FILE_DOCS_EN"
+echo "## Links" >> "$TEMP_FILE_DOCS_EN"
+echo "" >> "$TEMP_FILE_DOCS_EN"
+echo "- [GitHub Repository](https://github.com/stackvo/stackvo)" >> "$TEMP_FILE_DOCS_EN"
+echo "- [Documentation](https://stackvo.github.io/stackvo/)" >> "$TEMP_FILE_DOCS_EN"
+echo "- [Issues](https://github.com/stackvo/stackvo/issues)" >> "$TEMP_FILE_DOCS_EN"
+echo "- [Releases](https://github.com/stackvo/stackvo/releases)" >> "$TEMP_FILE_DOCS_EN"
 
 # Copy new files
 mkdir -p docs/tr docs/en
-mv "$TEMP_FILE_TR" docs/tr/changelog.md
-mv "$TEMP_FILE_EN" docs/en/changelog.md
+mv "$TEMP_FILE_ROOT" CHANGELOG.md
+mv "$TEMP_FILE_DOCS_TR" docs/tr/changelog.md
+mv "$TEMP_FILE_DOCS_EN" docs/en/changelog.md
 
 echo -e "${GREEN}✅ Changelog updated:${NC}"
+echo -e "${GREEN}   - CHANGELOG.md${NC}"
 echo -e "${GREEN}   - docs/tr/changelog.md${NC}"
 echo -e "${GREEN}   - docs/en/changelog.md${NC}"
 
