@@ -13,6 +13,10 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standardına day
 
 ---
 
+## [1.0.8] - 2026-01-08
+
+---
+
 ## [1.0.7] - 2026-01-07
 
 ---
@@ -21,6 +25,8 @@ Format [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standardına day
 
 ---
 
+
+---
 
 ---
 
