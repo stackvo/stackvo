@@ -124,7 +124,7 @@ get_category() {
 
 # Collect commits for each category (English only)
 for type in feat fix docs style refactor perf test chore; do
-    commits=$(git log $COMMIT_RANGE --pretty=format:"%s" --grep="^$type" --no-merges 2>/dev/null || echo "")
+    commits=$(git log $COMMIT_RANGE --pretty=format:"%s" --grep="^$type:" --no-merges 2>/dev/null || echo "")
     
     if [ -n "$commits" ]; then
         category=$(get_category $type)
@@ -156,7 +156,7 @@ for type in feat fix docs style refactor perf test chore; do
 done
 
 # Breaking changes (English only)
-breaking=$(git log $COMMIT_RANGE --pretty=format:"%s%n%b" --grep="BREAKING CHANGE" --no-merges 2>/dev/null || echo "")
+breaking=$(git log $COMMIT_RANGE --pretty=format:"%s%n%b" --grep="BREAKING CHANGE:" --no-merges 2>/dev/null || echo "")
 if [ -n "$breaking" ]; then
     echo "### ⚠️ BREAKING CHANGES" >> "$TEMP_FILE_ROOT"
     echo "### ⚠️ BREAKING CHANGES" >> "$TEMP_FILE_DOCS_TR"
