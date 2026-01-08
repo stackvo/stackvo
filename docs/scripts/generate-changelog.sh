@@ -20,20 +20,29 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}🚀 Changelog Generator${NC}"
 
-# Get latest tag
-LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+# Get new version number (as parameter)
+NEW_VERSION=${1:-"Unreleased"}
+RELEASE_DATE=$(date +%Y-%m-%d)
+
+# Get previous tag (before the new version)
+# If we're on a tag, get the previous one
+CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "")
+if [ -n "$CURRENT_TAG" ]; then
+    # We're on a tag, get the previous one
+    LATEST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+else
+    # We're not on a tag, get the latest one
+    LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+fi
 
 if [ -z "$LATEST_TAG" ]; then
     echo -e "${YELLOW}⚠️  First release, all commits will be used${NC}"
     COMMIT_RANGE="HEAD"
 else
-    echo -e "${GREEN}📌 Latest tag: $LATEST_TAG${NC}"
+    echo -e "${GREEN}📌 Previous tag: $LATEST_TAG${NC}"
+    echo -e "${GREEN}📌 New version: $NEW_VERSION${NC}"
     COMMIT_RANGE="$LATEST_TAG..HEAD"
 fi
-
-# Get new version number (as parameter)
-NEW_VERSION=${1:-"Unreleased"}
-RELEASE_DATE=$(date +%Y-%m-%d)
 
 # Temporary files for detailed changelogs (MkDocs)
 TEMP_FILE_DOCS_TR=$(mktemp)
