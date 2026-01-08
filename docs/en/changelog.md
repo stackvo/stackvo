@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.12] - 2026-01-08
+
+---
+
 ## [1.0.11] - 2026-01-08
 
 ---
@@ -59,6 +63,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 >>>>>>> Stashed changes
+
+---
 
 ---
 
