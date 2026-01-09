@@ -10,6 +10,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 source "$SCRIPT_DIR/../lib/logger.sh"
 
+##
+# Tüm CLI bash scriptlerine execute izni verir
+##
+fix_cli_permissions() {
+    log_info "Fixing CLI script permissions..."
+    
+    # Find all .sh files in CLI directory and make them executable
+    find "$CLI_DIR" -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+    
+    log_success "CLI script permissions fixed"
+}
+
 # Check Docker Compose version
 validate_docker_compose_version() {
     log_info "Checking Docker Compose version..."
@@ -58,14 +70,11 @@ if [ "$EUID" -eq 0 ]; then
     echo ""
 fi
 
-# Check Docker Compose version first
-validate_docker_compose_version
+# Fix CLI script permissions first
+fix_cli_permissions
 
-# Make scripts executable
-chmod +x "$CLI_DIR/stackvo.sh"
-chmod +x "$CLI_DIR/commands/generate.sh"
-chmod +x "$CLI_DIR/utils/generate-ssl-certs.sh"
-chmod +x "$CLI_DIR/commands/uninstall.sh"
+# Check Docker Compose version
+validate_docker_compose_version
 
 # Create symlink (requires sudo)
 if [ "$EUID" -eq 0 ]; then

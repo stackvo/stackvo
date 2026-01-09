@@ -10,6 +10,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 source "$SCRIPT_DIR/../lib/logger.sh"
 
+##
+# Tüm CLI bash scriptlerine execute izni verir
+##
+fix_cli_permissions() {
+    # Find all .sh files in CLI directory and make them executable
+    find "$CLI_DIR" -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+}
+
+# Fix CLI script permissions first (silent - no log messages)
+fix_cli_permissions
+
 echo -e "${RED}⚠️  STACKVO UNINSTALLER${NC}"
 echo ""
 echo "This will remove:"

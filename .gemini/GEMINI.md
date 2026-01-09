@@ -6,8 +6,7 @@
 
 - **Tüm açıklama mesajları Türkçe olmalıdır**
 - **Tüm artifact dosyaları (Implementation Plan, Walkthrough, Task) Türkçe yazılmalıdır**
-- **Commit mesajları Türkçe olmalıdır**
-- **Kod içi yorumlar Türkçe olmalıdır**
+- **Commit mesajları İngilizce olmalıdır** (Conventional Commits formatında)
 - **Kullanıcıya gönderilen tüm mesajlar Türkçe olmalıdır**
 
 ### Proje Yapısı
@@ -374,12 +373,43 @@ SERVICE_REDIS_ENABLE=false
 
 #### Commit Mesajları
 
+**Format:** [Conventional Commits](https://www.conventionalcommits.org/) standardı kullanılır.
+
 ```
-feat: PHP extension desteği eklendi
-fix: curl bağımlılığı düzeltildi
-docs: Türkçe dokümantasyon güncellendi
-refactor: Generator fonksiyonları yeniden yapılandırıldı
+<type>: <description>
+
+[optional body]
+
+[optional footer]
 ```
+
+**Tipler:**
+
+- `feat:` - Yeni özellik
+- `fix:` - Hata düzeltmesi
+- `docs:` - Dokümantasyon değişiklikleri
+- `refactor:` - Kod yeniden yapılandırma
+- `perf:` - Performans iyileştirmeleri
+- `test:` - Test ekleme veya güncelleme
+- `chore:` - Bakım işleri
+
+**Örnekler:**
+
+```bash
+# İyi commit mesajları (İngilizce)
+feat: add PostgreSQL 15 support
+fix: resolve Traefik SSL certificate error
+docs: update installation guide for macOS
+refactor: extract common generator functions
+perf: optimize Docker image build time
+
+# Kötü commit mesajları
+update readme
+fixed bug
+improvements
+```
+
+**Not:** Commit mesajları **İngilizce** yazılmalıdır (CONTRIBUTING.md standardına uygun).
 
 ### Artifact Kuralları
 
