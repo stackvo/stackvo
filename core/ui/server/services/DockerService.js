@@ -972,11 +972,11 @@ class DockerService {
       );
 
       // 3. Regenerate docker-compose.dynamic.yml
-      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+      const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
+      console.log(`Running: ${cliScript} generate services`);
 
       const { stdout, stderr } = await execAsync(
-        "./cli/stackvo.sh generate services",
-        { cwd: rootDir }
+        `${cliScript} generate services`
       );
 
       if (stderr) {
@@ -1170,11 +1170,11 @@ class DockerService {
       );
 
       // 6. Regenerate docker-compose.dynamic.yml
-      console.log(`Running: ./cli/stackvo.sh generate services in ${rootDir}`);
+      const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
+      console.log(`Running: ${cliScript} generate services`);
 
       const { stdout, stderr } = await execAsync(
-        "./cli/stackvo.sh generate services",
-        { cwd: rootDir }
+        `${cliScript} generate services`
       );
 
       if (stderr) {
@@ -1216,12 +1216,12 @@ class DockerService {
       console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=true`);
 
       // 2. Regenerate templates
-      console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
+      const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
+      console.log(`Running: ${cliScript} generate`);
 
       try {
         const { stdout: genStdout, stderr: genStderr } = await execAsync(
-          `./cli/stackvo.sh generate`,
-          { cwd: rootDir }
+          `${cliScript} generate`
         );
 
         if (genStderr) {
@@ -1316,12 +1316,12 @@ class DockerService {
       console.log(`Updated .env: TOOLS_${toolName.toUpperCase()}_ENABLE=false`);
 
       // 2. Regenerate templates
-      console.log(`Running: ./cli/stackvo.sh generate in ${rootDir}`);
+      const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
+      console.log(`Running: ${cliScript} generate`);
 
       try {
         const { stdout: genStdout, stderr: genStderr } = await execAsync(
-          `./cli/stackvo.sh generate`,
-          { cwd: rootDir }
+          `${cliScript} generate`
         );
 
         if (genStderr) {

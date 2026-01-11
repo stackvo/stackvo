@@ -161,11 +161,11 @@ class ProjectService {
       // 5. Run generate command
       // Use STACKVO_ROOT environment variable or fallback to relative path
       const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), '..', '..');
-      console.log(`Running: ./cli/stackvo.sh generate projects in ${rootDir}`);
+      const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
+      console.log(`Running: ${cliScript} generate projects`);
       
       const { stdout, stderr } = await execAsync(
-        './cli/stackvo.sh generate projects',
-        { cwd: rootDir }
+        `${cliScript} generate projects`
       );
 
       if (stderr) {
@@ -314,11 +314,11 @@ class ProjectService {
       // 3. Regenerate docker-compose.projects.yml
       // Use STACKVO_ROOT environment variable or fallback to relative path
       const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), '..', '..');
-      console.log(`Running: ./cli/stackvo.sh generate projects in ${rootDir}`);
+      const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
+      console.log(`Running: ${cliScript} generate projects`);
       
       const { stdout, stderr } = await execAsync(
-        './cli/stackvo.sh generate projects',
-        { cwd: rootDir }
+        `${cliScript} generate projects`
       );
 
       if (stderr) {
