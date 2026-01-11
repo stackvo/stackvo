@@ -17,8 +17,8 @@ services:
 
     volumes:
       - stackvo-mariadb-data:/var/lib/mysql
-      - ./generated/configs/mariadb.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
-      - ../logs/services/mariadb:/var/log/mysql
+      - ${HOST_STACKVO_ROOT}/generated/configs/mariadb.cnf:/etc/mysql/conf.d/stackvo.cnf:ro
+      # Log volume mount removed - logs go to stdout/stderr (GEMINI.md compliance)
 
     command: >
       mariadbd

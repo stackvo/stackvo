@@ -12,7 +12,7 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - ../logs/services/zookeeper:/var/log/zookeeper
+      - ${HOST_STACKVO_ROOT}/logs/services/zookeeper:/var/log/zookeeper
     ports:
       - "2181:2181"
     networks:
@@ -36,7 +36,7 @@ services:
       KAFKA_PROCESS_ROLES: ""
     volumes:
       - stackvo-kafka-data:/var/lib/kafka/data
-      - ../logs/services/kafka:/var/log/kafka
+      - ${HOST_STACKVO_ROOT}/logs/services/kafka:/var/log/kafka
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"
 

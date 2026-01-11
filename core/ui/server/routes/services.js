@@ -2,7 +2,6 @@ import express from 'express';
 import DockerService from '../services/DockerService.js';
 
 const router = express.Router();
-const dockerService = new DockerService();
 
 /**
  * GET /api/services
@@ -10,6 +9,7 @@ const dockerService = new DockerService();
  */
 router.get('/', async (req, res) => {
   try {
+    const dockerService = req.app.get('dockerService');
     const services = await dockerService.listServices();
     res.json({
       success: true,
@@ -29,10 +29,11 @@ router.get('/', async (req, res) => {
  * Start a service container
  */
 router.post('/:containerName/start', async (req, res) => {
+  const { containerName } = req.params;
+  const dockerService = req.app.get('dockerService');
+  const io = req.app.get('io');
+  
   try {
-    const { containerName } = req.params;
-    const io = req.app.get('io');
-    
     // Emit starting event
     if (io) {
       io.emit('service:starting', { service: containerName });
@@ -73,10 +74,11 @@ router.post('/:containerName/start', async (req, res) => {
  * Stop a service container
  */
 router.post('/:containerName/stop', async (req, res) => {
+  const { containerName } = req.params;
+  const dockerService = req.app.get('dockerService');
+  const io = req.app.get('io');
+
   try {
-    const { containerName } = req.params;
-    const io = req.app.get('io');
-    
     // Emit stopping event
     if (io) {
       io.emit('service:stopping', { service: containerName });
@@ -117,10 +119,11 @@ router.post('/:containerName/stop', async (req, res) => {
  * Restart a service container
  */
 router.post('/:containerName/restart', async (req, res) => {
+  const { containerName } = req.params;
+  const dockerService = req.app.get('dockerService');
+  const io = req.app.get('io');
+
   try {
-    const { containerName } = req.params;
-    const io = req.app.get('io');
-    
     // Emit restarting event
     if (io) {
       io.emit('service:restarting', { service: containerName });
@@ -173,7 +176,7 @@ router.post('/:serviceName/enable', async (req, res) => {
       io.emit('service:enabling', { service: serviceName });
     }
     
-    const result = await dockerService.enableService(serviceName, envService);
+    const result = await dockerService.enableService(serviceName, envService, io);
     
     // Emit success event
     if (io) {
@@ -223,10 +226,11 @@ router.post('/:serviceName/disable', async (req, res) => {
       io.emit('service:disabling', { service: serviceName });
     }
     
-    const result = await dockerService.disableService(serviceName, envService);
+    const result = await dockerService.disableService(serviceName, envService, io);
     
     // Emit success event
     if (io) {
+      console.log(`SocketEmit [${serviceName}]: service:disabled`);
       io.emit('service:disabled', { 
         service: serviceName,
         configured: false,

@@ -19,7 +19,7 @@ services:
 
     volumes:
       - stackvo-cassandra-data:/var/lib/cassandra
-      - ../logs/services/cassandra:/var/log/cassandra
+      - ${HOST_STACKVO_ROOT}/logs/services/cassandra:/var/log/cassandra
 
     ports:
       - "{{ HOST_PORT_CASSANDRA | default('9042') }}:9042"

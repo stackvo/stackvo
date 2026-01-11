@@ -106,6 +106,36 @@ EOF
 }
 
 ##
+# Create log directory for a service
+#
+# This ensures Docker can mount the log volumes without permission errors
+# Works on macOS, Linux, and Windows (WSL)
+#
+# Parameters:
+#   $1 - Service name (e.g., "blackfire", "mysql", "cassandra")
+##
+create_service_log_directory() {
+    local service_name=$1
+    local log_dir="${ROOT_DIR}/logs/services/${service_name}"
+    
+    # Create directory if it doesn't exist
+    if [[ ! -d "${log_dir}" ]]; then
+        mkdir -p "${log_dir}"
+        
+        # Set ownership (macOS, Linux, WSL compatible)
+        # Use sudo only if HOST_UID/HOST_GID are set and different from current user
+        if [[ -n "${HOST_UID}" ]] && [[ -n "${HOST_GID}" ]]; then
+            # Try without sudo first (works on most systems)
+            chown -R "${HOST_UID}:${HOST_GID}" "${log_dir}" 2>/dev/null || \
+            # Fallback to sudo if needed (macOS, some Linux)
+            sudo chown -R "${HOST_UID}:${HOST_GID}" "${log_dir}" 2>/dev/null || \
+            # If both fail, just log a warning (WSL might not need it)
+            log_warn "Could not set ownership for ${log_dir}"
+        fi
+    fi
+}
+
+##
 # Generates dynamic docker-compose.dynamic.yml file (services)
 #
 # Returns:
@@ -162,7 +192,28 @@ generate_dynamic_compose() {
     for service_def in "${services[@]}"; do
         local enable_flag="${service_def%%:*}"
         local template_path="${service_def##*:}"
+        
+        # Include service template
         include_module "$enable_flag" "$template_path" >> "$output"
+        
+        # Create log directory for services that have log volumes
+        # Extract service name from template path (e.g., "services/mysql/..." -> "mysql")
+        if [[ "$template_path" == services/* ]]; then
+            local service_name
+            service_name=$(echo "$template_path" | cut -d'/' -f2)
+            
+            # Check if service is enabled
+            eval "local enabled=\${${enable_flag}:-false}"
+            if [ "$enabled" = "true" ]; then
+                # Create log directory for this service
+                create_service_log_directory "$service_name"
+                
+                # Special case: Kafka also needs zookeeper log directory
+                if [ "$service_name" = "kafka" ]; then
+                    create_service_log_directory "zookeeper"
+                fi
+            fi
+        fi
     done
     
     # Tools container - only if enabled AND at least one tool is active

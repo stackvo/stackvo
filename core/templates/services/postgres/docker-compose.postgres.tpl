@@ -17,7 +17,7 @@ services:
 
     volumes:
       - stackvo-postgres-data:/var/lib/postgresql/data/pgdata
-      - ../logs/services/postgres:/var/log/postgresql
+      - ${HOST_STACKVO_ROOT}/logs/services/postgres:/var/log/postgresql
 
     ports:
       - "{{ HOST_PORT_POSTGRES | default('5432') }}:5432"

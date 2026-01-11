@@ -13,8 +13,8 @@ services:
 
     volumes:
       - stackvo-redis-data:/data
-      - ./generated/configs/redis.conf:/etc/redis/redis.conf:ro
-      - ../logs/services/redis:/var/log/redis
+      - ${HOST_STACKVO_ROOT}/generated/configs/redis.conf:/etc/redis/redis.conf:ro
+      - ${HOST_STACKVO_ROOT}/logs/services/redis:/var/log/redis
 
     ports:
       - "{{ HOST_PORT_REDIS | default('6379') }}:6379"

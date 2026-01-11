@@ -18,7 +18,7 @@ services:
     volumes:
       - stackvo-grafana-data:/var/lib/grafana
       - stackvo-grafana-config:/etc/grafana
-      - ../logs/services/grafana:/var/log/grafana
+      - ${HOST_STACKVO_ROOT}/logs/services/grafana:/var/log/grafana
 
     ports:
       - "{{ HOST_PORT_GRAFANA | default('3001') }}:3000"

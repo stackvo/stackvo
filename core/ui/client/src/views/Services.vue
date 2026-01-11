@@ -397,6 +397,19 @@
         </v-card-text>
       </v-card>
     </v-dialog>
+
+    <!-- Error Snackbar -->
+    <v-snackbar
+      v-model="showError"
+      color="error"
+      timeout="5000"
+      location="top"
+    >
+      {{ errorMessage }}
+      <template v-slot:actions>
+        <v-btn variant="text" @click="showError = false">Close</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
@@ -414,6 +427,10 @@ const loadingServices = ref({});
 
 // WebSocket for realtime status updates
 const socket = ref(null);
+
+// Error Snackbar state
+const showError = ref(false);
+const errorMessage = ref('');
 
 // Progress dialog for enable/disable operations
 const showProgress = ref(false);
@@ -444,6 +461,8 @@ async function startService(containerName) {
     await servicesStore.startService(containerName);
   } catch (error) {
     console.error('Failed to start service:', error);
+    errorMessage.value = `Failed to start: ${error.message}`;
+    showError.value = true;
   } finally {
     delete loadingServices.value[containerName];
   }
@@ -455,6 +474,8 @@ async function stopService(containerName) {
     await servicesStore.stopService(containerName);
   } catch (error) {
     console.error('Failed to stop service:', error);
+    errorMessage.value = `Failed to stop: ${error.message}`;
+    showError.value = true;
   } finally {
     delete loadingServices.value[containerName];
   }
@@ -466,6 +487,8 @@ async function restartService(containerName) {
     await servicesStore.restartService(containerName);
   } catch (error) {
     console.error('Failed to restart service:', error);
+    errorMessage.value = `Failed to restart: ${error.message}`;
+    showError.value = true;
   } finally {
     delete loadingServices.value[containerName];
   }
@@ -473,10 +496,14 @@ async function restartService(containerName) {
 
 async function enableService(serviceName) {
   loadingServices.value[serviceName] = 'enable';
+  // Clear steps when starting new operation
+  progressSteps.value = [];
   try {
     await servicesStore.enableService(serviceName);
   } catch (error) {
     console.error('Failed to enable service:', error);
+    errorMessage.value = `Failed to enable: ${error.message}`;
+    showError.value = true;
   } finally {
     delete loadingServices.value[serviceName];
   }
@@ -484,10 +511,14 @@ async function enableService(serviceName) {
 
 async function disableService(serviceName) {
   loadingServices.value[serviceName] = 'disable';
+  // Clear steps when starting new operation
+  progressSteps.value = [];
   try {
     await servicesStore.disableService(serviceName);
   } catch (error) {
     console.error('Failed to disable service:', error);
+    errorMessage.value = `Failed to disable: ${error.message}`;
+    showError.value = true;
   } finally {
     delete loadingServices.value[serviceName];
   }
@@ -505,31 +536,62 @@ onMounted(async () => {
     showProgress.value = true;
     progressOperation.value = "Enabling";
     progressService.value = data.service;
-    progressSteps.value = [
-      { message: "Updating .env configuration...", status: "running" },
-      { message: "Generating Docker Compose files...", status: "pending" },
-      { message: "Starting container...", status: "pending" },
-    ];
+    // Initial steps placeholder, will be updated by service:progress
+    if (progressSteps.value.length === 0) {
+      progressSteps.value = [
+        { id: 'init', message: "Initializing...", status: "running" }
+      ];
+    }
+  });
+
+  // NEW: Dynamic progress updates from backend
+  socket.value.on("service:progress", (data) => {
+    // data = { service, step, status, message }
+    console.log("Service progress:", data);
+    
+    if (!showProgress.value) {
+        showProgress.value = true;
+        progressService.value = data.service;
+        progressOperation.value = "Processing"; 
+    }
+    
+    // Find existing step or add new one
+    const existingStepIndex = progressSteps.value.findIndex(s => s.id === data.step);
+    
+    if (existingStepIndex !== -1) {
+        // Update existing step
+        progressSteps.value[existingStepIndex].status = data.status;
+        progressSteps.value[existingStepIndex].message = data.message;
+    } else {
+        // Add new step
+        progressSteps.value.push({
+            id: data.step,
+            message: data.message,
+            status: data.status
+        });
+    }
   });
   
   socket.value.on("service:enabled", (data) => {
     console.log("Service enabled:", data.service);
     
-    // Update progress steps
-    progressSteps.value = [
-      { message: "Updating .env configuration...", status: "done" },
-      { message: "Generating Docker Compose files...", status: "done" },
-      { message: "Starting container...", status: "done" },
-    ];
+    // update all steps to done
+    progressSteps.value.forEach(step => step.status = 'done');
+    // Add completion step if empty
+    if (progressSteps.value.length === 0) {
+         progressSteps.value.push({ id: 'done', message: "Service enabled successfully", status: "done" });
+    }
     
-    // Close dialog immediately
-    showProgress.value = false;
-    progressSteps.value = [];
-    
-    // Wait for dialog to disappear, then reload services
-    nextTick(async () => {
-      await servicesStore.loadServices();
-    });
+    setTimeout(() => {
+        // Close dialog
+        showProgress.value = false;
+        progressSteps.value = [];
+        
+        // Refresh services
+        nextTick(async () => {
+          await servicesStore.loadServices();
+        });
+    }, 1000); // Wait 1s to show completion
   });
   
   socket.value.on("service:disabling", (data) => {
@@ -537,31 +599,25 @@ onMounted(async () => {
     showProgress.value = true;
     progressOperation.value = "Disabling";
     progressService.value = data.service;
-    progressSteps.value = [
-      { message: "Stopping container...", status: "running" },
-      { message: "Updating .env configuration...", status: "pending" },
-      { message: "Generating Docker Compose files...", status: "pending" },
-    ];
+    if (progressSteps.value.length === 0) {
+      progressSteps.value = [
+        { id: 'init', message: "Initializing...", status: "running" }
+      ];
+    }
   });
   
   socket.value.on("service:disabled", (data) => {
     console.log("Service disabled:", data.service);
     
-    // Update progress steps
-    progressSteps.value = [
-      { message: "Stopping container...", status: "done" },
-      { message: "Updating .env configuration...", status: "done" },
-      { message: "Generating Docker Compose files...", status: "done" },
-    ];
+    progressSteps.value.forEach(step => step.status = 'done');
     
-    // Close dialog immediately
-    showProgress.value = false;
-    progressSteps.value = [];
-    
-    // Wait for dialog to disappear, then reload services
-    nextTick(async () => {
-      await servicesStore.loadServices();
-    });
+    setTimeout(() => {
+        showProgress.value = false;
+        progressSteps.value = [];
+        nextTick(async () => {
+          await servicesStore.loadServices();
+        });
+    }, 1000);
   });
   
   socket.value.on("service:starting", (data) => {
@@ -570,26 +626,22 @@ onMounted(async () => {
     progressOperation.value = "Starting";
     progressService.value = data.service;
     progressSteps.value = [
-      { message: "Starting container...", status: "running" },
+      { id: 'start', message: "Starting container...", status: "running" },
     ];
   });
   
   socket.value.on("service:started", (data) => {
     console.log("Service started:", data.service);
-    
-    // Update progress steps
     progressSteps.value = [
-      { message: "Starting container...", status: "done" },
+      { id: 'start', message: "Service started successfully", status: "done" },
     ];
-    
-    // Close dialog immediately
-    showProgress.value = false;
-    progressSteps.value = [];
-    
-    // Wait for dialog to disappear, then reload services
-    nextTick(async () => {
-      await servicesStore.loadServices();
-    });
+    setTimeout(() => {
+        showProgress.value = false;
+        progressSteps.value = [];
+        nextTick(async () => {
+          await servicesStore.loadServices();
+        });
+    }, 1000);
   });
   
   socket.value.on("service:stopping", (data) => {
@@ -598,26 +650,22 @@ onMounted(async () => {
     progressOperation.value = "Stopping";
     progressService.value = data.service;
     progressSteps.value = [
-      { message: "Stopping container...", status: "running" },
+      { id: 'stop', message: "Stopping container...", status: "running" },
     ];
   });
   
   socket.value.on("service:stopped", (data) => {
     console.log("Service stopped:", data.service);
-    
-    // Update progress steps
     progressSteps.value = [
-      { message: "Stopping container...", status: "done" },
+      { id: 'stop', message: "Service stopped successfully", status: "done" },
     ];
-    
-    // Close dialog immediately
-    showProgress.value = false;
-    progressSteps.value = [];
-    
-    // Wait for dialog to disappear, then reload services
-    nextTick(async () => {
-      await servicesStore.loadServices();
-    });
+    setTimeout(() => {
+        showProgress.value = false;
+        progressSteps.value = [];
+        nextTick(async () => {
+          await servicesStore.loadServices();
+        });
+    }, 1000);
   });
   
   socket.value.on("service:restarting", (data) => {
@@ -626,32 +674,39 @@ onMounted(async () => {
     progressOperation.value = "Restarting";
     progressService.value = data.service;
     progressSteps.value = [
-      { message: "Stopping container...", status: "running" },
-      { message: "Starting container...", status: "pending" },
+      { id: 'restart', message: "Restarting service...", status: "running" },
     ];
   });
   
   socket.value.on("service:restarted", (data) => {
     console.log("Service restarted:", data.service);
-    
-    // Update progress steps
     progressSteps.value = [
-      { message: "Stopping container...", status: "done" },
-      { message: "Starting container...", status: "done" },
+      { id: 'restart', message: "Service restarted successfully", status: "done" },
     ];
-    
-    // Close dialog immediately
-    showProgress.value = false;
-    progressSteps.value = [];
-    
-    // Wait for dialog to disappear, then reload services
-    nextTick(async () => {
-      await servicesStore.loadServices();
-    });
+    setTimeout(() => {
+        showProgress.value = false;
+        progressSteps.value = [];
+        nextTick(async () => {
+          await servicesStore.loadServices();
+        });
+    }, 1000);
   });
   
   socket.value.on("service:error", (data) => {
-    console.error("Service error:", data.service, data.error);
+    console.error("Service error:", data.service, data.message);
+    
+    // Stop loading state if checking
+    if (data.service && loadingServices.value[data.service]) {
+        delete loadingServices.value[data.service];
+    }
+
+    // Close progress if open
+    showProgress.value = false;
+    progressSteps.value = [];
+    
+    // Show Snackbar
+    errorMessage.value = `Error: ${data.message || 'Unknown error'}`;
+    showError.value = true;
   });
 });
 

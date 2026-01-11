@@ -902,16 +902,31 @@ class DockerService {
    * Enable a service
    * @param {string} serviceName - Service name
    * @param {Object} envService - EnvService instance
+   * @param {Object} io - Socket.io instance
    * @returns {Promise<Object>}
    */
-  async enableService(serviceName, envService) {
+  async enableService(serviceName, envService, io = null) {
     const { execAsync } = await import("../utils/exec.js");
     const path = await import("path");
     const fs = await import("fs/promises");
 
     const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
 
+    // Helper to emit progress
+    const emitProgress = (step, status, message) => {
+      if (io) {
+        io.emit('service:progress', { 
+          service: serviceName, 
+          step, 
+          status, 
+          message 
+        });
+      }
+    };
+
     try {
+      emitProgress('dependency', 'running', 'Checking dependencies...');
+      
       // 0. Check and auto-start required dependencies
       const configPath = path.join(process.cwd(), 'config', 'serviceDependencies.json');
       let dependencies = {};
@@ -933,9 +948,10 @@ class DockerService {
           const isRunning = await this.isServiceRunning(dep);
           if (!isRunning) {
             console.log(`Auto-starting required dependency: ${dep}`);
+            emitProgress('dependency', 'running', `Auto-starting dependency: ${dep}...`);
             try {
               // Recursively enable the dependency
-              await this.enableService(dep, envService);
+              await this.enableService(dep, envService, io);
               console.log(`Successfully started dependency: ${dep}`);
             } catch (depError) {
               console.error(`Failed to start dependency ${dep}:`, depError.message);
@@ -946,6 +962,7 @@ class DockerService {
           }
         }
       }
+      emitProgress('dependency', 'done', 'Dependencies checked');
 
       // 1. Create log directory for the service
       const logDir = path.join(rootDir, "logs", "services", serviceName);
@@ -966,12 +983,28 @@ class DockerService {
       }
 
       // 2. Update .env file
+      emitProgress('env', 'running', 'Updating configuration...');
       await envService.updateServiceEnable(serviceName, true);
       console.log(
         `Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=true`
       );
 
+      // 2.5. Verify .env file was updated (ensure file is flushed to disk)
+      try {
+        const envContent = await fs.readFile(path.join(rootDir, '.env'), 'utf-8');
+        const envVar = `SERVICE_${serviceName.toUpperCase()}_ENABLE`;
+        if (!envContent.includes(`${envVar}=true`)) {
+          throw new Error(`.env file not updated correctly: ${envVar}=true not found`);
+        }
+        console.log(`Verified .env file contains: ${envVar}=true`);
+      } catch (verifyError) {
+        console.error('Failed to verify .env update:', verifyError.message);
+        throw new Error(`Failed to verify .env update: ${verifyError.message}`);
+      }
+      emitProgress('env', 'done', 'Configuration updated');
+
       // 3. Regenerate docker-compose.dynamic.yml
+      emitProgress('generate', 'running', 'Generating Docker Compose files...');
       const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
       console.log(`Running: ${cliScript} generate services`);
 
@@ -983,18 +1016,44 @@ class DockerService {
         console.error("Generate stderr:", stderr);
       }
       console.log("Generate stdout:", stdout);
+      emitProgress('generate', 'done', 'Docker Compose files generated');
 
-      // 4. Build and start the service with all compose files
+      // 4. Remove existing container(s) if they exist (to apply new volume mounts)
+      // This ensures fresh containers with correct volume paths
+      emitProgress('container', 'running', 'Preparing container...');
+      const containerName = `stackvo-${serviceName}`;
+      try {
+        console.log(`Removing existing container: ${containerName}`);
+        await execAsync(`docker rm -f ${containerName} 2>/dev/null || true`, { cwd: rootDir });
+        console.log(`Removed existing container: ${containerName}`);
+        
+        // Special case: Kafka also has zookeeper container
+        if (serviceName === 'kafka') {
+          console.log(`Removing zookeeper container`);
+          await execAsync(`docker rm -f stackvo-zookeeper 2>/dev/null || true`, { cwd: rootDir });
+          console.log(`Removed zookeeper container`);
+        }
+      } catch (rmError) {
+        // Ignore error if container doesn't exist
+        console.log(`No existing container to remove or removal failed: ${rmError.message}`);
+      }
+
+      // 5. Build and start the service with all compose files
       // Note: Use --profile to enable services with profiles
+      // IMPORTANT: Use HOST_STACKVO_ROOT for cwd because docker-compose runs on host via Docker socket
+      // and paths in compose files are relative to the working directory
+      emitProgress('container', 'running', 'Building and starting container...');
       console.log(`Building and starting service: ${serviceName}`);
+      console.log(`Using working directory: ${rootDir}`); // Using container path for execution context
       const upResult = await execAsync(
         `docker-compose -f generated/stackvo.yml -f generated/docker-compose.dynamic.yml --profile ${serviceName} up -d --build ${serviceName} 2>&1`,
         { cwd: rootDir }
       );
 
       console.log("Service started:", upResult.stdout);
+      emitProgress('container', 'done', 'Container started successfully');
 
-      // 5. Clear cache
+      // 6. Clear cache
       this.cache.flushAll();
       console.log("Cache cleared");
 
@@ -1022,14 +1081,27 @@ class DockerService {
    * Disable a service
    * @param {string} serviceName - Service name
    * @param {Object} envService - EnvService instance
+   * @param {Object} io - Socket.io instance
    * @returns {Promise<Object>}
    */
-  async disableService(serviceName, envService) {
+  async disableService(serviceName, envService, io = null) {
     const { execAsync } = await import("../utils/exec.js");
     const path = await import("path");
     const fs = await import("fs/promises");
 
     const rootDir = process.env.STACKVO_ROOT || path.join(process.cwd(), "..", "..");
+
+    // Helper to emit progress
+    const emitProgress = (step, status, message) => {
+      if (io) {
+        io.emit('service:progress', { 
+          service: serviceName, 
+          step, 
+          status, 
+          message 
+        });
+      }
+    };
 
     try {
       const containerName = `stackvo-${serviceName}`;
@@ -1046,6 +1118,7 @@ class DockerService {
       }
 
       // 2. Stop and remove container
+      emitProgress('container', 'running', 'Stopping and removing container...');
       try {
         const container = this.docker.getContainer(containerName);
 
@@ -1069,6 +1142,30 @@ class DockerService {
         );
         // Continue even if container doesn't exist
       }
+
+      // Special case: Kafka also has zookeeper container
+      if (serviceName === 'kafka') {
+        try {
+          const zookeeperContainer = this.docker.getContainer('stackvo-zookeeper');
+          
+          try {
+            await zookeeperContainer.stop();
+            console.log(`Zookeeper container stopped`);
+          } catch (stopError) {
+            console.log(`Zookeeper container already stopped or not running`);
+          }
+          
+          await zookeeperContainer.remove();
+          console.log(`Zookeeper container removed`);
+        } catch (zookeeperError) {
+          console.warn(
+            `Could not remove zookeeper container:`,
+            zookeeperError.message
+          );
+          // Continue even if container doesn't exist
+        }
+      }
+      emitProgress('container', 'done', 'Container removed');
 
       // 3. Remove Docker image
       try {
@@ -1164,23 +1261,29 @@ class DockerService {
       }
 
       // 5. Update .env file
+      emitProgress('env', 'running', 'Updating configuration...');
       await envService.updateServiceEnable(serviceName, false);
       console.log(
         `Updated .env: SERVICE_${serviceName.toUpperCase()}_ENABLE=false`
       );
+      emitProgress('env', 'done', 'Configuration updated');
 
       // 6. Regenerate docker-compose.dynamic.yml
+      emitProgress('generate', 'running', 'Generating Docker Compose files...');
       const cliScript = path.join(rootDir, 'core', 'cli', 'stackvo.sh');
       console.log(`Running: ${cliScript} generate services`);
+      console.log(`Using working directory: ${rootDir}`);
 
       const { stdout, stderr } = await execAsync(
-        `${cliScript} generate services`
+        `${cliScript} generate services`,
+        { cwd: rootDir }
       );
 
       if (stderr) {
         console.error("Generate stderr:", stderr);
       }
       console.log("Generate stdout:", stdout);
+      emitProgress('generate', 'done', 'Docker Compose files generated');
 
       // 7. Clear cache
       this.cache.flushAll();

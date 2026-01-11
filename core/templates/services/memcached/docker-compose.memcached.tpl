@@ -20,7 +20,7 @@ services:
       - "{{ HOST_PORT_MEMCACHED | default('11211') }}:11211"
 
     volumes:
-      - ../logs/services/memcached:/var/log/memcached
+      - ${HOST_STACKVO_ROOT}/logs/services/memcached:/var/log/memcached
 
     networks:
       - "{{ DOCKER_DEFAULT_NETWORK }}"

@@ -16,7 +16,7 @@ services:
 
     volumes:
       - stackvo-kibana-data:/usr/share/kibana/data
-      - ../logs/services/kibana:/usr/share/kibana/logs
+      - ${HOST_STACKVO_ROOT}/logs/services/kibana:/usr/share/kibana/logs
 
     ports:
       - "{{ HOST_PORT_KIBANA | default('5601') }}:5601"

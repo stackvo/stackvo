@@ -13,67 +13,152 @@
 
 #### CLI Komutları
 
-- Tüm CLI komutları `./cli/stackvo.sh` ile başlar
+- Tüm CLI komutları `./stackvo.sh` ile başlar (root dizinindeki wrapper script)
+- Wrapper script, gerçek CLI'yi (`core/cli/stackvo.sh`) çağırır
 - Ana komutlar:
   - `generate` - Tüm konfigürasyonları oluşturur
   - `generate projects` - Sadece proje containerlarını oluşturur
   - `generate services` - Sadece servisleri oluşturur
+  - `install` - Stackvo'yu kurar ve başlatır
+  - `uninstall` - Stackvo'yu tamamen kaldırır
   - `up` - Tüm servisleri başlatır
   - `down` - Tüm servisleri durdurur
   - `restart` - Servisleri yeniden başlatır
+  - `pull` - Docker image'larını günceller
 
 #### Dizin Yapısı
 
 ```
 stackvo/
-├── cli/                    # CLI komutları ve kütüphaneler
-│   ├── commands/          # Ana komutlar (generate.sh, up.sh, etc.)
-│   └── lib/               # Yardımcı kütüphaneler
-│       ├── generators/    # Generator modülleri
-│       ├── constants.sh   # Sabitler
-│       ├── logger.sh      # Log fonksiyonları
-│       └── env-loader.sh  # Environment yükleyici
-├── core/
-│   ├── compose/           # Base docker-compose dosyaları
-│   └── templates/         # Template dosyaları
-│       ├── servers/       # Web server şablonları (nginx, apache, caddy)
-│       ├── services/      # Servis şablonları (mysql, redis, etc.)
-│       └── ui/            # UI şablonları
-├── generated/             # Otomatik oluşturulan dosyalar (gitignore'da)
-│   ├── projects/          # Proje Dockerfile'ları
-│   ├── configs/           # Nginx/Apache konfigürasyonları
-│   ├── stackvo.yml        # Base compose
-│   ├── docker-compose.dynamic.yml    # Dinamik servisler
-│   └── docker-compose.projects.yml   # Proje containerları
-├── projects/              # Kullanıcı projeleri
-│   └── {proje-adı}/
-│       ├── stackvo.json   # Proje konfigürasyonu
-│       └── public/        # Document root
-└── .env                   # Ana konfigürasyon dosyası
+├── stackvo.sh                          # CLI wrapper script (root entry point)
+├── .env.example                        # Örnek konfigürasyon dosyası
+├── core/                               # Stackvo çekirdek dosyaları
+│   ├── cli/                            # CLI komutları ve kütüphaneler
+│   │   ├── stackvo.sh                  # Ana CLI script (gerçek entry point)
+│   │   ├── commands/                   # Ana komutlar
+│   │   │   ├── generate.sh             # Generate komutu
+│   │   │   ├── install.sh              # Install komutu
+│   │   │   ├── uninstall.sh            # Uninstall komutu
+│   │   │   └── pull.sh                 # Pull komutu
+│   │   ├── lib/                        # Yardımcı kütüphaneler
+│   │   │   ├── generators/             # Generator modülleri
+│   │   │   │   ├── project.sh          # Proje generator
+│   │   │   │   ├── compose.sh          # Compose generator
+│   │   │   │   ├── traefik.sh          # Traefik generator
+│   │   │   │   ├── config.sh           # Config generator
+│   │   │   │   ├── tools.sh            # Tools generator
+│   │   │   │   ├── stackvo-ui.sh       # UI generator
+│   │   │   │   ├── project/            # Proje alt-modülleri
+│   │   │   │   └── common/             # Ortak fonksiyonlar
+│   │   │   ├── uninstallers/           # Uninstaller modülleri
+│   │   │   ├── constants.sh            # Sabitler
+│   │   │   ├── logger.sh               # Log fonksiyonları
+│   │   │   ├── env-loader.sh           # Environment yükleyici
+│   │   │   ├── common.sh               # Ortak yardımcı fonksiyonlar
+│   │   │   ├── php-extensions.sh       # PHP extension yönetimi
+│   │   │   └── template-processor.sh   # Template işleyici
+│   │   └── utils/                      # Yardımcı araçlar
+│   ├── ui/                             # Web UI kaynak kodları
+│   │   ├── client/                     # Vue.js frontend
+│   │   │   ├── src/                    # Kaynak kodlar
+│   │   │   ├── public/                 # Statik dosyalar
+│   │   │   └── package.json
+│   │   ├── server/                     # Node.js backend (Express)
+│   │   │   ├── routes/                 # API route'ları
+│   │   │   ├── services/               # Backend servisleri
+│   │   │   ├── utils/                  # Yardımcı fonksiyonlar
+│   │   │   └── index.js                # Server entry point
+│   │   ├── dist/                       # Build output (production)
+│   │   ├── package.json                # NPM dependencies
+│   │   ├── vite.config.js              # Vite konfigürasyonu
+│   │   └── README.md                   # UI dokümantasyonu
+│   ├── compose/                        # Base docker-compose
+│   │   └── stackvo.yml                 # Base compose template
+│   └── templates/                      # Template dosyaları
+│       ├── servers/                    # Web server şablonları
+│       │   ├── nginx/                  # Nginx konfigürasyonları
+│       │   ├── apache/                 # Apache konfigürasyonları
+│       │   └── caddy/                  # Caddy konfigürasyonları
+│       ├── services/                   # Servis şablonları
+│       │   ├── mysql/                  # MySQL
+│       │   ├── mariadb/                # MariaDB
+│       │   ├── postgres/               # PostgreSQL
+│       │   ├── redis/                  # Redis
+│       │   ├── mongo/                  # MongoDB
+│       │   ├── elasticsearch/          # Elasticsearch
+│       │   ├── kibana/                 # Kibana
+│       │   ├── rabbitmq/               # RabbitMQ
+│       │   ├── kafka/                  # Kafka
+│       │   ├── memcached/              # Memcached
+│       │   ├── mailhog/                # MailHog
+│       │   ├── blackfire/              # Blackfire
+│       │   └── ...                     # Diğer servisler
+│       └── ui/                         # UI şablonları
+├── docs/                               # MkDocs dokümantasyonu (gitignore'da)
+│   ├── en/                             # İngilizce dokümantasyon
+│   │   ├── index.md
+│   │   ├── getting-started/
+│   │   ├── guides/
+│   │   └── references/
+│   ├── tr/                             # Türkçe dokümantasyon
+│   │   ├── index.md
+│   │   ├── getting-started/
+│   │   ├── guides/
+│   │   └── references/
+│   ├── assets/                         # Dokümantasyon varlıkları (gitignore'da)
+│   ├── screenshots/                    # Ekran görüntüleri (gitignore'da)
+│   ├── overrides/                      # MkDocs tema özelleştirmeleri (gitignore'da)
+│   └── scripts/                        # Dokümantasyon scriptleri (gitignore'da)
+│       ├── generate-changelog.sh
+│       └── release.sh
+├── logs/                               # Log dizini (gitignore'da)
+│   └── services/                       # Servis log'ları
+│       ├── mysql/
+│       ├── redis/
+│       ├── nginx/
+│       └── ...
+├── generated/                          # Otomatik oluşturulan dosyalar (gitignore'da)
+│   ├── projects/                       # Proje Dockerfile'ları
+│   │   └── {proje-adı}/
+│   │       └── Dockerfile
+│   ├── configs/                        # Web server konfigürasyonları
+│   │   ├── {proje-adı}-nginx.conf
+│   │   ├── {proje-adı}-apache.conf
+│   │   └── {proje-adı}-caddy.conf
+│   ├── stackvo.yml                     # Base compose (Traefik)
+│   ├── docker-compose.dynamic.yml      # Dinamik servisler
+│   └── docker-compose.projects.yml     # Proje containerları
+└── projects/                           # Kullanıcı projeleri
+    └── {proje-adı}/
+        ├── stackvo.json                # Proje konfigürasyonu
+        ├── .stackvo/                   # Özel konfigürasyonlar (opsiyonel)
+        │   ├── Dockerfile              # Custom Dockerfile
+        │   └── nginx.conf              # Custom nginx config
+        └── public/                     # Document root (varsayılan)
 ```
 
 ### Kod Yazım Kuralları
 
 #### Bash Script Kuralları
 
-1. **Fonksiyon Başlıkları**: Her fonksiyon öncesi Türkçe açıklama bloğu ekle
+1. **Fonksiyon Başlıkları**: Her fonksiyon öncesi İngilizce açıklama bloğu ekle
 
    ```bash
    ##
-   # Proje containerlarını oluşturur
+   # Generate project containers
    #
-   # Parametreler:
-   #   $1 - Proje adı
-   #   $2 - PHP versiyonu
+   # Parameters:
+   #   $1 - Project name
+   #   $2 - PHP version
    ##
    ```
 
-2. **Log Mesajları**: Türkçe log mesajları kullan
+2. **Log Mesajları**: İngilizce log mesajları kullan
 
    ```bash
-   log_info "Proje containerları oluşturuluyor..."
-   log_success "Dockerfile başarıyla oluşturuldu"
-   log_error "Konfigürasyon dosyası bulunamadı"
+   log_info "Generating project containers..."
+   log_success "Dockerfile created successfully"
+   log_error "Configuration file not found"
    ```
 
 3. **Değişken İsimlendirme**: İngilizce snake_case kullan
@@ -191,34 +276,29 @@ services:
 
 ##### 2. Log Volume Mount Kuralları
 
-**KURAL**: Servislerde log volume mount kullanılmamalıdır. Log'lar stdout/stderr'a yazılmalıdır.
+**KURAL**: Servis log'ları `logs/services/{service-name}/` dizinine mount edilmelidir.
 
-**Neden**:
+**Dizin Yapısı**:
 
-- Permission sorunları yaratıyor
-- Container'lar farklı kullanıcılarla çalışıyor
-- Docker logs ile zaten erişilebilir
-
-**Etkilenen Servisler**:
-
-- ✅ Kong (log volume mount kaldırıldı)
+```
+stackvo/
+└── logs/                   # Log dizini (gitignore'da)
+    └── services/           # Servis log'ları
+        ├── mysql/
+        ├── redis/
+        ├── nginx/
+        └── ...
+```
 
 **Doğru Kullanım**:
 
 ```yaml
-environment:
-  KONG_PROXY_ACCESS_LOG: "/dev/stdout"
-  KONG_ADMIN_ACCESS_LOG: "/dev/stdout"
-  KONG_PROXY_ERROR_LOG: "/dev/stderr"
-  KONG_ADMIN_ERROR_LOG: "/dev/stderr"
-```
-
-**Yanlış Kullanım**:
-
-```yaml
 volumes:
-  - ../logs/services/kong:/usr/local/kong/logs # ❌ Permission sorunları
+  - ../logs/services/mysql:/var/log/mysql
+  - ../logs/services/nginx:/var/log/nginx
 ```
+
+**Not**: Docker Compose relative path'leri compose dosyasının bulunduğu dizine göre resolve eder. `generated/*.yml` dosyaları için `../logs` kullanılmalıdır (bir üst dizin).
 
 ##### 3. Config Dosya Yolu Kuralları
 
