@@ -15,7 +15,7 @@ class ProjectService {
    * @param {Object} projectData - Project configuration
    * @returns {Promise<Object>} Created project info
    */
-  async createProject(projectData) {
+  async createProject(projectData, io = null) {
     const { 
       name, 
       domain, 
@@ -165,7 +165,8 @@ class ProjectService {
       console.log(`Running: ${cliScript} generate projects`);
       
       const { stdout, stderr } = await execAsync(
-        `${cliScript} generate projects`
+        `${cliScript} generate projects`,
+        { cwd: rootDir }
       );
 
       if (stderr) {
@@ -194,16 +195,21 @@ class ProjectService {
         // Don't throw error, just log warning - project can still work
       }
 
-      // 6. Build and start container (buildContainer does both: build + docker-compose up)
-      console.log(`Building and starting container for project: ${name}`);
-      const buildResult = await this.docker.buildContainer(name);
+      // 6. Build and start container in background
+      console.log(`Building and starting container for project: ${name} (Background)`);
       
-      if (!buildResult.success) {
-        console.error('Build failed:', buildResult.message);
-        throw new Error(`Failed to build container: ${buildResult.message}`);
-      }
+      // Don't await build - let it run in background and emit socket events
+      this.docker.buildContainer(name, io).catch(buildError => {
+        console.error('Background build failed:', buildError);
+        if (io) {
+          io.emit('project:error', { 
+            project: name, 
+            error: `Build failed: ${buildError.message}` 
+          });
+        }
+      });
       
-      console.log('Build and start successful:', buildResult.message);
+      console.log('Project definitions created, build started in background');
 
       return {
         name,
@@ -318,7 +324,8 @@ class ProjectService {
       console.log(`Running: ${cliScript} generate projects`);
       
       const { stdout, stderr } = await execAsync(
-        `${cliScript} generate projects`
+        `${cliScript} generate projects`,
+        { cwd: rootDir }
       );
 
       if (stderr) {

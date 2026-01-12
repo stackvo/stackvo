@@ -3,8 +3,6 @@ import DockerService from '../services/DockerService.js';
 import ProjectService from '../services/ProjectService.js';
 
 const router = express.Router();
-const dockerService = new DockerService();
-const projectService = new ProjectService(dockerService);
 
 /**
  * GET /api/projects
@@ -12,6 +10,7 @@ const projectService = new ProjectService(dockerService);
  */
 router.get('/', async (req, res) => {
   try {
+    const dockerService = req.app.get('dockerService');
     const projects = await dockerService.listProjects();
     res.json({
       success: true,
@@ -34,6 +33,7 @@ router.post('/:containerName/start', async (req, res) => {
   try {
     const { containerName } = req.params;
     const io = req.app.get('io');
+    const dockerService = req.app.get('dockerService');
     const fullContainerName = `stackvo-${containerName}`;
     
     // Emit starting event
@@ -79,6 +79,7 @@ router.post('/:containerName/stop', async (req, res) => {
   try {
     const { containerName } = req.params;
     const io = req.app.get('io');
+    const dockerService = req.app.get('dockerService');
     const fullContainerName = `stackvo-${containerName}`;
     
     // Emit stopping event
@@ -124,6 +125,7 @@ router.post('/:containerName/restart', async (req, res) => {
   try {
     const { containerName } = req.params;
     const io = req.app.get('io');
+    const dockerService = req.app.get('dockerService');
     const fullContainerName = `stackvo-${containerName}`;
     
     // Emit restarting event
@@ -168,6 +170,7 @@ router.post('/:projectName/build', async (req, res) => {
   try {
     const { projectName } = req.params;
     const io = req.app.get('io');  // Get Socket.io instance
+    const dockerService = req.app.get('dockerService');
     
     // Debug: Check if io is available
     console.log(`[BUILD] Starting build for ${projectName}`);
@@ -203,6 +206,8 @@ router.post('/create', async (req, res) => {
   try {
     const projectData = req.body;
     const io = req.app.get('io');
+    const dockerService = req.app.get('dockerService');
+    const projectService = new ProjectService(dockerService);
     
     // Validation
     if (!projectData.name || !projectData.runtime || !projectData.version) {
@@ -218,7 +223,7 @@ router.post('/create', async (req, res) => {
     }
     
     // Create project
-    const result = await projectService.createProject(projectData);
+    const result = await projectService.createProject(projectData, io);
     
     // Emit success event
     if (io) {
@@ -258,6 +263,8 @@ router.delete('/:name', async (req, res) => {
   try {
     const { name } = req.params;
     const io = req.app.get('io');
+    const dockerService = req.app.get('dockerService');
+    const projectService = new ProjectService(dockerService);
     
     // Emit deleting event
     if (io) {
