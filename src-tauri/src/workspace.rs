@@ -244,10 +244,7 @@ fn describe(root: PathBuf, source: Source) -> Workspace {
         // A machine with no catalogue cannot answer this yet, and does not need
         // to: `CatalogueGate` comes first, and until it is past there is nothing
         // to migrate *into*.
-        migration_pending: crate::config::Env::load(&root)
-            .ok()
-            .zip(crate::pkg::Tree::open(&crate::market::dir(&root)).ok())
-            .is_some_and(|(env, tree)| crate::handover::is_pending(&root, &env, &tree)),
+        migration_pending: crate::handover::pending(&root),
         projects_dir: projects.map(|p| p.display().to_string()),
         source,
         root: Some(root.display().to_string()),
