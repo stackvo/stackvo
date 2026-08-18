@@ -334,7 +334,7 @@ jobs:
       # review trusts on an artifact that has none of the guarantees.
       - name: Attest what built these artifacts
         if: ${{ !inputs.rehearsal }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           # `artifactPaths` is a JSON array; the action takes a comma- or
           # newline-separated list.
