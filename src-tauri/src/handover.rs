@@ -131,6 +131,29 @@ pub fn is_pending(root: &std::path::Path, env: &Env, catalogue: &dyn Catalogue) 
         .any(|service| env.service_enabled(service))
 }
 
+/// The same question, asked of a workspace rather than of two loaded halves.
+///
+/// `is_pending` takes the `.env` and the catalogue because the tests hand it
+/// fixtures; every caller in the app has neither and would have to load both,
+/// which is how the gate and the renderer ended up asking the question two
+/// different ways — `MigrationGate` through this predicate, `service_source`
+/// through "does `instances.json` exist". Those two disagree on a workspace
+/// that has never had services: nothing to migrate, so the gate lets it past,
+/// and no table, so the render refused it. A first launch could reach neither
+/// the migration nor a stack.
+///
+/// Either half failing to load answers `false`, and that is the same answer for
+/// the same reason it is in [`crate::workspace::resolve`]: a workspace whose
+/// `.env` will not parse or whose catalogue is not there yet cannot have a
+/// migration planned for it, and the screens ahead of this one are where that
+/// is said.
+pub fn pending(root: &std::path::Path) -> bool {
+    Env::load(root)
+        .ok()
+        .zip(crate::pkg::Tree::open(&crate::market::dir(root)).ok())
+        .is_some_and(|(env, tree)| is_pending(root, &env, &tree))
+}
+
 /// Decide what the handover would do. Reads nothing but `.env` and the
 /// catalogue; writes nothing at all.
 ///
