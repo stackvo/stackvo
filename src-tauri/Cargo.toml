@@ -55,7 +55,7 @@ sysinfo = "0.39"
 # added aes, bzip2, zstd, xz, lzma and ppmd for an archive that only ever holds
 # text. `zip` itself is already built on Windows, where `tauri-plugin-updater`
 # takes it to unpack an update.
-zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "8", default-features = false, features = ["deflate-flate2"] }
 
 # Named directly so `zip`'s deflate has a backend to deflate with.
 #
