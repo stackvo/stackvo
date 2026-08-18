@@ -266,7 +266,7 @@ jobs:
 
       - name: Attach the SBOM to the release
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: sbom/
@@ -310,7 +310,7 @@ jobs:
       # label resolved and the bundler ran there.
       - name: Keep the rehearsal bundles
         if: ${{ inputs.rehearsal }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
@@ -354,7 +354,7 @@ jobs:
           done | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
 
       - name: Attach the checksums
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: checksums-${{ matrix.target }}
           path: checksums/
