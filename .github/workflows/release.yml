@@ -1,0 +1,361 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      # §3 #22. The six-target matrix was "unverified until a tag runs it", and
+      # a tag could not run it: `preflight` fails without the signing secrets,
+      # and those are §5.3's decision rather than anybody's afternoon. So the
+      # two ARM rows — whose only open question is whether the runner label
+      # exists and the bundler is happy on it — were waiting behind a question
+      # about key custody they have nothing to do with.
+      #
+      # A rehearsal separates them. It builds every target, runs the suite on
+      # each, produces the bundles and publishes **nothing**: no release, no
+      # tag, no attestation, no updater manifest. The artifacts land on the run
+      # page for somebody to look at.
+      #
+      # Defaulted to `true`, and that is a change of behaviour worth stating: a
+      # hand-started run used to go straight to `tauri-action` with
+      # `tagName: <branch>`, which drafts a release named after a branch. That
+      # was never what a person clicking "Run workflow" from a feature branch
+      # meant. Publishing is now the deliberate answer rather than the quiet one.
+      rehearsal:
+        description: 'Rehearsal — build every target, publish nothing'
+        type: boolean
+        default: true
+
+# The updater only accepts a bundle signed with the private half of the key
+# compiled into the app. That key is a repository secret and never appears in
+# this file or anywhere else in the repo:
+#
+#   npm run tauri signer generate -- -w ~/.tauri/stackvo.key
+#
+# Put the PUBLIC key in src-tauri/tauri.conf.json under plugins.updater.pubkey,
+# and the private key plus its password in the repository secrets below. Without
+# both halves the build produces unsigned artifacts that the updater will refuse
+# — which is the correct failure, not a bug to work around.
+jobs:
+  # Refuse to publish a release the updater could never accept. Without this the
+  # pipeline succeeds, artifacts appear on the releases page, and the failure
+  # surfaces months later on a user's machine as an unexplained signature error.
+  # Cheaper to fail here, in ten seconds, than there.
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A rehearsal signs nothing, so a missing signing key is not a reason to
+      # stop it. Said out loud rather than skipped silently: the whole point of
+      # this job is that an unsignable release must never look like a signable
+      # one, and a job that goes green with its checks switched off is exactly
+      # that unless the run page says which mode it was in.
+      - name: Rehearsal — the signing checks below do not apply
+        if: ${{ inputs.rehearsal }}
+        run: |
+          echo "::notice::Rehearsal run. Every target is built and nothing is published."
+          echo "The signing preflight is skipped because a rehearsal produces no signed artifact."
+
+      - name: The updater public key must be present
+        if: ${{ !inputs.rehearsal }}
+        run: |
+          pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins?.updater?.pubkey ?? ''")
+          if [ -z "$pubkey" ]; then
+            echo "::error file=src-tauri/tauri.conf.json::plugins.updater.pubkey is empty."
+            echo "Generate a key pair with: npm run tauri signer generate -- -w ~/.tauri/stackvo.key"
+            echo "Put the public half in tauri.conf.json and the private half in TAURI_SIGNING_PRIVATE_KEY."
+            exit 1
+          fi
+
+      - name: The signing secrets must be set
+        if: ${{ !inputs.rehearsal }}
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set on this repository."
+            exit 1
+          fi
+
+  build:
+    needs: preflight
+    permissions:
+      contents: write
+      # Both are required by `attest-build-provenance`: the OIDC token is what
+      # proves to the attestation service that this really is a run of this
+      # workflow, and without the second the attestation cannot be stored.
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          # §3 #22. Native ARM runners rather than cross-compilation: a Tauri
+          # bundle is a platform installer — a .deb, an AppImage, an MSI — and
+          # cross-building one means a second toolchain and a second set of
+          # bundler quirks to keep working, for a machine GitHub already
+          # rents by the minute.
+          #
+          # Nothing on a developer's machine can prove a runner label exists or
+          # that the bundler is happy on it. What used to follow from that was
+          # "unverified until a tag runs it" — and a tag could not run it,
+          # because `preflight` refuses without signing secrets that are §5.3's
+          # decision. The `rehearsal` input above is the way out: it builds all
+          # six and publishes nothing, so these two rows can be answered without
+          # anybody deciding where a private key lives.
+          #
+          # `fail-fast: false` above is what keeps a wrong guess from taking the
+          # other four builds down with it.
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    # Exposed at job level so the `if:` on the signing step can test it; a
+    # secret is not readable from `env.` context otherwise.
+    env:
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Linux dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - run: npm ci
+
+      # The contract is compiled into the binary, so a release must not ship
+      # one that disagrees with the code.
+      - name: Verify the contract surface
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # Windows Authenticode. Tauri reads the certificate thumbprint from
+      # tauri.conf.json, so the .pfx has to be imported into the runner's store
+      # first and the thumbprint written in — neither can be a plain env var.
+      #
+      # Skipped when the secret is absent, deliberately: an unsigned Windows
+      # build is installable, it just shows a SmartScreen warning. Failing the
+      # release instead would block every other platform over one missing
+      # certificate.
+      - name: Import the Windows signing certificate
+        id: winsign
+        if: startsWith(matrix.os, 'windows') && env.WINDOWS_CERTIFICATE != ''
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, $bytes)
+
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx -Force
+
+          # Written into the config rather than passed as a flag: this is where
+          # tauri-action looks for it.
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if (-not $conf.bundle.windows) {
+            $conf.bundle | Add-Member -Name windows -Value ([PSCustomObject]@{}) -MemberType NoteProperty
+          }
+          $conf.bundle.windows | Add-Member -Name certificateThumbprint -Value $cert.Thumbprint -MemberType NoteProperty -Force
+          $conf.bundle.windows | Add-Member -Name digestAlgorithm -Value 'sha256' -MemberType NoteProperty -Force
+          $conf.bundle.windows | Add-Member -Name timestampUrl -Value 'http://timestamp.digicert.com' -MemberType NoteProperty -Force
+          $conf | ConvertTo-Json -Depth 32 | Set-Content src-tauri/tauri.conf.json
+
+          Write-Host "signing with thumbprint $($cert.Thumbprint)"
+
+      - name: Note that Windows artifacts are unsigned
+        if: startsWith(matrix.os, 'windows') && steps.winsign.outcome == 'skipped'
+        run: echo "::warning::WINDOWS_CERTIFICATE is not set — Windows users will see a SmartScreen warning."
+
+      # The other half of the check above, which was missing. Windows announced
+      # its unsigned builds; macOS said nothing at all, so a release could go out
+      # with an unsigned bundle and the only evidence was a user being told the
+      # developer is unidentified.
+      #
+      # A warning, not a failure — deliberately the same trade the Windows step
+      # makes. Blocking every platform's release over one absent secret is worse
+      # than shipping unsigned, as long as shipping unsigned is never silent.
+      #
+      # Signed-but-not-notarised is called out separately because it is the state
+      # people miss: the bundle carries a valid signature and Gatekeeper still
+      # refuses it, because notarisation is a separate round trip to Apple.
+      - name: Note whether macOS artifacts will be signed and notarised
+        if: startsWith(matrix.os, 'macos')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          unsigned=""
+          [ -n "$APPLE_CERTIFICATE" ] || unsigned="$unsigned APPLE_CERTIFICATE"
+          [ -n "$APPLE_SIGNING_IDENTITY" ] || unsigned="$unsigned APPLE_SIGNING_IDENTITY"
+          if [ -n "$unsigned" ]; then
+            echo "::warning::macOS artifacts will be UNSIGNED —$unsigned not set. Gatekeeper will refuse to open them without a right-click override."
+            exit 0
+          fi
+
+          missing=""
+          [ -n "$APPLE_ID" ] || missing="$missing APPLE_ID"
+          [ -n "$APPLE_PASSWORD" ] || missing="$missing APPLE_PASSWORD"
+          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
+          if [ -n "$missing" ]; then
+            echo "::warning::macOS artifacts will be signed but NOT notarised —$missing not set. Gatekeeper still blocks a signed bundle that Apple has not notarised."
+          else
+            echo "macOS artifacts will be signed and notarised."
+          fi
+
+      # A bill of materials, because a corporate buyer asks for one.
+      #
+      # Two files, because this app is two dependency graphs and neither tool
+      # can see the other's: `cargo` owns everything behind the IPC boundary and
+      # `npm` owns everything in the webview. A single-language SBOM for a Tauri
+      # app is a document that omits half the software it describes.
+      #
+      # Linux only — the graphs are the same on every platform, and three
+      # identical documents attached to one release is three chances to attach
+      # the wrong one.
+      - name: Build the SBOM
+        # Pinned to the x86 Linux runner rather than to the Linux *family*: the
+        # dependency graphs are identical across targets, and two attachments
+        # called `sbom` is a collision rather than a second document.
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          cargo install cargo-cyclonedx --locked
+          cargo cyclonedx --manifest-path src-tauri/Cargo.toml --format json --spec-version 1.5
+          # `cargo-cyclonedx` writes beside the manifest it read; collect both
+          # here so the upload does not have to know either tool's layout.
+          mkdir -p sbom
+          find src-tauri -maxdepth 1 -name '*.cdx.json' -exec cp {} sbom/rust.cdx.json \;
+          npm sbom --sbom-format cyclonedx --omit dev > sbom/npm.cdx.json
+          ls -l sbom/
+
+      - name: Attach the SBOM to the release
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error
+
+      - uses: tauri-apps/tauri-action@v0
+        id: tauri
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS notarisation. Without these the app still builds, but Gatekeeper
+          # shows the "unidentified developer" warning on first launch.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          args: --target ${{ matrix.target }}
+          # Empty in a rehearsal, and an empty `tagName` is what makes
+          # `tauri-action` build without touching a release — the bundle is
+          # produced, nothing is uploaded, no tag is created.
+          #
+          # Written as `!x && y || ''` rather than the more obvious
+          # `x && '' || y`, because the latter is a trap: `''` is falsy, so the
+          # `||` fires and the rehearsal publishes under the branch name. This
+          # form has no falsy left operand on the publishing path.
+          tagName: ${{ !inputs.rehearsal && github.ref_name || '' }}
+          releaseName: ${{ !inputs.rehearsal && format('StackVo {0}', github.ref_name) || '' }}
+          releaseDraft: true
+          prerelease: false
+          # tauri-action writes latest.json alongside the artifacts; the
+          # endpoint in tauri.conf.json has to point at wherever it is served.
+          includeUpdaterJson: true
+
+      # What a rehearsal is for: the bundle each target actually produced,
+      # downloadable from the run page. The two ARM rows are the reason — a
+      # `.deb` and an `.msi` that exist are the only proof that the runner
+      # label resolved and the bundler ran there.
+      - name: Keep the rehearsal bundles
+        if: ${{ inputs.rehearsal }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          if-no-files-found: error
+          retention-days: 7
+
+      # ---------------------------------------------------------------- trust
+      #
+      # `latest.json` is signed, so the *updater* can prove an update came from
+      # us. Nothing covered the other route: a person who downloads an installer
+      # from the releases page by hand had no way to check they got what we
+      # built. These two steps close that, and they are what a corporate
+      # security review asks for by name.
+
+      # Cryptographic proof of which workflow, commit and runner produced each
+      # file, verifiable with `gh attestation verify <file> --repo <owner>/<repo>`.
+      # Not in a rehearsal. An attestation is a signed statement that these
+      # bytes are a release of this project, and a rehearsal's bytes are not —
+      # they are a build nobody published, from a branch, possibly unsigned.
+      # Attesting them would put exactly the kind of provenance a security
+      # review trusts on an artifact that has none of the guarantees.
+      - name: Attest what built these artifacts
+        if: ${{ !inputs.rehearsal }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          # `artifactPaths` is a JSON array; the action takes a comma- or
+          # newline-separated list.
+          subject-path: ${{ join(fromJSON(steps.tauri.outputs.artifactPaths), ',') }}
+
+      # A plain checksum list, for the reviewer who has no `gh` and no interest
+      # in SLSA — the lowest common denominator, and the one most people use.
+      - name: Publish checksums
+        shell: bash
+        run: |
+          mkdir -p checksums
+          for path in $(echo '${{ steps.tauri.outputs.artifactPaths }}' | node -e 'JSON.parse(require("fs").readFileSync(0,"utf8")).forEach(p=>console.log(p))'); do
+            [ -f "$path" ] || continue
+            # `basename` in the output, not the runner's absolute path: the
+            # person checking has the file in their downloads folder.
+            ( cd "$(dirname "$path")" && shasum -a 256 "$(basename "$path")" )
+          done | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
+
+      - name: Attach the checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums-${{ matrix.target }}
+          path: checksums/
+          if-no-files-found: error

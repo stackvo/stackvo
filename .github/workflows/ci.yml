@@ -1,0 +1,456 @@
+name: CI
+#
+# Everything below can be run before pushing: `tools/before-push.sh --all`.
+# `ci.yml` is the second opinion, not the first — ADR 0030 says why that
+# distinction had to be written down, and `tools/linux/` is how the Linux and
+# Windows halves became answerable off a runner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The reason this job exists: the Windows-specific blocks in engine.rs,
+  # hosts.rs and pty.rs cannot be compiled from macOS — cross-compiling fails in
+  # tauri-build, which needs llvm-rc to embed the app manifest. Until this runs
+  # green on windows-latest, nobody should claim Windows works.
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Tauri's Linux build needs the webkit/gtk headers; the other two ship
+      # their webview with the OS. `libdbus-1-dev` is the keystore: on Linux the
+      # Secret Service is reached over D-Bus, and without the headers the build
+      # fails here and nowhere a developer on macOS would ever see it.
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # The front end is 44% of this repo; until now none of it passed through a
+      # gate, while the Rust half had clippy and 100+ tests. Lint and unit tests
+      # run on Ubuntu only — they are platform-independent, and repeating them
+      # three times buys nothing.
+      - name: Lint the front end
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run lint
+
+      - name: Test the front end
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run test:js
+
+      # §3 #10. `src/lib/ipc.d.ts` is generated from `contracts/ipc.json`, and a
+      # generated file that is edited by hand or left behind by a contract
+      # change is worse than none: an editor keeps offering the old argument
+      # names with no sign that it is wrong. Ubuntu only — the output is the
+      # same bytes on every platform.
+      - name: The generated types are current
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run types:check
+
+      # And that they COMPILE, against the JavaScript that reads them. The two
+      # are different questions: `types:check` asks whether the file matches the
+      # contract, and for as long as that was the only gate the file named a
+      # type it never declared, stopped parsing partway through on a glob in
+      # somebody's prose, and typed calls the app makes every day as wrong.
+      - name: The generated types compile, and the front end agrees with them
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run types:tsc
+
+      - name: Build the front end
+        run: npm run build
+
+      # Ubuntu only, like the lint and unit-test steps above: the bundle is the
+      # same bytes on every platform, and asking three runners the same question
+      # buys nothing. Immediately after the build, because it reads `dist/` and
+      # a later job would have to rebuild to see it.
+      - name: Hold the bundle budget
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run bundle:budget
+
+      # The front end in a real engine (§3 #12). Ubuntu only, for the reason the
+      # steps above are: the assertions are about layout and roles, not about an
+      # OS, and a browser download on three runners is three minutes for one
+      # answer.
+      #
+      # `--with-deps` because a bare `playwright install` on a CI image gets a
+      # browser that cannot start: the shared libraries are the half that is
+      # missing there and present on a developer's machine, which is exactly the
+      # kind of difference that makes a suite pass locally and fail in CI.
+      #
+      # Chromium only. Not a claim that the app is a Chromium app — it is not,
+      # it runs in WKWebView, WebView2 and WebKitGTK — but a claim about what
+      # these tests measure: a scrollable region without focus, a button with no
+      # accessible name and a page that overflows its viewport are engine
+      # -independent, and the one browser that reproduces them is enough.
+      - name: Install the browser
+        if: matrix.os == 'ubuntu-latest'
+        run: npx playwright install --with-deps chromium
+
+      - name: Test the front end in a browser
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run test:e2e
+
+      # Kept only when something failed: a screenshot and a trace are what turn
+      # "it fails in CI" into a thing somebody can look at.
+      - name: Keep the browser report
+        if: failure() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      # Everything below runs on all three platforms, so the cfg-gated code is
+      # actually compiled somewhere rather than only written.
+      - name: Check the Rust core
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+  # The other half of §3 #12: the whole binary, under a driver.
+  #
+  # A separate job rather than a step in `build`, and the reason is the one the
+  # matrix cannot express: this runs on exactly one of the three platforms, and
+  # not because it is redundant elsewhere. `tauri-driver` supports Windows and
+  # Linux; macOS has no WKWebView driver at all, which is why the suite it
+  # complements — Playwright — exists in the first place. A step guarded by
+  # `if: matrix.os == 'ubuntu-latest'` inside a three-way matrix reads as an
+  # optimisation. This is not one.
+  #
+  # It is also the job whose author cannot watch it pass. This repository is
+  # developed on macOS, so the first machine that ever runs the file is this
+  # one. Two things are arranged against that: the client's pure half is unit
+  # tested in `tests/driver-client.spec.js` on every platform, and there is no
+  # skip path here — a missing `tauri-driver` fails rather than passes quietly,
+  # because "green" and "never ran" must not look the same.
+  driver:
+    name: driver
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `webkit2gtk-driver` is the WebDriver server `tauri-driver` proxies to —
+      # it is a separate package from the webkit runtime the app links against,
+      # and its absence is the single most likely reason a first run fails.
+      # `xvfb` because the app opens a window and a runner has no display.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev \
+            webkit2gtk-driver xvfb
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: driver
+
+      # `--locked` so the driver this job installs is the one its lockfile
+      # pins, rather than whatever resolved on the morning it ran.
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - run: npm ci
+
+      # `frontendDist` is `../dist`; without this the binary starts and serves
+      # nothing, and the failure reads as an empty webview rather than as a
+      # missing build.
+      - name: Build the front end
+        run: npm run build
+
+      # `tauri build --debug`, NOT `cargo build`. This is the line the whole
+      # suite turned on, and it was wrong: `tauri-build` emits `cfg(dev)` for a
+      # plain cargo build, so the binary embeds `devUrl` and the webview opens
+      # http://localhost:1420. With no dev server running it gets "connection
+      # refused", loads about:blank, and every assertion reports an empty
+      # `#app` — including "the built bundle renders inside the real webview",
+      # which is the one thing this suite exists to check and could not have
+      # passed.
+      #
+      # The old comment argued debug over release on cost. The cost was real
+      # and the comparison was not: the two profiles were not answering the
+      # same question more or less slowly, one of them was not answering it.
+      # `--debug` keeps the compile cheap; `--no-bundle` skips the .deb, which
+      # is not what gets driven.
+      - name: Build the application the way it ships
+        run: npx tauri build --debug --no-bundle
+
+      - name: Drive the application
+        run: xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:driver
+
+      # A green `driver` job has to mean five tests RAN. `node:test` reads a
+      # `null` skip value as a skip directive, so a throwing test came back
+      # `not ok N # SKIP`, landed under `# skipped`, was left out of `# fail`,
+      # and the process exited 0 — the first time this suite was ever run it
+      # had four real failures and reported success. `whyNotHere` answers
+      # `false` now and `driver-client.spec.js` holds it, but that is a check on
+      # one function. This is a check on the OUTCOME, which is what the job is
+      # actually promising: on Linux nothing here is allowed to be skipped.
+      - name: The five tests ran, rather than being skipped
+        run: |
+          xvfb-run -a --server-args="-screen 0 1280x820x24" \
+            node --test --test-reporter=tap tests/driver/boot.driver.js | tee driver.tap
+          skipped=$(grep -c '# SKIP' driver.tap || true)
+          if [ "$skipped" -ne 0 ]; then
+            echo "::error::$skipped driver test(s) were skipped on Linux, where the suite is meant to run."
+            exit 1
+          fi
+
+  # What is not tested.
+  #
+  # 478 Rust tests and 160 front-end tests is a good number and was never a
+  # measurement: nobody could say which of `engine.rs`'s 1,391 lines or which of
+  # `Settings.vue`'s 3,172 any of them reached. A count of tests answers "is
+  # there effort here"; only coverage answers "is there a hole here".
+  #
+  # **There is a floor now.** This job reported and never failed for four rounds
+  # of work, on the argument that a threshold picked before anyone has seen the
+  # number is either low enough to bless the gap or high enough to fail on the
+  # first run. The numbers have since been watched across those rounds — Rust
+  # 61.60 → 64.34, front end 30.70 → 89.65 — so the floors in
+  # `tools/coverage-floors.mjs` are set from evidence, sit below the measurement
+  # with stated headroom, and exist to answer one question the report never
+  # could: *did that just get worse.*
+  #
+  # The measuring steps stay `continue-on-error` so a failing test still
+  # produces a table rather than taking this job down for a reason `build`
+  # already reports. The gate is a separate final step, and it fails when a
+  # report is missing rather than passing on an empty comparison.
+  #
+  # Ubuntu only: coverage is a property of the code, not of the platform, and
+  # the cfg-gated Windows and macOS branches are covered by `build` compiling
+  # and running them on their own runners.
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: coverage
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      # `src-tauri/rust-toolchain.toml` pins 1.96.1, and rustup resolves that
+      # file from the working directory — so the component added to `stable`
+      # above is on a toolchain this build never uses. Added here, from inside
+      # `src-tauri`, it lands on the toolchain that actually compiles.
+      - name: Give the pinned toolchain its instrumentation tools
+        working-directory: src-tauri
+        run: rustup component add llvm-tools-preview
+
+      - run: npm ci
+
+      # `--ignore-run-fail` so a failing test still produces a report. Without
+      # it `cargo llvm-cov` exits before printing the table, and this job would
+      # go red for a reason the `build` job already covers — reporting nothing
+      # exactly when something is wrong is the opposite of what it is for.
+      - name: Measure the Rust core
+        continue-on-error: true
+        run: |
+          cargo llvm-cov --manifest-path src-tauri/Cargo.toml \
+            --ignore-run-fail --summary-only | tee rust-coverage.txt
+
+      # `report` re-reads the profiling data the step above already produced, so
+      # this is a second rendering of one measurement rather than a second run
+      # of the test suite. The gate reads the JSON; the summary below reads the
+      # text. Parsing a percentage out of a column-aligned table is how a gate
+      # starts silently comparing the wrong number.
+      - name: Render the Rust report for the gate
+        continue-on-error: true
+        run: |
+          cargo llvm-cov report --manifest-path src-tauri/Cargo.toml \
+            --json --summary-only > rust-coverage.json
+
+      - name: Measure the front end
+        continue-on-error: true
+        run: npm run test:js:coverage
+
+      # Into the run summary rather than a log nobody opens. Two numbers on the
+      # workflow page is the whole point of this job.
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            echo '### Rust'
+            echo '```'
+            # The column header and the total. Per-module rows are in the step
+            # log; a summary that lists 49 of them is a summary nobody reads.
+            grep -E '^(Filename|TOTAL)' rust-coverage.txt || echo "no Rust report produced"
+            echo '```'
+            echo
+            echo '### Front end'
+            if [ -f coverage/coverage-summary.json ]; then
+              node -e '
+                const t = require("./coverage/coverage-summary.json").total;
+                for (const k of ["lines", "statements", "functions", "branches"]) {
+                  console.log(`- ${k}: ${t[k].pct}% (${t[k].covered}/${t[k].total})`);
+                }
+              '
+            else
+              echo "no front-end report produced"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The only step in this job that can fail it. Deliberately last: the
+      # summary above is written first, so a breach is read next to the numbers
+      # that caused it instead of in an empty run page.
+      - name: Hold the floors
+        run: node tools/check-coverage.mjs
+
+  # Supply chain. One platform is enough — the dependency graph is the same
+  # everywhere, and installing cargo-deny three times to get one answer is waste.
+  supply-chain:
+    name: supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      # Advisories, licences, banned crates and source registries. The policy,
+      # including why unmaintained transitive crates warn rather than fail, is
+      # in src-tauri/deny.toml.
+      - name: cargo-deny
+        run: cargo deny --manifest-path src-tauri/Cargo.toml check
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Production dependencies only: a dev-only advisory does not ship to a
+      # user, and failing the build on one blocks work for no gain in safety.
+      - name: npm audit
+        run: npm audit --omit=dev --audit-level=moderate
+
+      # The other half of a supply chain: what we owe the people whose code we
+      # ship. Every permissive licence here requires its notice to travel with
+      # the binary, and NOTICE.md is compiled into it — so a dependency added
+      # without regenerating the notice ships an incomplete one. This compares
+      # the inventory against Cargo.lock and package-lock.json and fails when
+      # something shipped is not named.
+      #
+      # Only the inventory. The licence *texts* are read out of the local
+      # package sources and depend on which platforms have been fetched; a gate
+      # that goes red because nobody built for Windows is a gate that gets
+      # switched off.
+      - name: Third-party notices
+        run: npm run notice:check
+
+  # The contract checks, against input this repository owns.
+  #
+  # ## Why the upstream checkout is gone
+  #
+  # This job used to clone `stackvo/stackvo` and validate against it. That
+  # repository is now **empty** — `.gitignore`, `LICENSE`, `README.md` and
+  # nothing else — so the first step, `cp stackvo-checkout/.env.example …`,
+  # failed and took the job with it. §3 #33 called this "an external
+  # dependency"; it turned out to be a dependency on content that is not there.
+  #
+  # `tools/fixtures/validator-workspace/` is the replacement and it is strictly
+  # better: four projects, three of them wrong on purpose, so suite A runs and
+  # its findings are asserted exactly. Suite A had never checked a manifest on
+  # any machine before that fixture existed.
+  #
+  # The repository's own root is still validated, with `--allow-no-manifests`,
+  # because that run answers a different question: the .env schema, the
+  # extension catalogue and the IPC surface, against the tree as it ships.
+  #
+  # ## What was dropped with the checkout, and why that is not a loss
+  #
+  # `tools/measure-env-usage.mjs` went too. It reads `core/` — the Bash
+  # StackVo's own sources — to find which `.env` keys anything actually uses,
+  # and there is no `core/` in an empty repository. The step was measuring a
+  # directory that had stopped existing; keeping it pointed at nothing would
+  # have been the same silence this job just came out of. The tool stays, and
+  # runs by hand against a real checkout: `node tools/measure-env-usage.mjs
+  # --root <path>`.
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      # Suite A, actually running. `tests/validate-contracts.spec.js` asserts
+      # the exact codes; this is the same run as a gate, so a fixture that
+      # stopped being read fails here too.
+      - name: Validate contracts against the fixture workspace
+        run: npm run test:js -- tests/validate-contracts.spec.js
+
+      # And against this tree. `--allow-no-manifests` because the repository
+      # itself carries no `projects/` directory and never did — the fixture is
+      # where suite A earns its place.
+      - name: Validate contracts against this repository
+        run: node tools/validate-contracts.mjs --allow-no-manifests
