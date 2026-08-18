@@ -9910,12 +9910,19 @@ pub type Rendered = (Vec<GenFile>, Vec<(String, String)>);
 /// the warning could not be fixed without putting a templateless entry into the
 /// `.env` catalogue, where it would have offered a switch that renders nothing.
 ///
-/// A workspace with no table is now a workspace that has not migrated, and it
-/// is met by `MigrationGate` before it ever reaches a render. Reaching here
-/// without one is a bug in the gate, so it says so with a name rather than
-/// producing an empty stack.
+/// A workspace that owes a migration is met by `MigrationGate` before it ever
+/// reaches a render, and reaching here still owing one is a bug in the gate —
+/// so it says so with a name. What it does *not* do is read a missing table as
+/// that bug: a workspace that has installed nothing has no table either, and
+/// there the empty stack is the correct answer rather than a symptom.
 fn service_source(root: &std::path::Path) -> Result<crate::instances::Table> {
-    if !crate::instances::path(root).exists() {
+    // The question is "has this workspace a migration owed", not "is there a
+    // file" — and it is asked through the predicate the gate is driven by, so
+    // the two cannot answer differently. They did: a first launch has no table
+    // and nothing in `.env` to migrate, so `MigrationGate` waved it through and
+    // this refused it, and the bootstrap's very first step failed with a
+    // sentence about a `.env` the workspace had never had.
+    if crate::handover::pending(root) {
         // `Conflict` rather than a new code: the workspace's state and this
         // version's renderer disagree, which is what that code already means,
         // and a new variant is a contract change (ADR 0008) for a message.
@@ -9926,6 +9933,9 @@ fn service_source(root: &std::path::Path) -> Result<crate::instances::Table> {
         )
         .with_hint(crate::hints::MIGRATE_THE_WORKSPACE));
     }
+    // Absent is empty (`Table::load`), and empty is a stack of the proxy and
+    // the certificate authority with nothing behind them — which is what a
+    // workspace that has installed no service from the Market yet *is*.
     crate::instances::Table::load(root)
 }
 
@@ -12321,6 +12331,44 @@ pub async fn instance_promote(state: State<'_, AppState>, id: String) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The first launch, which used to have nowhere to go.
+    ///
+    /// A workspace that has just been created has no `instances.json` and no
+    /// service in `.env` to migrate. `MigrationGate` reads the second half and
+    /// lets it past; `service_source` read only the first and refused, so the
+    /// bootstrap's opening step — "compose dosyaları yazılıyor" — failed with a
+    /// sentence about a `.env` this workspace had never had, and there was no
+    /// screen anywhere that could produce the table it was asking for.
+    ///
+    /// The catalogue is absent here on purpose: that is a machine that has
+    /// fetched the registry and installed no package yet, which is every first
+    /// launch and is the exact shape the two predicates disagreed on.
+    #[test]
+    fn a_workspace_with_nothing_to_migrate_renders_an_empty_stack() {
+        let root = std::env::temp_dir().join(format!(
+            "stackvo-fresh-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        assert!(
+            !crate::handover::pending(&root),
+            "a fresh workspace owes no migration"
+        );
+
+        let table = service_source(&root).expect("a fresh workspace can be rendered");
+        assert!(table.instances.is_empty(), "{:?}", table.instances);
+
+        // And the guard is still a guard: give the same workspace a table and
+        // it is read rather than invented.
+        crate::instances::Table::default().save(&root).unwrap();
+        assert!(service_source(&root).is_ok());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// The stack answers on more than its projects.
     ///
