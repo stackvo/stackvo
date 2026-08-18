@@ -1,0 +1,285 @@
+[package]
+name = "stackvo-desktop"
+version = "0.1.0"
+description = "Native desktop app for StackVo"
+authors = ["StackVo"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.82"
+
+# Three binaries live here — the app, `stackvo-mcp` and `stackvo` — and `tauri
+# dev` runs a bare `cargo run`, which refuses to guess. Naming the app here
+# keeps that working; the other two are reached with an explicit `--bin`.
+#
+# Neither of the two is bundled with the app: `tauri.conf.json` declares no
+# `externalBin` and `release.yml` does not build them, so both are `cargo build
+# --release --bin …`. `agents::binary` searches rather than assumes for exactly
+# that reason, and the CLI section of README.md says the same.
+default-run = "stackvo-desktop"
+
+[lib]
+# Tauri's mobile targets require a cdylib; the bin below is a thin wrapper.
+name = "stackvo_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+
+# Signed auto-updates. The public key lives in tauri.conf.json; the private half
+# is a release secret and is never in this repo.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+# Docker engine access. Default features are `http` + `pipe` — `pipe` is what
+# provides unix-socket and named-pipe transports, which is all StackVo needs.
+# `ssl` is not a default, so no TLS stack is pulled in for a local daemon.
+bollard = "0.21"
+
+# Host metrics read on the host itself — the whole point of the port.
+include_dir = "0.7"
+sysinfo = "0.39"
+
+# The diagnostic bundle in `diagnostics.rs`. One archive is the difference
+# between "send me your log" and a person hunting through ~/Library/Logs for
+# the right file and remembering to add the doctor output.
+#
+# Measured before adding: this brings in exactly **one** new crate. `flate2` and
+# `miniz_oxide` are already in the graph, and `deflate-flate2` is the one
+# compression feature that reuses them — the default feature set would have
+# added aes, bzip2, zstd, xz, lzma and ppmd for an archive that only ever holds
+# text. `zip` itself is already built on Windows, where `tauri-plugin-updater`
+# takes it to unpack an update.
+zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+
+# Named directly so `zip`'s deflate has a backend to deflate with.
+#
+# `zip` is taken with `default-features = false`, and its `deflate-flate2`
+# feature pulls flate2 the same way — with no compression backend selected. On
+# macOS and Linux something else in the graph happened to enable one, so the
+# build worked and nobody looked; on Windows nothing did, and `cargo check`
+# stopped with `You need to choose a zlib backend`, `No compression backend
+# selected` and an unresolved `crc32fast`, three errors that read like a broken
+# crate and are one missing feature.
+#
+# Measured before adding: **no new crate enters the tree** — flate2 1.1.9 is
+# already built here, and `rust_backend` is its own default (miniz_oxide, also
+# already present). This changes which features are unified, not what is
+# compiled and audited. `zlib-ng` would be faster and is a C library; the thing
+# being compressed here is a diagnostics bundle.
+flate2 = "1"
+
+# CPU time breakdown (user/nice/system/idle). sysinfo only exposes an aggregate
+# percentage, and the dashboard shows the split — so this fills the one gap that
+# would otherwise force the UI to display a number nobody measured.
+systemstat = "0.2"
+
+# Stream combinators for bollard's log and stats streams.
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+# The OS keystore — Keychain, Credential Manager, Secret Service — for the
+# database passwords that otherwise sit in plain text in a file that gets backed
+# up and synced. `secrets.rs` carries the reasoning and ADR 0010 its limits.
+#
+# Measured before adding, and it is not the same on all three platforms. A build
+# gains **one** crate on macOS and Windows, where the native stores are already
+# in the graph via Tauri, and **fourteen** on Linux, where the Secret Service
+# session is D-Bus plus its own encrypted handshake (aes, cbc, hkdf, hmac, and
+# num/num-* for the Diffie-Hellman). `Cargo.lock` gains twenty-nine, because it
+# resolves every target at once — that larger number is the one `NOTICE.md` is
+# generated from, and the smaller one is what a user installs.
+#
+# `crypto-rust` rather than `crypto-openssl` so that handshake does not put an
+# OpenSSL build in front of a Linux user. `linux-native` was the cheaper option
+# and is wrong: it is the kernel keyring, scoped to a session and gone at reboot,
+# and a password store that empties itself is not one.
+keyring = { version = "3", default-features = false, features = [
+  "apple-native",
+  "windows-native",
+  "sync-secret-service",
+  "crypto-rust",
+] }
+
+# Editing somebody else's TOML without reformatting it (K-1).
+#
+# `agents.rs` writes an MCP entry into each assistant's own configuration file
+# and its first rule is that everything already in the file survives — comments,
+# key order, quoting style. For JSON that comes free from `serde_json::Value`;
+# for Codex's `~/.codex/config.toml` it does not, and a plain serialiser would
+# hand somebody back a file with their comments gone and their tables reordered.
+# That is why K-1 sat unbuilt: the module header names this dependency as the
+# blocker and this repository treats one as a measured decision.
+#
+# Measured before adding, the same way `sha2` was: **no new package enters the
+# lock file.** toml_edit 0.25 and toml_writer are already there and already in
+# `NOTICE.md`, reached through `proc-macro-crate` under Tauri's own graph —
+# `Cargo.lock` gains two dependency edges and zero packages. This changes what
+# this crate may `use` rather than what gets compiled, audited or licensed.
+toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
+
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` keeps a JSON object's keys in the order the file had them.
+#
+# Without it `serde_json::Map` is a BTreeMap, so every object this app parses
+# and writes back comes out **alphabetised**. `agents.rs` edits configuration
+# files it does not own and promises that what is already in them survives —
+# and `examples/agent_config_probe.rs`, run against the real files on a
+# developer's machine, showed four of them coming back with their keys
+# reordered. A 58 KB `~/.claude.json` rewritten into a different order is not
+# data loss and is still not something a tool should do to somebody's file
+# while adding one entry to it.
+#
+# Measured: `indexmap` is what this turns on and it is already in `Cargo.lock`
+# and `NOTICE.md` — no package enters the tree. The behaviour change is
+# deliberate and global, which is the point: every JSON document this app
+# rewrites is somebody else's.
+serde_json = { version = "1", features = ["preserve_order"] }
+# Content addressing for service packages. A manifest states the sha256 of every
+# file it ships and the registry states the sha256 of the manifest, so a client
+# can tell what it downloaded from what somebody else wrote — see
+# `contracts/package-version.schema.json` and `pkg::verify`.
+#
+# Measured before adding: **no new crate enters the tree.** sha2 0.10 is already
+# built here through `tauri-codegen`, so this changes what the crate may `use`
+# rather than what gets compiled and audited. Hand-rolling SHA-256 was the
+# alternative and is the wrong kind of clever: an implementation that is subtly
+# wrong does not fail here, it fails as "this package is corrupt" on somebody
+# else's machine.
+sha2 = "0.10"
+
+# Sixteen random bytes for the install id the staged rollout buckets on (§3
+# #21). Measured before adding, on the same terms as sha2 above: **no new crate
+# enters the tree** — 0.3.4 is already built here through `rand`, which `tauri`
+# pulls in, so this changes what this crate may `use` rather than what gets
+# compiled and audited.
+#
+# `rand` itself would have done, and is the wrong dependency to name: this needs
+# one call for one array of bytes, and depending on a generator API for that is
+# a larger surface than the thing being asked for. A clock would have needed no
+# dependency at all and is banned outright — `architecture_claims.rs` says why,
+# and it says it because two ids built from `SystemTime::now()` in the same
+# microsecond are one id.
+getrandom = "0.3"
+# `io-std` is for the MCP server, which speaks JSON-RPC over stdin and stdout.
+# `net` is new, for the loopback surface (§3 #34 / ADR 0026). A feature on a
+# crate already compiled here, not a crate — the listener is 40 lines of
+# `TcpListener` and the alternative was axum or hyper-as-a-direct-dependency
+# for one method, one path and one header. ADR 0019 measured the same choice
+# for the TUI and `tests/driver/webdriver.js` for WebDriver; this is the third.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util", "io-std", "net"] }
+thiserror = "2"
+dirs = "6"
+
+# Filesystem watching for projects/*/stackvo.json.
+notify = "8"
+
+# Real PTYs on the host. node-pty could only reach containers because it ran
+# inside one; this can open a host shell in a project directory too.
+portable-pty = "0.9"
+
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-appender = "0.2.5"
+
+# Reading the SAN list and expiry out of the generated wildcard certificate.
+# Shelling out to `openssl x509 -noout -text` would have been one line and is
+# what the Bash side does, but openssl is not reliably on PATH on Windows — and
+# a parser that only runs on two of three platforms cannot be unit-tested on the
+# third. This is pure Rust (nom/asn1-rs, no C), so `covers` and `expiry` are
+# ordinary functions with tests that run everywhere.
+x509-parser = "0.18.1"
+
+# Docker reports container creation as an RFC 3339 string. Comparing it against
+# the generated Dockerfile's mtime is what tells Xdebug's "compiled in yet?"
+# apart from "configured yet?" — two states that look identical from the
+# manifest and send people to different fixes. Already in the tree via
+# x509-parser; `parsing` only, no formatting and no std time source.
+time = { version = "0.3.44", default-features = false, features = ["parsing"] }
+
+# Reading the mail catcher's inbox. The webview cannot do this itself: the CSP
+# in tauri.conf.json allows `connect-src 'self' ipc:` and nothing else, which is
+# the point — widening it to reach one localhost port would widen it for every
+# page the app ever renders. Already in the tree via the updater plugin, and
+# taken here without default features: this only ever talks to 127.0.0.1, so it
+# needs no TLS stack and no cookie store.
+#
+# `system-proxy` is here for the updater, not for the mail catcher. There is one
+# reqwest in the graph — `cargo tree -e features -i reqwest` — so this crate's
+# feature set is also `tauri-plugin-updater`'s, and without it the only proxy
+# reqwest resolves is `HTTPS_PROXY`/`HTTP_PROXY`. On a managed macOS machine the
+# proxy is usually set in System Settings and nowhere else, so update checks
+# failed silently on exactly the fleet that most needs them.
+#
+# It is not free, and `mail.rs` pays for it: the feature is process-wide, and
+# hyper-util's macOS reader takes the proxy host and port without the system's
+# exceptions list. Every client that does not opt out would route 127.0.0.1 at
+# the company proxy — so `mail::client` builds with `no_proxy()`. Read that
+# comment before adding a second reqwest caller.
+reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls", "system-proxy"] }
+# Verifying the package index's signature (C, ADR 0015).
+#
+# Measured before adding, like every other line here: **zero new packages.**
+# minisign is ed25519 with a file format around it, and it is what
+# `tauri-plugin-updater` already uses to check a downloaded binary — so this
+# crate is in `Cargo.lock` and in `NOTICE.md` already, and taking it directly
+# adds a dependency edge and nothing else.
+#
+# It also means the key ceremony ADR 0015 describes has a tool that exists:
+# `minisign -G`, or Tauri's own signer. A scheme needing a bespoke tool is one
+# whose ceremony never happens.
+minisign-verify = "0.2.5"
+
+# Desktop-only plugins: single-instance and autostart are meaningless on mobile.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+# Raw mode for `stackvo tui` (M-8), and nothing else.
+#
+# Measured before adding, and the measurement is the decision: `ratatui` — the
+# obvious way to build a terminal screen — puts **25 new packages** in
+# `Cargo.lock` (649 → 674): a layout solver, a widget set, two unicode-width
+# crates, an LRU cache, strum, darling, a second rustix. What `tui.rs` draws is
+# a list, a detail line and a status bar, with the same column arithmetic
+# `cli.rs` already uses for its tables.
+#
+# These two add **zero packages**. `libc` is already built through
+# `portable-pty` and `windows-sys` through Tauri; both gain a dependency edge
+# and nothing else. They are here for one call each — `tcsetattr` and
+# `SetConsoleMode` — because taking the terminal out of line mode is the one
+# part of a terminal screen that is not text.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console", "Win32_Foundation"] }
+
+[features]
+default = []
+
+# Benchmarks only. Kept out of the default feature set and out of CI — see the
+# module comment on `benches/render.rs` for why a criterion run is a measuring
+# instrument here rather than a gate.
+[dev-dependencies]
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "render"
+harness = false
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+
+# `true` here — which is what this said — strips the symbol table along with the
+# debug info, and a stripped symbol table makes the backtrace in `crash.rs` a
+# column of bare addresses. `"debuginfo"` keeps the names and drops the part
+# that actually costs the megabytes: file-and-line is gone from a crash report,
+# function names are not.
+strip = "debuginfo"

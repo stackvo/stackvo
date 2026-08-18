@@ -1,0 +1,31 @@
+{
+  "apiVersion": "stackvo.dev/package/v1",
+  "service": "kafka",
+  "version": "7.5.0",
+  "image": {
+    "repository": "confluentinc/cp-kafka",
+    "tag": "7.5.0"
+  },
+  "capabilities": ["queue", "kafka-protocol"],
+  "instancing": { "multiple": true, "identity": "version" },
+  "ports": [
+    { "name": "main", "container": 9092, "preferred": 9092, "protocol": "tcp", "legacyKey": "SERVICE_KAFKA_HOST_PORT", "primary": false },
+    { "name": "external", "container": 29092, "preferred": 29092, "protocol": "tcp", "legacyKey": "SERVICE_KAFKA_EXTERNAL_HOST_PORT", "primary": false }
+  ],
+  "volumes": [
+    { "name": "data", "container": "/var/lib/kafka/data", "purgeable": true }
+  ],
+  "files": [
+  ],
+  "settings": [
+  ],
+  "connection": null,
+  "url": null,
+  "dependsOn": [],
+  "health": { "test": ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server 127.0.0.1:9092"], "interval": "15s", "retries": 15, "startPeriod": "45s" },
+  "companions": [
+    { "name": "zookeeper", "image": { "repository": "confluentinc/cp-zookeeper", "tag": "latest" }, "ports": [{ "name": "main", "container": 2181, "preferred": 2181 }], "volumes": [], "health": { "test": ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/2181'"], "interval": "10s", "retries": 12, "startPeriod": "15s" }, "compose": { "file": "companion.zookeeper.yml.tpl", "sha256": "5d91dae7b058228365651a33266b3e0251cc37dbfb6ec6cb18661252e110e3cc" } }
+  ],
+  "compose": { "file": "compose.yml.tpl", "sha256": "ba4854e7a80d75e7c87bb573ff6610fcaf204cd6f7f38048ad7e3c9e092ca7ef" },
+  "support": {"status":"supported"}
+}
