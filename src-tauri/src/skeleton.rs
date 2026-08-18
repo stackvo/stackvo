@@ -310,8 +310,25 @@ pub fn revert(root: &Path, relative: &str) -> Result<()> {
 /// deep and the chain stopped at three. Depth is not something to count by
 /// hand — a test caught it, but only because it asserted on a real path
 /// rather than on a file count.
+///
+/// Dotfiles are not among them, and the reason is the same one the module doc
+/// gives for `.env`: `include_dir!` takes the directory as the file system has
+/// it, gitignore and all, so anything Finder or an editor drops into
+/// `skeleton/` is compiled into the binary and becomes part of the contract.
+/// A `.DS_Store` did exactly that — listed as a template the workspace could
+/// override, and not UTF-8, so the first caller to read it got `None` where the
+/// list had promised a file. Nothing under `skeleton/` is meant to be hidden,
+/// so the whole class goes rather than the one name.
 fn files_of<'a>(dir: &'a Dir<'a>) -> Vec<&'a include_dir::File<'a>> {
-    let mut out: Vec<&include_dir::File> = dir.files().collect();
+    let mut out: Vec<&include_dir::File> = dir
+        .files()
+        .filter(|f| {
+            !f.path()
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with('.'))
+        })
+        .collect();
     for child in dir.dirs() {
         out.extend(files_of(child));
     }
@@ -362,15 +379,31 @@ mod tests {
     /// This was assumed rather than checked, and the assumption was written
     /// into the module doc as if it were a safeguard. It is not: a
     /// `skeleton/.env` sat in the binary, ahead of `.env.example` in the file
-    /// order, so it was the file a new workspace was actually seeded from.
+    /// order, so it was the file a new workspace was actually seeded from. The
+    /// second one through the same hole was a `.DS_Store`, which is why
+    /// `files_of` filters the class rather than the two names.
+    ///
+    /// Asserted on `overridable()` — the contract — rather than on the raw
+    /// directory: what matters is not that the build machine is tidy but that
+    /// nothing a tidy build machine lacks can reach the list. Every entry is
+    /// read as well, because a name on the list that `read_template` answers
+    /// `None` for is the failure this pair of bugs actually produced.
     #[test]
-    fn no_env_file_is_compiled_in() {
-        let leaked: Vec<String> = files_of(&SKELETON)
-            .iter()
-            .map(|f| f.path().display().to_string())
-            .filter(|p| p.rsplit('/').next().unwrap_or(p).starts_with(".env"))
-            .collect();
-        assert!(leaked.is_empty(), "env files in the binary: {leaked:?}");
+    fn nothing_hidden_or_unreadable_is_offered_as_a_template() {
+        let listed = overridable();
+        assert!(!listed.is_empty(), "the skeleton ships no templates at all");
+
+        for rel in listed {
+            let name = rel.rsplit('/').next().unwrap_or(&rel).to_string();
+            assert!(!name.starts_with('.'), "{rel} is a hidden file");
+            assert!(
+                SKELETON
+                    .get_file(&rel)
+                    .and_then(|f| f.contents_utf8())
+                    .is_some(),
+                "{rel} is listed but cannot be read as text"
+            );
+        }
     }
 
     #[test]
