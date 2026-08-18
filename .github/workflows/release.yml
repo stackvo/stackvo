@@ -45,7 +45,7 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # A rehearsal signs nothing, so a missing signing key is not a reason to
       # stop it. Said out loud rather than skipped silently: the whole point of
@@ -129,7 +129,7 @@ jobs:
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
