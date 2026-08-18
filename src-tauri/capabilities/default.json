@@ -1,0 +1,31 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities granted to the main window. Deliberately narrow: the app reaches Docker, the filesystem and the hosts file through typed Rust commands, not through blanket plugin permissions. This is the inverse of the web UI's `chmod 666 /var/run/docker.sock`. `opener:allow-open-path` was granted and is now gone: the plugin documents it as enabling the command with no scope, so every call was refused, and a scope wide enough for an arbitrary workspace is a scope over everything. Directories open through `open_folder` instead.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "http://*"
+        },
+        {
+          "url": "https://*"
+        }
+      ]
+    },
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-confirm",
+    "notification:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "updater:default",
+    "process:allow-restart"
+  ]
+}
