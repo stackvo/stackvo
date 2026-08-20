@@ -176,8 +176,23 @@
  *
  * These tie with the rules above on specificity and win on source order, which
  * is why they have to stay below them. */
-:root .rounded-0 {
+:root .rounded-0:not(.v-list-item) {
   border-radius: 0 !important;
+}
+
+/* A list item is the one place `rounded-0` is nobody's decision.
+ *
+ * `VList` hands its items `rounded: false` by default, so every row in every
+ * plain list carries the class — and the rule above then pinned it to zero,
+ * against a menu whose own card follows the setting. The hover highlight is
+ * the item's own box (`.v-list-item__overlay` inherits its radius), so a
+ * square highlight sat inside a rounded menu with the corners showing past it.
+ *
+ * Nothing in this application asks a list item to run to an edge: every
+ * authored `rounded="0"` is a field or the page shell. So the exception above
+ * is safe, and this is what the row falls back to. */
+:root .v-list-item.rounded-0 {
+  border-radius: var(--app-radius) !important;
 }
 
 /* Compound, not descendant: the caps belong to the field that carries the

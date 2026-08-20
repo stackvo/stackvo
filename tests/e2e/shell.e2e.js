@@ -156,3 +156,39 @@ test('says the engine is down rather than rendering an empty stack', async ({ pa
   const text = (await page.locator('body').innerText()).trim();
   expect(text.length, 'the page is empty with the engine down').toBeGreaterThan(40);
 });
+
+/**
+ * The corner radius setting reaches a menu row's hover, not just the menu.
+ *
+ * `VList` gives every item `rounded: false`, which lands as a `rounded-0`
+ * class, and `global.css` pins that class to zero because `rounded="0"` marks
+ * a surface running to an edge. Nothing in this application asks that of a
+ * list item — it is Vuetify's default — so the pin squared every menu row
+ * inside a menu whose own card followed the setting, and the highlight sat in
+ * a rounded box with the corners showing past it.
+ *
+ * Computed style in a real engine, because that is the only place a class this
+ * one never writes can be seen at all: the markup says nothing, and jsdom
+ * resolves no cascade.
+ */
+test('a menu row is rounded to the same radius as the menu around it', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: /language|dil/i }).first().click();
+  const row = page.locator('.v-overlay--active .v-list-item').first();
+  await expect(row).toBeVisible();
+
+  const measured = await page.evaluate(() => {
+    const item = document.querySelector('.v-overlay--active .v-list-item');
+    return {
+      app: getComputedStyle(document.documentElement).getPropertyValue('--app-radius').trim(),
+      item: getComputedStyle(item).borderRadius,
+      // The hover highlight is a child that inherits the row's radius, so a
+      // rounded row with a square highlight would still be the reported bug.
+      overlay: getComputedStyle(item.querySelector('.v-list-item__overlay')).borderRadius,
+    };
+  });
+
+  expect(measured.item, 'the menu row does not follow the radius setting').toBe(measured.app);
+  expect(measured.overlay, 'the hover highlight does not follow the row').toBe(measured.app);
+});
