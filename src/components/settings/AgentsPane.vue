@@ -154,9 +154,13 @@ defineExpose({ snippet, state });
       <code class="text-caption">{{ status.binary }}</code>
     </div>
 
+    <!-- The accent, like every other toggle in the application. Orange here was
+         meant to mark the risk, and the sentence underneath already names it —
+         a colour nothing else on the page uses reads as a warning *state* the
+         switch is in rather than as the switch being on. -->
     <v-switch
       v-model="allowWrites"
-      color="warning"
+      color="primary"
       density="compact"
       hide-details
       class="mb-1"

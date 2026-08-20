@@ -327,3 +327,41 @@ body::-webkit-scrollbar,
 .v-overlay:not(.v-overlay--active) {
   display: none;
 }
+
+/* An off switch, in the dark theme, said out loud.
+ *
+ * Vuetify draws the unselected track as `surface-variant` at 0.6 opacity and
+ * the knob as `surface-bright`. In the light theme those land above the page
+ * and read fine; in this one they land *below* the card they sit on — the knob
+ * (`#1E2530`) is darker than the group card behind it, and the track composites
+ * to within a few points of the same. The result is a control that is only
+ * visible when it is on, so "off" and "not a switch at all" look identical, and
+ * the label beside it is the only thing saying a toggle is there.
+ *
+ * Material's own answer is the one taken here: an unselected switch is an
+ * outlined track with a knob in the outline colour, rather than a filled track
+ * that happens to be a dark fill. Both values are derived from `on-surface`, so
+ * a neutral palette that repaints the surfaces carries the switch with it.
+ *
+ * Off only. `--dirty` is the on state and it is already painted in the accent
+ * colour; `--disabled` is meant to recede, and lifting it here would make an
+ * unavailable toggle louder than an available one.
+ */
+.v-theme--dark
+  .v-switch:not(.v-input--disabled)
+  .v-selection-control:not(.v-selection-control--dirty)
+  .v-switch__track {
+  background-color: rgba(var(--v-theme-on-surface), 0.18);
+  /* The fill above carries its own alpha, so the element-level 0.6 that dimmed
+     it is not needed twice. */
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.34);
+}
+
+.v-theme--dark
+  .v-switch:not(.v-input--disabled)
+  .v-selection-control:not(.v-selection-control--dirty)
+  .v-switch__thumb {
+  background-color: rgb(var(--v-theme-on-surface-variant));
+  color: rgb(var(--v-theme-surface));
+}
