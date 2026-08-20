@@ -101,7 +101,7 @@ onMounted(loadCatalog);
       </v-chip>
     </template>
 
-    <v-row dense>
+    <v-row>
       <v-col v-for="f in NGINX_FIELDS" :key="f.key" cols="12" sm="6" md="4">
         <v-text-field
           :model-value="effective(f.key)"
@@ -134,7 +134,7 @@ onMounted(loadCatalog);
 
     <!-- Only meaningful once compression is on, so it appears with
            it rather than sitting greyed out asking to be understood. -->
-    <v-row v-if="gzipOn" dense class="mt-2">
+    <v-row v-if="gzipOn" class="mt-2">
       <v-col cols="12" sm="4">
         <v-text-field
           :model-value="effective('SERVER_GZIP_COMP_LEVEL')"

@@ -50,8 +50,11 @@ onMounted(loadCatalog);
       </v-chip>
     </template>
 
-    <v-row dense>
-      <v-col v-for="r in RUNTIME_DEFAULTS" :key="r.id" cols="12" sm="6">
+    <!-- Three across on a wide window, like the request-limits grid: the
+         field holds a version number, so a half-width column is mostly empty
+         and five runtimes then take three rows to say five short things. -->
+    <v-row>
+      <v-col v-for="r in RUNTIME_DEFAULTS" :key="r.id" cols="12" sm="6" md="4">
         <v-select
           :model-value="effective(r.key)"
           :items="runtimeItems(r)"
@@ -88,7 +91,7 @@ onMounted(loadCatalog);
       </v-chip>
     </template>
 
-    <v-row dense>
+    <v-row>
       <v-col cols="12" md="6">
         <v-select
           :model-value="effective('SUPPORTED_LANGUAGES_PHP_DEFAULT')"
@@ -123,7 +126,7 @@ onMounted(loadCatalog);
     :title="t('settings.defaults.phpTools')"
     :description="t('settings.shape.phpDesc')"
   >
-    <v-row dense class="mb-1">
+    <v-row class="mb-2">
       <v-col cols="12" md="6">
         <v-combobox
           :model-value="effective('PHP_TOOL_COMPOSER_VERSION')"
@@ -162,7 +165,7 @@ onMounted(loadCatalog);
       persistent-hint
       density="comfortable"
       variant="outlined"
-      class="mb-3"
+      class="mb-5"
       @update:model-value="(v) => setList('PHP_DEFAULT_TOOLS', v)"
     />
     <v-combobox

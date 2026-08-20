@@ -38,7 +38,7 @@ watch(
     <p class="text-caption text-medium-emphasis mb-4">{{ t('phpIni.explain') }}</p>
 
     <template v-if="status">
-      <v-row dense>
+      <v-row>
         <v-col v-for="key in PHP_INI_FIELDS" :key="key" cols="12" sm="6">
           <!-- The placeholder is what PHP in the container reports right
                now, not a documented default. Measured, because assuming
