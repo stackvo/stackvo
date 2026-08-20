@@ -128,7 +128,7 @@ onMounted(() => {
          glued together, and only the TLD is the part people mean
          when they ask to swap .loc for .dev — as one input the two
          are indistinguishable from a raw .env row. -->
-    <v-row dense align="start">
+    <v-row align="start">
       <v-col cols="12" sm="6">
         <v-text-field
           :model-value="suffixLabel"
@@ -291,7 +291,7 @@ onMounted(() => {
     :title="t('settings.shape.networkTitle')"
     :description="t('settings.shape.networkGroupDesc')"
   >
-    <v-row dense>
+    <v-row>
       <v-col cols="12" md="6">
         <v-text-field
           :model-value="effective('DOCKER_DEFAULT_NETWORK')"
