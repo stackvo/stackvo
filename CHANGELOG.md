@@ -7,6 +7,62 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Eight tunnel providers in the Share pane, not one** (§3, the tunnel).
+  `tunnel.rs` was cloudflared and the shape of "one provider" had leaked into
+  every part of it: the image was a constant, the URL was recognised by
+  `.trycloudflare.com`, and the pane said "no account needed" as though that
+  were a fact about tunnels rather than about Cloudflare. The choice is a real
+  one — a quick tunnel's address changes on every start, which is right for
+  "did the webhook arrive" and useless for a redirect URI somebody registers in
+  a dashboard once — and the providers that keep an address are exactly the
+  ones that want an account.
+
+  A provider is now data: image, arguments, the shape of the URL it prints, and
+  whether it needs a token. `cloudflare`, `localhost.run`, `pinggy` and
+  `localtunnel` need no account; `ngrok`, Tailscale Funnel, `zrok` and
+  LocalXpose take a token, which goes in the OS keystore beside the Stripe key
+  and reaches the container as an environment variable — never as an argument,
+  which `docker inspect` and this app's own operation console both print. A
+  provider that needs a token and has none is refused **before** the image is
+  pulled rather than after minutes of download.
+
+  **Every one of the eight is run for real** by
+  `cargo run --example tunnel_probe`, against a throwaway nginx on a throwaway
+  network, using the same `run_args` the app uses. That establishes for all of
+  them that the image runs, the client is inside it, and the arguments built
+  here are arguments it accepts; for the four anonymous ones that a public URL
+  comes back and is picked out of the client's own banner; and for the four
+  that need an account that an invalid token is refused in words the pane can
+  show. What is left untested for those four is a single step — what the
+  provider does with a *valid* token — and the pane says exactly that instead
+  of a blanket "unverified".
+
+  Five findings came out of watching the clients rather than reading about
+  them, and each one changed the code:
+
+  - `localhost.run` and Pinggy both link their own dashboard directly above the
+    tunnel they just opened, so suffix lists written from documentation would
+    have handed out `admin.localhost.run` and `dashboard.pinggy.io` as the
+    public address of somebody's application;
+  - `tailscale funnel` serves "a service running on the local machine", so its
+    sidecar joins the **project container's network namespace** and the target
+    is a port number — rather than a remote URL the documentation never
+    promises to accept;
+  - localtunnel's `--host` names the *tunnel server*, not the target: pointed
+    at the project container it produced a client that sat in silence;
+  - LocalXpose can present the local domain after all, through the
+    `--request-header host:` plugin in its own help text;
+  - ngrok's `--log` defaults to `false` — without `--log=stdout` the agent
+    works perfectly and prints the URL nowhere at all.
+
+  The sidecar is no longer `--rm`, for the reason `stripe.rs` already learned:
+  a rejected token makes the client print its complaint and exit, and `--rm`
+  takes the log away with the container — leaving the likeliest failure the
+  feature has looking like a tunnel that is merely slow. `tunnel_status` now
+  reads that complaint out and the pane shows it in the client's own words,
+  with the provider read from a `stackvo.tunnel.provider` label rather than
+  guessed from an image two of them share.
+
 - **Two more release targets: Linux aarch64 and Windows ARM64** (§3 #22). Six
   in the matrix instead of four, on **native ARM runners** rather than by
   cross-compilation — a Tauri bundle is a platform installer, a `.deb`, an

@@ -2157,12 +2157,13 @@
       "new": true,
       "kind": "operation",
       "args": {
-        "name": "string"
+        "name": "string",
+        "provider": "string | null"
       },
       "returns": "OperationId",
       "emits": ["tunnel:progress", "tunnel:done"],
-      "why": "Starts a cloudflared quick-tunnel sidecar on the stack's network, forwarding a random trycloudflare.com URL to the project's container. No account, no token — and no host-binary competitor can attach to the container network at all.",
-      "notes": "An operation because the first start pulls the cloudflared image, which can take minutes. Targets the project container directly (with the local domain as Host header): with SSL on, every Traefik project router is websecure-only, which a public visitor cannot handshake against. Refuses when the project container is not running — a tunnel serving 502s looks like it worked. The URL that results is public and unauthenticated while the tunnel runs; the UI says so."
+      "why": "Starts a tunnel-client sidecar on the stack's network, forwarding a public URL to the project's container. No host-binary competitor can attach to the container network at all. `provider` names one of the eight in tunnel_providers and defaults to cloudflare — the choice is real: an anonymous quick tunnel gets a URL in ten seconds and a new one on every start, which is right for \"did the webhook arrive\" and useless for a redirect URI somebody registers in a dashboard.",
+      "notes": "An operation because the first start pulls the provider's image, which can take minutes. Targets the project container directly: with SSL on, every Traefik project router listens on websecure only, and a public visitor cannot complete a TLS handshake against a hostname that exists in no DNS. Three providers also present the local domain as the Host header; the SSH-based ones cannot, and the pane says so. A provider that needs a token is refused here when none is stored, before the pull rather than after it, and the token reaches the container as an environment variable — never as an argument, which docker inspect and the operation console both print."
     },
     "tunnel_status": {
       "new": true,
@@ -2170,7 +2171,15 @@
       "args": {},
       "returns": "TunnelStatus[]",
       "why": "Webhook testing (Stripe, GitHub) had no answer: myapp.loc does not exist on the internet. This reports every running tunnel sidecar and its assigned public URL.",
-      "notes": "The URL is read from the sidecar's own log on every call rather than cached — what the log says is what is actually live, across app restarts and container crashes alike. `url` is null while cloudflared is still connecting; the UI polls until it appears."
+      "notes": "The URL is read from the sidecar's own log on every call rather than cached — what the log says is what is actually live, across app restarts and container crashes alike. `url` is null while the client is still connecting; the UI polls until it appears. `provider` comes from the container's `stackvo.tunnel.provider` label and is null only for a sidecar started before the picker existed, which is a cloudflared one. `failure` is the client's own complaint, read from the same log — a rejected token is the likeliest failure four of the eight providers have, and the sidecar is deliberately not --rm so its log survives the exit that produced it."
+    },
+    "tunnel_providers": {
+      "new": true,
+      "kind": "query",
+      "args": {},
+      "returns": "TunnelProviderStatus[]",
+      "why": "The picker is built from the table that owns the invocation, in Rust. A list the front end kept would go on offering a provider the day one is removed, and offer it without the fact that decides whether it can be used at all — whether its token is in the keystore.",
+      "notes": "hasToken is a boolean and never the token. `anonymous` marks the four providers that hand out a URL with no account; `verified` marks the ones a real tunnel was opened through in this repository, which is those same four — the rest carry the vendors' documented invocations and say so on screen. `sessionMinutes` is the free tier's cap where one is enforced, which somebody needs before they paste the URL into a dashboard rather than after."
     },
     "tunnel_stop": {
       "new": true,
@@ -2179,7 +2188,18 @@
         "name": "string"
       },
       "returns": "void",
-      "notes": "The sidecar runs with --rm, so stop is also removal — nothing is left behind to leak the old URL."
+      "notes": "Removes rather than stops. The sidecar is kept after an exit so its log can say why it failed, so a container left behind here would go on showing a dead URL and a stale reason to the next person who opens the pane."
+    },
+    "tunnel_token_set": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "provider": "string",
+        "token": "string | null"
+      },
+      "returns": "boolean (whether a token is now stored)",
+      "why": "Four providers need an account token, and a credential needs somewhere to go that is not a file in the workspace — this app already decided where that is.",
+      "notes": "One command for both directions: `null` clears it. The entry is per provider and not per project, which is the opposite of stripe_key_set and deliberately so — a Stripe key is an account's, and two projects on one account cross-post events; a tunnel token is a machine's. A provider that takes no token is refused rather than given a keystore entry that would sit there for ever looking like configuration."
     },
     "updater_status": {
       "new": true,
@@ -3996,7 +4016,20 @@
       "project": "string",
       "running": "bool",
       "url": "string?",
-      "container": "string"
+      "container": "string",
+      "provider": "string?",
+      "failure": "string?"
+    },
+    "TunnelProviderStatus": {
+      "id": "string",
+      "image": "string",
+      "anonymous": "bool",
+      "tokenEnv": "string?",
+      "urlSuffixes": "string[]",
+      "rewritesHost": "bool",
+      "sessionMinutes": "number?",
+      "verified": "bool",
+      "hasToken": "bool"
     },
     "UpdateInfo": {
       "available": "bool",

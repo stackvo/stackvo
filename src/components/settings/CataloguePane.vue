@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import { api } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import SettingsGroup from '@/components/SettingsGroup.vue';
 
 /**
  * Where service packages come from, in the place people look for a setting.
@@ -149,9 +150,18 @@ const bundleSize = computed(() =>
 </script>
 
 <template>
-  <div>
-    <ErrorAlert :error="error" class="mb-4" />
+  <!-- Two groups, as every other settings pane is built. This one was a flat
+       column of alerts and buttons with a rule through the middle, which made
+       the two halves — where a catalogue comes *from*, and how one is carried
+       *out* — look like one long form. `SettingsGroup` is what the rest of the
+       page uses to say "these controls answer one question". -->
+  <ErrorAlert :error="error" />
 
+  <SettingsGroup
+    icon="mdi-cloud-download-outline"
+    :title="t('catalogueSettings.sourceTitle')"
+    :description="t('catalogueSettings.sourceWhat')"
+  >
     <!-- What is in force now. Absent is a state of its own (ADR 0011): nothing
          is embedded, so a machine that has never fetched has no catalogue at
          all rather than an empty one. -->
@@ -197,7 +207,7 @@ const bundleSize = computed(() =>
       class="mb-3"
     />
 
-    <div class="d-flex ga-2 mb-4">
+    <div class="d-flex ga-2" :class="probe ? 'mb-4' : ''">
       <v-btn
         variant="tonal"
         prepend-icon="mdi-check-network-outline"
@@ -269,18 +279,19 @@ const bundleSize = computed(() =>
         {{ t('catalogueSettings.resolved', { url: probe.resolved }) }}
       </div>
     </v-alert>
+  </SettingsGroup>
 
-    <!-- The other end of the same question: getting this catalogue to a
-         machine that cannot fetch one (§3 #31). ADR 0011 makes this the only
-         way such a machine ever has services at all, which is why it is a
-         section here and not an advanced menu. -->
-    <v-divider class="my-6" />
-
-    <div class="text-subtitle-2 mb-1">{{ t('catalogueSettings.bundleTitle') }}</div>
-    <div class="text-caption text-medium-emphasis mb-3">
-      {{ t('catalogueSettings.bundleWhat') }}
-    </div>
-
+  <!-- The other end of the same question: getting this catalogue to a
+       machine that cannot fetch one (§3 #31). ADR 0011 makes this the only
+       way such a machine ever has services at all, which is why it is a
+       group of its own here and not an advanced menu. Its sentence is the
+       group's description now — the header is where every other pane says
+       what a group is for. -->
+  <SettingsGroup
+    icon="mdi-package-variant-closed"
+    :title="t('catalogueSettings.bundleTitle')"
+    :description="t('catalogueSettings.bundleWhat')"
+  >
     <v-btn
       variant="tonal"
       prepend-icon="mdi-package-variant-closed"
@@ -331,5 +342,5 @@ const bundleSize = computed(() =>
 
       <div class="text-caption mt-2">{{ t('catalogueSettings.bundleNext') }}</div>
     </v-alert>
-  </div>
+  </SettingsGroup>
 </template>

@@ -127,9 +127,131 @@ describe('the tunnel', () => {
       await tn.start();
 
       expect(tn.error.value.code).toBe('DOCKER_UNAVAILABLE');
-      expect(calls.some(([n]) => n === 'tunnelStatus'), 'polled after a failed start').toBe(false);
+      expect(
+        calls.some(([n]) => n === 'tunnelStatus'),
+        'polled after a failed start'
+      ).toBe(false);
       expect(tn.busy.value).toBe(false);
     });
+  });
+
+  describe('choosing a provider', () => {
+    /**
+     * Eight providers, and the one the button uses has to be the one the
+     * picker shows — a start that silently opened Cloudflare while the field
+     * said ngrok would hand out an address that expires on a different clock.
+     */
+    it('starts the provider that was chosen, not the default', async () => {
+      vi.useFakeTimers();
+      replies.tunnelStart = null;
+      replies.tunnelStatus = [{ project: 'shop', running: true, url: 'https://x.ngrok-free.app' }];
+
+      const tn = useTunnel(ref('shop'));
+      tn.chosen.value = 'ngrok';
+      const done = tn.start();
+      await vi.advanceTimersByTimeAsync(TUNNEL_POLL_MS * 2);
+      await done;
+      vi.useRealTimers();
+
+      expect(calls.find(([n]) => n === 'tunnelStart')).toEqual(['tunnelStart', 'shop', 'ngrok']);
+    });
+
+    /**
+     * A running tunnel is the answer to "which provider", whatever was picked
+     * before it started — including after an app restart, when nothing here
+     * chose anything at all.
+     */
+    it("adopts the running tunnel's provider into the picker", async () => {
+      replies.tunnelStatus = [
+        { project: 'shop', running: true, url: 'https://x.loca.lt', provider: 'localtunnel' },
+      ];
+
+      const tn = useTunnel(ref('shop'));
+      await tn.load();
+      expect(tn.chosen.value).toBe('localtunnel');
+    });
+
+    /** A provider whose token is missing cannot open anything, and the pane
+     *  disables the button on this rather than on a failed pull. */
+    it('knows a provider that needs a token it does not have', async () => {
+      replies.tunnelProviders = [
+        { id: 'cloudflare', anonymous: true, tokenEnv: null, hasToken: false },
+        { id: 'ngrok', anonymous: false, tokenEnv: 'NGROK_AUTHTOKEN', hasToken: false },
+        { id: 'zrok', anonymous: false, tokenEnv: 'ZROK_TOKEN', hasToken: true },
+      ];
+
+      const tn = useTunnel(ref('shop'));
+      await tn.loadProviders();
+
+      expect(tn.needsToken.value, 'cloudflare needs nothing').toBe(false);
+      tn.chosen.value = 'ngrok';
+      expect(tn.needsToken.value).toBe(true);
+      tn.chosen.value = 'zrok';
+      expect(tn.needsToken.value, 'a stored token is enough').toBe(false);
+    });
+
+    /** A command a stub does not know answers null, and a picker built from
+     *  `null.map` takes the whole pane down with it. */
+    it('survives a provider list that is not a list', async () => {
+      replies.tunnelProviders = null;
+
+      const tn = useTunnel(ref('shop'));
+      await tn.loadProviders();
+      expect(tn.providers.value).toEqual([]);
+      expect(tn.provider.value).toBe(null);
+    });
+
+    /**
+     * `hasToken` is the keystore's answer, and a keychain that refused the
+     * write is exactly the case where believing an optimistic one is wrong.
+     */
+    it('re-reads the table after storing a token rather than assuming', async () => {
+      replies.tunnelTokenSet = true;
+      replies.tunnelProviders = [
+        { id: 'ngrok', anonymous: false, tokenEnv: 'NGROK_AUTHTOKEN', hasToken: true },
+      ];
+
+      const tn = useTunnel(ref('shop'));
+      expect(await tn.saveToken('ngrok', 'secret')).toBe(true);
+
+      expect(calls.map(([n]) => n)).toEqual(['tunnelTokenSet', 'tunnelProviders']);
+      expect(calls[0]).toEqual(['tunnelTokenSet', 'ngrok', 'secret']);
+      expect(tn.providers.value[0].hasToken).toBe(true);
+    });
+  });
+
+  /**
+   * A rejected token is the likeliest failure four of these providers have,
+   * and the sidecar exits on it. Polling twenty times against a container that
+   * is already gone says "connecting" for half a minute about something that
+   * will never connect.
+   */
+  it('stops polling when the client reported a failure', async () => {
+    vi.useFakeTimers();
+    let polls = 0;
+    replies.tunnelStart = null;
+    replies.tunnelStatus = () => {
+      polls += 1;
+      return Promise.resolve([
+        {
+          project: 'shop',
+          running: false,
+          url: null,
+          provider: 'ngrok',
+          failure: polls >= 2 ? 'authentication failed: the authtoken is invalid' : null,
+        },
+      ]);
+    };
+
+    const tn = useTunnel(ref('shop'));
+    tn.chosen.value = 'ngrok';
+    const done = tn.start();
+    await vi.advanceTimersByTimeAsync(TUNNEL_POLL_MS * 6);
+    await done;
+    vi.useRealTimers();
+
+    expect(polls, 'kept polling past the failure').toBe(2);
+    expect(tn.tunnel.value.failure).toContain('authtoken');
   });
 
   it('re-reads the status after stopping, rather than assuming', async () => {
