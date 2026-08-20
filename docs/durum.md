@@ -1020,13 +1020,13 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 
 | | Sayı | Nasıl sayıldı |
 |---|---|---|
-| Toplam IPC komutu | **253** | `contracts/ipc.json` → `commands` (250 Rust + 3 `frontend-plugin`) |
-| Bunlardan `#[tauri::command]` olarak yazılmış | **249** | `commands.rs`, `#[cfg(test)]` dışı |
-| Frontend kaynak dosyası | **134** | `src/**/*.{js,vue}`, spec dosyaları hariç |
+| Toplam IPC komutu | **255** | `contracts/ipc.json` → `commands` (252 Rust + 3 `frontend-plugin`) |
+| Bunlardan `#[tauri::command]` olarak yazılmış | **251** | `commands.rs`, `#[cfg(test)]` dışı |
+| Frontend kaynak dosyası | **135** | `src/**/*.{js,vue}`, spec dosyaları hariç |
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
-| `ipc.js` sarmalayıcısı | **246** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **97 modül, 85.831 satır** | `src-tauri/src/*.rs` |
+| `ipc.js` sarmalayıcısı | **248** | `api` nesnesinin üye sayısı |
+| Rust kaynağı | **97 modül, 87.006 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 
