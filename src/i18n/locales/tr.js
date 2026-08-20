@@ -493,6 +493,9 @@ export default {
     policyMirror: 'Bir yönetici kaynağı {url} adresine sabitlemiş. Aşağıdaki adres yok sayılıyor.',
     signatureRequired:
       'Bu makine imzalı katalog istiyor ve henüz yayımlanmış bir imzalama anahtarı yok; çekme, imzasıza düşmek yerine reddediliyor.',
+    sourceTitle: 'Kaynak',
+    sourceWhat:
+      'Bu makinenin katalogu nereden çektiği, ve yürürlükteki katalogda ne olduğu. Bir adres, kullanılmadan önce test edilebilir.',
     address: 'Katalog adresi',
     addressHint:
       'Bir https:// adresi ya da bir klasör. GitHub depo adresi, dosyaların gerçekte sunulduğu yere çevrilir.',
@@ -1922,15 +1925,63 @@ export default {
     scan: 'Tüneli başka bir cihazda açmak için kamerayı buna tutun. Tünel durunca bu da çalışmaz.',
     title: 'Paylaş',
     explain:
-      'Bu projeye yönlenen geçici bir genel URL — .loc alan adına erişemeyen webhook gönderenler (Stripe, GitHub) için. Yığın ağında yan konteyner olarak bir Cloudflare hızlı tüneli çalıştırır; hesap gerekmez.',
+      'Bu projeye yönlenen geçici bir genel URL — .loc alan adına erişemeyen webhook gönderenler (Stripe, GitHub) için. Yığın ağında yan konteyner olarak bir tünel istemcisi çalışır ve dışarı bağlanır; bu makinede hiçbir port açılmaz.',
     needsRunning: 'Önce projeyi başlatın — tünel projenin konteynerine yönlenir.',
     start: 'Genel URL al',
     startHint:
-      'İlk başlatma cloudflared imajını indirir. URL rastgeledir, yalnızca tünel çalışırken yaşar ve her başlatmada değişir.',
-    connecting: 'Bağlanıyor — Cloudflare URL atıyor…',
+      'İlk başlatma sağlayıcının imajını indirir. Sağlayıcı aksini söylemedikçe URL rastgeledir, yalnızca tünel çalışırken yaşar ve her başlatmada değişir.',
+    connecting: 'Bağlanıyor — sağlayıcı URL atıyor…',
     stop: 'Paylaşımı durdur',
+    failed: 'Tünel istemcisi şu sebeple durdu',
+    via: '{provider} üzerinden',
+    provider: 'Sağlayıcı',
+    noAccount: 'Hesap gerekmez',
+    needsAccount: 'Hesap gerekir',
+    unverified: 'Denenmedi',
+    unverifiedNote:
+      'Bu sağlayıcıdan StackVo ile hiç trafik geçmedi — burada kimsenin onda hesabı yok. İstemcisi, argümanları ve geçersiz jetona verdiği cevap sınandı (`cargo run --example tunnel_probe`); sınanmayan tek şey geçerli bir jetonla ne yaptığı. Şikâyet ederse kendi sözleri burada görünür.',
+    tokenMissing: 'jeton yok',
+    sessionCap: '{minutes} dk sınır',
+    sessionCapLong:
+      'Ücretsiz kullanımda bu tünel {minutes} dakika sonra biter; yeniden başlatmak yeni bir adres verir.',
+    noHostHeader:
+      'Uygulama Host olarak tünel adını görür, bu projenin yerel alan adını değil. Mutlak URL üreten bir çatı, onları tünel adresinden üretir.',
+    tokenNeeded: 'Bu sağlayıcı tünel açmadan önce bir hesap jetonu istiyor.',
+    tokenStored: 'Bu sağlayıcı için bir jeton saklı.',
+    tokenAdd: 'Jeton ekle',
+    tokenReplace: 'Değiştir',
+    tokenClear: 'Sil',
+    tokenSave: 'Jetonu kaydet',
+    tokenLabel: 'Jeton ({env})',
+    tokenHint:
+      'İşletim sisteminin anahtar deposunda tutulur, çalışma alanında değil, ve konteynere ortam değişkeni olarak verilir. Bir daha hiç gösterilmez.',
     publicWarning:
       'Bu URL genel internette canlıdır ve kimlik doğrulaması yoktur. Elinde olan herkes makinenizdeki bu projeye erişir. Test bitince paylaşımı durdurun.',
+    providers: {
+      cloudflare: 'Cloudflare hızlı tünel',
+      localhost_run: 'localhost.run',
+      pinggy: 'Pinggy',
+      localtunnel: 'localtunnel',
+      ngrok: 'ngrok',
+      tailscale: 'Tailscale Funnel',
+      zrok: 'zrok',
+      localxpose: 'LocalXpose',
+    },
+    providerNote: {
+      cloudflare:
+        'Hesap gerekmez. Her başlatmada yeni bir rastgele trycloudflare.com adresi; erişilebilir olması bir dakikayı bulabilir.',
+      localhost_run: 'Hesap gerekmez, SSH üzerinden. Her başlatmada yeni bir lhr.life adresi.',
+      pinggy:
+        'Hesap gerekmez, SSH üzerinden. Ücretsiz oturumlar süre sınırlıdır ve aynı adresten arka arkaya açılan birkaç tünel bir süreliğine reddedilir.',
+      localtunnel:
+        'Hesap gerekmez. loca.lt adresi; tarayıcılar önce bir hatırlatma sayfası görür, webhook gönderenler görmez. İstemci ilk açılışta kendini indirir, o yüzden bu sağlayıcı geç kalkar.',
+      ngrok:
+        'Bir authtoken ister. Ücretsiz plan bir sabit alan adı içerir — yönlendirme adresi için gereken şey budur.',
+      tailscale:
+        'Bir auth key ister. Funnel, yeniden başlatmalardan sağ çıkan sabit bir ad.tailnet.ts.net adresi verir. Bu yan konteyner projenin konteynerinin ağı içinde çalışır, çünkü Funnel yerel bir portu yayımlar.',
+      zrok: 'Bir hesap jetonu ister. Açık kaynak, kendi sunucunuzda da çalıştırılabilir.',
+      localxpose: 'Bir erişim jetonu ister.',
+    },
   },
 
   migration: {

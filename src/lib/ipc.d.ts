@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 128 named types, 246 wrappers, 0 field(s) the
+ * Measured at generation: 129 named types, 248 wrappers, 0 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -1773,6 +1773,31 @@ export interface TunnelStatus {
     url?: string;
     /** string */
     container: string;
+    /** string? */
+    provider?: string;
+    /** string? */
+    failure?: string;
+}
+
+export interface TunnelProviderStatus {
+    /** string */
+    id: string;
+    /** string */
+    image: string;
+    /** bool */
+    anonymous: boolean;
+    /** string? */
+    tokenEnv?: string;
+    /** string[] */
+    urlSuffixes: string[];
+    /** bool */
+    rewritesHost: boolean;
+    /** number? */
+    sessionMinutes?: number;
+    /** bool */
+    verified: boolean;
+    /** bool */
+    hasToken: boolean;
 }
 
 export interface UpdateInfo {
@@ -2481,10 +2506,18 @@ export interface StackvoApi {
    */
   tunnelStatus(): Promise<TunnelStatus[]>;
   /**
-   * Starts a cloudflared quick-tunnel sidecar on the stack's network, forwarding a random trycloudflare.com URL to the project's container. No account, no token — and no host-binary competitor can attach to the container network at all.
+   * The picker is built from the table that owns the invocation, in Rust. A list the front end kept would go on offering a provider the day one is removed, and offer it without the fact that decides whether it can be used at all — whether its token is in the keystore.
    */
-  tunnelStart(name: string): Promise<OperationId>;
+  tunnelProviders(): Promise<TunnelProviderStatus[]>;
+  /**
+   * Starts a tunnel-client sidecar on the stack's network, forwarding a public URL to the project's container. No host-binary competitor can attach to the container network at all. `provider` names one of the eight in tunnel_providers and defaults to cloudflare — the choice is real: an anonymous quick tunnel gets a URL in ten seconds and a new one on every start, which is right for "did the webhook arrive" and useless for a redirect URI somebody registers in a dashboard.
+   */
+  tunnelStart(name: string, provider: string | null): Promise<OperationId>;
   tunnelStop(name: string): Promise<void>;
+  /**
+   * Four providers need an account token, and a credential needs somewhere to go that is not a file in the workspace — this app already decided where that is.
+   */
+  tunnelTokenSet(provider: string, token: string | null): Promise<boolean>;
   /**
    * M-3. Two features hand out an address whose whole point is that it is opened on ANOTHER device — the LAN name from lan_status and the public URL from tunnel_status — and both are long, both contain either a dashed IP address or four random Cloudflare words, and the only way to get one onto a phone was to type it. That is the moment somebody gives up and uses the desktop browser's device emulation instead, which is not the same thing and is exactly the class of bug it fails to show.
    */

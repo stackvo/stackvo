@@ -8504,22 +8504,70 @@ pub async fn tunnel_status() -> Result<Vec<crate::tunnel::TunnelStatus>> {
     crate::tunnel::status_all().await
 }
 
-/// Start a cloudflared quick-tunnel sidecar for one project.
+/// Every tunnel provider, and whether this machine holds a token for it.
 ///
-/// An operation, not a mutation: the first start pulls the cloudflared image,
+/// The table lives in Rust because the invocation does: a picker built from a
+/// list the front end kept would go on offering a provider the day one is
+/// removed, and offer it without the one fact that decides whether it can be
+/// used at all — whether its token is in the keystore.
+#[tauri::command]
+pub fn tunnel_providers() -> Result<Vec<crate::tunnel::ProviderStatus>> {
+    Ok(crate::tunnel::providers())
+}
+
+/// Put a provider's token in the OS keystore, or take it out.
+///
+/// One command for both, like `stripe_key_set`: "clear it" is `null` rather
+/// than a second verb, and a screen that could only add a credential is a
+/// screen people are right not to give one to.
+#[tauri::command]
+pub fn tunnel_token_set(provider: String, token: Option<String>) -> Result<bool> {
+    let p = crate::tunnel::provider(&provider)?;
+    // Refused rather than stored: a token for a provider that takes none would
+    // sit in the keystore for ever, doing nothing, looking like configuration.
+    if p.token_env.is_none() {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("{provider} needs no token"),
+        ));
+    }
+
+    let entry = crate::tunnel::secret_name(&provider);
+    match token.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(token) => {
+            crate::secrets::write(&entry, token)?;
+            Ok(true)
+        }
+        None => {
+            crate::secrets::delete(&entry)?;
+            Ok(false)
+        }
+    }
+}
+
+/// Start a tunnel sidecar for one project.
+///
+/// An operation, not a mutation: the first start pulls the provider's image,
 /// which can take minutes and belongs in the operation console. The public
-/// URL is not in the return value — Cloudflare assigns it after the container
-/// is up, so the UI polls `tunnel_status` until it appears.
+/// URL is not in the return value — the provider assigns it after the
+/// container is up, so the UI polls `tunnel_status` until it appears.
 #[tauri::command]
 pub async fn tunnel_start(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
+    provider: Option<String>,
 ) -> Result<String> {
     // Per-project, not global: two projects may tunnel at once, the same one
     // must not race itself.
     let _busy = state.inflight.acquire(format!("tunnel:{name}"))?;
     let root = state.root()?;
+
+    let provider = crate::tunnel::provider(
+        provider
+            .as_deref()
+            .unwrap_or(crate::tunnel::DEFAULT_PROVIDER),
+    )?;
 
     let manifest = manifest::read(
         &workspace::project_dir(&root, &name)?.join("stackvo.json"),
@@ -8527,16 +8575,41 @@ pub async fn tunnel_start(
     )?;
     crate::tunnel::ensure_project_running(&name).await?;
 
+    // Read before the image is pulled: minutes of download ending in "no
+    // token" is the same refusal, delivered as late as it possibly could be.
+    let token = match provider.token_env {
+        Some(_) => Some(
+            crate::secrets::read(&crate::tunnel::secret_name(provider.id))?.ok_or_else(|| {
+                Error::new(
+                    Code::InvalidInput,
+                    format!("no token is stored for {}", provider.id),
+                )
+            })?,
+        ),
+        None => None,
+    };
+
     let network = Env::load(&root)
         .ok()
         .and_then(|env| env.get("DOCKER_DEFAULT_NETWORK").map(str::to_string))
         .unwrap_or_else(|| "stackvo-net".to_string());
     let args = crate::tunnel::run_args(
+        provider,
         &name,
         manifest.domain.as_deref(),
         crate::tunnel::internal_port(&manifest),
         &network,
     );
+
+    // Whatever is left of a previous tunnel, gone before this one starts: the
+    // container is deliberately not `--rm`, so a sidecar that failed is still
+    // holding the name — and its log, which is why it was kept.
+    let _ = engine::remove_container(&crate::tunnel::container_id(&name)).await;
+
+    let env: Vec<(&str, &str)> = match (provider.token_env, token.as_deref()) {
+        (Some(var), Some(value)) => vec![(var, value)],
+        _ => vec![],
+    };
 
     let operation_id = events::next_operation_id("tunnel");
     runner::run_operation(
@@ -8549,19 +8622,24 @@ pub async fn tunnel_start(
             program: "docker",
             args: &args,
             cwd: &root,
-            env: &[],
+            // The one place the token exists in this process, handed to the
+            // child rather than written into the command it streams.
+            env: &env,
         },
     )
     .await?;
     Ok(operation_id)
 }
 
-/// Stop a project's tunnel. The sidecar runs with `--rm`, so stopping is
-/// also removal — nothing is left behind to leak the old URL.
+/// Stop a project's tunnel, and remove it.
+///
+/// Removed rather than stopped: the sidecar is kept after an exit so its log
+/// can say why it failed, and a container left behind here would keep serving
+/// a dead URL and a stale reason to the next person who opens the pane.
 #[tauri::command]
 pub async fn tunnel_stop(state: State<'_, AppState>, name: String) -> Result<()> {
     let _busy = state.inflight.acquire(format!("tunnel:{name}"))?;
-    engine::stop_container(&crate::tunnel::container_id(&name)).await
+    engine::remove_container(&crate::tunnel::container_id(&name)).await
 }
 
 /// Reclaim space from dangling images and — only when explicitly asked —

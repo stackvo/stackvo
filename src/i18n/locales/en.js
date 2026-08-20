@@ -503,6 +503,9 @@ export default {
     policyMirror: 'An administrator has set the source to {url}. The address below is ignored.',
     signatureRequired:
       'This machine requires a signed catalogue and no signing key is published yet, so fetching is refused rather than falling back to an unsigned one.',
+    sourceTitle: 'Source',
+    sourceWhat:
+      'Where this machine fetches its catalogue from, and what the one in force holds. An address can be tested before it is used.',
     address: 'Catalogue address',
     addressHint:
       'An https:// address or a folder. A GitHub repository URL is translated to where its files are actually served from.',
@@ -1953,15 +1956,63 @@ export default {
     title: 'Share',
     scan: 'Point a camera at this to open the tunnel on another device. It stops working when the tunnel does.',
     explain:
-      'A temporary public URL that forwards to this project — for webhook senders (Stripe, GitHub) that cannot reach a .loc domain. Runs a Cloudflare quick tunnel as a sidecar container on the stack network; no account needed.',
+      'A temporary public URL that forwards to this project — for webhook senders (Stripe, GitHub) that cannot reach a .loc domain. A tunnel client runs as a sidecar container on the stack network and dials out; nothing on this machine is exposed by opening a port.',
     needsRunning: 'Start the project first — the tunnel forwards to its container.',
     start: 'Get a public URL',
     startHint:
-      'The first start downloads the cloudflared image. The URL is random, lives only while the tunnel runs, and changes on every start.',
-    connecting: 'Connecting — Cloudflare is assigning the URL…',
+      "The first start downloads the provider's image. Unless the provider says otherwise, the URL is random, lives only while the tunnel runs, and changes on every start.",
+    connecting: 'Connecting — the provider is assigning the URL…',
     stop: 'Stop sharing',
+    failed: 'The tunnel client stopped with this',
+    via: 'Through {provider}',
+    provider: 'Provider',
+    noAccount: 'No account',
+    needsAccount: 'Account needed',
+    unverified: 'Unverified',
+    unverifiedNote:
+      'No tunnel has carried traffic through this provider from StackVo — nobody here has an account with it. Its client, its arguments and its answer to an invalid token are all checked by `cargo run --example tunnel_probe`; what is untested is what it does with a valid one. If it complains, its own words appear here.',
+    tokenMissing: 'no token stored',
+    sessionCap: '{minutes} min limit',
+    sessionCapLong:
+      'The free tier ends this tunnel after {minutes} minutes; starting again gives a new address.',
+    noHostHeader:
+      "The application sees the tunnel hostname as Host, not this project's local domain. A framework that builds absolute URLs will build them from the tunnel address.",
+    tokenNeeded: 'This provider needs an account token before it can open a tunnel.',
+    tokenStored: 'A token is stored for this provider.',
+    tokenAdd: 'Add token',
+    tokenReplace: 'Replace',
+    tokenClear: 'Clear',
+    tokenSave: 'Save token',
+    tokenLabel: 'Token ({env})',
+    tokenHint:
+      'Kept in the OS keystore, never in the workspace, and handed to the container as an environment variable. It is never displayed again.',
     publicWarning:
       'This URL is live on the public internet and has no authentication. Anyone who has it reaches this project on your machine. Stop sharing when the test is done.',
+    providers: {
+      cloudflare: 'Cloudflare quick tunnel',
+      localhost_run: 'localhost.run',
+      pinggy: 'Pinggy',
+      localtunnel: 'localtunnel',
+      ngrok: 'ngrok',
+      tailscale: 'Tailscale Funnel',
+      zrok: 'zrok',
+      localxpose: 'LocalXpose',
+    },
+    providerNote: {
+      cloudflare:
+        'No account. A new random trycloudflare.com address on every start, and it can take a minute to become reachable.',
+      localhost_run: 'No account, over SSH. A new lhr.life address on every start.',
+      pinggy:
+        'No account, over SSH. Free sessions are time-limited, and several opened in a row from one address are refused for a while.',
+      localtunnel:
+        'No account. A loca.lt address; browsers see a reminder page first, webhook senders do not. The client fetches itself on the first start, so this one takes longer to come up.',
+      ngrok:
+        'Needs an authtoken. The free plan includes one reserved domain, which is what a redirect URI needs.',
+      tailscale:
+        'Needs an auth key. Funnel gives a stable name.tailnet.ts.net address that survives restarts. This sidecar runs inside the project container\u2019s own network, because Funnel serves a local port.',
+      zrok: 'Needs an account token. Open source, and it can be self-hosted.',
+      localxpose: 'Needs an access token.',
+    },
   },
 
   migration: {

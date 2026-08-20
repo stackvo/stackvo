@@ -316,6 +316,13 @@ pub struct ContainerInfo {
     /// here.
     pub health: Option<String>,
     pub ports: Vec<Port>,
+    /// The container's Docker labels.
+    ///
+    /// Carried because a sidecar sometimes has to say what *kind* of sidecar
+    /// it is, and its name cannot: a tunnel container is `stackvo-tunnel-<p>`
+    /// whichever provider opened it, because that is the one name stop and
+    /// status look under. The provider goes in a label and comes back here.
+    pub labels: std::collections::HashMap<String, String>,
 }
 
 /// The health verdict inside a container-list status line.
@@ -420,6 +427,7 @@ pub async fn stackvo_containers() -> Result<std::collections::HashMap<String, Co
                 health: c.status.as_deref().and_then(health_from_status),
                 status: c.status,
                 ports,
+                labels: c.labels.unwrap_or_default(),
             },
         );
     }

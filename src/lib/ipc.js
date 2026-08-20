@@ -555,8 +555,24 @@ export const api = {
 
   /** Every tunnel sidecar and its public URL, read live from its log. */
   tunnelStatus: () => call('tunnel_status'),
-  tunnelStart: (name) => call('tunnel_start', { name }),
+  /**
+   * The eight providers, and whether this machine holds a token for each.
+   *
+   * The table is Rust's because the invocation is: a list kept here would go
+   * on offering a provider the day one is removed.
+   */
+  tunnelProviders: () => call('tunnel_providers'),
+  /** `provider` defaults to cloudflare on the Rust side when null. */
+  tunnelStart: (name, provider = null) => call('tunnel_start', { name, provider }),
   tunnelStop: (name) => call('tunnel_stop', { name }),
+  /**
+   * A provider's account token, into the OS keystore or out of it.
+   *
+   * `null` clears it, and there is no command that reads one back — the pane
+   * can replace it or clear it and never display it, the same bargain
+   * `stripeKeySet` makes.
+   */
+  tunnelTokenSet: (provider, token) => call('tunnel_token_set', { provider, token }),
 
   /**
    * A QR code for an address meant to be opened on another device (M-3).
