@@ -803,7 +803,7 @@ describe('the market page', () => {
 });
 
 /**
- * The package authoring dialog (C-1).
+ * The package authoring panel (C-1).
  *
  * The property worth a test is the one that is silent when wrong: a report
  * carrying problems means **nothing was written**, so the screen must not show
@@ -812,8 +812,8 @@ describe('the market page', () => {
  */
 describe('writing a package', () => {
   /**
-   * Queried through `document`, not the wrapper: `v-dialog` teleports its card
-   * to the body, so `wrapper.find` reaches an element that is not there.
+   * Queried through `document`, not the wrapper: the panel teleports itself to
+   * the body, so `wrapper.find` reaches an element that is not there.
    */
   async function open() {
     document.body.innerHTML = '';

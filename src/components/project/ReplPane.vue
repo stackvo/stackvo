@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * A snippet, the application it runs inside, and what came back.
@@ -122,13 +123,15 @@ watch(() => props.name, load);
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-console-line</v-icon>{{ t('repl.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('repl.explain') }}</p>
+    <PaneHeader
+      help="project-repl"
+      icon="mdi-console-line"
+      :title="t('repl.title')"
+      :description="t('repl.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <!-- Nothing this can load. Said plainly rather than shown as a disabled
          editor: a static site has no application to boot, and that is not a

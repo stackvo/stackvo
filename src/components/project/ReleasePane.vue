@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRelease } from '@/composables/useRelease';
 import { api } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The production image this project can be shipped as.
@@ -95,14 +96,15 @@ async function showRecipe() {
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-package-variant-closed</v-icon>
-      {{ t('release.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('release.explain') }}</p>
+    <PaneHeader
+      help="project-release"
+      icon="mdi-package-variant-closed"
+      :title="t('release.title')"
+      :description="t('release.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <template v-if="plan">
       <div class="d-flex ga-2 align-start">

@@ -80,6 +80,7 @@ onMounted(loadCatalog);
 
 <template>
   <SettingsGroup
+    help="settings-server-limits"
     icon="mdi-web-box"
     :title="t('settings.servers.limits')"
     :description="t('settings.servers.limitsDesc')"
@@ -178,6 +179,7 @@ onMounted(loadCatalog);
   <ServerDirectivesPane @saved="(keys) => emit('directives-saved', keys)" />
 
   <SettingsGroup
+    help="settings-server-limits-applies"
     icon="mdi-server-network"
     :title="t('settings.servers.applies')"
     :description="t('settings.servers.appliesDesc')"

@@ -394,6 +394,7 @@ function supportLabel(version) {
 
 <template>
   <PageLayout
+    help="page-market"
     top-icon="mdi-storefront-outline"
     :top-title="t('marketView.title')"
     :top-subtitle="t('marketView.subtitle')"
@@ -654,6 +655,7 @@ function supportLabel(version) {
                than growing the page — the catalogue is twenty-five services and
                the instance table is however many somebody has made. -->
           <SettingsGroup
+            help="page-market-available"
             class="market-col"
             icon="mdi-store-outline"
             :title="t('marketView.available')"
@@ -941,6 +943,7 @@ function supportLabel(version) {
           </SettingsGroup>
 
           <SettingsGroup
+            help="page-market-instances"
             class="market-col"
             icon="mdi-cube-outline"
             :title="t('marketView.instances')"

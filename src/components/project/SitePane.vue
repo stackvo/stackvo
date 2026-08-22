@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Three per-project settings that reach the container through this app's own
@@ -89,10 +90,12 @@ watch(() => [props.name, props.runtime], load, { immediate: true });
 
 <template>
   <v-card v-if="applies && settings" variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-tune-variant</v-icon>{{ t('site.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-3">{{ t('site.explain') }}</p>
+    <PaneHeader
+      help="project-site"
+      icon="mdi-tune-variant"
+      :title="t('site.title')"
+      :description="t('site.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 

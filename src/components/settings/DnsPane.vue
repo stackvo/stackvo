@@ -102,7 +102,12 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsGroup icon="mdi-dns-outline" :title="t('dns.title')" :subtitle="t('dns.subtitle')">
+  <SettingsGroup
+    help="settings-dns"
+    icon="mdi-dns-outline"
+    :title="t('dns.title')"
+    :subtitle="t('dns.subtitle')"
+  >
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 
     <p class="text-caption text-medium-emphasis mb-4">{{ t('dns.explain') }}</p>

@@ -547,6 +547,17 @@
       "why": "The one migration that touches a workspace somebody is already using. handover.rs is built plan-then-apply so the reasons survive; a UI with only the apply half would have thrown them away.",
       "notes": "Pure: computes the plan and writes nothing. `blockers` non-empty means the handover is refused as a whole — a version enabled in `.env` and absent from the catalogue is never migrated to its nearest neighbour, because that is an unrequested upgrade performed on a datadir. `missing` names what to install to unblock it: a preview that only refused was a dead end with the answer one page away and unnamed."
     },
+    "help_doc": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "topic": "string",
+        "locale": "string"
+      },
+      "returns": "string",
+      "why": "Every card in the interface carries a help button; this is what the button reads. What a button does is prose somebody will want to correct the day after a release, so the current copy is pulled from the repository (raw.githubusercontent.com, docs/help/<locale>/<topic>.md on main) rather than being as old as the build. Documented in PRIVACY.md: the request names the topic and the locale, which is a fact about what the person was stuck on.",
+      "notes": "Three sources in order: the repository over HTTPS (once per topic per run, 5s timeout), the cache written under the app directory from the last successful pull, and the copy carried by bundle.resources \u2014 so the network decides how current the text is and never decides whether there is text at all, and a failed fetch is silent rather than an error. A 200 whose body does not open with `# ` is refused rather than cached: a captive portal answering with its login page would otherwise replace a good document on exactly the network where the real one cannot be reached. `topic` is matched against `[a-z0-9-]{1,64}` before it touches a path or a URL: it arrives over IPC, and `..` in a topic would read any file on the machine, or fetch any file in the repository, into a web view. An unknown locale reads the English document rather than erroring \u2014 a reader who set a language nobody has written for is better served by a page than by an error about their own settings \u2014 and a topic with no document anywhere is NOT_FOUND naming the topic. Looks in the bundle resource directory first, then the repository's own docs/help, so `tauri dev` and an installed application both find it. The registry of valid topics is src/lib/help.js; tests/help-topics.spec.js fails on a card whose topic it does not know and on a document written in one language and not the other. See src-tauri/src/help.rs."
+    },
     "host_stats": {
       "replaces": "GET /api/docker/stats",
       "kind": "query",

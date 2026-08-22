@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n';
 import PageLayout from '@/components/PageLayout.vue';
 import LogView from '@/components/LogView.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * One live tail across every project.
@@ -26,11 +27,34 @@ const { t } = useI18n();
 
 <template>
   <PageLayout
+    help="page-logs"
     top-icon="mdi-text-box-multiple-outline"
     :top-title="t('logs.title')"
     :top-subtitle="t('logs.allDescription')"
     hide-bar
   >
+    <!-- Named like the card it is, the way the project page names its panes.
+         The blue band above says what the *page* is; this says what the card
+         under it holds — and the toolbar below is not a title, it is what you
+         can do to the stream. -->
+    <div class="logs-head">
+      <PaneHeader
+        help="page-logs-all-projects"
+        icon="mdi-text-box-multiple-outline"
+        :title="t('logs.allProjects')"
+        :description="t('logs.allExplain')"
+      />
+    </div>
+
     <LogView scope="all" class="flex-grow-1" />
   </PageLayout>
 </template>
+
+<style scoped>
+/* The one padded part of the card: the console under it runs to the card's
+   edges by design, so the heading is what needs the inset. */
+.logs-head {
+  flex: 0 0 auto;
+  padding: 16px 16px 0;
+}
+</style>

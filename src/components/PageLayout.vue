@@ -1,4 +1,6 @@
 <script setup>
+import HelpButton from '@/components/HelpButton.vue';
+
 /**
  * The page chrome every view sits in — ported from the web UI so the desktop
  * app is recognisably the same product.
@@ -20,6 +22,8 @@ defineProps({
    * borderless look the flag exists for.
    */
   barTransparent: { type: Boolean, default: false },
+  /** The topic its help button opens. See `lib/help.js`. */
+  help: { type: String, default: '' },
 });
 </script>
 
@@ -70,8 +74,11 @@ defineProps({
           </div>
         </v-toolbar-title>
 
-        <template v-if="$slots['top-append']" #append>
+        <!-- The page's own help, in the corner of its own bar — the same
+             offer the cards below carry, at the level above them. -->
+        <template v-if="$slots['top-append'] || help" #append>
           <slot name="top-append" />
+          <HelpButton v-if="help" :topic="help" class="page-help" />
         </template>
       </v-toolbar>
 
@@ -116,6 +123,21 @@ defineProps({
 
 .page-card {
   height: 100%;
+}
+
+/* On the primary bar the quiet grey of the card corners would disappear; the
+   bar's own ink is what reads there.
+ *
+ * The inset is what puts it on one line with the controls below it. A toolbar's
+ * append sits 4px from the window edge; the card under it is held off that edge
+ * by `mx-5` (20px) and keeps another 12px inside itself before its own buttons
+ * start. Without the difference the page's help button hangs out past every
+ * control on the page — the one thing on screen that is not in the column
+ * everything else lines up in. Measured, not guessed: the two right edges land
+ * on 1368 at any window width, because all three numbers are fixed. */
+.page-help {
+  opacity: 0.9;
+  margin-inline-end: 28px;
 }
 
 /* Vuetify wraps the title's contents in a `__placeholder` element that is

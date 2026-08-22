@@ -46,8 +46,7 @@ async function open() {
   return wrapper;
 }
 
-const button = (wrapper, label) =>
-  wrapper.findAll('button').find((b) => b.text().includes(label));
+const button = (wrapper, label) => wrapper.findAll('button').find((b) => b.text().includes(label));
 
 beforeEach(() => {
   websurfaceStart.mockReset();

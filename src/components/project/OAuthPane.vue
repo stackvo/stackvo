@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The redirect URI to paste into an identity provider's console (M-12).
@@ -45,10 +46,12 @@ watch(() => [props.name, path.value], load, { immediate: true });
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-login-variant</v-icon>{{ t('oauth.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-3">{{ t('oauth.explain') }}</p>
+    <PaneHeader
+      help="project-oauth"
+      icon="mdi-login-variant"
+      :title="t('oauth.title')"
+      :description="t('oauth.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 

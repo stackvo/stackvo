@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * What this project *is*: its domain, its runtime, and the addresses it answers
@@ -32,22 +33,12 @@ const httpsUrl = computed(() => (props.project?.domain ? `https://${props.projec
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="d-flex align-center ga-2 mb-4">
-      <div class="section-head">
-        <v-icon size="18" class="mr-2">mdi-folder-cog</v-icon>{{ t('projectDetail.configuration') }}
-      </div>
-      <v-spacer />
-      <!-- Every value read below is a field in stackvo.json, so the way
-           to change one belongs beside them rather than only in the raw
-           JSON pane further down the rail. -->
-      <v-btn
-        size="small"
-        variant="tonal"
-        prepend-icon="mdi-tune-variant"
-        @click="emit('settings')"
-        >{{ t('projectSettings.open') }}</v-btn
-      >
-    </div>
+    <PaneHeader
+      help="project-overview"
+      icon="mdi-folder-cog"
+      :title="t('projectDetail.configuration')"
+      :description="t('projectDetail.configurationExplain')"
+    />
 
     <v-row>
       <v-col cols="12" md="4">
@@ -233,5 +224,15 @@ const httpsUrl = computed(() => (props.project?.domain ? `https://${props.projec
         </div>
       </v-alert>
     </template>
+
+    <!-- Every value read above is a field in stackvo.json, so the way to change
+         one belongs with them rather than only in the raw JSON pane further
+         down the rail. -->
+    <div class="pane-foot">
+      <v-spacer />
+      <v-btn size="small" variant="tonal" prepend-icon="mdi-tune-variant" @click="emit('settings')">
+        {{ t('projectSettings.open') }}
+      </v-btn>
+    </div>
   </v-card>
 </template>

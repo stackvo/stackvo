@@ -613,6 +613,14 @@ export const api = {
   stripeStart: (name, path, events = []) => call('stripe_start', { name, path, events }),
   stripeStop: (name) => call('stripe_stop', { name }),
 
+  /**
+   * One card's help document, as markdown.
+   *
+   * Read off disk by the backend on every call — see `lib/help.js` for the
+   * topic registry and `docs/help/` for the documents themselves.
+   */
+  helpDoc: (topic, locale) => call('help_doc', { topic, locale }),
+
   landingStatus: () => call('landing_status'),
   landingStart: () => call('landing_start'),
   landingStop: () => call('landing_stop'),

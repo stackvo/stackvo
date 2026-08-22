@@ -83,6 +83,7 @@ onMounted(load);
 
 <template>
   <SettingsGroup
+    help="settings-routes"
     icon="mdi-arrow-decision-outline"
     :title="t('routes.title')"
     :subtitle="t('routes.subtitle')"

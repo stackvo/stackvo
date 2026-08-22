@@ -6,6 +6,7 @@ import { useOperationsStore } from '@/stores/operations';
 import { useProfiler } from '@/composables/useProfiler';
 import FlameView from '@/components/FlameView.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Xdebug's profiler: the mode switch, the recorded files, and one open report.
@@ -64,13 +65,15 @@ watch(
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-speedometer</v-icon>{{ t('profiler.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('profiler.explain') }}</p>
+    <PaneHeader
+      help="project-profiler"
+      icon="mdi-speedometer"
+      :title="t('profiler.title')"
+      :description="t('profiler.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <template v-if="status">
       <!-- Compiled in first. Without the extension there is nothing to

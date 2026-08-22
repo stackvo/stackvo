@@ -1,6 +1,7 @@
 <script setup>
 import { useI18n } from 'vue-i18n';
 import LogView from '@/components/LogView.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * One project's logs.
@@ -25,6 +26,19 @@ const { t } = useI18n();
        edges of the page, which made the one tab that reads like a different
        application out of the one whose content never ends. -->
   <v-card variant="flat" class="pane logs-pane">
+    <!-- Named like every other pane on the page. The viewer under it brings a
+         toolbar of its own — a source picker, a search box, the controls — and
+         a toolbar is not a title: it says what you can do to the output, never
+         what the card is. -->
+    <div class="logs-head">
+      <PaneHeader
+        help="project-logs"
+        icon="mdi-text-box-outline"
+        :title="t('logs.title')"
+        :description="t('logs.explain')"
+      />
+    </div>
+
     <LogView
       v-if="project.built"
       :container="project.containerName"
@@ -49,8 +63,16 @@ const { t } = useI18n();
   overflow: hidden;
 }
 
-.pane.logs-pane > * {
+.pane.logs-pane > *:not(.logs-head) {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* The one part of this card that is padded: the viewer under it runs to the
+   card's edges by design, and a heading that did the same would sit against
+   the border. */
+.pane.logs-pane > .logs-head {
+  flex: 0 0 auto;
+  padding: 16px 16px 0;
 }
 </style>

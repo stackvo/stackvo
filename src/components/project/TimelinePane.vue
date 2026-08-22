@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * One page load, from both ends.
@@ -78,13 +79,15 @@ watch(service, load);
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-timeline-clock-outline</v-icon>{{ t('timeline.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('timeline.explain') }}</p>
+    <PaneHeader
+      help="project-timeline"
+      icon="mdi-timeline-clock-outline"
+      :title="t('timeline.title')"
+      :description="t('timeline.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <div class="d-flex align-center ga-3 flex-wrap mb-3">
       <v-select

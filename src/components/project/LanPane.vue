@@ -5,6 +5,7 @@ import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import QrCode from '@/components/QrCode.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The address a phone on the same Wi-Fi can open this project at.
@@ -73,13 +74,15 @@ watch(() => props.name, load, { immediate: true });
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-wifi</v-icon>{{ t('lan.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('lan.explain') }}</p>
+    <PaneHeader
+      help="project-lan"
+      icon="mdi-wifi"
+      :title="t('lan.title')"
+      :description="t('lan.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <v-switch
       :model-value="shared"

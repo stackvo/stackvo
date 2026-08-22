@@ -9,6 +9,13 @@ your own Docker daemon and your own filesystem, and the only thing it contacts
 on its own initiative is the update endpoint — described below, and only from
 the Settings screen.
 
+One thing is worth naming here rather than only in the table: opening a **help
+panel** fetches that card's document from the repository, so the text is current
+rather than as old as your build. The request names the topic you opened, which
+is a fact about you, and it is listed below with everything else. It is cached
+after the first fetch, so the panel works offline and a machine that never
+reaches the network still has the copy the app shipped with.
+
 This document exists because "we don't collect anything" is not a fact until
 somebody writes down what "anything" was measured against. The readiness review
 made the point in the other direction: a tool that quietly collects nothing and
@@ -104,6 +111,7 @@ it.
 | Follow a link in the app        | Your browser opens it. The app's own links point at `stackvo.github.io`, `github.com`, `docs.docker.com`, and — from the support and share menus — `bsky.app`, `buymeacoffee.com`, `discord.gg`, `fosstodon.org`, `reddit.com`, `twitter.com`, `www.linkedin.com`, `www.youtube.com` |
 | Fetch the service catalogue     | The address **you** chose, or the mirror `policy.market.registryUrl` names on a managed machine. The app suggests the `github.com/stackvo/stackvo-service-packages` repository, which it translates to `raw.githubusercontent.com` before fetching, and nothing fetches anything until you press the button — a first run with no network shows the catalogue gate and stays there. Plain `http://` is refused. The request carries an `If-None-Match` for the copy already here and no identifier of any kind; the system proxy is used, unlike the mail client above, because on a managed network the mirror is only reachable through it |
 | Install a service package       | The same address. Nothing else is contacted — the image itself is pulled later, by your Docker daemon, from whatever registry the package names                                                                                                                                       |
+| Open a help panel               | `raw.githubusercontent.com`, for the help document of the card you opened it on. The request carries the topic name (`project-tunnel`, `settings-dns`) and your interface language, and no identifier of any kind. **It says which help page you opened**, which is a fact about what you were stuck on — so it is here rather than buried. One request per topic per run: the answer is cached under the app's own directory, the panel works offline from that cache, and a fresh install with no network reads the copy the app shipped with. A failed request is never reported; it silently reads what is already on disk |
 | Send a diagnostic bundle        | Wherever you send it                                                                                                                                                                                                                                                                 |
 
 ### While Docker builds an image
