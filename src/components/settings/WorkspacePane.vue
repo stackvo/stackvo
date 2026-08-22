@@ -90,6 +90,7 @@ onMounted(loadPreset);
   />
 
   <SettingsGroup
+    help="settings-workspace-group"
     icon="mdi-folder-open-outline"
     :title="t('settings.workspaceGroup')"
     :description="t('settings.workspaceGroupDesc')"
@@ -150,6 +151,7 @@ onMounted(loadPreset);
   <TemplateOverridesPane />
 
   <SettingsGroup
+    help="settings-workspace-compose"
     icon="mdi-play-box-multiple-outline"
     :title="t('settings.compose')"
     :description="t('settings.stackSub')"
@@ -194,6 +196,7 @@ onMounted(loadPreset);
        changes with nothing regenerating after it, and neither leaves a mark
        anywhere else. -->
   <SettingsGroup
+    help="settings-workspace-generator"
     icon="mdi-cog-sync-outline"
     :title="t('settings.generator')"
     :description="t('settings.generatorDesc')"
@@ -252,6 +255,7 @@ onMounted(loadPreset);
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-workspace-export"
     icon="mdi-export-variant"
     :title="t('stackPreset.export')"
     :description="t('stackPreset.exportDesc')"
@@ -291,6 +295,7 @@ onMounted(loadPreset);
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-workspace-import"
     icon="mdi-import"
     :title="t('stackPreset.import')"
     :description="t('stackPreset.importDesc')"

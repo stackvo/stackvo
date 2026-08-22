@@ -3,6 +3,7 @@ import { toRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePhpIni, PHP_INI_FIELDS } from '@/composables/usePhpIni';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The four php.ini directives a project can override.
@@ -29,13 +30,15 @@ watch(
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-language-php</v-icon>{{ t('phpIni.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('phpIni.explain') }}</p>
+    <PaneHeader
+      help="project-php-ini"
+      icon="mdi-language-php"
+      :title="t('phpIni.title')"
+      :description="t('phpIni.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <template v-if="status">
       <v-row>

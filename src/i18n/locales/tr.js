@@ -671,12 +671,17 @@ export default {
     back: 'Geri',
     indicator: 'Gösterge',
     configuration: 'Yapılandırma',
+    configurationExplain:
+      'Projenin stackvo.json’da yazan hâli: hangi adreste, hangi çalışma zamanıyla ve hangi kökten yayınlandığı.',
     container: 'Konteyner',
+    containerExplain: 'Bu projeyi şu an çalıştıran konteyner: kimliği, imajı ve durumu.',
     live: 'Canlı — kaynak ölçümleri 2 saniyede bir yenilenir',
     disk: 'Disk',
     composition: 'Dağılım',
+    compositionExplain: 'Ölçülen kaynağın neye gittiği — yukarıdaki toplamların içi.',
     usedShort: 'kullanımda',
     cpuActivity: 'İşlemci Aktivitesi',
+    cpuActivityExplain: 'Son günlerin saat saat işlemci kullanımı; ölçümler dakikada bir alınır.',
     noHistory: 'Henüz geçmiş yok — ölçümler dakikada bir alınıyor.',
     noSample: 'ölçüm yok',
     less: 'Az',
@@ -966,6 +971,8 @@ export default {
   mail: {
     subtitle: 'Projelerinin gönderdiği postalar, makineden çıkmadan yakalanmış hâlde.',
     inbox: 'Gelen kutusu',
+    inboxExplain:
+      'Projelerinizin gönderdiği postalar yakalayıcıda tutulur; hiçbiri makineden çıkmaz. Soldan bir mesaj seçin, sağda okuyun.',
     title: 'Mail',
     unread: '{n} okunmamış',
     select: 'Okumak için bir mesaj seçin.',
@@ -1124,6 +1131,8 @@ export default {
     allDescription: 'Yakalaması açık her projeden gelen dump() ve dd() çıktıları',
     noProjects: 'Köprüyü kullanabilecek bir PHP projesi yok.',
     allProjects: 'Tüm projeler',
+    allExplain:
+      'Yakalaması açık her projenin dump() çıktısı tek listede. Hangilerinin izleneceğini ve neyin görüneceğini aşağıdaki araç çubuğundan daraltın.',
     capture: 'dump() ve dd() yakala',
     captureHint: 'Anında etkili — konteynere dokunulmaz.',
     help: 'Bu bölüm hakkında',
@@ -1768,6 +1777,10 @@ export default {
     saved: 'Kaydedildi',
   },
 
+  help: {
+    notWritten:
+      'Bu kartın yardım metni henüz yazılmadı ({topic}). Kartın kendi açıklama satırı şimdilik özetin tamamı.',
+  },
   a11y: {
     copy: 'Panoya kopyala',
     moreActions: 'Diğer işlemler',
@@ -1776,6 +1789,7 @@ export default {
     toggleConsole: 'Konsolu aç/kapat',
     loading: 'Yükleniyor',
     close: 'Kapat',
+    help: 'Bu kart ne işe yarar',
     primaryNav: 'Ana gezinme',
   },
   actions: {
@@ -1814,6 +1828,8 @@ export default {
   },
   logs: {
     title: 'Loglar',
+    explain:
+      'Konteynerin kendi çıktısı ve projenin yazdığı log dosyaları — kaynağı aşağıdaki araç çubuğundan seçin.',
     live: 'canlı',
     openInEditor: 'Bu dosyayı editörde aç',
     waiting: 'Log bekleniyor…',
@@ -1828,6 +1844,8 @@ export default {
     allDescription:
       'Her projeyi kapsayan canlı bir akış. Burada yalnızca bu andan sonra yazılan çıktı görünür — bir dosyanın geçmişini okumak için projesini açın.',
     allProjects: 'Bütün projeler',
+    allExplain:
+      'Her projenin çıktısı tek akışta. Hangilerinin izleneceğini ve neyin görüneceğini aşağıdaki araç çubuğundan daraltın.',
     waitingAll: 'İzleniyor. Projeleriniz yazdıkça satırlar burada belirir.',
     following: '{total} dosyanın {followed} tanesi izleniyor · {projects} proje',
     files: '{n} dosya',
@@ -2309,6 +2327,7 @@ export default {
     save: 'Kaydet',
     bringUp: 'Compose ile ayağa kaldır',
     dockerfile: 'Dockerfile',
+    dockerfileHint: 'Bu projenin imajının derleneceği dosya — stackvo.json’dan üretilir.',
     image: 'İmaj',
     state: 'Durum',
     matchesGenerated: 'Üretilmiş dosya güncel',

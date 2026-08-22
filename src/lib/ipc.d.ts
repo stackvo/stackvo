@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 129 named types, 248 wrappers, 0 field(s) the
+ * Measured at generation: 129 named types, 249 wrappers, 0 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -2538,6 +2538,10 @@ export interface StackvoApi {
   stripeStart(name: string, path: string, events: string[]): Promise<OperationId>;
   /** Turning it off has to be as easy as turning it on. */
   stripeStop(name: string): Promise<void>;
+  /**
+   * Every card in the interface carries a help button; this is what the button reads. The documents are markdown under docs/help/<locale>/<topic>.md and are read off disk on every call rather than compiled into the binary — what a button does is prose somebody will want to correct the day after a release, and a correction that costs a rebuild is a correction that does not get made. The cost is that the directory travels with the application, which is what bundle.resources in tauri.conf.json is for.
+   */
+  helpDoc(topic: string, locale: string): Promise<string>;
   /**
    * M-4. Every rival in the category ships one and it is the address people bookmark. StackVo has had the NAME for it since the beginning with nothing answering on it: core_domains already writes the bare suffix into the hosts file and certs::required_domains already issues for it, so opening https://<suffix> got Traefik's own 404 — a name the app went out of its way to make resolve, serving nothing.
    */

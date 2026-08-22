@@ -691,12 +691,19 @@ export default {
     back: 'Back',
     indicator: 'Indicator',
     configuration: 'Configuration',
+    configurationExplain:
+      'What stackvo.json says this project is: the address it answers on, the runtime it runs, and the root it serves from.',
     container: 'Container',
+    containerExplain:
+      'The container running this project right now: its name, its image, and its state.',
     live: 'Live — resource metrics update every 2 seconds',
     disk: 'Disk',
     composition: 'Composition',
+    compositionExplain:
+      'Where the measured resource actually goes — the inside of the totals above.',
     usedShort: 'used',
     cpuActivity: 'CPU Activity',
+    cpuActivityExplain: 'CPU use hour by hour over recent days; samples are taken once a minute.',
     noHistory: 'No history yet — samples are taken once a minute.',
     noSample: 'no sample',
     less: 'Less',
@@ -982,6 +989,8 @@ export default {
   mail: {
     subtitle: 'Mail your projects sent, caught before it left the machine.',
     inbox: 'Inbox',
+    inboxExplain:
+      'Mail your projects send is held by the catcher; none of it leaves this machine. Pick a message on the left, read it on the right.',
     title: 'Mail',
     unread: '{n} unread',
     select: 'Select a message to read it.',
@@ -1143,6 +1152,8 @@ export default {
     allDescription: 'dump() and dd() from every project that is capturing',
     noProjects: 'No PHP project can carry the bridge.',
     allProjects: 'All projects',
+    allExplain:
+      'The dump() output of every project that is capturing, in one list. Narrow which ones are watched, and what shows, in the toolbar below.',
     capture: 'Catch dump() and dd()',
     captureHint: 'Takes effect immediately — no container is touched.',
     help: 'About this pane',
@@ -1792,7 +1803,12 @@ export default {
     saved: 'Saved',
   },
 
+  help: {
+    notWritten:
+      'The help for this card has not been written yet ({topic}). Its own description line is the whole summary for now.',
+  },
   a11y: {
+    help: 'What this card is for',
     copy: 'Copy to clipboard',
     moreActions: 'More actions',
     followOutput: 'Follow output',
@@ -1842,6 +1858,8 @@ export default {
   },
   logs: {
     title: 'Logs',
+    explain:
+      'The container’s own output and the log files the project writes — pick the source in the toolbar below.',
     live: 'live',
     openInEditor: 'Open this file in the editor',
     waiting: 'Waiting for output…',
@@ -1858,6 +1876,8 @@ export default {
     allDescription:
       'A live tail across every project. Only output written from now on appears here — open a project to read the history of one file.',
     allProjects: 'Every project',
+    allExplain:
+      'Every project’s output in one stream. Narrow which ones are watched, and what shows, in the toolbar below.',
     waitingAll: 'Watching. Lines appear as your projects write them.',
     following: 'following {followed} of {total} files · {projects} projects',
     files: '{n} files',
@@ -2340,6 +2360,7 @@ export default {
     save: 'Save',
     bringUp: 'Bring up via compose',
     dockerfile: 'Dockerfile',
+    dockerfileHint: 'The file this project’s image builds from — generated from stackvo.json.',
     image: 'Image',
     state: 'State',
     matchesGenerated: 'The generated file is up to date',

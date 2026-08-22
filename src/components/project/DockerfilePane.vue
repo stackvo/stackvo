@@ -33,19 +33,18 @@ watch(
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <!-- Folded away by default. The generator emits around 120 lines for a PHP
        project with extensions, and printing all of them made this pane taller
        than the rest of the tab put together. -->
-  <CollapsiblePane>
-    <template #title>
-      <span class="section-head">
-        <v-icon size="18" class="mr-2">mdi-file-document-outline</v-icon>
-        {{ t('detail.dockerfile') }}
-      </span>
+  <CollapsiblePane
+    help="project-dockerfile"
+    icon="mdi-file-document-outline"
+    :title="t('detail.dockerfile')"
+    :description="t('detail.dockerfileHint')"
+  >
+    <template #alert>
+      <ErrorAlert v-if="error" :error="error" />
     </template>
-
     <!-- The verdict stays out of the fold. Whether the file the build would
          actually use is still the file this manifest describes is the one thing
          here worth knowing without reading it, and a closed pane that hides its

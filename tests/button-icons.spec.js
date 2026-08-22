@@ -61,7 +61,11 @@ function buttons(text) {
       else if (next[2] !== '/') depth += 1;
       j = at + next[0].length;
     }
-    out.push({ line: lineOf(text, start), attrs, slot: text.slice(bodyFrom, j - '</v-btn>'.length) });
+    out.push({
+      line: lineOf(text, start),
+      attrs,
+      slot: text.slice(bodyFrom, j - '</v-btn>'.length),
+    });
     i = start + open[0].length;
   }
 }

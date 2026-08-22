@@ -437,6 +437,7 @@ onUnmounted(() => {
 
 <template>
   <PageLayout
+    help="page-project-detail"
     top-icon="mdi-information"
     :top-title="t('projectDetail.title')"
     :top-subtitle="t('projectDetail.subtitle')"

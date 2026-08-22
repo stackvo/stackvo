@@ -3,6 +3,7 @@ import { toRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useXdebug } from '@/composables/useXdebug';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Xdebug's three layers, and the switch that moves all of them.
@@ -36,15 +37,15 @@ async function set(enabled) {
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="d-flex align-center ga-2 mb-3">
-      <div class="section-head">
-        <v-icon size="18" class="mr-2">mdi-bug-outline</v-icon>{{ t('xdebug.title') }}
-      </div>
-      <span class="text-caption text-medium-emphasis">{{ t('xdebug.subtitle') }}</span>
-    </div>
+    <PaneHeader
+      help="project-xdebug"
+      icon="mdi-bug-outline"
+      :title="t('xdebug.title')"
+      :description="t('xdebug.subtitle')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <template v-if="status">
       <v-switch

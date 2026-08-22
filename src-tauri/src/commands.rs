@@ -8364,6 +8364,23 @@ fn landing_url(root: &std::path::Path) -> String {
     format!("https://{suffix}")
 }
 
+/// One help document, as markdown, for the card that asked for it.
+///
+/// Pulled from the repository once per topic per run, cached for the next time
+/// the machine is offline, and falling back to the copy the app shipped with.
+/// [`crate::help`] holds the order and the reasoning.
+///
+/// The resource directory is resolved here rather than inside that module so it
+/// stays testable without a Tauri handle — its tests read the repository's own
+/// `docs/help`, which is the copy that ships.
+#[tauri::command]
+pub async fn help_doc(app: AppHandle, topic: String, locale: String) -> Result<String> {
+    use tauri::Manager as _;
+
+    let resources = app.path().resource_dir().ok();
+    crate::help::current(resources, &topic, &locale).await
+}
+
 /// Whether the page is being served, and what it would say.
 #[tauri::command]
 pub async fn landing_status(state: State<'_, AppState>) -> Result<crate::landing::Status> {

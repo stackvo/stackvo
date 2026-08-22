@@ -874,6 +874,7 @@ onUnmounted(() => teardown?.());
 
 <template>
   <PageLayout
+    help="page-projects"
     top-icon="mdi-folder-multiple"
     :top-title="t('projectsView.title')"
     :top-subtitle="t('projectsView.subtitle')"

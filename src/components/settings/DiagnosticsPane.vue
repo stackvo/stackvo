@@ -84,6 +84,7 @@ onMounted(async () => {
 
 <template>
   <SettingsGroup
+    help="settings-diagnostics-engine"
     icon="mdi-docker"
     :title="t('engine.title')"
     :description="t('settings.engineGroupDesc')"
@@ -106,6 +107,7 @@ onMounted(async () => {
   <DoctorPanel />
 
   <SettingsGroup
+    help="settings-diagnostics"
     icon="mdi-bug-outline"
     :title="t('settings.diagnostics')"
     :description="t('settings.diagnosticsHint')"

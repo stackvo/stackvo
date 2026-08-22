@@ -448,6 +448,7 @@ onMounted(async () => {
 
 <template>
   <PageLayout
+    help="page-settings"
     top-icon="mdi-cog"
     :top-title="t('app.settings')"
     :top-subtitle="t('settings.subtitle')"
@@ -571,6 +572,7 @@ onMounted(async () => {
             </v-card>
 
             <SettingsGroup
+              help="page-settings-updates"
               icon="mdi-update"
               :title="t('settings.updates')"
               :description="t('settings.updatesDesc')"
@@ -641,6 +643,7 @@ onMounted(async () => {
                  hand from four cards is the step that gets skipped, and a
                  report without it costs a round trip. -->
             <SettingsGroup
+              help="page-settings-system"
               icon="mdi-information-outline"
               :title="t('about.system')"
               :description="t('about.systemDesc')"
@@ -667,6 +670,7 @@ onMounted(async () => {
             </SettingsGroup>
 
             <SettingsGroup
+              help="page-settings-resources"
               icon="mdi-link-variant"
               :title="t('about.resources')"
               :description="t('about.resourcesDesc')"

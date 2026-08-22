@@ -295,3 +295,24 @@
   background: rgb(var(--v-theme-surface-bright));
   user-select: text;
 }
+
+/* The row of controls that acts on a whole pane.
+ *
+ * These used to sit beside the pane's title, opposite the name, which is where
+ * a header control conventionally goes — and it is where they stopped working
+ * once the panes took the Settings page's header: an avatar, a name and a
+ * sentence is a three-line block, and a `Save` button floated against the top
+ * of it reads as belonging to the sentence rather than to the card.
+ *
+ * At the foot instead, after the content they commit. The hairline is the same
+ * one the card's own border is drawn with, at the same halved opacity, so the
+ * separation is visible without becoming a second border inside the box. */
+.detail-content .pane-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: thin solid rgba(var(--v-border-color), calc(var(--v-border-opacity) / 2));
+}

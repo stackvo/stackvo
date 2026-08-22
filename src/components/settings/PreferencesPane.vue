@@ -38,6 +38,7 @@ onMounted(async () => {
 
 <template>
   <SettingsGroup
+    help="settings-preferences-external-apps"
     icon="mdi-application-cog-outline"
     :title="t('settings.externalApps')"
     :description="t('settings.externalAppsDesc')"
@@ -92,6 +93,7 @@ onMounted(async () => {
        it is about what this installation does unattended, and it applies to
        whichever workspace is open. -->
   <SettingsGroup
+    help="settings-preferences-backups"
     icon="mdi-database-clock-outline"
     :title="t('settings.backups')"
     :description="t('settings.backupsDesc')"
@@ -125,6 +127,7 @@ onMounted(async () => {
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-preferences-startup"
     icon="mdi-power"
     :title="t('settings.startup')"
     :description="t('settings.startupDesc')"

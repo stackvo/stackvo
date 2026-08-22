@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n';
 import { useOperationsStore } from '@/stores/operations';
 import DumpView from '@/components/DumpView.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * What `dd()` and `dump()` wrote, caught before they reached the response.
@@ -22,10 +23,12 @@ const ops = useOperationsStore();
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-bug-check-outline</v-icon>{{ t('dumps.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('dumps.explain') }}</p>
+    <PaneHeader
+      help="project-dumps"
+      icon="mdi-bug-check-outline"
+      :title="t('dumps.title')"
+      :description="t('dumps.explain')"
+    />
 
     <DumpView :project="name" scope="project">
       <!-- The recreate button belongs to the project page: it is the

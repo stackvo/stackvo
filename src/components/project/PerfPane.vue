@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import { bytes } from '@/lib/format';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The performance layer (I-1): the heavy directories, off the host filesystem.
@@ -103,10 +104,12 @@ watch(() => [props.name, props.runtime], load, { immediate: true });
 
 <template>
   <v-card v-if="applies" variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-rocket-launch-outline</v-icon>{{ t('perf.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-3">{{ t('perf.explain') }}</p>
+    <PaneHeader
+      help="project-perf"
+      icon="mdi-rocket-launch-outline"
+      :title="t('perf.title')"
+      :description="t('perf.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
     <v-alert v-if="note" type="success" variant="tonal" density="compact" class="mb-3">

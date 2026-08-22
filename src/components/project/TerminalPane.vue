@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useTerminal } from '@/composables/useTerminal';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * A shell inside this project's container, in the window.
@@ -129,13 +130,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-console</v-icon>{{ t('terminal.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('terminal.explain') }}</p>
+    <PaneHeader
+      help="project-terminal"
+      icon="mdi-console"
+      :title="t('terminal.title')"
+      :description="t('terminal.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <v-alert v-if="!running" type="info" variant="tonal" class="mb-0">
       {{ t('terminal.needsRunning') }}

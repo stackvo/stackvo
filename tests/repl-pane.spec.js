@@ -137,12 +137,22 @@ describe('what it offers', () => {
   });
 });
 
+/**
+ * The Run button, by its label.
+ *
+ * This was `pane.find('button')` — the first button in the pane — which stopped
+ * being Run the day every card grew a help button in its header. A label is
+ * what a person clicks by, and it does not move when the chrome around it does.
+ */
+const run = (pane) =>
+  pane.findAll('button').find((candidate) => candidate.text().includes(en.repl.run));
+
 describe('running one', () => {
   it('sends the runner id and the code, and shows what came back', async () => {
     replies.replRun = OK;
     const pane = await paneWith('dump(41);');
 
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
 
     expect(calls).toContainEqual(['replRun', 'shop', 'laravel', 'dump(41);']);
@@ -165,7 +175,7 @@ describe('running one', () => {
     };
     const pane = await paneWith();
 
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
 
     expect(pane.text()).toContain('exit 255');
@@ -178,7 +188,7 @@ describe('running one', () => {
     replies.replRun = { ...OK, stdout: '', stderr: 'Error: boom\n    at [eval]', exitCode: 1 };
     const pane = await paneWith();
 
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
 
     expect(pane.text()).toContain('Error: boom');
@@ -193,7 +203,7 @@ describe('running one', () => {
     replies.replRun = { ...OK, limited: false, timedOut: false };
     const pane = await paneWith();
 
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
 
     expect(pane.text()).toContain(en.repl.notLimited);
@@ -203,7 +213,7 @@ describe('running one', () => {
     replies.replRun = { ...OK, stdout: '', timedOut: true, exitCode: 124 };
     const pane = await paneWith();
 
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
 
     expect(pane.text()).toContain(en.repl.timedOut);
@@ -212,10 +222,10 @@ describe('running one', () => {
   /** Nothing to run is not a request. */
   it('will not run an empty snippet or a stopped project', async () => {
     const empty = await paneWith('   ');
-    expect(empty.find('button').attributes('disabled')).toBeDefined();
+    expect(run(empty).attributes('disabled')).toBeDefined();
 
     const stopped = await paneWith('dump(1);', false);
-    expect(stopped.find('button').attributes('disabled')).toBeDefined();
+    expect(run(stopped).attributes('disabled')).toBeDefined();
     expect(stopped.text()).toContain(en.repl.needsRunning);
   });
 
@@ -225,12 +235,12 @@ describe('running one', () => {
   it('clears the last output when a run fails outright', async () => {
     replies.replRun = OK;
     const pane = await paneWith();
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
     expect(pane.text()).toContain('41');
 
     replies.replRun = () => Promise.reject(new Error('the project is not running'));
-    await pane.find('button').trigger('click');
+    await run(pane).trigger('click');
     await flushPromises();
     expect(pane.text()).not.toContain('812 ms');
   });

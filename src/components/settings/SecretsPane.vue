@@ -72,6 +72,7 @@ onMounted(load);
   <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
   <SettingsGroup
+    help="settings-secrets"
     icon="mdi-key-chain-variant"
     :title="t('settings.secrets.title')"
     :description="t('settings.secrets.description')"

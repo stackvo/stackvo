@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Stripe's own events, forwarded into this project (M-11).
@@ -98,10 +99,12 @@ watch(() => props.name, load, { immediate: true });
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-credit-card-outline</v-icon>{{ t('stripe.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-3">{{ t('stripe.explain') }}</p>
+    <PaneHeader
+      help="project-stripe"
+      icon="mdi-credit-card-outline"
+      :title="t('stripe.title')"
+      :description="t('stripe.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 
