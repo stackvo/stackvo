@@ -405,210 +405,216 @@ onUnmounted(close);
 </script>
 
 <template>
-  <v-theme-provider :theme="consoleTheme">
-    <v-locale-provider :locale="consoleLocale">
-      <div class="log-root">
-        <v-toolbar flat class="log-head">
-          <v-icon size="20">mdi-text-box-outline</v-icon>
+  <!-- The console theme reaches the output and not the bar above it. The bar is
+       this application's chrome — it sits inside a card the page drew, in the
+       page's theme — and a dark-console preference that also darkened the bar
+       left it painted for one theme while the card behind it was painted for
+       the other: on a light page, light-on-light. What `darkConsoles` is asking
+       for is a dark *console*, which is the part below the divider. -->
+  <v-locale-provider :locale="consoleLocale">
+    <div class="log-root">
+      <v-toolbar flat class="log-head">
+        <v-icon size="20">mdi-text-box-outline</v-icon>
 
-          <!-- The fanout picks projects, not files: choosing a file across a
-               whole workspace is the question this view exists to avoid having
-               to answer. Empty means every project.
+        <!-- The fanout picks projects, not files: choosing a file across a
+             whole workspace is the question this view exists to avoid having
+             to answer. Empty means every project.
 
-               `aria-label` as well as `placeholder`: a placeholder is a hint
-               that disappears the moment anything is typed, not an accessible
-               name, so a screen reader announced this as an unlabelled
-               combobox. -->
-          <v-select
-            v-if="fanout"
-            v-model="chosen"
-            :items="projectItems"
-            :placeholder="tc('logs.allProjects')"
-            :aria-label="tc('logs.allProjects')"
-            multiple
-            chips
-            closable-chips
-            density="compact"
-            variant="plain"
-            hide-details
-            class="log-source"
-          />
+             `aria-label` as well as `placeholder`: a placeholder is a hint
+             that disappears the moment anything is typed, not an accessible
+             name, so a screen reader announced this as an unlabelled
+             combobox. -->
+        <v-select
+          v-if="fanout"
+          v-model="chosen"
+          :items="projectItems"
+          :placeholder="tc('logs.allProjects')"
+          :aria-label="tc('logs.allProjects')"
+          multiple
+          chips
+          closable-chips
+          density="compact"
+          variant="plain"
+          hide-details
+          class="log-source"
+        />
 
-          <!-- Only offered when there is something to choose between. A project
-               with no log files gets the plain container name it always had. -->
-          <v-select
-            v-else-if="files.length"
-            v-model="source"
-            :items="sources"
-            density="compact"
-            variant="plain"
-            hide-details
-            class="log-source"
-          />
-          <span v-else class="text-body-2 log-name">{{ container }}</span>
+        <!-- Only offered when there is something to choose between. A project
+             with no log files gets the plain container name it always had. -->
+        <v-select
+          v-else-if="files.length"
+          v-model="source"
+          :items="sources"
+          density="compact"
+          variant="plain"
+          hide-details
+          class="log-source"
+        />
+        <span v-else class="text-body-2 log-name">{{ container }}</span>
 
-          <v-chip v-if="streamId" size="x-small" color="success">{{ tc('logs.live') }}</v-chip>
+        <v-chip v-if="streamId" size="x-small" color="success">{{ tc('logs.live') }}</v-chip>
 
-          <!-- Coverage, because the fanout follows at most 60 files. A view
-               that caps itself and says nothing reads as "nothing else is
-               happening". -->
-          <span v-if="fanout && coverage" class="text-caption text-medium-emphasis">
-            {{
-              tc('logs.following', {
-                followed: coverage.followed,
-                total: coverage.total,
-                projects: coverage.projects,
-              })
-            }}
-          </span>
-          <v-spacer />
+        <!-- Coverage, because the fanout follows at most 60 files. A view
+             that caps itself and says nothing reads as "nothing else is
+             happening". -->
+        <span v-if="fanout && coverage" class="text-caption text-medium-emphasis">
+          {{
+            tc('logs.following', {
+              followed: coverage.followed,
+              total: coverage.total,
+              projects: coverage.projects,
+            })
+          }}
+        </span>
+        <v-spacer />
 
-          <v-text-field
-            v-model="query"
-            :placeholder="tc('logs.search')"
-            :aria-label="tc('logs.search')"
-            density="compact"
-            variant="solo-filled"
-            flat
-            hide-details
-            clearable
-            prepend-inner-icon="mdi-magnify"
-            class="log-search"
-          >
-            <!-- Regex as a switch inside the field, where the query it changes
-                 the meaning of is. `.*` reads as an icon a developer knows. -->
-            <template #append-inner>
-              <v-btn
-                icon
-                size="x-small"
-                variant="text"
-                :color="useRegex ? 'primary' : undefined"
-                :aria-label="tc('logs.regex')"
-                :aria-pressed="useRegex"
-                @click="useRegex = !useRegex"
-              >
-                <v-icon size="18">mdi-regex</v-icon>
-                <v-tooltip activator="parent">{{ tc('logs.regex') }}</v-tooltip>
-              </v-btn>
-            </template>
-          </v-text-field>
-
-          <!-- Counts in the menu rather than chips in the bar: six levels of
-               chips is wider than most of the lines they filter. -->
-          <v-menu :close-on-content-click="false">
-            <template #activator="{ props: menuProps }">
-              <v-btn
-                v-bind="menuProps"
-                icon
-                variant="text"
-                size="small"
-                :color="levels.length ? 'primary' : undefined"
-                :aria-label="tc('logs.filterLevel')"
-              >
-                <v-icon>mdi-filter-variant</v-icon>
-                <v-tooltip activator="parent">{{ tc('logs.filterLevel') }}</v-tooltip>
-              </v-btn>
-            </template>
-            <v-list density="compact">
-              <v-list-item
-                v-for="level in LEVELS"
-                :key="level"
-                :active="levels.includes(level)"
-                @click="toggleLevel(level)"
-              >
-                <template #prepend>
-                  <v-icon size="16" :class="`level-${level}`">mdi-circle-medium</v-icon>
-                </template>
-                <v-list-item-title class="text-caption">
-                  {{ tc(`logs.level.${level}`) }}
-                </v-list-item-title>
-                <template #append>
-                  <span class="text-caption text-medium-emphasis ml-4">{{ counts[level] }}</span>
-                </template>
-              </v-list-item>
-              <v-divider class="my-1" />
-              <v-list-item :disabled="!levels.length" @click="levels = []">
-                <v-list-item-title class="text-caption">{{
-                  tc('logs.clearFilter')
-                }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
-          </v-menu>
-
-          <v-btn
-            icon
-            variant="text"
-            size="small"
-            :aria-label="tc('logs.copy')"
-            :disabled="!visible.length"
-            @click="copyVisible"
-          >
-            <v-icon>mdi-content-copy</v-icon>
-            <v-tooltip activator="parent">{{ tc('logs.copy') }}</v-tooltip>
-          </v-btn>
-
-          <v-btn
-            icon
-            variant="text"
-            size="small"
-            :color="follow ? 'primary' : undefined"
-            :aria-label="followLabel"
-            :aria-pressed="follow"
-            @click="follow = !follow"
-          >
-            <v-icon>{{
-              follow ? 'mdi-arrow-down-bold-box' : 'mdi-arrow-down-bold-box-outline'
-            }}</v-icon>
-            <v-tooltip activator="parent">{{ followLabel }}</v-tooltip>
-          </v-btn>
-
-          <v-btn
-            icon
-            variant="text"
-            size="small"
-            :color="paused ? 'warning' : undefined"
-            :aria-label="paused ? tc('logs.resume') : tc('logs.pause')"
-            :aria-pressed="paused"
-            @click="paused ? resume() : (paused = true)"
-          >
-            <v-badge
-              :model-value="paused && pending.length > 0"
-              :content="pending.length"
-              color="warning"
-              offset-x="-2"
-              offset-y="-2"
+        <v-text-field
+          v-model="query"
+          :placeholder="tc('logs.search')"
+          :aria-label="tc('logs.search')"
+          density="compact"
+          variant="solo-filled"
+          flat
+          hide-details
+          clearable
+          prepend-inner-icon="mdi-magnify"
+          class="log-search"
+        >
+          <!-- Regex as a switch inside the field, where the query it changes
+               the meaning of is. `.*` reads as an icon a developer knows. -->
+          <template #append-inner>
+            <v-btn
+              icon
+              size="x-small"
+              variant="text"
+              :color="useRegex ? 'primary' : undefined"
+              :aria-label="tc('logs.regex')"
+              :aria-pressed="useRegex"
+              @click="useRegex = !useRegex"
             >
-              <v-icon>{{ paused ? 'mdi-play' : 'mdi-pause' }}</v-icon>
-            </v-badge>
-            <v-tooltip activator="parent">
-              {{ paused ? tc('logs.resumeHint', { n: pending.length }) : tc('logs.pause') }}
-            </v-tooltip>
-          </v-btn>
+              <v-icon size="18">mdi-regex</v-icon>
+              <v-tooltip activator="parent">{{ tc('logs.regex') }}</v-tooltip>
+            </v-btn>
+          </template>
+        </v-text-field>
 
-          <v-btn
-            icon
-            variant="text"
-            size="small"
-            :disabled="!lines.length"
-            :aria-label="tc('logs.clear')"
-            @click="clearView"
+        <!-- Counts in the menu rather than chips in the bar: six levels of
+             chips is wider than most of the lines they filter. -->
+        <v-menu :close-on-content-click="false">
+          <template #activator="{ props: menuProps }">
+            <v-btn
+              v-bind="menuProps"
+              icon
+              variant="text"
+              size="small"
+              :color="levels.length ? 'primary' : undefined"
+              :aria-label="tc('logs.filterLevel')"
+            >
+              <v-icon>mdi-filter-variant</v-icon>
+              <v-tooltip activator="parent">{{ tc('logs.filterLevel') }}</v-tooltip>
+            </v-btn>
+          </template>
+          <v-list density="compact">
+            <v-list-item
+              v-for="level in LEVELS"
+              :key="level"
+              :active="levels.includes(level)"
+              @click="toggleLevel(level)"
+            >
+              <template #prepend>
+                <v-icon size="16" :class="`level-${level}`">mdi-circle-medium</v-icon>
+              </template>
+              <v-list-item-title class="text-caption">
+                {{ tc(`logs.level.${level}`) }}
+              </v-list-item-title>
+              <template #append>
+                <span class="text-caption text-medium-emphasis ml-4">{{ counts[level] }}</span>
+              </template>
+            </v-list-item>
+            <v-divider class="my-1" />
+            <v-list-item :disabled="!levels.length" @click="levels = []">
+              <v-list-item-title class="text-caption">{{
+                tc('logs.clearFilter')
+              }}</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+
+        <v-btn
+          icon
+          variant="text"
+          size="small"
+          :aria-label="tc('logs.copy')"
+          :disabled="!visible.length"
+          @click="copyVisible"
+        >
+          <v-icon>mdi-content-copy</v-icon>
+          <v-tooltip activator="parent">{{ tc('logs.copy') }}</v-tooltip>
+        </v-btn>
+
+        <v-btn
+          icon
+          variant="text"
+          size="small"
+          :color="follow ? 'primary' : undefined"
+          :aria-label="followLabel"
+          :aria-pressed="follow"
+          @click="follow = !follow"
+        >
+          <v-icon>{{
+            follow ? 'mdi-arrow-down-bold-box' : 'mdi-arrow-down-bold-box-outline'
+          }}</v-icon>
+          <v-tooltip activator="parent">{{ followLabel }}</v-tooltip>
+        </v-btn>
+
+        <v-btn
+          icon
+          variant="text"
+          size="small"
+          :color="paused ? 'warning' : undefined"
+          :aria-label="paused ? tc('logs.resume') : tc('logs.pause')"
+          :aria-pressed="paused"
+          @click="paused ? resume() : (paused = true)"
+        >
+          <v-badge
+            :model-value="paused && pending.length > 0"
+            :content="pending.length"
+            color="warning"
+            offset-x="-2"
+            offset-y="-2"
           >
-            <v-icon>mdi-notification-clear-all</v-icon>
-            <v-tooltip activator="parent">{{ tc('logs.clearHint') }}</v-tooltip>
-          </v-btn>
+            <v-icon>{{ paused ? 'mdi-play' : 'mdi-pause' }}</v-icon>
+          </v-badge>
+          <v-tooltip activator="parent">
+            {{ paused ? tc('logs.resumeHint', { n: pending.length }) : tc('logs.pause') }}
+          </v-tooltip>
+        </v-btn>
 
-          <!-- Whatever the frame needs to add — a dialog puts its dismiss here. -->
-          <slot name="actions" />
-        </v-toolbar>
+        <v-btn
+          icon
+          variant="text"
+          size="small"
+          :disabled="!lines.length"
+          :aria-label="tc('logs.clear')"
+          @click="clearView"
+        >
+          <v-icon>mdi-notification-clear-all</v-icon>
+          <v-tooltip activator="parent">{{ tc('logs.clearHint') }}</v-tooltip>
+        </v-btn>
 
-        <v-divider />
+        <!-- Whatever the frame needs to add — a dialog puts its dismiss here. -->
+        <slot name="actions" />
+      </v-toolbar>
 
+      <v-divider />
+
+      <v-theme-provider :theme="consoleTheme" class="log-console">
         <div ref="viewport" class="log-view">
           <ErrorAlert :error="error" type="error" />
 
           <!-- The fanout is live-only, so an empty pane is the normal opening
-               state and not a fault: nothing has been written since it opened.
-               Saying so is the difference between "waiting" and "broken". -->
+             state and not a fault: nothing has been written since it opened.
+             Saying so is the difference between "waiting" and "broken". -->
           <div
             v-if="!error && !lines.length"
             class="text-medium-emphasis text-caption pa-4 text-center"
@@ -617,7 +623,7 @@ onUnmounted(close);
           </div>
 
           <!-- Distinguished from an empty log: one means nothing has been
-               written, the other means a filter is hiding what was. -->
+             written, the other means a filter is hiding what was. -->
           <div
             v-else-if="!visible.length"
             class="text-medium-emphasis text-caption pa-4 text-center"
@@ -626,12 +632,12 @@ onUnmounted(close);
           </div>
 
           <!-- Container paths in a stack frame become clickable: the bind
-               mount states the substitution (/var/www/html ↔ projects/<name>),
-               so a frame is one click from the editor, not a search. -->
+             mount states the substitution (/var/www/html ↔ projects/<name>),
+             so a frame is one click from the editor, not a search. -->
           <template v-for="(line, i) in visible" :key="i">
             <!-- The live boundary. Everything above it was already in the file
-               when the tail started, grouped by file rather than by time —
-               which is the only claim this code can honestly make about it. -->
+             when the tail started, grouped by file rather than by time —
+             which is the only claim this code can honestly make about it. -->
             <div v-if="i === liveFrom" class="log-boundary">
               <span>{{ tc('logs.liveFrom') }}</span>
             </div>
@@ -642,28 +648,28 @@ onUnmounted(close);
                 line.level ? `level-${line.level}` : null,
               ]"
             ><span
-              v-if="line.project"
-              class="log-origin"
-              :title="line.origin"
-              >{{ line.project }}</span
-            ><template v-for="(seg, j) in segments(line)"><span
-                v-if="seg.file"
-                :key="j"
-                class="log-jump"
-                role="link"
-                :title="tc('logs.openInEditor')"
-                @click="jump(line, seg.file)"
-                >{{ seg.text }}</span
-              ><!-- Marking the hit is the difference between "this line
-                    matched" and "this is why it matched" — on a 200-character
-                    request line, the second one is the answer. -->
-              <template v-else><template
-                  v-for="(part, k) in highlight(seg.text, query, useRegex)"
-                  :key="k"
-                ><mark v-if="part.hit" class="log-hit">{{ part.text }}</mark><template
-                    v-else
-                    >{{ part.text }}</template
-                  ></template></template></template></pre>
+            v-if="line.project"
+            class="log-origin"
+            :title="line.origin"
+            >{{ line.project }}</span
+          ><template v-for="(seg, j) in segments(line)"><span
+              v-if="seg.file"
+              :key="j"
+              class="log-jump"
+              role="link"
+              :title="tc('logs.openInEditor')"
+              @click="jump(line, seg.file)"
+              >{{ seg.text }}</span
+            ><!-- Marking the hit is the difference between "this line
+                  matched" and "this is why it matched" — on a 200-character
+                  request line, the second one is the answer. -->
+            <template v-else><template
+                v-for="(part, k) in highlight(seg.text, query, useRegex)"
+                :key="k"
+              ><mark v-if="part.hit" class="log-hit">{{ part.text }}</mark><template
+                  v-else
+                  >{{ part.text }}</template
+                ></template></template></template></pre>
           </template>
         </div>
 
@@ -673,9 +679,9 @@ onUnmounted(close);
             {{ tc('logs.showing', { shown: visible.length, total: lines.length }) }}
           </div>
         </template>
-      </div>
-    </v-locale-provider>
-  </v-theme-provider>
+      </v-theme-provider>
+    </div>
+  </v-locale-provider>
 </template>
 
 <style scoped>
@@ -703,6 +709,15 @@ onUnmounted(close);
      A toolbar takes its height from the same defaults every other bar does, so
      there is nothing left to keep in step. */
   flex: 0 0 auto;
+
+  /* Transparent, so the card behind it shows through. `v-toolbar` paints
+     `surface` by default, and the card this sits in is a translucent
+     `surface-bright` — two fills that are close in the light theme and
+     visibly different in the dark one, where the bar read as a separate
+     strip laid over the card rather than as the card's own second row. The
+     divider under it is what separates the bar from the output; the fill
+     never had to. */
+  background: transparent;
 }
 
 .log-head :deep(.v-toolbar__content) {
@@ -759,6 +774,14 @@ onUnmounted(close);
   max-width: 420px;
   min-width: 200px;
   flex: 1 1 320px;
+}
+
+/* The console's own box: dark or not, it fills what is left under the bar. */
+.log-console {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .log-view {

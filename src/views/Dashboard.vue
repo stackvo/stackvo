@@ -5,6 +5,7 @@ import { useTheme } from 'vuetify';
 import { useAppStore } from '@/stores/app';
 import { useMetricsStore } from '@/stores/metrics';
 import { useInventoryStore } from '@/stores/inventory';
+import HelpButton from '@/components/HelpButton.vue';
 import PageLayout from '@/components/PageLayout.vue';
 import HostsDialog from '@/components/HostsDialog.vue';
 import LandingCard from '@/components/LandingCard.vue';
@@ -191,6 +192,7 @@ onMounted(() => {
 
 <template>
   <PageLayout
+    help="page-dashboard"
     top-icon="mdi-view-dashboard"
     :top-title="t('dashboard.title')"
     :top-subtitle="t('dashboard.subtitle')"
@@ -237,6 +239,8 @@ onMounted(() => {
                     {{ totalStopped }} {{ t('dashboard.stopped') }}
                   </div>
                 </div>
+
+                <HelpButton topic="page-dashboard-health" class="align-self-start" />
               </div>
             </v-card-text>
           </v-card>
@@ -260,6 +264,8 @@ onMounted(() => {
                     {{ t('dashboard.inactive') }}
                   </div>
                 </div>
+
+                <HelpButton topic="page-dashboard-projects" class="align-self-start" />
               </div>
             </v-card-text>
           </v-card>
@@ -283,6 +289,8 @@ onMounted(() => {
                     {{ t('dashboard.inactive') }}
                   </div>
                 </div>
+
+                <HelpButton topic="page-dashboard-services" class="align-self-start" />
               </div>
             </v-card-text>
           </v-card>
@@ -305,6 +313,8 @@ onMounted(() => {
                     {{ metrics.resources.images.unused }} {{ t('stats.unused') }}
                   </div>
                 </div>
+
+                <HelpButton topic="page-dashboard-images" class="align-self-start" />
               </div>
             </v-card-text>
           </v-card>
@@ -325,8 +335,10 @@ onMounted(() => {
       <v-row class="dash-row">
         <v-col cols="12" md="6" lg="3">
           <v-card elevation="1" class="pa-4 d-flex flex-column metric-card">
-            <div class="text-subtitle-2 text-medium-emphasis mb-2">
-              {{ t('dashboard.cpuLoad') }}
+            <div class="d-flex align-center mb-2">
+              <span class="text-subtitle-2 text-medium-emphasis">{{ t('dashboard.cpuLoad') }}</span>
+              <v-spacer />
+              <HelpButton topic="page-dashboard-cpu" />
             </div>
 
             <div v-if="loading" class="flex-grow-1 d-flex align-center justify-center">
@@ -387,6 +399,7 @@ onMounted(() => {
               }}</span>
               <v-spacer />
               <span class="text-h6">{{ percent(stats?.cpu.percent) }}</span>
+              <HelpButton topic="page-dashboard-cpu-history" class="ml-2" />
             </div>
 
             <div class="flex-grow-1 d-flex flex-column justify-center">
@@ -410,7 +423,11 @@ onMounted(() => {
 
         <v-col cols="12" md="6" lg="3">
           <v-card elevation="1" class="pa-4 d-flex flex-column metric-card">
-            <div class="text-subtitle-2 text-medium-emphasis mb-2">{{ t('stats.memory') }}</div>
+            <div class="d-flex align-center mb-2">
+              <span class="text-subtitle-2 text-medium-emphasis">{{ t('stats.memory') }}</span>
+              <v-spacer />
+              <HelpButton topic="page-dashboard-memory" />
+            </div>
             <div v-if="loading" class="flex-grow-1 d-flex align-center justify-center">
               <v-progress-circular indeterminate size="28" :aria-label="t('a11y.loading')" />
             </div>
@@ -467,7 +484,11 @@ onMounted(() => {
 
         <v-col cols="12" md="6" lg="3">
           <v-card elevation="1" class="pa-4 d-flex flex-column metric-card">
-            <div class="text-subtitle-2 text-medium-emphasis mb-2">{{ t('stats.storage') }}</div>
+            <div class="d-flex align-center mb-2">
+              <span class="text-subtitle-2 text-medium-emphasis">{{ t('stats.storage') }}</span>
+              <v-spacer />
+              <HelpButton topic="page-dashboard-storage" />
+            </div>
             <div v-if="loading" class="flex-grow-1 d-flex align-center justify-center">
               <v-progress-circular indeterminate size="28" :aria-label="t('a11y.loading')" />
             </div>
@@ -544,6 +565,8 @@ onMounted(() => {
                   <div class="text-h6">{{ bytesPerSecond(stats?.disk.writeRate) }}</div>
                 </div>
               </div>
+
+              <HelpButton topic="page-dashboard-disk-io" class="align-self-start" />
             </div>
 
             <v-row class="mt-2">
@@ -598,6 +621,8 @@ onMounted(() => {
                   <div class="text-h6">{{ bytesPerSecond(stats?.network.txRate) }}</div>
                 </div>
               </div>
+
+              <HelpButton topic="page-dashboard-network" class="align-self-start" />
             </div>
 
             <v-row class="mt-2">

@@ -1,6 +1,7 @@
 <script setup>
 import { onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
+import HelpButton from '@/components/HelpButton.vue';
 
 /**
  * Material's modal side sheet, as the app's second surface for detail.
@@ -34,6 +35,22 @@ const props = defineProps({
    * scrolling — for content that fills and scrolls on its own, like a log.
    */
   flush: { type: Boolean, default: false },
+  /**
+   * The topic its help button opens. See `lib/help.js`.
+   *
+   * Optional, unlike on a card: a panel that only confirms something has
+   * nothing to explain, and a help button on it would be an offer of nothing.
+   */
+  help: { type: String, default: '' },
+  /**
+   * Sit above another sheet rather than beside it.
+   *
+   * Two temporary drawers get the same z-index from Vuetify, so the one mounted
+   * later paints over the other whatever the user opened last. The help panel
+   * is opened *from inside* other panels, so it is the one that has to win — and
+   * only it passes this.
+   */
+  above: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -71,7 +88,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       :width="width"
       border="0"
       elevation="12"
-      :class="['side-sheet', { 'side-sheet--flush': flush }]"
+      :class="['side-sheet', { 'side-sheet--flush': flush, 'side-sheet--above': above }]"
       :aria-label="title"
       @update:model-value="emit('update:modelValue', $event)"
     >
@@ -88,6 +105,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             <span class="text-h6 side-sheet__title">{{ title }}</span>
             <slot name="header-append" />
             <v-spacer />
+            <HelpButton v-if="help" :topic="help" />
             <v-btn icon :aria-label="t('a11y.close')" @click="close">
               <v-icon>mdi-close</v-icon>
               <v-tooltip activator="parent">{{ t('a11y.close') }}</v-tooltip>
@@ -127,6 +145,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   overflow: hidden;
   border-start-start-radius: var(--app-radius);
   border-end-start-radius: var(--app-radius);
+}
+
+/* One step up, for a sheet opened from inside another one. After the rule above
+   rather than before it: both carry `!important` at the same specificity, so
+   source order is what decides, and the first version of this lost to the very
+   rule it was meant to beat. Still far below 2000, so a select inside the panel
+   opens over it. */
+.side-sheet.side-sheet--above {
+  z-index: 1030 !important;
 }
 
 /* 64dp, 24dp of start padding, dismiss at the end. Filled with the accent: the

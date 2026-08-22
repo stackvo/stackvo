@@ -3,6 +3,7 @@ import { toRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDevServer } from '@/composables/useDevServer';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * A Node project's dev server.
@@ -33,14 +34,15 @@ watch(
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-lightning-bolt-outline</v-icon>
-      {{ t('devServer.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('devServer.explain') }}</p>
+    <PaneHeader
+      help="project-dev-server"
+      icon="mdi-lightning-bolt-outline"
+      :title="t('devServer.title')"
+      :description="t('devServer.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <template v-if="status">
       <v-switch

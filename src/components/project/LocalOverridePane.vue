@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * `stackvo.local.json` — what this machine does differently (B-2).
@@ -97,34 +98,12 @@ watch(() => props.name, load);
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="d-flex align-center ga-2 mb-1">
-      <div class="section-head">
-        <v-icon size="18" class="mr-2">mdi-laptop</v-icon>{{ t('local.title') }}
-      </div>
-      <v-spacer />
-      <v-btn
-        v-if="state?.exists"
-        size="small"
-        variant="text"
-        prepend-icon="mdi-delete-outline"
-        :loading="saving"
-        @click="clear"
-      >
-        {{ t('local.remove') }}
-      </v-btn>
-      <v-btn
-        size="small"
-        color="primary"
-        variant="flat"
-        :disabled="!dirty"
-        :loading="saving"
-        @click="save"
-      >
-        {{ t('detail.save') }}
-      </v-btn>
-    </div>
-
-    <p class="text-caption text-medium-emphasis mb-3">{{ t('local.explain') }}</p>
+    <PaneHeader
+      help="project-local-override"
+      icon="mdi-laptop"
+      :title="t('local.title')"
+      :description="t('local.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 
@@ -172,5 +151,29 @@ watch(() => props.name, load);
       :loading="loading"
       @update:model-value="dirty = true"
     />
+
+    <div class="pane-foot">
+      <v-spacer />
+      <v-btn
+        v-if="state?.exists"
+        size="small"
+        variant="text"
+        prepend-icon="mdi-delete-outline"
+        :loading="saving"
+        @click="clear"
+      >
+        {{ t('local.remove') }}
+      </v-btn>
+      <v-btn
+        size="small"
+        color="primary"
+        variant="flat"
+        :disabled="!dirty"
+        :loading="saving"
+        @click="save"
+      >
+        {{ t('detail.save') }}
+      </v-btn>
+    </div>
   </v-card>
 </template>

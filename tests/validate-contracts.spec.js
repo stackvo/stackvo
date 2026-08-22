@@ -112,9 +112,7 @@ describe('the defaults the binary carries', () => {
     // `SUPPORTED_LANGUAGES_PHP_VERSIONS` would be empty and PHP 8.3 — a version
     // the binary ships — would be reported as unlisted.
     const report = validate(FIXTURE);
-    const unlisted = [...(report.warnings ?? [])].filter(
-      (f) => f.code === 'UNLISTED_PHP_VERSION'
-    );
+    const unlisted = [...(report.warnings ?? [])].filter((f) => f.code === 'UNLISTED_PHP_VERSION');
     expect(unlisted).toEqual([]);
   });
 
@@ -123,9 +121,7 @@ describe('the defaults the binary carries', () => {
     // `platform_matrix_claims.rs` holds it. This only refuses the failure a
     // regex over source text actually has: matching nothing and looking calm.
     const report = validate(ROOT);
-    const collapsed = [...(report.errors ?? [])].filter(
-      (f) => f.code === 'EMBEDDED_UNREADABLE'
-    );
+    const collapsed = [...(report.errors ?? [])].filter((f) => f.code === 'EMBEDDED_UNREADABLE');
     expect(collapsed).toEqual([]);
   });
 });

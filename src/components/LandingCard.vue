@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import HelpButton from '@/components/HelpButton.vue';
 
 /**
  * The one page that lists every site (M-4).
@@ -97,6 +98,8 @@ onMounted(load);
       </div>
 
       <v-spacer />
+
+      <HelpButton topic="page-dashboard-landing" />
 
       <span class="text-caption text-medium-emphasis">
         {{ t('landing.counts', { projects: status.projects, services: status.services }) }}

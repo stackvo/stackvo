@@ -3,6 +3,7 @@ import { toRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useWorkers } from '@/composables/useWorkers';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Queue and schedule sidecars for this project.
@@ -23,13 +24,15 @@ watch(() => props.name, load, { immediate: true });
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-cog-sync-outline</v-icon>{{ t('workers.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('workers.explain') }}</p>
+    <PaneHeader
+      help="project-workers"
+      icon="mdi-cog-sync-outline"
+      :title="t('workers.title')"
+      :description="t('workers.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <v-alert v-if="!kinds.length" type="info" variant="tonal">
       <div class="text-caption">{{ t('workers.none') }}</div>

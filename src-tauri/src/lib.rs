@@ -32,6 +32,7 @@ pub mod events;
 pub mod generator;
 pub mod git;
 pub mod handover;
+pub mod help;
 pub mod hints;
 pub mod hooks;
 pub mod hosts;
@@ -405,6 +406,7 @@ pub fn run() {
             commands::tunnel_status,
             commands::tunnel_providers,
             commands::qr_encode,
+            commands::help_doc,
             commands::landing_status,
             commands::oauth_callbacks,
             commands::locale_packs,

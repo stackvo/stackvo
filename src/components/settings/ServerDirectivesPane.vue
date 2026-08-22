@@ -34,6 +34,7 @@ onMounted(load);
 
 <template>
   <SettingsGroup
+    help="settings-server-directives"
     icon="mdi-file-code-outline"
     :title="t('settings.servers.extra')"
     :description="t('settings.servers.extraDesc')"

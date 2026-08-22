@@ -29,6 +29,7 @@ onMounted(loadCatalog);
 
 <template>
   <SettingsGroup
+    help="settings-php-runtimes"
     icon="mdi-code-braces"
     :title="t('settings.defaults.runtimes')"
     :description="t('settings.runtimes.desc')"
@@ -70,6 +71,7 @@ onMounted(loadCatalog);
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-php"
     icon="mdi-tag-outline"
     :title="t('settings.defaults.php')"
     :description="t('settings.php.versionDesc')"
@@ -122,6 +124,7 @@ onMounted(loadCatalog);
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-php-tools"
     icon="mdi-hammer-wrench"
     :title="t('settings.defaults.phpTools')"
     :description="t('settings.shape.phpDesc')"

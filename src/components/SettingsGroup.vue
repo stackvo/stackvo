@@ -1,4 +1,6 @@
 <script setup>
+import HelpButton from '@/components/HelpButton.vue';
+
 /**
  * One card of related controls inside a settings section.
  *
@@ -15,6 +17,8 @@ defineProps({
   icon: { type: String, default: '' },
   title: { type: String, default: '' },
   description: { type: String, default: '' },
+  /** The topic its help button opens. See `lib/help.js`. */
+  help: { type: String, default: '' },
 });
 </script>
 
@@ -30,6 +34,7 @@ defineProps({
       </div>
       <v-spacer />
       <slot name="append" />
+      <HelpButton v-if="help" :topic="help" />
     </div>
 
     <!-- Named as well as spaced: a page that wants the group to fill a column

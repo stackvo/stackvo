@@ -529,7 +529,7 @@ describe('the DNS pane', () => {
     const wrapper = await open({ listening: true, tcp: true, configured: true });
     replies.dnsCheck = CHECK;
 
-    await wrapper.find('button').trigger('click');
+    await button(wrapper, i18n.global.t('dns.test')).trigger('click');
     await flushPromises();
 
     const probes = wrapper.find('[data-test="dns-probes"]');

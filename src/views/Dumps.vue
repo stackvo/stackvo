@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n';
 import PageLayout from '@/components/PageLayout.vue';
 import DumpView from '@/components/DumpView.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Every project's dumps, in one place.
@@ -26,11 +27,33 @@ const { t } = useI18n();
 
 <template>
   <PageLayout
+    help="page-dumps"
     top-icon="mdi-bug-outline"
     :top-title="t('dumps.title')"
     :top-subtitle="t('dumps.allDescription')"
     hide-bar
   >
+    <!-- The same heading the log page and the project panes carry. The blue
+         band above names the page; this names the card, and the toolbar below
+         it is what you can do to the stream rather than what it is. -->
+    <div class="dumps-head">
+      <PaneHeader
+        help="page-dumps-all-projects"
+        icon="mdi-bug-outline"
+        :title="t('dumps.allProjects')"
+        :description="t('dumps.allExplain')"
+      />
+    </div>
+
     <DumpView scope="all" class="flex-grow-1" />
   </PageLayout>
 </template>
+
+<style scoped>
+/* The one padded part of the card: the stream under it runs to the card's
+   edges by design, so the heading is what needs the inset. */
+.dumps-head {
+  flex: 0 0 auto;
+  padding: 16px 16px 0;
+}
+</style>

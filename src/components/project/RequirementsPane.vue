@@ -105,13 +105,13 @@ defineExpose({ load });
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <SettingsGroup
+    help="project-requirements"
     icon="mdi-cube-scan"
     :title="t('requirements.title')"
     :description="t('requirements.description')"
   >
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
     <v-progress-linear v-if="loading" indeterminate class="mb-2" />
 
     <div v-if="empty && !loading" class="text-body-2 text-medium-emphasis">

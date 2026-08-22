@@ -47,6 +47,7 @@ onMounted(load);
        list possible at all — every workspace used to hold all thirty
        files, so "has a copy" said nothing. -->
   <SettingsGroup
+    help="settings-template-overrides"
     icon="mdi-file-replace-outline"
     :title="t('settings.templates.title')"
     :description="t('settings.templates.description')"

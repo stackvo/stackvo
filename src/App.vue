@@ -23,6 +23,7 @@ import CatalogueGate from '@/components/CatalogueGate.vue';
 import MigrationGate from '@/components/MigrationGate.vue';
 import NewProjectDrawer from '@/components/NewProjectDrawer.vue';
 import CloseDialog from '@/components/CloseDialog.vue';
+import HelpSheet from '@/components/HelpSheet.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 
 const app = useAppStore();
@@ -1019,6 +1020,10 @@ onUnmounted(() => {
     <v-snackbar-queue v-model="toasts" closable location="top right" :timeout="4000" />
 
     <CloseDialog v-model="showCloseDialog" />
+
+    <!-- One panel for every help button in the application: they write a topic
+         into a shared ref and this is what reads it. -->
+    <HelpSheet />
 
     <CommandPalette v-model="paletteOpen" />
 

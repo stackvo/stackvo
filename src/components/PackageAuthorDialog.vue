@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import SideSheet from '@/components/SideSheet.vue';
 
 /**
  * Writing a service package, and re-sealing it after an edit (C-1).
@@ -83,102 +84,105 @@ const seal = () => run(() => api.packageSeal(category.value, service.value, vers
 </script>
 
 <template>
-  <v-dialog v-model="model" max-width="640" scrollable>
-    <v-card class="pa-4">
-      <div class="section-head mb-1">
-        <v-icon size="18" class="mr-2">mdi-package-variant-plus</v-icon>{{ t('authoring.title') }}
-      </div>
-      <p class="text-caption text-medium-emphasis mb-4">{{ t('authoring.explain') }}</p>
+  <!-- A side sheet, not a dialog. Writing a package is a sequence with the
+       catalogue as its subject — create, edit the files, check, seal — and a
+       dialog covers the list of packages the whole time. This sits beside it. -->
+  <SideSheet
+    v-model="model"
+    icon="mdi-package-variant-plus"
+    :title="t('authoring.title')"
+    :width="640"
+  >
+    <p class="text-caption text-medium-emphasis mb-4">{{ t('authoring.explain') }}</p>
 
-      <ErrorAlert v-if="error" :error="error" class="mb-3" />
+    <ErrorAlert v-if="error" :error="error" class="mb-3" />
 
-      <div class="d-flex ga-2 mb-2">
-        <v-select
-          v-model="category"
-          :items="CATEGORIES"
-          :label="t('authoring.category')"
-          density="compact"
-          variant="outlined"
-          hide-details
-        />
-        <v-text-field
-          v-model="service"
-          :label="t('authoring.service')"
-          placeholder="widget"
-          density="compact"
-          variant="outlined"
-          hide-details
-        />
-        <v-text-field
-          v-model="version"
-          :label="t('authoring.version')"
-          placeholder="1.0"
-          density="compact"
-          variant="outlined"
-          hide-details
-        />
-      </div>
-
-      <!-- Only creating needs it: sealing and checking read the manifest, which
-           already says which image the package runs. -->
-      <v-text-field
-        v-model="image"
-        :label="t('authoring.image')"
-        :hint="t('authoring.imageHint')"
-        persistent-hint
-        placeholder="widget:1.0"
+    <div class="d-flex ga-2 mb-2">
+      <v-select
+        v-model="category"
+        :items="CATEGORIES"
+        :label="t('authoring.category')"
         density="compact"
         variant="outlined"
-        class="mb-4"
+        hide-details
       />
+      <v-text-field
+        v-model="service"
+        :label="t('authoring.service')"
+        placeholder="widget"
+        density="compact"
+        variant="outlined"
+        hide-details
+      />
+      <v-text-field
+        v-model="version"
+        :label="t('authoring.version')"
+        placeholder="1.0"
+        density="compact"
+        variant="outlined"
+        hide-details
+      />
+    </div>
 
-      <div class="d-flex ga-2 mb-4">
-        <v-btn
-          color="primary"
-          variant="flat"
-          size="small"
-          :loading="busy"
-          :disabled="!named || !image"
-          @click="create"
-        >
-          {{ t('authoring.create') }}
-        </v-btn>
-        <v-spacer />
-        <v-btn variant="text" size="small" :loading="busy" :disabled="!named" @click="check">
-          {{ t('authoring.check') }}
-        </v-btn>
-        <v-btn variant="tonal" size="small" :loading="busy" :disabled="!named" @click="seal">
-          {{ t('authoring.seal') }}
-        </v-btn>
-      </div>
+    <!-- Only creating needs it: sealing and checking read the manifest, which
+         already says which image the package runs. -->
+    <v-text-field
+      v-model="image"
+      :label="t('authoring.image')"
+      :hint="t('authoring.imageHint')"
+      persistent-hint
+      placeholder="widget:1.0"
+      density="compact"
+      variant="outlined"
+      class="mb-4"
+    />
 
-      <!-- Refusals first and loudest: a report with any means nothing was
-           written, which is the fact that decides what to do next. -->
-      <v-alert v-if="problems.length" type="error" variant="tonal" density="compact" class="mb-3">
-        <div class="text-caption mb-1">{{ t('authoring.refused') }}</div>
-        <ul class="pl-4">
-          <li v-for="(problem, i) in problems" :key="i" class="text-caption">{{ problem }}</li>
-        </ul>
-      </v-alert>
+    <div class="d-flex ga-2 mb-4">
+      <v-btn
+        color="primary"
+        variant="flat"
+        size="small"
+        :loading="busy"
+        :disabled="!named || !image"
+        @click="create"
+      >
+        {{ t('authoring.create') }}
+      </v-btn>
+      <v-spacer />
+      <v-btn variant="text" size="small" :loading="busy" :disabled="!named" @click="check">
+        {{ t('authoring.check') }}
+      </v-btn>
+      <v-btn variant="tonal" size="small" :loading="busy" :disabled="!named" @click="seal">
+        {{ t('authoring.seal') }}
+      </v-btn>
+    </div>
 
-      <template v-else-if="report">
-        <v-alert type="success" variant="tonal" density="compact" class="mb-2">
-          <div class="text-caption">
-            {{ t('authoring.valid', { service: report.service, version: report.version }) }}
-          </div>
-        </v-alert>
-        <div v-if="resealed.length" class="text-caption text-medium-emphasis mb-2">
-          {{ t('authoring.resealed', { files: resealed.join(', ') }) }}
+    <!-- Refusals first and loudest: a report with any means nothing was
+         written, which is the fact that decides what to do next. -->
+    <v-alert v-if="problems.length" type="error" variant="tonal" density="compact" class="mb-3">
+      <div class="text-caption mb-1">{{ t('authoring.refused') }}</div>
+      <ul class="pl-4">
+        <li v-for="(problem, i) in problems" :key="i" class="text-caption">{{ problem }}</li>
+      </ul>
+    </v-alert>
+
+    <template v-else-if="report">
+      <v-alert type="success" variant="tonal" density="compact" class="mb-2">
+        <div class="text-caption">
+          {{ t('authoring.valid', { service: report.service, version: report.version }) }}
         </div>
-        <!-- The path, because the next step is editing the files in whatever
-             they already use. -->
-        <code class="text-caption">{{ report.dir }}</code>
-      </template>
-
-      <div class="d-flex mt-4">
-        <v-spacer />
-        <v-btn variant="text" @click="model = false">{{ t('app.close') }}</v-btn>
+      </v-alert>
+      <div v-if="resealed.length" class="text-caption text-medium-emphasis mb-2">
+        {{ t('authoring.resealed', { files: resealed.join(', ') }) }}
       </div>
-    </v-card>
-  </v-dialog>
+      <!-- The path, because the next step is editing the files in whatever
+           they already use. -->
+      <code class="text-caption">{{ report.dir }}</code>
+    </template>
+
+    <template #footer>
+      <v-spacer />
+      <v-btn variant="text" @click="model = false">{{ t('app.close') }}</v-btn>
+    </template>
+  </SideSheet>
 </template>

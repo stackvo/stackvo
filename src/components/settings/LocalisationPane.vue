@@ -109,6 +109,7 @@ onMounted(loadPacks);
 
 <template>
   <SettingsGroup
+    help="settings-localisation-language"
     icon="mdi-web"
     :title="t('settings.language')"
     :description="t('settings.languageDesc')"
@@ -170,6 +171,7 @@ onMounted(loadPacks);
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-localisation-console-language"
     icon="mdi-console"
     :title="t('settings.consoleLanguage')"
     :description="t('settings.consoleLanguageDesc')"
@@ -189,6 +191,7 @@ onMounted(loadPacks);
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-localisation-direction"
     icon="mdi-format-textdirection-r-to-l"
     :title="t('settings.direction')"
     :description="t('settings.directionDesc')"

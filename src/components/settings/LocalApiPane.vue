@@ -97,6 +97,7 @@ onMounted(refresh);
   <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
   <SettingsGroup
+    help="settings-local-api"
     icon="mdi-lan-connect"
     :title="t('settings.localApi.title')"
     :description="t('settings.localApi.description')"
