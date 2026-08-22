@@ -41,17 +41,12 @@ const text = computed({
        the configuration tab and the least often read: everything it holds is
        shown as fields in the pane above, and this is where you come when you
        want to see the file itself. -->
-  <CollapsiblePane>
-    <template #title>
-      <span class="section-head">
-        <v-icon size="18" class="mr-2">mdi-code-json</v-icon>{{ t('detail.manifest') }}
-      </span>
-    </template>
-
-    <template #meta>
-      <span class="text-caption text-medium-emphasis">{{ t('detail.manifestHint') }}</span>
-    </template>
-
+  <CollapsiblePane
+    help="project-manifest"
+    icon="mdi-code-json"
+    :title="t('detail.manifest')"
+    :description="t('detail.manifestHint')"
+  >
     <!-- Outside the fold. Saving a draft and bringing the stack up are things
          you do to the project, not to the view of the file — and a save button
          that disappears when the editor is shut is a save you have to go

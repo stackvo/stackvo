@@ -102,6 +102,7 @@ onMounted(() => {
   <ErrorAlert v-if="hostsError" :error="hostsError" class="mb-4" />
 
   <SettingsGroup
+    help="settings-domain-address"
     icon="mdi-web"
     :title="t('settings.shape.addressTitle')"
     :description="t('settings.shape.addressDesc')"
@@ -195,6 +196,7 @@ onMounted(() => {
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-domain-hosts"
     icon="mdi-file-document-outline"
     :title="t('settings.shape.hostsTitle')"
     :description="t('settings.shape.hostsDesc')"
@@ -247,6 +249,7 @@ onMounted(() => {
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-domain-proxy"
     icon="mdi-transit-connection-variant"
     :title="t('settings.shape.proxyTitle')"
     :description="t('settings.shape.proxyDesc')"
@@ -287,6 +290,7 @@ onMounted(() => {
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-domain-network"
     icon="mdi-lan"
     :title="t('settings.shape.networkTitle')"
     :description="t('settings.shape.networkGroupDesc')"

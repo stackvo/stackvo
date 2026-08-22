@@ -39,6 +39,7 @@ onMounted(load);
   <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
   <SettingsGroup
+    help="settings-certificates"
     icon="mdi-certificate-outline"
     :title="t('certs.title')"
     :description="t('certs.subtitle')"

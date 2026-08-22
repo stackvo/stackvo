@@ -6,6 +6,7 @@ import { useCopyTick } from '@/composables/useCopyTick';
 import { useTunnel } from '@/composables/useTunnel';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import QrCode from '@/components/QrCode.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The public URL this project can be reached at while it is running.
@@ -87,13 +88,15 @@ async function submitToken(value) {
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-earth</v-icon>{{ t('tunnel.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('tunnel.explain') }}</p>
+    <PaneHeader
+      help="project-tunnel"
+      icon="mdi-earth"
+      :title="t('tunnel.title')"
+      :description="t('tunnel.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <!-- The tunnel forwards to the container; a stopped container would
          serve 502s from a URL that looks like it worked. -->

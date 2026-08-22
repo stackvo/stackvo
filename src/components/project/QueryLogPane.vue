@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * What the database was asked while you were looking, and what it was asked
@@ -118,13 +119,15 @@ watch(service, load);
 </script>
 
 <template>
-  <ErrorAlert v-if="error" :error="error" class="mb-4" />
-
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-database-search</v-icon>{{ t('queryLog.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-4">{{ t('queryLog.explain') }}</p>
+    <PaneHeader
+      help="project-query-log"
+      icon="mdi-database-search"
+      :title="t('queryLog.title')"
+      :description="t('queryLog.explain')"
+    />
+
+    <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
     <!-- Nothing this can attach to. Said plainly rather than shown as an empty
          control: the project may simply not use a SQL database. -->

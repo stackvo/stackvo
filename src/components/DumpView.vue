@@ -685,6 +685,15 @@ function openSource(row) {
      A toolbar takes its height from the same defaults every other bar does, so
      there is nothing left to keep in step. */
   flex: 0 0 auto;
+
+  /* Transparent, so the card behind it shows through. `v-toolbar` paints
+     `surface` by default, and the card this sits in is a translucent
+     `surface-bright` — two fills that are close in the light theme and
+     visibly different in the dark one, where the bar read as a separate
+     strip laid over the card rather than as the card's own second row. The
+     divider under it is what separates the bar from the output; the fill
+     never had to. */
+  background: transparent;
 }
 
 .dump-head :deep(.v-toolbar__content) {

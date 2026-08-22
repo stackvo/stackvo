@@ -115,6 +115,7 @@ defineExpose({ snippet, state });
   <ErrorAlert v-if="error" :error="error" class="mb-4" />
 
   <SettingsGroup
+    help="settings-agents"
     icon="mdi-robot-outline"
     :title="t('settings.agents.title')"
     :description="t('settings.agents.description')"

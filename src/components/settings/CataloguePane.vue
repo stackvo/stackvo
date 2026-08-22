@@ -158,6 +158,7 @@ const bundleSize = computed(() =>
   <ErrorAlert :error="error" />
 
   <SettingsGroup
+    help="settings-catalogue-source"
     icon="mdi-cloud-download-outline"
     :title="t('catalogueSettings.sourceTitle')"
     :description="t('catalogueSettings.sourceWhat')"
@@ -288,6 +289,7 @@ const bundleSize = computed(() =>
        group's description now — the header is where every other pane says
        what a group is for. -->
   <SettingsGroup
+    help="settings-catalogue-bundle"
     icon="mdi-package-variant-closed"
     :title="t('catalogueSettings.bundleTitle')"
     :description="t('catalogueSettings.bundleWhat')"

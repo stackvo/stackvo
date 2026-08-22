@@ -50,6 +50,7 @@ const isDefaultAppearance = computed(() =>
 
 <template>
   <SettingsGroup
+    help="settings-appearance-theme-colors"
     icon="mdi-palette"
     :title="t('settings.themeColors')"
     :description="t('settings.themeColorsDesc')"
@@ -163,6 +164,7 @@ const isDefaultAppearance = computed(() =>
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-appearance-typography"
     icon="mdi-format-font"
     :title="t('settings.typography')"
     :description="t('settings.typographyDesc')"
@@ -242,6 +244,7 @@ const isDefaultAppearance = computed(() =>
   <!-- The one palette in the app that is not decoration: these four
          colours are how a container reports what it is doing. -->
   <SettingsGroup
+    help="settings-appearance-status-colors"
     icon="mdi-traffic-light-outline"
     :title="t('settings.statusColors')"
     :description="t('settings.statusColorsDesc')"
@@ -285,6 +288,7 @@ const isDefaultAppearance = computed(() =>
   </SettingsGroup>
 
   <SettingsGroup
+    help="settings-appearance-presets"
     icon="mdi-bookmark-multiple-outline"
     :title="t('settings.presets')"
     :description="t('settings.presetsDesc')"

@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useWorktrees } from '@/composables/useWorktrees';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * N — a branch with an environment of its own.
@@ -212,27 +213,12 @@ watch(
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="d-flex align-center ga-2 mb-1">
-      <div class="section-head">
-        <v-icon size="18" class="mr-2">mdi-source-branch</v-icon>{{ t('worktree.title') }}
-      </div>
-      <v-spacer />
-      <v-btn
-        v-if="!isWorktree && available && !creating"
-        size="small"
-        color="primary"
-        variant="flat"
-        prepend-icon="mdi-plus"
-        :loading="busy === 'create'"
-        @click="openForm"
-      >
-        {{ t('worktree.new') }}
-      </v-btn>
-    </div>
-
-    <p class="text-caption text-medium-emphasis mb-3">
-      {{ isWorktree ? t('worktree.explainSelf') : t('worktree.explain') }}
-    </p>
+    <PaneHeader
+      help="project-worktree"
+      icon="mdi-source-branch"
+      :title="t('worktree.title')"
+      :description="isWorktree ? t('worktree.explainSelf') : t('worktree.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 
@@ -536,6 +522,23 @@ watch(
         </div>
       </template>
     </template>
+
+    <!-- The one control that acts on the pane rather than on a row, so it sits
+         under the list it adds to. Hidden while the form is open: the form is
+         already the thing this button opens. -->
+    <div v-if="!isWorktree && available && !creating" class="pane-foot">
+      <v-spacer />
+      <v-btn
+        size="small"
+        color="primary"
+        variant="flat"
+        prepend-icon="mdi-plus"
+        :loading="busy === 'create'"
+        @click="openForm"
+      >
+        {{ t('worktree.new') }}
+      </v-btn>
+    </div>
 
     <!-- ------------------------------------------------------- removal -->
     <!-- Each thing that can be destroyed is its own switch, off by default.

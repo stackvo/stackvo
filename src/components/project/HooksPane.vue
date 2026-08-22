@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * What this project runs when it starts, stops or is rebuilt (B-3).
@@ -93,10 +94,12 @@ watch(() => props.name, load);
 
 <template>
   <v-card v-if="declared.length || loading" variant="flat" class="pane">
-    <div class="section-head mb-1">
-      <v-icon size="18" class="mr-2">mdi-hook</v-icon>{{ t('hooks.title') }}
-    </div>
-    <p class="text-caption text-medium-emphasis mb-3">{{ t('hooks.explain') }}</p>
+    <PaneHeader
+      help="project-hooks"
+      icon="mdi-hook"
+      :title="t('hooks.title')"
+      :description="t('hooks.explain')"
+    />
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 

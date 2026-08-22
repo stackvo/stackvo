@@ -6,6 +6,7 @@ import { api } from '@/lib/ipc';
 import PageLayout from '@/components/PageLayout.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import MailRelayPane from '@/components/MailRelayPane.vue';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * The inbox as a destination — Herd's Mail page, done here.
@@ -269,12 +270,26 @@ onUnmounted(() => clearInterval(timer));
 
 <template>
   <PageLayout
+    help="page-mail"
     top-icon="mdi-email-outline"
     :top-title="t('mail.title')"
     :top-subtitle="t('mail.subtitle')"
     hide-bar
   >
     <div class="mail-page">
+      <!-- The card names itself, the way the log and dump pages do. The blue
+           band above is the page; this is the card under it — and it is the one
+           line that stays put through all three states, so what you are looking
+           at does not stop being said when the inbox happens to be empty. -->
+      <div class="mail-head">
+        <PaneHeader
+          help="page-mail-inbox"
+          icon="mdi-email-outline"
+          :title="t('mail.inbox')"
+          :description="t('mail.inboxExplain')"
+        />
+      </div>
+
       <ErrorAlert :error="error" type="error" closable class="ma-4 mb-0" @close="error = null" />
 
       <!-- Where a released message goes (M-2). On this page rather than in
@@ -344,7 +359,6 @@ onUnmounted(() => clearInterval(timer));
         <div v-else class="mail-split">
           <div class="mail-list">
             <div class="mail-list-header">
-              <span class="text-subtitle-2 font-weight-bold">{{ t('mail.inbox') }}</span>
               <v-chip size="x-small" variant="tonal" color="success">{{ status.service }}</v-chip>
               <v-spacer />
               <v-btn
@@ -684,6 +698,13 @@ onUnmounted(() => clearInterval(timer));
 /* Material over hairlines: panes are tonal surfaces with radius and gap;
    rows separate by spacing and shape, selection is a tonal container. The
    only line left on the page is the tabs' own indicator. */
+/* The one padded part of the card: the split under it runs to the card's edges
+   by design, so the heading is what needs the inset. */
+.mail-head {
+  flex: 0 0 auto;
+  padding: 16px 16px 0;
+}
+
 .mail-page {
   display: flex;
   flex-direction: column;

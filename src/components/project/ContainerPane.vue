@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n';
 import { bytes } from '@/lib/format';
 import { useCopyTick } from '@/composables/useCopyTick';
+import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * What Docker reports about the container behind this project.
@@ -25,9 +26,12 @@ const { copied, copy } = useCopyTick();
 
 <template>
   <v-card variant="flat" class="pane">
-    <div class="section-head mb-4">
-      <v-icon size="18" class="mr-2">mdi-docker</v-icon>{{ t('projectDetail.container') }}
-    </div>
+    <PaneHeader
+      help="project-container"
+      icon="mdi-docker"
+      :title="t('projectDetail.container')"
+      :description="t('projectDetail.containerExplain')"
+    />
 
     <div v-if="!details" class="text-caption text-medium-emphasis py-8 text-center">
       {{ t('projects.notBuilt') }}

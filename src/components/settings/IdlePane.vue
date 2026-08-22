@@ -72,7 +72,12 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsGroup icon="mdi-sleep" :title="t('idle.title')" :subtitle="t('idle.subtitle')">
+  <SettingsGroup
+    help="settings-idle"
+    icon="mdi-sleep"
+    :title="t('idle.title')"
+    :subtitle="t('idle.subtitle')"
+  >
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
     <p class="text-caption text-medium-emphasis mb-4">{{ t('idle.explain') }}</p>
 

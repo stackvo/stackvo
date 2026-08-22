@@ -321,6 +321,7 @@ const canCreate = computed(
     :model-value="modelValue"
     :title="t('newProject.title')"
     icon="mdi-folder-plus-outline"
+    help="panel-new-project"
     :width="920"
     @update:model-value="emit('update:modelValue', $event)"
   >
