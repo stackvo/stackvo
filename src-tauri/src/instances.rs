@@ -1,7 +1,7 @@
 //! What is installed, how many times, and under which names.
 //!
-//! Faz 2 of `docs/servis-market-mimarisi.md`. Until now a service's whole state
-//! was a `SERVICE_<ID>_*` family in `.env`: `SERVICE_MYSQL_ENABLE=true` and
+//! The single source of truth this replaced `.env` with. A service's whole state
+//! used to be a `SERVICE_<ID>_*` family there: `SERVICE_MYSQL_ENABLE=true` and
 //! `SERVICE_MYSQL_VERSION=8.0`. That works exactly as long as a service has one
 //! version, and it cannot be stretched — `.env` is flat by contract (first `=`
 //! wins, no quoting, no nesting, and two other parsers read the same file), so

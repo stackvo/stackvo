@@ -832,6 +832,68 @@ pub struct Doctor {
     /// the stack looks healthy, and the withdrawal is a line in an index
     /// nobody re-reads by hand.
     pub revoked: Vec<RevokedInstall>,
+    /// Package files this workspace has put its own copy in front of (P).
+    ///
+    /// Not a fault, and listed anyway — this is the page somebody is on when a
+    /// service behaves unlike everything written about it, and "the compose
+    /// fragment on this machine is not the published one" is the answer to that
+    /// question more often than anything else here. It is also the only place
+    /// an override whose package has since been uninstalled is visible at all.
+    pub overrides: Vec<OverrideInUse>,
+}
+
+/// One file this workspace has taken over, and whether it is being read.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverrideInUse {
+    pub service: String,
+    pub version: String,
+    pub path: String,
+    /// False when `policy.market.allowOverrides` is off, or when the package it
+    /// belongs to is no longer installed.
+    ///
+    /// Both are states where a file exists, looks like it is doing something,
+    /// and is doing nothing — which is the shape of problem that costs a whole
+    /// afternoon, because the evidence and the cause are in different places.
+    pub applied: bool,
+    /// Why it is not being read, when it is not.
+    pub ignored_because: Option<String>,
+}
+
+/// What this workspace has overridden, and which of those actually render.
+fn overrides_in_use(root: Option<&Path>) -> Vec<OverrideInUse> {
+    let Some(root) = root else {
+        return Vec::new();
+    };
+    let allowed = crate::policy::current().market().allows_overrides();
+    // The same helper every other reader uses. `dir()` answers "is this version
+    // installed", which overrides do not change — but a second spelling here is
+    // a second thing to keep in step, and `overrides_claims.rs` reads it as one
+    // more place a later screen could be copied from.
+    let tree = crate::market::catalogue(root).ok();
+
+    crate::overrides::all(root)
+        .into_iter()
+        .map(|entry| {
+            let installed = tree
+                .as_ref()
+                .is_some_and(|t| t.dir(&entry.service, &entry.version).is_some());
+            let ignored_because = if !allowed {
+                Some("policy".to_string())
+            } else if !installed {
+                Some("notInstalled".to_string())
+            } else {
+                None
+            };
+            OverrideInUse {
+                service: entry.service,
+                version: entry.version,
+                path: entry.path,
+                applied: ignored_because.is_none(),
+                ignored_because,
+            }
+        })
+        .collect()
 }
 
 /// An installed version its publisher has withdrawn.
@@ -1019,6 +1081,7 @@ pub async fn run(root: Option<&Path>) -> Doctor {
         extensions: root.map(extension_problems).unwrap_or_default(),
         keystore: keystore_check(root),
         revoked: revoked_installs(root),
+        overrides: overrides_in_use(root),
     }
 }
 

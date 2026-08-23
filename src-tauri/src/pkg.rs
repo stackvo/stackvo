@@ -1,8 +1,8 @@
 //! Reading a service package, and deciding whether to believe it.
 //!
 //! The client half of `contracts/package-version.schema.json`. A package is
-//! data somebody else wrote — in Faz 1 that somebody is this project's own
-//! converter, and from Faz 5 it is whatever a registry served — so every field
+//! data somebody else wrote — a converter run once against the old templates, or
+//! whatever a registry served over HTTPS — so every field
 //! that reaches a compose file passes through [`Manifest::check`] first, and
 //! every byte on disk passes through [`verify`].
 //!
@@ -22,7 +22,7 @@
 //! ## What this module does not do
 //!
 //! It does not fetch, and it does not check signatures. Fetching is `market`
-//! and trust is `trust`; both are Faz 4 and both are layered *above* this. The
+//! and trust is `signing`; both are layered *above* this. The
 //! split is deliberate: this module is pure and has no network, which is what
 //! lets its tests be the ones that describe attacks.
 
@@ -520,7 +520,7 @@ fn is_sha256(text: &str) -> bool {
 
 /// A path a package may write: relative, no traversal, no separators it should
 /// not have, nothing absolute.
-fn checked_relative(path: &str, who: &str) -> Result<()> {
+pub(crate) fn checked_relative(path: &str, who: &str) -> Result<()> {
     let bad = |m: &str| {
         Err(
             Error::new(Code::InvalidManifest, format!("{who}: {path:?} {m}"))
@@ -634,6 +634,15 @@ pub struct Identity {
 #[derive(Debug, Clone, Default)]
 pub struct Tree {
     entries: std::collections::BTreeMap<String, TreeEntry>,
+    /// `<workspace>/overrides`, when this workspace is allowed to have them.
+    ///
+    /// A field rather than a lookup at each read: which files a workspace has
+    /// taken over is a property of the catalogue somebody is looking at, and a
+    /// tree opened without it is one where the published bytes are the answer —
+    /// which is what every fixture and every test of the format wants.
+    /// `market::catalogue` is the one place that attaches it, so no caller can
+    /// forget to.
+    overrides: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -712,6 +721,17 @@ impl Tree {
         }
 
         Ok(tree)
+    }
+
+    /// Layer a workspace's own copies over the published files.
+    ///
+    /// Decision 0031; [`crate::overrides`] carries the reasoning. Only files a
+    /// manifest names as templates can be there, the manifest itself never can,
+    /// and nothing under `packages/` changes — so [`Tree::load`] verifies the
+    /// same bytes it verified before and a reinstall is exactly as safe.
+    pub fn with_overrides(mut self, at: std::path::PathBuf) -> Self {
+        self.overrides = Some(at);
+        self
     }
 
     pub fn identity(&self, service: &str) -> Option<&Identity> {
@@ -793,6 +813,15 @@ impl Catalogue for Tree {
     /// the one that is still there after somebody refactors the parser.
     fn file(&self, service: &str, version: &str, relative: &str) -> Option<String> {
         checked_relative(relative, "package file").ok()?;
+        // The workspace's own copy first, when it has one. Deliberately ahead
+        // of the `dir` lookup rather than after a failed read: an override is a
+        // decision somebody made, and consulting it only when the published
+        // file happens to be missing would make it a fallback instead.
+        if let Some(at) = &self.overrides {
+            if let Some(text) = crate::overrides::read(at, service, version, relative) {
+                return Some(text);
+            }
+        }
         let dir = self.dir(service, version)?;
         std::fs::read_to_string(dir.join(relative)).ok()
     }

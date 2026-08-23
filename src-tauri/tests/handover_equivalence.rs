@@ -1,7 +1,7 @@
 //! What a migrated workspace gets, against what it has today.
 //!
-//! This is the check `docs/servis-market-mimarisi.md` §7 calls the handover's
-//! only real safety, and it is worth saying exactly what it can and cannot be.
+//! This is the handover's only real safety, and it is worth saying exactly what
+//! it can and cannot be.
 //!
 //! It **cannot** be a byte comparison. The whole point of the new pipeline is
 //! that names change: `stackvo-mysql` becomes `stackvo-mysql-8-0`, and a

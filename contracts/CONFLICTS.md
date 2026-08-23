@@ -408,11 +408,12 @@ So a workspace that picks 9.4 or 9.7 from the version list gets a container that
 never starts. Measured against `mysql:9.4` on 11 August 2026, not read about;
 removing both lets it boot and report `9.4.0`.
 
-**v1 fix:** the service packages carry a config *per version*, which is what the
-per-version directory is for. `packages/databases/mysql/versions/9.4` and `9.7`
-have both directives removed and the reason written into the file. The template
-under `skeleton/` is unchanged and still wrong — it is deleted in Faz 6, and
-until then the versions it breaks are the two nobody could have been running.
+**Fixed, and this is what the per-version directory is for** (decision 0032).
+The service packages carry a config *per version*:
+`packages/databases/mysql/versions/9.4` and `9.7` have both directives removed
+and the reason written into the file. The shared template under `skeleton/` that
+mounted one `my.cnf` onto every series is gone with the rest of them (decision
+0016), so there is no second copy left to go stale.
 
 ## Summary
 

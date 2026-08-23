@@ -624,7 +624,7 @@ fn instance_services(
         return None;
     }
     let table = crate::instances::Table::load(root).ok()?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(root)).ok()?;
+    let tree = crate::market::catalogue(root).ok()?;
     let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
 
     let mut out: Vec<Service> = table
@@ -2865,7 +2865,7 @@ fn instance_domains(
         return None;
     }
     let table = crate::instances::Table::load(root).ok()?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(root)).ok()?;
+    let tree = crate::market::catalogue(root).ok()?;
     let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
 
     Some(
@@ -7143,7 +7143,7 @@ pub fn project_devcontainer_plan(
     let m = manifest::read(&dir.join("stackvo.json"), &name)?;
 
     let table = service_source(&root)?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
     let env = Env::load(&root)?;
     let opts = crate::generator::ToolchainOptions {
         tools: env.list("PHP_DEFAULT_TOOLS"),
@@ -10830,6 +10830,12 @@ pub fn policy_status() -> serde_json::Value {
             "requireSignature": policy.market().require_signature,
             "allowedPackages": policy.market().allowed_packages.iter().collect::<Vec<_>>(),
             "allowedRegistries": policy.market().allowed_registries.iter().collect::<Vec<_>>(),
+            // Two rules that refuse an action and were not on the wire. The
+            // comment above says why they have to be: a person who has just
+            // been refused reads this pane to find out which rule did it, and a
+            // rule that is enforced and unreported sends them to support.
+            "allowedSources": policy.market().allowed_sources.iter().collect::<Vec<_>>(),
+            "allowOverrides": policy.market().allow_overrides,
             "autoUpdate": policy.market().auto_update,
             // The count, not the keys. A public key is not a secret and this is
             // still a status call; the number is what answers "did my key
@@ -11449,11 +11455,11 @@ pub type Rendered = (Vec<GenFile>, Vec<(String, String)>);
 /// middle of it would be a function nobody could read either half of.
 /// Where the services half of a render comes from — and there is only one.
 ///
-/// Faz 6 of `docs/servis-market-mimarisi.md` is closed here. This used to be a
-/// switch: no `instances.json` meant render from `.env` and the templates
-/// compiled into the binary, an `instances.json` meant render from the table
-/// and the package tree. Both branches existed so that every workspace in
-/// existence could keep working while the second one was built.
+/// ADR 0016 is what closed the second one. This used to be a switch: no
+/// `instances.json` meant render from `.env` and the templates compiled into the
+/// binary, an `instances.json` meant render from the table and the package tree.
+/// Both branches existed so that every workspace in existence could keep working
+/// while the second one was built.
 ///
 /// The first branch is gone (ADR 0016). What made keeping it untenable was not
 /// the code — it was that the two branches knew about **different catalogues**:
@@ -11676,7 +11682,7 @@ pub fn render_generated(root: &std::path::Path) -> Result<Rendered> {
     {
         let table = service_source(root)?;
         {
-            let tree = crate::pkg::Tree::open(&crate::market::dir(root))?;
+            let tree = crate::market::catalogue(root)?;
             let network = vars
                 .get("DOCKER_DEFAULT_NETWORK")
                 .cloned()
@@ -12177,15 +12183,14 @@ mod lock_tests {
 
 use std::collections::BTreeMap;
 //
-// Faz 3 and Faz 4 of `docs/servis-market-mimarisi.md`, the half that touches
-// neither Docker nor `.env`. Everything here reads or writes two things: the
-// package cache under `<root>/market`, and the instance table at
+// The catalogue and the instance table. Everything here reads or writes two
+// things: the package cache under `<root>/market`, and the instance table at
 // `<root>/services/instances.json`.
 //
-// The commands that *do* touch Docker — enabling an instance, starting it —
-// are deliberately absent. They need the generate path to render from the
-// instance table, and that swap is Faz 6. Shipping them now would mean a
-// button that writes a row nothing renders.
+// The commands that touch Docker — enabling an instance, starting it — arrived
+// one round later than the rest, and the order was deliberate: they need the
+// generate path to render from the instance table, and until that swap landed
+// (ADR 0016) they would have been buttons that wrote a row nothing rendered.
 
 /// Has this machine got a catalogue, where from, and how old is it?
 ///
@@ -12206,14 +12211,23 @@ pub struct MarketStatus {
     pub source_location: Option<String>,
     pub packages: usize,
     pub installed: usize,
-    /// Whether signatures are being checked. Always false today, and named so
-    /// the UI can say so rather than implying otherwise — see `market::Trust`.
+    /// Whether the **cached index** was signature-verified when it arrived.
+    ///
+    /// Not whether this build *can* verify. Those are different sentences and
+    /// only this one belongs on a screen: a machine that pins the official key
+    /// still holds an unverified catalogue whenever the last refresh came from
+    /// a directory somebody picked, which is every offline install.
     pub signed: bool,
     /// Whether `policy.market.requireSignature` is set. Reported separately
     /// from `signed` because the pair is the whole story: required and not
-    /// happening is a refusal a user needs explained, and it is the state a
-    /// managed machine is in until ADR 0015's key exists.
+    /// happening is a refusal a user needs explained.
     pub signature_required: bool,
+    /// The key id that verified it, so a screen can name what it trusted.
+    ///
+    /// `None` whenever `signed` is false. Present so the two states a user can
+    /// be in — verified by the official key, verified by their organisation's
+    /// mirror key — are distinguishable, which "signed: true" alone cannot do.
+    pub verified_by: Option<String>,
     /// The bundle an administrator pointed this machine at, if any. Shown so
     /// the source line does not look like a path the user chose.
     pub offline_bundle: Option<String>,
@@ -12261,6 +12275,12 @@ pub struct MarketVersion {
     /// Whether an instance is using it, so the UI can refuse an uninstall
     /// before the filesystem does.
     pub in_use: bool,
+    /// How many of this version's files this workspace has taken over (ADR 0031).
+    ///
+    /// On the row rather than behind a click, because it is the answer to "why
+    /// does this behave unlike the documentation" — and a person asking that
+    /// question is not going to open a sheet they have no reason to suspect.
+    pub overridden: usize,
 }
 
 /// One installed instance, as the front end needs it.
@@ -12291,7 +12311,7 @@ pub fn market_status(state: State<'_, AppState>) -> Result<MarketStatus> {
     let root = market_root(&state)?;
     let registry = crate::market::cached(&root)?;
     let source = crate::market::remembered(&root)?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
     let installed = crate::pkg::Catalogue::services(&tree)
         .iter()
         .map(|s| crate::pkg::Catalogue::versions(&tree, s).len())
@@ -12306,12 +12326,12 @@ pub fn market_status(state: State<'_, AppState>) -> Result<MarketStatus> {
         source_location: source.as_ref().map(|s| s.location.clone()),
         packages: registry.as_ref().map(|r| r.packages.len()).unwrap_or(0),
         installed,
-        // `market::Trust::Signed` refuses rather than downgrades, so nothing
-        // can report true here until there is a key to verify against. A
-        // machine whose policy sets `requireSignature` therefore cannot
-        // refresh at all, and saying so is the point: the alternative is a
-        // page that looks the same on a machine where the check is off.
-        signed: false,
+        // What the last refresh actually did, read back from `source.json`.
+        // This was a hard-coded `false` for as long as no key was pinned, and
+        // it was true by accident rather than by measurement — the kind of
+        // field that stays behind after the thing it describes changes.
+        signed: source.as_ref().is_some_and(|s| s.verified_by.is_some()),
+        verified_by: source.as_ref().and_then(|s| s.verified_by.clone()),
         signature_required: crate::policy::current().market().require_signature,
         offline_bundle: crate::policy::current()
             .market()
@@ -12347,9 +12367,14 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
         .or_else(|| market.registry_url.clone())
         .unwrap_or(location);
 
-    let reference = crate::market::SourceRef {
+    let mut reference = crate::market::SourceRef {
         kind: crate::market::kind_of(&location).to_string(),
         location,
+        // Filled in from what the refresh actually did, below. Not from what
+        // this build pins: a machine with a key still holds an unverified index
+        // whenever the last refresh was unsigned, which is every refresh from a
+        // directory somebody picked.
+        verified_by: None,
     };
     let previous = crate::market::cached(&root)?;
 
@@ -12370,7 +12395,11 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
     let moved = root.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<()> {
         let source = crate::market::open(&moved, &reference)?;
-        crate::market::refresh(&moved, source.as_ref(), trust, previous.as_ref())?;
+        let done = crate::market::refresh(&moved, source.as_ref(), trust, previous.as_ref())?;
+        // Remembered only after the index was accepted, and carrying what
+        // verified it. A `source.json` written before the refresh succeeded
+        // would name a source this machine never took an index from.
+        reference.verified_by = done.verified_by;
         crate::market::remember(&moved, &reference)
     })
     .await
@@ -12440,14 +12469,75 @@ pub fn package_seal(
     ))
 }
 
+// -------------------------------------------------- workspace overrides (P)
+
+/// The files of one installed version this workspace may take over, and which
+/// of them it already has.
+///
+/// The list comes from the manifest rather than from the directory, so it is
+/// the compose fragment, the config templates and each companion's fragment —
+/// never the manifest itself. `crate::overrides` carries why that line is where
+/// it is.
+#[tauri::command]
+pub fn package_files(
+    state: State<'_, AppState>,
+    service: String,
+    version: String,
+) -> Result<Vec<crate::overrides::OverridableFile>> {
+    let root = state.root()?;
+    let tree = crate::market::catalogue(&root)?;
+    let manifest = tree.load(&service, &version)?;
+    crate::overrides::listing(&root, &service, &version, &manifest)
+}
+
+/// Copy one published file into the workspace so it can be edited.
+///
+/// Returns the absolute path, because the caller's next move is to open it in
+/// the user's own editor — the same return `template_override` gives, and for
+/// the same reason that command gives: a box in a settings pane is a worse
+/// place to edit compose YAML than whatever they already use.
+#[tauri::command]
+pub fn package_override(
+    state: State<'_, AppState>,
+    service: String,
+    version: String,
+    path: String,
+) -> Result<String> {
+    let root = state.root()?;
+    let tree = crate::market::catalogue(&root)?;
+    let manifest = tree.load(&service, &version)?;
+    let at = crate::overrides::materialize(&root, &tree, &service, &version, &manifest, &path)?;
+    Ok(at.display().to_string())
+}
+
+/// Drop the workspace's copy and go back to the published file.
+///
+/// Destructive by definition — the file being deleted is somebody's edit — so
+/// the front end asks first. Nothing here is undoable.
+#[tauri::command]
+pub fn package_override_revert(
+    state: State<'_, AppState>,
+    service: String,
+    version: String,
+    path: String,
+) -> Result<()> {
+    let root = state.root()?;
+    crate::overrides::revert(&root, &service, &version, &path)
+}
+
 #[tauri::command]
 pub fn market_catalog(state: State<'_, AppState>) -> Result<Vec<MarketPackage>> {
     let root = state.root()?;
     let Some(registry) = crate::market::cached(&root)? else {
         return Ok(Vec::new());
     };
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
     let table = crate::instances::Table::load(&root)?;
+    // Walked once for the whole catalogue rather than per row: this is a
+    // hundred version rows, and asking the filesystem a hundred times for an
+    // answer one directory listing already holds is a page that gets slower
+    // every time the catalogue grows.
+    let overrides = crate::overrides::all(&root);
 
     Ok(registry
         .packages
@@ -12474,6 +12564,10 @@ pub fn market_catalog(state: State<'_, AppState>) -> Result<Vec<MarketPackage>> 
                         .instances
                         .iter()
                         .any(|i| i.service == package.service && i.version == row.version),
+                    overridden: overrides
+                        .iter()
+                        .filter(|o| o.service == package.service && o.version == row.version)
+                        .count(),
                 })
                 .collect(),
         })
@@ -12609,6 +12703,8 @@ pub async fn market_probe(state: State<'_, AppState>, location: String) -> Resul
     let reference = crate::market::SourceRef {
         kind: kind.clone(),
         location: location.clone(),
+        // A probe verifies nothing and remembers nothing.
+        verified_by: None,
     };
 
     // Into a scratch directory, so a probe cannot touch the real cache even by
@@ -12631,6 +12727,7 @@ pub async fn market_probe(state: State<'_, AppState>, location: String) -> Resul
                 crate::market::Trust::Unsigned,
                 None,
             )
+            .map(|done| done.registry)
         })
         .await
         .map_err(|e| Error::new(Code::IoError, format!("the probe could not be run: {e}")))?
@@ -12796,7 +12893,7 @@ pub struct HandoverNote {
 fn preview_of(root: &std::path::Path) -> Result<HandoverPreview> {
     let migrated = crate::instances::path(root).exists();
     let env = crate::config::Env::load(root)?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(root))?;
+    let tree = crate::market::catalogue(root)?;
     let pending = crate::handover::is_pending(root, &env, &tree);
 
     // A workspace that has already migrated has nothing to plan, and planning
@@ -12966,7 +13063,7 @@ pub async fn handover_apply(state: State<'_, AppState>) -> Result<HandoverPrevie
     }
 
     let env = crate::config::Env::load(&root)?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
     let now = crate::snapshot::now_rfc3339();
     let plan = crate::handover::plan(&root, &env, &tree, &crate::ports::is_free, &now);
 
@@ -12987,7 +13084,7 @@ pub async fn handover_apply(state: State<'_, AppState>) -> Result<HandoverPrevie
 pub fn instance_list(state: State<'_, AppState>) -> Result<Vec<InstanceRow>> {
     let root = state.root()?;
     let table = crate::instances::Table::load(&root)?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
 
     Ok(table
         .instances
@@ -13040,7 +13137,7 @@ pub fn instance_plan(
     version: String,
 ) -> Result<InstancePlan> {
     let root = state.root()?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
     let manifest = tree.load(&service, &version)?;
     let table = crate::instances::Table::load(&root)?;
 
@@ -13123,7 +13220,7 @@ pub async fn instance_create(
     ports: Option<BTreeMap<String, u16>>,
 ) -> Result<String> {
     let root = state.root()?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
     let manifest = tree.load(&service, &version)?;
 
     let mut table = crate::instances::Table::load(&root)?;
@@ -13291,7 +13388,7 @@ fn instance_manifest(
     root: &std::path::Path,
     instance: &crate::instances::Instance,
 ) -> Result<crate::pkg::Manifest> {
-    crate::pkg::Tree::open(&crate::market::dir(root))?.load(&instance.service, &instance.version)
+    crate::market::catalogue(root)?.load(&instance.service, &instance.version)
 }
 
 /// The value in force for one setting: what was stored, then the default.
@@ -13324,7 +13421,7 @@ pub fn instance_settings(state: State<'_, AppState>, id: String) -> Result<Vec<I
     let instance = instance_of(&root, &id)?;
     let manifest = instance_manifest(&root, &instance)?;
     let table = crate::instances::Table::load(&root)?;
-    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let tree = crate::market::catalogue(&root)?;
 
     Ok(manifest
         .settings

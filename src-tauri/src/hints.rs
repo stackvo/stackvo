@@ -306,8 +306,8 @@ hints! {
     WAIT_FOR_OPERATION = "waitForOperation",
         "Wait for it to finish, or watch the operation console for progress.";
     NO_REGISTRY_KEY = "noRegistryKey",
-        "This build pins no registry key. An organisation running its own mirror can \
-         pin one with the market.registryKey policy.";
+        "This build pins no registry key, so it cannot check a signature. An organisation \
+         running its own mirror can pin one with policy.market.additionalKeys.";
     SIGNED_BY_UNKNOWN_KEY = "signedByUnknownKey",
         "The index may be from somewhere else, or the publisher may have rotated keys \
          without this machine learning the new one.";
@@ -342,6 +342,15 @@ hints! {
          whoever published it.";
     PACKAGE_NOT_IN_REGISTRY = "packageNotInRegistry",
         "Refresh the catalogue, or pick a version it lists.";
+    ONLY_PACKAGE_TEMPLATES = "onlyPackageTemplates",
+        "Only the compose fragment and the config templates a package ships can be \
+         overridden — never its manifest, which is what declares the image and the ports.";
+    REVERT_OVERRIDE_FIRST = "revertOverrideFirst",
+        "This workspace already has its own copy of that file. Revert it first if you want \
+         the published one back.";
+    OVERRIDES_REFUSED_BY_POLICY = "overridesRefusedByPolicy",
+        "An administrator's policy says the published package files are the ones that run \
+         on this machine.";
     BUNDLE_NEEDS_AN_EMPTY_DIRECTORY = "bundleNeedsAnEmptyDirectory",
         "Choose a directory that does not exist yet, or an empty one — a bundle written \
          over other files is one nobody can account for.";

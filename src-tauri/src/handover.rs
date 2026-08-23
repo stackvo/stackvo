@@ -1,9 +1,9 @@
 //! Handing the service state in `.env` over to the instance table.
 //!
-//! Faz 2 of `docs/servis-market-mimarisi.md`, and the one piece of it that
-//! touches a workspace somebody is already using. Everything else in this
-//! sprint is new code with no users; this reads a file that has seven services
-//! switched on in it and decides what happens to their data.
+//! The one piece of the move to packages that touches a workspace somebody is
+//! already using. Everything else in it was new code with no users; this reads a
+//! file that has seven services switched on in it and decides what happens to
+//! their data.
 //!
 //! So it is a **plan first and a write second**. [`plan`] is pure: it reads,
 //! decides, and returns what it would do together with every note and every
@@ -150,7 +150,7 @@ pub fn is_pending(root: &std::path::Path, env: &Env, catalogue: &dyn Catalogue) 
 pub fn pending(root: &std::path::Path) -> bool {
     Env::load(root)
         .ok()
-        .zip(crate::pkg::Tree::open(&crate::market::dir(root)).ok())
+        .zip(crate::market::catalogue(root).ok())
         .is_some_and(|(env, tree)| is_pending(root, &env, &tree))
 }
 
@@ -394,9 +394,9 @@ const MIGRATED_MARK: &str =
 /// ## The order is the safety
 ///
 /// The backup is written **first**, before the table and before `.env` is
-/// touched. `docs/servis-market-mimarisi.md` §7 asks for a revert path, and a
-/// revert whose only artefact is written after the risky step is a revert that
-/// exists in the cases where nothing went wrong.
+/// touched. A migration this size has to have a revert path, and a revert whose
+/// only artefact is written after the risky step is a revert that exists in the
+/// cases where nothing went wrong.
 ///
 /// An existing backup is not overwritten. A second run means the first one
 /// already happened; replacing `.env.pre-market.bak` with a post-migration

@@ -56,6 +56,7 @@ pub mod mcp;
 pub mod menu;
 pub mod migrate;
 pub mod oauth;
+pub mod overrides;
 pub mod paths;
 pub mod perf;
 pub mod phpini;
@@ -469,6 +470,9 @@ pub fn run() {
             commands::package_scaffold,
             commands::package_lint,
             commands::package_seal,
+            commands::package_files,
+            commands::package_override,
+            commands::package_override_revert,
             commands::market_catalog,
             commands::market_install,
             commands::market_uninstall,

@@ -6,6 +6,7 @@ import { api } from '@/lib/ipc';
 import { bytes } from '@/lib/format';
 import { useMarket } from '@/composables/useMarket';
 import PackageAuthorDialog from '@/components/PackageAuthorDialog.vue';
+import PackageOverrideSheet from '@/components/PackageOverrideSheet.vue';
 import { useInventoryStore } from '@/stores/inventory';
 import PageLayout from '@/components/PageLayout.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
@@ -30,6 +31,15 @@ import ServiceDetailSheet from '@/components/ServiceDetailSheet.vue';
 
 const { t, locale } = useI18n();
 const market = useMarket();
+
+/**
+ * Which installed version's files are open, or null (decision 0031).
+ *
+ * A `{ service, version }` rather than a boolean and two refs: the sheet reads
+ * both and they are only ever set together, so keeping them apart is keeping
+ * two things in step for no reason.
+ */
+const overrideTarget = ref(null);
 
 /**
  * C-1. Beside the source picker, because both answer "where do packages come
@@ -432,9 +442,14 @@ function supportLabel(version) {
           <div class="text-subtitle-2 mb-2">{{ t('marketView.sourceTitle') }}</div>
           <!-- Which source is in force, and how much of it to believe. It was
                a permanent line above the catalogue; it belongs here, where
-               somebody is already asking the question. `signed` is reported
-               rather than assumed: nothing verifies a signature yet, and a page
-               that implied otherwise would be the wrong kind of quiet. -->
+               somebody is already asking the question.
+
+               `signed` is about the index this machine HOLDS, not about what
+               the build can verify — so a workspace that pins the official key
+               and last refreshed from a folder still reads "not
+               signature-checked", which is the truth. When it was verified the
+               key is named, because "verified" and "verified by whose key" are
+               different answers on a machine with a mirror. -->
           <div v-if="market.status.value" class="text-caption mb-3">
             <span class="font-mono">{{ market.status.value.sourceLocation ?? '—' }}</span>
             <div :class="market.status.value.signed ? 'text-success' : 'text-medium-emphasis'">
@@ -444,9 +459,11 @@ function supportLabel(version) {
                   installed: market.status.value.installed,
                 })
               }}
-              <template v-if="!market.status.value.signed">
-                · {{ t('marketView.unsigned') }}
+              <template v-if="market.status.value.signed">
+                ·
+                {{ t('marketView.verifiedBy', { key: market.status.value.verifiedBy }) }}
               </template>
+              <template v-else> · {{ t('marketView.unsigned') }} </template>
             </div>
           </div>
           <v-text-field
@@ -912,6 +929,33 @@ function supportLabel(version) {
                           {{ t('marketView.addInstance') }}
                         </v-tooltip>
                       </v-btn>
+                      <!-- The workspace's own copy of a file this package
+                         ships. Beside Uninstall rather than in the row's
+                         detail sheet: it is the answer to "this behaves unlike
+                         the documentation", and somebody asking that has no
+                         reason to open a sheet about the version. -->
+                      <v-btn
+                        icon
+                        size="small"
+                        variant="text"
+                        :color="item.version.overridden ? 'primary' : undefined"
+                        :aria-label="t('overrides.files')"
+                        @click.stop="
+                          overrideTarget = {
+                            service: item.entry.service,
+                            version: item.version.version,
+                          }
+                        "
+                      >
+                        <v-icon size="small">mdi-file-edit-outline</v-icon>
+                        <v-tooltip activator="parent" location="top">
+                          {{
+                            item.version.overridden
+                              ? t('overrides.overriddenCount', { n: item.version.overridden })
+                              : t('overrides.files')
+                          }}
+                        </v-tooltip>
+                      </v-btn>
                       <!-- Refused in Rust while an instance names it; disabled
                          here so the refusal is visible before the click. The
                          tooltip hangs off the span rather than the button: a
@@ -1277,6 +1321,17 @@ function supportLabel(version) {
       :service="detailTarget"
       :model-value="!!detailTarget"
       @update:model-value="detailTarget = $event ? detailTarget : null"
+    />
+
+    <!-- One sheet for whichever version is open, like the detail sheet above.
+         `changed` reloads the catalogue: the version row carries the override
+         count, so it is stale the moment anything in here succeeds. -->
+    <PackageOverrideSheet
+      :service="overrideTarget?.service ?? ''"
+      :version="overrideTarget?.version ?? ''"
+      :model-value="!!overrideTarget"
+      @update:model-value="overrideTarget = $event ? overrideTarget : null"
+      @changed="market.load()"
     />
 
     <PackageAuthorDialog v-model="authorOpen" />
