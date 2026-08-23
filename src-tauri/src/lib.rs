@@ -10,6 +10,7 @@ pub mod certs;
 pub mod channel;
 pub mod cli;
 pub mod commands;
+pub mod completions;
 pub mod compose_policy;
 pub mod config;
 pub mod connect;
@@ -20,6 +21,7 @@ pub mod db;
 pub mod dbmove;
 pub mod debugbridge;
 pub mod detect;
+pub mod devcontainer;
 pub mod devserver;
 pub mod diagnostics;
 pub mod dns;
@@ -36,6 +38,7 @@ pub mod help;
 pub mod hints;
 pub mod hooks;
 pub mod hosts;
+pub mod ide;
 pub mod idle;
 pub mod imports;
 pub mod inflight;
@@ -63,6 +66,7 @@ pub mod preflight;
 pub mod preset;
 pub mod profile;
 pub mod progress;
+pub mod provider;
 pub mod pty;
 pub mod qr;
 pub mod querylog;
@@ -71,6 +75,7 @@ pub mod release;
 pub mod render;
 pub mod repl;
 pub mod routes;
+pub mod rules;
 pub mod runner;
 pub mod scaffold;
 pub mod secrets;
@@ -79,11 +84,13 @@ pub mod signing;
 pub mod site;
 pub mod skeleton;
 pub mod snapshot;
+pub mod spx;
 pub mod stats;
 pub mod stats_store;
 pub mod stripe;
 pub mod template;
 pub mod timeline;
+pub mod tooling;
 pub mod trace;
 pub mod tray;
 pub mod tui;
@@ -440,6 +447,12 @@ pub fn run() {
             commands::project_scaffold,
             commands::project_clone,
             commands::project_register,
+            commands::project_providers,
+            commands::provider_consent,
+            commands::provider_secret_set,
+            commands::provider_run,
+            commands::project_devcontainer_plan,
+            commands::project_devcontainer_write,
             commands::git_available,
             commands::worktree_support,
             commands::worktree_list,
@@ -532,6 +545,18 @@ pub fn run() {
             commands::service_open_in_client,
             commands::xdebug_status,
             commands::xdebug_set,
+            commands::spx_status,
+            commands::spx_set,
+            commands::spx_build,
+            commands::spx_delete,
+            commands::spx_clear,
+            commands::spx_options,
+            commands::spx_record_request,
+            commands::spx_record_command,
+            commands::spx_report,
+            commands::ide_debug_status,
+            commands::ide_debug_apply,
+            commands::ide_debug_remove,
             commands::php_ini_status,
             commands::php_ini_set,
             commands::doctor_drop_extension,
@@ -593,10 +618,12 @@ pub fn run() {
             commands::imports_take,
             commands::project_adoptable,
             commands::project_adopt,
+            commands::project_adopt_many,
             commands::project_manifest_read,
             commands::project_local_read,
             commands::project_local_write,
             commands::project_hooks_plan,
+            commands::project_sidecars,
             commands::project_hooks_approve,
             commands::project_hooks_revoke,
             commands::project_manifest_write,
@@ -626,6 +653,14 @@ pub fn run() {
             commands::agents_status,
             commands::agents_install,
             commands::agents_remove,
+            commands::rules_status,
+            commands::rules_apply,
+            commands::rules_remove,
+            commands::tooling_status,
+            commands::tooling_path_apply,
+            commands::tooling_path_remove,
+            commands::tooling_install,
+            commands::tooling_remove,
             commands::system_accent,
             commands::logs_info,
             commands::diagnostics_bundle,

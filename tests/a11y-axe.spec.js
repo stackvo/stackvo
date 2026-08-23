@@ -663,6 +663,135 @@ describe('axe over the extracted project panes', () => {
     document.body.innerHTML = '';
   });
 
+  it('AgentPane has no violations', async () => {
+    vi.resetModules();
+    // The rows carry a path in a `<code>` and two buttons whose only
+    // distinguishing text is on the row above them — exactly the shape that
+    // reads as a column of identical controls, so it is scanned with content.
+    vi.doMock('@/lib/ipc', () => ({
+      StackvoError: class extends Error {},
+      call: vi.fn(),
+      asList: (value) => (Array.isArray(value) ? value : []),
+      api: {
+        rulesStatus: async () => [
+          {
+            id: 'claude',
+            label: 'Claude Code',
+            scope: 'workspace',
+            path: '/w/projects/shop/CLAUDE.md',
+            exists: true,
+            installed: true,
+            current: true,
+          },
+          {
+            id: 'cursor',
+            label: 'Cursor',
+            scope: 'workspace',
+            path: '/w/projects/shop/.cursor/rules/stackvo.mdc',
+            exists: false,
+            installed: false,
+            current: false,
+          },
+          {
+            id: 'gemini',
+            label: 'Gemini CLI',
+            scope: 'global',
+            path: '/home/x/.gemini/GEMINI.md',
+            exists: true,
+            installed: true,
+            current: false,
+          },
+        ],
+        rulesApply: vi.fn(),
+        rulesRemove: vi.fn(),
+      },
+    }));
+
+    const { createPinia } = await import('pinia');
+    const AgentPane = (await import('@/components/project/AgentPane.vue')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(
+      {
+        components: { AgentPane },
+        template: '<v-app><AgentPane name="shop" runtime="node" /></v-app>',
+      },
+      { attachTo: host, global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    // The global row is Settings' question; a project page that offered it
+    // would be a button changing something the page does not show.
+    expect(wrapper.text()).not.toContain('/home/x/.gemini/GEMINI.md');
+
+    expect(await scan(wrapper)).toHaveNoViolations();
+    document.body.innerHTML = '';
+    vi.doUnmock('@/lib/ipc');
+  });
+
+  it('SpxPane has no violations', async () => {
+    vi.resetModules();
+    // With a report in the table: the row's only distinguishing control is an
+    // icon button, which is exactly the shape this file exists to catch.
+    vi.doMock('@/lib/ipc', () => ({
+      StackvoError: class extends Error {},
+      call: vi.fn(),
+      asList: (value) => (Array.isArray(value) ? value : []),
+      api: {
+        spxStatus: async () => ({
+          supported: true,
+          enabled: true,
+          built: true,
+          phpVersion: '8.4',
+          active: true,
+          running: true,
+          controlUrl: 'https://shop.loc/?SPX_KEY=abc&SPX_UI_URI=/',
+          xdebugConflict: true,
+          bytes: 4096,
+          directory: '/w/logs/projects/shop/spx',
+          reports: [
+            {
+              key: 'spx-full-1',
+              recordedAt: 1787426207,
+              cli: false,
+              request: 'GET /api/health',
+              wallTimeUs: 736_000,
+              peakMemory: 1808984,
+              callCount: 1240,
+              bytes: 4096,
+            },
+          ],
+        }),
+        spxSet: vi.fn(),
+        spxBuild: vi.fn(),
+        spxDelete: vi.fn(),
+        spxClear: vi.fn(),
+        openInBrowser: vi.fn(),
+      },
+    }));
+
+    const { createPinia } = await import('pinia');
+    const SpxPane = (await import('@/components/project/SpxPane.vue')).default;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const wrapper = mount(
+      {
+        components: { SpxPane },
+        template: '<v-app><SpxPane name="shop" runtime="php" /></v-app>',
+      },
+      { attachTo: host, global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(await scan(wrapper)).toHaveNoViolations();
+    document.body.innerHTML = '';
+    vi.doUnmock('@/lib/ipc');
+  });
+
   it('LogsPane says so when the project has not been built', async () => {
     const LogsPane = (await import('@/components/project/LogsPane.vue')).default;
     const host = document.createElement('div');
@@ -803,6 +932,38 @@ describe('axe over the extracted Settings panes', () => {
           },
         ],
       },
+      // The rules half. Both scopes and both states, so the scan sees the
+      // buttons a row can carry rather than an empty list.
+      rulesStatus: [
+        {
+          id: 'claude',
+          label: 'Claude Code',
+          scope: 'workspace',
+          path: '/Users/x/.stackvo/projects/shop/CLAUDE.md',
+          exists: true,
+          installed: true,
+          current: true,
+        },
+        {
+          id: 'cursor',
+          label: 'Cursor',
+          scope: 'workspace',
+          path: '/Users/x/.stackvo/projects/shop/.cursor/rules/stackvo.mdc',
+          exists: false,
+          installed: false,
+          current: false,
+        },
+        {
+          id: 'claude',
+          label: 'Claude Code',
+          scope: 'global',
+          path: '/Users/x/.claude/CLAUDE.md',
+          exists: true,
+          installed: true,
+          current: false,
+        },
+      ],
+      projectsList: [{ name: 'shop' }],
     });
     expect(await scan(wrapper)).toHaveNoViolations();
     document.body.innerHTML = '';

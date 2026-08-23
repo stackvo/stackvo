@@ -94,6 +94,11 @@ pub enum Action {
     Databases,
     Mail,
     Mcp,
+    Rules,
+    Tools,
+    Ide,
+    Spx,
+    SpxTop,
     Up,
     Down,
     Start,
@@ -104,6 +109,15 @@ pub enum Action {
     CertsRenew,
     McpInstall,
     McpRemove,
+    RulesInstall,
+    RulesRemove,
+    PathInstall,
+    PathRemove,
+    ToolInstall,
+    ToolRemove,
+    IdeInstall,
+    SpxBuild,
+    SpxRecord,
     /// `stackvo market-bundle <dir>` — the catalogue, for a machine with no
     /// network (§3 #31).
     MarketBundle,
@@ -120,6 +134,10 @@ pub enum Action {
     Commands,
     /// `stackvo run <id>` — one of them.
     Run,
+    /// `stackvo completions <shell>` — the stub that wires tab completion up.
+    Completions,
+    /// `stackvo complete --word <w> -- <words>` — what the stub asks.
+    Complete,
 }
 
 /// One flag a command accepts.
@@ -162,6 +180,23 @@ pub enum Backing {
     /// Runs a program in the project's container. No contract command exists
     /// or should — see above.
     HostShell,
+    /// Answered from **this binary's own shape** — the table above — rather
+    /// than from the stack.
+    ///
+    /// The two completion commands are the whole of it, and they are a
+    /// different kind of thing from everything else here: their subject is the
+    /// CLI, not the workspace. `completions` renders a shell stub from
+    /// [`COMMANDS`]; `complete` renders the candidates for a half-typed line
+    /// from the same table. Naming a contract command for either would be an
+    /// invention, and `Surface` means "a screen over several", which they are
+    /// not.
+    ///
+    /// Kept a boundary rather than an escape hatch by `cli_surface.rs`, the way
+    /// [`Backing::HostShell`] is: a `Local` command reaches no contract command
+    /// and never writes. `complete` does consult the project list to answer a
+    /// `<project>` slot, and that is a read whose worst failure is an empty
+    /// list — it can produce no effect a contract would need to describe.
+    Local,
 }
 
 /// One command, and what it stands on.
@@ -202,7 +237,7 @@ impl Command {
     pub fn contract(&self) -> Option<&'static str> {
         match self.backing {
             Backing::Contract(name) => Some(name),
-            Backing::Surface(_) | Backing::HostShell => None,
+            Backing::Surface(_) | Backing::HostShell | Backing::Local => None,
         }
     }
 
@@ -214,7 +249,7 @@ impl Command {
         match self.backing {
             Backing::Contract(name) => vec![name],
             Backing::Surface(names) => names.to_vec(),
-            Backing::HostShell => Vec::new(),
+            Backing::HostShell | Backing::Local => Vec::new(),
         }
     }
 }
@@ -288,6 +323,21 @@ const LIMIT: Flag = Flag {
     short: None,
     value: Some("n"),
     help: "How many messages. Default 25.",
+};
+
+const RULES_GLOBAL: Flag = Flag {
+    long: "global",
+    short: None,
+    value: None,
+    help: "Write the home-directory copy instead of the project one. Not every \
+           assistant reads one; `stackvo rules` says which do.",
+};
+
+const RULES_PROJECT: Flag = Flag {
+    long: "project",
+    short: None,
+    value: Some("name"),
+    help: "Which project directory the rules go into. Default: the workspace root.",
 };
 
 const MODE: Flag = Flag {
@@ -377,7 +427,7 @@ pub const COMMANDS: &[Command] = &[
         action: Action::Project,
         backing: Backing::Contract("project_get"),
         writes: false,
-        args: "<name>",
+        args: "<project>",
         arity: (1, 1),
         prefix: &[],
         flags: &[],
@@ -451,6 +501,102 @@ pub const COMMANDS: &[Command] = &[
         flags: &[],
         summary: "Which assistants on this machine have stackvo-mcp registered, \
                   and where each one's configuration file is.",
+    },
+    Command {
+        name: "rules",
+        action: Action::Rules,
+        backing: Backing::Contract("rules_status"),
+        writes: false,
+        args: "",
+        arity: (0, 0),
+        prefix: &[],
+        flags: &[RULES_PROJECT],
+        summary: "Which AI rules files carry StackVo's block, in the project and \
+                  in the home directory.",
+    },
+    // The one command in this table that answers with no workspace at all —
+    // see `tooling_action`. Putting `stackvo` on PATH is something somebody
+    // does before choosing a folder, and a command that demanded one would be
+    // unreachable from the state it exists to fix.
+    // ---- about this binary, not the stack --------------------------------
+    Command {
+        name: "completions",
+        action: Action::Completions,
+        // Neither of these two reaches the contract at all — see Backing::Local.
+        backing: Backing::Local,
+        writes: false,
+        args: "<shell>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Print the tab-completion stub for one shell. `path-install` \
+                  writes it for you; this is for a package manager, or for \
+                  reading it before it goes into your startup file.",
+    },
+    Command {
+        name: "complete",
+        action: Action::Complete,
+        backing: Backing::Local,
+        writes: false,
+        args: "<word…>",
+        arity: (0, usize::MAX),
+        prefix: &[],
+        flags: &[Flag {
+            long: "word",
+            short: None,
+            value: Some("partial"),
+            help: "The word under the cursor, which may be empty.",
+        }],
+        summary: "What could come next on a half-typed line, one candidate per \
+                  line. Called by the stub above; there is no reason to type it.",
+    },
+    Command {
+        name: "tools",
+        action: Action::Tools,
+        backing: Backing::Contract("tooling_status"),
+        writes: false,
+        args: "",
+        arity: (0, 0),
+        prefix: &[],
+        flags: &[],
+        summary: "Where `stackvo` is installed from, which shell startup files \
+                  carry its PATH entry, and which host tools this machine has.",
+    },
+    Command {
+        name: "ide",
+        action: Action::Ide,
+        backing: Backing::Contract("ide_debug_status"),
+        writes: false,
+        args: "<project>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "The values an IDE needs to step-debug one project, and whether \
+                  anything is listening on the debug port.",
+    },
+    Command {
+        name: "spx",
+        action: Action::Spx,
+        backing: Backing::Contract("spx_status"),
+        writes: false,
+        args: "<project>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "The sampling profiler: whether it is built, mounted and \
+                  recording, and what it has recorded.",
+    },
+    Command {
+        name: "spx-top",
+        action: Action::SpxTop,
+        backing: Backing::Contract("spx_report"),
+        writes: false,
+        args: "<project> <report>",
+        arity: (2, 2),
+        prefix: &[],
+        flags: &[],
+        summary: "Where one recording spent its time: the functions holding it, \
+                  ranked. `stackvo spx <project>` lists the keys.",
     },
     // ---- writes ----------------------------------------------------------
     Command {
@@ -566,6 +712,112 @@ pub const COMMANDS: &[Command] = &[
         flags: &[],
         summary: "Take the stackvo entry back out of one assistant's configuration.",
     },
+    Command {
+        name: "rules-install",
+        action: Action::RulesInstall,
+        backing: Backing::Contract("rules_apply"),
+        writes: true,
+        args: "<target>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[RULES_GLOBAL, RULES_PROJECT],
+        summary: "Write the AI rules into one file. `stackvo rules` lists the ids.",
+    },
+    Command {
+        name: "rules-remove",
+        action: Action::RulesRemove,
+        backing: Backing::Contract("rules_remove"),
+        writes: true,
+        args: "<target>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[RULES_GLOBAL, RULES_PROJECT],
+        summary: "Take StackVo's block back out of that file. The rest of it stays.",
+    },
+    Command {
+        name: "path-install",
+        action: Action::PathInstall,
+        backing: Backing::Contract("tooling_path_apply"),
+        writes: true,
+        args: "[shell]",
+        arity: (0, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Link `stackvo` and `stackvo-mcp` into the directory this app \
+                  owns and put it on PATH. The shell defaults to $SHELL.",
+    },
+    Command {
+        name: "path-remove",
+        action: Action::PathRemove,
+        backing: Backing::Contract("tooling_path_remove"),
+        writes: true,
+        args: "[shell]",
+        arity: (0, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Take the PATH entry back out of that shell's startup file. \
+                  The links stay where they are.",
+    },
+    Command {
+        name: "tool-install",
+        action: Action::ToolInstall,
+        backing: Backing::Contract("tooling_install"),
+        writes: true,
+        args: "<tool>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Fetch one host tool, check it against the digest compiled into \
+                  this build, and install it. `stackvo tools` lists the ids.",
+    },
+    Command {
+        name: "tool-remove",
+        action: Action::ToolRemove,
+        backing: Backing::Contract("tooling_remove"),
+        writes: true,
+        args: "<tool>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Remove the copy this app installed. A system copy is left \
+                  exactly where it is.",
+    },
+    Command {
+        name: "ide-install",
+        action: Action::IdeInstall,
+        backing: Backing::Contract("ide_debug_apply"),
+        writes: true,
+        args: "<project> <ide>",
+        arity: (2, 2),
+        prefix: &[],
+        flags: &[],
+        summary: "Write the debug configuration into one IDE's file in that \
+                  project. `stackvo ide <project>` lists the ids.",
+    },
+    Command {
+        name: "spx-record",
+        action: Action::SpxRecord,
+        backing: Backing::Contract("spx_record_request"),
+        writes: true,
+        args: "<project> [path]",
+        arity: (1, 2),
+        prefix: &[],
+        flags: &[],
+        summary: "Profile one request to that project, without a browser. The \
+                  path defaults to /.",
+    },
+    Command {
+        name: "spx-build",
+        action: Action::SpxBuild,
+        backing: Backing::Contract("spx_build"),
+        writes: true,
+        args: "<project>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Compile php-spx for that project's PHP version, in a throwaway \
+                  container of its own image. Minutes, once per PHP version.",
+    },
     // §3 #31. A terminal command rather than a button, and the reason is who
     // does it: somebody at a connected machine writing a catalogue onto a
     // removable disk to carry to one that has no network. That is an operator's
@@ -666,6 +918,125 @@ pub const COMMANDS: &[Command] = &[
         &["node"],
         "[arguments…]",
         "Run node in the container."
+    ),
+    // ---- the frameworks this app already recognises -----------------------
+    //
+    // Not breadth for its own sake — the rule for every row below is that the
+    // program is one **this app already declares**, so a row here reaches
+    // something that is definitely in the image rather than something a README
+    // said. Three sources, and nothing outside them:
+    //
+    // * `quickcmd::CATALOGUE` — what each framework's container actually runs,
+    //   verified against real images when those rows were written.
+    // * `manifest::LANG_RUNTIMES` — the runtimes this app generates a container
+    //   for. `generator.rs` builds each `FROM python:…`, `FROM golang:…`,
+    //   `FROM rust:…` in ONE stage, so the toolchain is still there at run time
+    //   and `stackvo cargo test` reaches a cargo that exists.
+    // * `manifest::NODE_PACKAGE_MANAGERS` — the three Corepack can pin.
+    //
+    // **`drush` is deliberately absent.** `detect.rs` recognises `drupal/core`,
+    // but nothing in this app says how Drupal is driven — no catalogue row, no
+    // generator step — so a `drush` row would be inventing a path
+    // (`vendor/bin/drush`? on `PATH`?) and finding out from a bug report. It is
+    // one `stackvo exec drush` away for anybody who needs it, and a row that
+    // usually fails is worse than no row.
+    shell_command!(
+        "wp",
+        Action::Passthrough,
+        // `--allow-root` for the same reason `quickcmd`'s two wp rows carry it:
+        // the container runs as root and wp-cli refuses outright without it, so
+        // every call would fail. wp-cli takes a global flag anywhere on the
+        // line, which is what makes putting it in the prefix safe.
+        &["wp", "--allow-root"],
+        "[arguments…]",
+        "Run wp-cli against this project's WordPress."
+    ),
+    shell_command!(
+        "console",
+        Action::Passthrough,
+        &["php", "bin/console"],
+        "[arguments…]",
+        "Run a Symfony console command."
+    ),
+    shell_command!(
+        "rails",
+        Action::Passthrough,
+        &["bundle", "exec", "rails"],
+        "[arguments…]",
+        "Run a Rails command, through bundler as the catalogue's rows do."
+    ),
+    shell_command!(
+        "bundle",
+        Action::Passthrough,
+        &["bundle"],
+        "[arguments…]",
+        "Run bundler in the container, against the Ruby the project declares."
+    ),
+    // ---- the other package managers ---------------------------------------
+    shell_command!(
+        "yarn",
+        Action::Passthrough,
+        &["yarn"],
+        "[arguments…]",
+        "Run yarn in the container."
+    ),
+    shell_command!(
+        "pnpm",
+        Action::Passthrough,
+        &["pnpm"],
+        "[arguments…]",
+        "Run pnpm in the container."
+    ),
+    // ---- the runtimes with no row until now -------------------------------
+    //
+    // `php` and `node` had one and the six other runtimes this app generates
+    // did not, which made "run it in the container" read as a PHP feature. The
+    // sentence `php`'s row makes — the version the project declares, on a host
+    // with none — is exactly as true of these.
+    shell_command!(
+        "python",
+        Action::Passthrough,
+        &["python"],
+        "[arguments…]",
+        "Run Python in this project's container — the version the project \
+         declares. `stackvo python manage.py migrate` is a Django migration."
+    ),
+    shell_command!(
+        "ruby",
+        Action::Passthrough,
+        &["ruby"],
+        "[arguments…]",
+        "Run Ruby in this project's container."
+    ),
+    shell_command!(
+        "go",
+        Action::Passthrough,
+        &["go"],
+        "[arguments…]",
+        "Run the Go toolchain in the container. The image is built in one \
+         stage, so `go test ./...` reaches a compiler that is still there."
+    ),
+    shell_command!(
+        "cargo",
+        Action::Passthrough,
+        &["cargo"],
+        "[arguments…]",
+        "Run cargo in the container — the same one the project's start command \
+         uses."
+    ),
+    shell_command!(
+        "bun",
+        Action::Passthrough,
+        &["bun"],
+        "[arguments…]",
+        "Run bun in the container."
+    ),
+    shell_command!(
+        "deno",
+        Action::Passthrough,
+        &["deno"],
+        "[arguments…]",
+        "Run deno in the container."
     ),
     shell_command!(
         "exec",
@@ -883,7 +1254,11 @@ pub fn parse(argv: &[String]) -> Result<Parsed> {
                     "`stackvo {} {}` takes {}, and {} {} given",
                     command.name,
                     command.args,
-                    if min == max {
+                    if max == usize::MAX {
+                        // `0 to 18446744073709551615` is how a variadic arity
+                        // reads if you print the number, and it reads as a bug.
+                        format!("{min} or more")
+                    } else if min == max {
                         format!("{min}")
                     } else {
                         format!("{min} to {max}")
@@ -1080,10 +1455,14 @@ pub fn help(style: &Style) -> String {
     ));
     out.push_str("Usage: stackvo <command> [arguments] [flags]\n\n");
 
-    // Three groups rather than two, because a shell command is a third kind of
-    // thing: `stackvo down` takes the stack away and `stackvo artisan migrate`
-    // runs somebody's own command inside one container. Filing the second under
-    // "Changes the stack" would be true and useless.
+    // Five groups rather than two, because "reads" and "writes" is not what a
+    // person scanning this list is sorting by. A shell command is a third kind
+    // of thing — `stackvo down` takes the stack away and `stackvo artisan
+    // migrate` runs somebody's own command inside one container, and filing the
+    // second under "Changes the stack" would be true and useless — and the
+    // completion pair is a fifth: they read nothing about the stack at all, and
+    // listing `complete` between `doctor` and `logs` puts a command no person
+    // ever types in the middle of the ones they do.
     let push = |title: &str, want: fn(&Command) -> bool, out: &mut String| {
         out.push_str(&format!("{}\n", style.bold(title)));
         let width = COMMANDS
@@ -1113,7 +1492,12 @@ pub fn help(style: &Style) -> String {
         out.push('\n');
     };
 
-    push("Reads", |c| !c.writes, &mut out);
+    // A plain `fn`, not a closure: `push` takes a function pointer so the four
+    // predicates below stay comparable at a glance.
+    fn local(c: &Command) -> bool {
+        matches!(c.backing, Backing::Local)
+    }
+    push("Reads", |c| !c.writes && !local(c), &mut out);
     push(
         "Changes the stack",
         |c| c.writes && !c.passthrough() && c.action != Action::Tui,
@@ -1125,6 +1509,7 @@ pub fn help(style: &Style) -> String {
         Command::passthrough,
         &mut out,
     );
+    push("Shell completion", local, &mut out);
 
     out.push_str(&format!("{}\n", style.bold("Flags")));
     for flag in GLOBAL {
@@ -1206,6 +1591,13 @@ pub fn command_help(command: &Command, style: &Style) -> String {
         Backing::Surface(names) => {
             out.push_str(&format!("A screen over `{}`.\n\n", names.join("`, `")));
         }
+        Backing::Local => {
+            out.push_str(
+                "Answered from this binary's own table, not from the stack — so \
+                 it works before a workspace exists, which is when a shell is \
+                 sourcing its startup file.\n\n",
+            );
+        }
         Backing::HostShell => {
             let shown = if command.prefix.is_empty() {
                 "the program you name".to_string()
@@ -1269,6 +1661,12 @@ pub struct Target {
     /// The directory inside the container matching the caller's own, when the
     /// caller is somewhere under the project root and the source is mounted.
     pub workdir: Option<String>,
+    /// What the project declares it is — `php`, `node`, `python`, ….
+    ///
+    /// Carried so a failure can say it. `stackvo python -V` in a PHP project
+    /// gets Docker's own "executable file not found", which is accurate and
+    /// says nothing about *why*; the answer is one word and it is this one.
+    pub runtime: String,
 }
 
 /// Which project the caller means.
@@ -1312,6 +1710,7 @@ pub async fn target(root: &Path, wanted: Option<&str>, cwd: &Path) -> Result<Tar
         container: project.container_name.clone(),
         name: project.name,
         running: project.running,
+        runtime: project.runtime.clone(),
         mount,
         workdir,
     })
@@ -1477,7 +1876,34 @@ async fn run_in_container(
 
     // `None` means a signal killed it — Ctrl-C on an interactive shell, which
     // is an ordinary way to end one rather than a failure to report.
-    Ok(Outcome::Exit(status.code().unwrap_or(0)))
+    let code = status.code().unwrap_or(0);
+
+    // **127 is "the container has no such program", and it is worth one line.**
+    //
+    // Docker's own message names the program and says it is not on `PATH`,
+    // which is accurate and is left exactly as it arrived — this adds the fact
+    // Docker cannot know: which runtime the project declared. The rows for
+    // `python`, `cargo`, `bun` and the rest exist because this app generates
+    // containers for those runtimes, so `stackvo python -V` in a PHP project is
+    // a mistake somebody will make, and "php" is the whole of the answer.
+    //
+    // Only on 127, only for a command that names a fixed program, and only
+    // where the caller can see it: `--quiet` means no narration and this is
+    // narration. It never changes the exit code, which is passed through the
+    // way `stackvo artisan test` needs it to be.
+    if code == 127 && !command.prefix.is_empty() && !parsed.on("quiet") {
+        let _ = writeln!(
+            std::io::stderr(),
+            "{} {} is a {} project, so `{}` is not in its container — \
+             `stackvo exec` runs anything that is.",
+            style.dim("note"),
+            target.name,
+            target.runtime,
+            command.prefix[0],
+        );
+    }
+
+    Ok(Outcome::Exit(code))
 }
 
 /// Run one parsed command line.
@@ -1491,8 +1917,28 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
         .ok_or_else(|| Error::new(Code::InvalidInput, "no command"))?;
 
     let workspace = crate::workspace::resolve();
-    let root = workspace.require_root()?;
     let value = |v: Value| Ok(Outcome::Value(Box::new(v)));
+
+    // Before the root is required, and that is the whole of it: `stackvo tools`
+    // and `stackvo path-install` are about *this machine* — where the command
+    // itself is installed from — and the state they exist to fix is the one
+    // where nothing has been set up yet. A NO_WORKSPACE from the command that
+    // installs the command would be the app refusing to be installed until it
+    // had been used.
+    if let Some(result) = tooling(command, parsed).await {
+        return result.map(|v| Outcome::Value(Box::new(v)));
+    }
+
+    // Before the root is required, and for a sharper version of the same
+    // reason. A shell sources its startup file on **every** new terminal, so a
+    // completion that failed without a workspace would print an error into the
+    // line somebody is typing — on a machine where nothing is set up yet, which
+    // is exactly when a person is typing `stackvo` to find out what it does.
+    if let Some(result) = local(command, parsed).await {
+        return result;
+    }
+
+    let root = workspace.require_root()?;
 
     match command.action {
         // ---- in the project's container (A-3) -----------------------------
@@ -1656,6 +2102,21 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
 
         Action::Mcp => value(json!(crate::agents::status(workspace.root.as_deref()))),
 
+        Action::Spx => value(json!(crate::spx::status(&root, &parsed.args[0]).await?)),
+
+        Action::SpxTop => value(json!(crate::spx::analyse(
+            &root,
+            &parsed.args[0],
+            &parsed.args[1],
+            crate::spx::HOTSPOTS
+        )?)),
+
+        Action::Ide => value(json!(crate::ide::status(&root, &parsed.args[0]).await?)),
+
+        Action::Rules => value(json!(crate::rules::status(
+            rules_dir(&workspace, parsed.value("project"))?.as_deref()
+        ))),
+
         // ---- writes -------------------------------------------------------
         Action::Up => {
             let mode = parsed.value("mode").unwrap_or("minimal").to_string();
@@ -1794,7 +2255,315 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
             audit("cli_agent_remove", &client, path.is_ok());
             value(json!({ "client": client, "path": path? }))
         }
+
+        Action::SpxRecord => {
+            let project = parsed.args[0].clone();
+            let path = parsed.args.get(1).cloned().unwrap_or_else(|| "/".into());
+
+            // The same two questions the command asks, for the same reason: a
+            // request sent at a container without the mount records nothing and
+            // reports a page that loaded fine.
+            let status = crate::spx::status(&root, &project).await?;
+            if !status.enabled || status.active != Some(true) {
+                return Err(Error::new(
+                    Code::Conflict,
+                    format!("the profiler is not in {project}'s running container"),
+                )
+                .with_hint(crate::hints::SPX_RECORD_NEEDS_THE_MOUNT));
+            }
+            let domain = status.domain.as_deref().ok_or_else(|| {
+                Error::new(
+                    Code::Unsupported,
+                    format!("{project} has no address to send a request to"),
+                )
+            })?;
+
+            let url = crate::spx::request_url(domain, &path)?;
+            let config = crate::spx::read_config(&root, &project);
+            let key = crate::spx::key(&root)?;
+
+            let before: std::collections::HashSet<String> = crate::spx::list(&root, &project)
+                .into_iter()
+                .map(|report| report.key)
+                .collect();
+
+            let code = crate::spx::send(&url, &crate::spx::trigger_cookie(&key, &config)).await?;
+            audit("cli_spx_record", &project, true);
+
+            let mut recorded = None;
+            for attempt in 0..20 {
+                if attempt > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                }
+                recorded = crate::spx::list(&root, &project)
+                    .into_iter()
+                    .find(|report| !before.contains(&report.key));
+                if recorded.is_some() {
+                    break;
+                }
+            }
+
+            let report = recorded.ok_or_else(|| {
+                Error::new(
+                    Code::NotFound,
+                    format!("{project} answered {code}, and the profiler recorded nothing"),
+                )
+                .with_hint(crate::hints::SPX_RECORDED_NOTHING)
+            })?;
+            value(json!({ "project": project, "status": code, "report": report }))
+        }
+
+        Action::SpxBuild => {
+            let project = parsed.args[0].clone();
+            let file = crate::workspace::project_dir(&root, &project)?.join("stackvo.json");
+            let manifest = crate::manifest::read(&file, &project)?;
+            let php = manifest.php.as_ref().ok_or_else(|| {
+                Error::new(
+                    Code::Unsupported,
+                    format!(
+                        "{project} is a {} project; php-spx is PHP-only",
+                        manifest.runtime
+                    ),
+                )
+            })?;
+
+            let out = crate::spx::build_dir(&root, &php.version);
+            std::fs::create_dir_all(&out)
+                .map_err(|e| Error::io(format!("creating {}", out.display()), e))?;
+
+            let script = crate::spx::build_script(crate::spx::SOURCE_REF, crate::spx::SOURCE_URL);
+            let args = crate::spx::build_args(&crate::spx::image_name(&project), &out, &script);
+            let operation_id = crate::events::next_operation_id("spx");
+
+            let outcome = crate::runner::run_operation(
+                sink,
+                crate::runner::Operation {
+                    operation_id: &operation_id,
+                    subject: &project,
+                    progress_event: "spx:progress",
+                    finished_event: "spx:done",
+                    program: "docker",
+                    args: &args,
+                    cwd: &root,
+                    env: &[],
+                },
+            )
+            .await;
+
+            // A failed build leaves whatever it managed to copy, and `built`
+            // treats the extension's presence as proof of a usable one.
+            if outcome.is_err() {
+                let _ = std::fs::remove_file(crate::spx::extension_path(&root, &php.version));
+            }
+            outcome?;
+            value(json!({ "project": project, "php": php.version, "built": true }))
+        }
+
+        Action::IdeInstall => {
+            let (project, ide) = (parsed.args[0].clone(), parsed.args[1].clone());
+            let path = crate::ide::apply(&root, &project, &ide);
+            // Audited on this surface too: the trail's question is "did
+            // something write into a repository", and it must not have a
+            // different answer depending on which surface did it.
+            audit("cli_ide_debug_apply", &project, path.is_ok());
+            value(json!({ "project": project, "ide": ide, "path": path? }))
+        }
+
+        Action::RulesInstall | Action::RulesRemove => {
+            let target = parsed.args[0].clone();
+            let scope = if parsed.on("global") {
+                crate::rules::Scope::Global
+            } else {
+                crate::rules::Scope::Workspace
+            };
+            let dir = rules_dir(&workspace, parsed.value("project"))?;
+
+            let path = if matches!(command.action, Action::RulesInstall) {
+                let path = crate::rules::apply(&target, scope, dir.as_deref());
+                // Audited on this surface too. The trail's question is "did
+                // something write instructions into a repository", and it must
+                // not have a different answer depending on which surface did it.
+                audit("cli_rules_apply", &target, path.is_ok());
+                path
+            } else {
+                crate::rules::remove(&target, scope, dir.as_deref())
+            };
+
+            value(json!({ "target": target, "path": path? }))
+        }
+
+        // Answered above, before the workspace was required. Named here rather
+        // than swept up by a wildcard because the exhaustiveness of this match
+        // is what stops a new action being added and never wired up — a `_`
+        // arm would take that back for every action at once.
+        Action::Tools
+        | Action::PathInstall
+        | Action::PathRemove
+        | Action::ToolInstall
+        | Action::ToolRemove => unreachable!("handled by `tooling` before the root is required"),
+
+        Action::Completions | Action::Complete => {
+            unreachable!("handled by `local` before the root is required")
+        }
     }
+}
+
+/// The two commands whose subject is this binary rather than the stack.
+///
+/// `None` for everything else — the same filter shape [`tooling`] uses, and for
+/// the same reason: an action added to the table and forgotten here falls
+/// through to the match below and behaves exactly as it did.
+///
+/// **Neither can fail in a way the caller sees.** These are called from a shell
+/// completion, where the only two acceptable outputs are candidates and
+/// nothing: a message on stdout becomes a candidate, and one on stderr lands in
+/// the middle of somebody's prompt. So the project list is read on a
+/// best-effort basis and an unreadable workspace yields an empty list, which
+/// the shell handles by falling back to filenames.
+async fn local(command: &Command, parsed: &Parsed) -> Option<Result<Outcome>> {
+    match command.action {
+        Action::Completions => {
+            let id = parsed.args.first().map(String::as_str).unwrap_or_default();
+            Some(match crate::completions::stub(id, "stackvo") {
+                Some(script) => {
+                    print!("{script}");
+                    Ok(Outcome::Exit(0))
+                }
+                // The one place here that DOES report: `stackvo completions
+                // bahs` is a person at a terminal, not a completion hook, and
+                // silence would look like a shell with no stub.
+                None => Err(Error::new(
+                    Code::InvalidInput,
+                    format!("`{id}` is not a shell this can write a stub for"),
+                )
+                .with_hint(format!(
+                    "One of: {}.",
+                    crate::tooling::SHELLS
+                        .iter()
+                        .map(|s| s.id)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))),
+            })
+        }
+
+        Action::Complete => {
+            let word = parsed.value("word").unwrap_or_default();
+            let names = crate::completions::Names {
+                // `root` directly rather than `require_root`, which refuses
+                // an invalid workspace — here half a workspace still has a
+                // project list worth offering, and no workspace yields none.
+                projects: match crate::workspace::resolve().root {
+                    Some(root) => crate::commands::list_projects(std::path::Path::new(&root))
+                        .await
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|project| project.name)
+                        .collect(),
+                    None => Vec::new(),
+                },
+            };
+            for candidate in crate::completions::candidates(&parsed.args, word, &names) {
+                println!("{candidate}");
+            }
+            Some(Ok(Outcome::Exit(0)))
+        }
+
+        _ => None,
+    }
+}
+
+/// The four commands that answer without a workspace.
+///
+/// `None` for everything else, which is what makes this a filter rather than a
+/// second dispatcher: an action added to the table and forgotten here falls
+/// through to the match below and behaves exactly as it did.
+async fn tooling(command: &Command, parsed: &Parsed) -> Option<Result<Value>> {
+    /// The shell to write into: the one named, or the one the caller is in.
+    ///
+    /// Named wins, always. Guessing is fine for a default and never fine for a
+    /// file somebody spelled out.
+    fn shell(parsed: &Parsed) -> Result<String> {
+        if let Some(named) = parsed.args.first() {
+            return Ok(named.clone());
+        }
+        crate::tooling::current_shell()
+            .map(str::to_string)
+            .ok_or_else(|| {
+                Error::new(
+                    Code::InvalidInput,
+                    "SHELL is not set, so no shell could be guessed",
+                )
+                .with_hint(format!(
+                    "Name one: {}.",
+                    crate::tooling::SHELLS
+                        .iter()
+                        .map(|s| s.id)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            })
+    }
+
+    Some(match command.action {
+        Action::Tools => Ok(json!(crate::tooling::status().await)),
+
+        Action::PathInstall => shell(parsed).and_then(|id| {
+            let path = crate::tooling::path_apply(&id);
+            // Audited on this surface too. The trail's question is "did
+            // something edit a shell startup file", and it must not have a
+            // different answer depending on which surface did it.
+            audit("cli_tooling_path_apply", &id, path.is_ok());
+            Ok(json!({ "shell": id, "path": path? }))
+        }),
+
+        Action::PathRemove => shell(parsed)
+            .and_then(|id| Ok(json!({ "shell": id, "path": crate::tooling::path_remove(&id)? }))),
+
+        Action::ToolInstall => {
+            let tool = parsed.args[0].clone();
+            let path = crate::tooling::install(&tool).await;
+            audit("cli_tooling_install", &tool, path.is_ok());
+            path.map(|path| json!({ "tool": tool, "path": path }))
+        }
+
+        Action::ToolRemove => {
+            let tool = parsed.args[0].clone();
+            crate::tooling::remove(&tool).map(|path| json!({ "tool": tool, "path": path }))
+        }
+
+        _ => return None,
+    })
+}
+
+/// The directory workspace-scoped rules are written into.
+///
+/// The workspace root by default, a project when one is named. The name is
+/// checked before it is joined, for the reason `commands::rules_dir` gives:
+/// the writer creates directories, so an unchecked `../..` is a way to write a
+/// file anywhere.
+fn rules_dir(
+    workspace: &crate::workspace::Workspace,
+    project: Option<&str>,
+) -> crate::error::Result<Option<std::path::PathBuf>> {
+    let Some(root) = workspace.root.as_deref().map(std::path::PathBuf::from) else {
+        return Ok(None);
+    };
+    let Some(name) = project else {
+        return Ok(Some(root));
+    };
+
+    if !crate::workspace::is_safe_name(name) {
+        return Err(crate::error::Error::new(
+            crate::error::Code::InvalidInput,
+            format!("\"{name}\" is not a valid project name"),
+        ));
+    }
+    let dir = crate::workspace::require_projects_root(&root)?.join(name);
+    if !dir.is_dir() {
+        return Err(crate::error::Error::not_found(format!("project {name}")));
+    }
+    Ok(Some(dir))
 }
 
 /// One compose run, narrated. The operation id keeps log correlation working.
@@ -1849,6 +2618,11 @@ fn audit(action: &'static str, subject: &str, ok: bool) {
 /// quietly claim something the machine-readable output denies.
 pub fn render(action: Action, value: &Value, style: &Style) -> String {
     match action {
+        // Both write to stdout themselves and return `Outcome::Exit`, so they
+        // never reach here. Named rather than swept into a `_`, because the
+        // exhaustiveness check is the only thing that will notice the next
+        // action that forgets a renderer.
+        Action::Completions | Action::Complete => String::new(),
         Action::Status => render_status(value, style),
         Action::Doctor => render_doctor(value, style),
         Action::Projects => render_projects(value, style),
@@ -1858,6 +2632,12 @@ pub fn render(action: Action, value: &Value, style: &Style) -> String {
         Action::Databases => render_databases(value, style),
         Action::Mail => render_mail(value, style),
         Action::Mcp => render_mcp(value, style),
+        Action::Rules => render_rules(value, style),
+        Action::Tools => render_tools(value, style),
+        Action::Ide => render_ide(value, style),
+        Action::Spx => render_spx(value, style),
+        Action::SpxTop => render_spx_top(value, style),
+        Action::SpxRecord => render_spx_record(value, style),
         Action::Logs => lines(value).into_iter().map(|l| format!("{l}\n")).collect(),
         Action::Up | Action::Down | Action::Generate | Action::Xdebug => {
             render_write(action, value, style)
@@ -1884,6 +2664,54 @@ pub fn render(action: Action, value: &Value, style: &Style) -> String {
             "{} removed from {} — {}\n",
             style.ok("ok"),
             str_at(value, "client").unwrap_or("?"),
+            str_at(value, "path").unwrap_or("?")
+        ),
+        Action::SpxBuild => format!(
+            "{} php-spx built for PHP {}\n",
+            style.ok("ok"),
+            str_at(value, "php").unwrap_or("?")
+        ),
+        Action::IdeInstall => format!(
+            "{} written — {}\n",
+            style.ok("ok"),
+            str_at(value, "path").unwrap_or("?")
+        ),
+        Action::RulesInstall => format!(
+            "{} rules written — {}\n",
+            style.ok("ok"),
+            str_at(value, "path").unwrap_or("?")
+        ),
+        Action::RulesRemove => format!(
+            "{} rules removed — {}\n",
+            style.ok("ok"),
+            str_at(value, "path").unwrap_or("?")
+        ),
+        Action::PathInstall => format!(
+            "{} {} — {}\n{}",
+            style.ok("ok"),
+            str_at(value, "shell").unwrap_or("?"),
+            str_at(value, "path").unwrap_or("?"),
+            // The sentence somebody needs and nothing else says: the file is
+            // written and this shell has not read it. Without it the next
+            // `stackvo` still fails and the command looks like it lied.
+            style.dim("Open a new shell, or source that file, for it to take effect.\n")
+        ),
+        Action::PathRemove => format!(
+            "{} {} — {}\n",
+            style.ok("ok"),
+            str_at(value, "shell").unwrap_or("?"),
+            str_at(value, "path").unwrap_or("?")
+        ),
+        Action::ToolInstall => format!(
+            "{} {} installed — {}\n",
+            style.ok("ok"),
+            str_at(value, "tool").unwrap_or("?"),
+            str_at(value, "path").unwrap_or("?")
+        ),
+        Action::ToolRemove => format!(
+            "{} {} removed — {}\n",
+            style.ok("ok"),
+            str_at(value, "tool").unwrap_or("?"),
             str_at(value, "path").unwrap_or("?")
         ),
         Action::MarketBundle => {
@@ -2732,6 +3560,464 @@ fn render_commands(value: &Value, style: &Style) -> String {
     out
 }
 
+/// The rules table: one row per file, in both scopes.
+///
+/// The state column carries the distinction the buttons in the pane make and
+/// that a bare yes/no would lose — a block an older release wrote is installed
+/// and still wrong, and "written" for it would be the wrong answer to the only
+/// question somebody runs this to ask.
+/// Three tables, because the page answers three questions.
+///
+/// Where the commands are, whether a shell can find them, and what the host is
+/// missing. One combined table would have to invent a column meaning "source"
+/// for a shell row and "startup file" for a tool row.
+fn render_tools(value: &Value, style: &Style) -> String {
+    let array = |key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let text = |row: &Value, key: &str| {
+        row.get(key)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+
+    let mut out = format!(
+        "{} {}\n",
+        style.dim("directory"),
+        str_at(value, "binDir").unwrap_or("—")
+    );
+    out.push_str(&format!(
+        "{} {}\n\n",
+        style.dim("on PATH  "),
+        if value.get("onPath").and_then(Value::as_bool) == Some(true) {
+            style.ok("yes")
+        } else {
+            // Not a failure. A block written into `.zshrc` reaches the *next*
+            // shell, and this process was started by an earlier one.
+            style.warn("not in this shell")
+        }
+    ));
+
+    let own: Vec<Vec<String>> = array("own")
+        .iter()
+        .map(|row| {
+            let built = text(row, "built");
+            let linked = text(row, "linked");
+            vec![
+                match (linked.is_empty(), built.is_empty()) {
+                    (false, _) => style.ok("linked"),
+                    (true, false) => style.dim("built"),
+                    (true, true) => style.warn("not built"),
+                },
+                text(row, "id"),
+                if built.is_empty() {
+                    "—".into()
+                } else {
+                    built
+                },
+            ]
+        })
+        .collect();
+    out.push_str(&table(&["", "command", "built from"], &own, style));
+
+    let shells: Vec<Vec<String>> = array("shells")
+        .iter()
+        .map(|row| {
+            let installed = row.get("installed").and_then(Value::as_bool) == Some(true);
+            let current = row.get("current").and_then(Value::as_bool) == Some(true);
+            let exists = row.get("exists").and_then(Value::as_bool) == Some(true);
+            vec![
+                match (installed, current) {
+                    (true, true) => style.ok("written"),
+                    (true, false) => style.warn("outdated"),
+                    // "no file" and "a file without our line" are different
+                    // answers: the first means that shell is not used here.
+                    _ if exists => style.dim("—"),
+                    _ => style.dim("no file"),
+                },
+                text(row, "id"),
+                text(row, "path"),
+            ]
+        })
+        .collect();
+    out.push_str(&format!(
+        "\n{}",
+        table(&["", "shell", "startup file"], &shells, style)
+    ));
+
+    let tools: Vec<Vec<String>> = array("tools")
+        .iter()
+        .map(|row| {
+            let source = text(row, "source");
+            let version = text(row, "version");
+            vec![
+                match source.as_str() {
+                    "managed" => style.ok("managed"),
+                    "system" => style.dim("yours"),
+                    _ => style.fail("missing"),
+                },
+                text(row, "id"),
+                if version.is_empty() {
+                    "—".into()
+                } else {
+                    version
+                },
+                // The offer, not the requirement: a blank means this app has no
+                // download for it and never will.
+                match text(row, "offers").as_str() {
+                    "" => style.dim("—"),
+                    offered if source == "missing" => style.warn(&format!("offers {offered}")),
+                    offered => style.dim(&format!("pinned {offered}")),
+                },
+            ]
+        })
+        .collect();
+    out.push_str(&format!(
+        "\n{}",
+        table(&["", "tool", "version", "installable"], &tools, style)
+    ));
+
+    out.push_str(&style.dim(
+        "\n`stackvo path-install [shell]` links the commands and adds the PATH entry.\n\
+         `stackvo tool-install <tool>` fetches one, against a digest compiled into this build.\n",
+    ));
+    out
+}
+
+fn render_rules(value: &Value, style: &Style) -> String {
+    let rows: Vec<Vec<String>> = value
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|row| {
+            let installed = row.get("installed").and_then(Value::as_bool) == Some(true);
+            let current = row.get("current").and_then(Value::as_bool) == Some(true);
+            let text = |key: &str| {
+                row.get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string()
+            };
+
+            vec![
+                match (installed, current) {
+                    (true, true) => style.ok("written"),
+                    (true, false) => style.warn("outdated"),
+                    _ => style.dim("—"),
+                },
+                text("id"),
+                text("scope"),
+                text("label"),
+                text("path"),
+            ]
+        })
+        .collect();
+
+    if rows.is_empty() {
+        return format!(
+            "{}\n",
+            style.dim("no rules files are known on this machine")
+        );
+    }
+
+    let mut out = table(&["", "id", "scope", "read by", "file"], &rows, style);
+    out.push_str(&style.dim(
+        "\n`stackvo rules-install <id>` writes one; add --global for the home copy.\n\
+         Only the region between StackVo's markers is written.\n",
+    ));
+    out
+}
+
+/// The profiler's three states, and what it has recorded.
+/// A profiler's timings, which span four orders of magnitude.
+///
+/// Microseconds in, because that is the unit php-spx reports a run in — under
+/// the name `wall_time_ms`, which it is not. `src/lib/format.js::micros` is the
+/// same function for the window, and the two agree on purpose: a number that
+/// reads as `736 µs` on one surface and `0 ms` on the other is the same bug
+/// twice.
+fn micros(value: f64) -> String {
+    let us = value.abs();
+    if us < 1000.0 {
+        format!("{} µs", value.round())
+    } else if us < 1_000_000.0 {
+        format!("{:.1} ms", value / 1000.0)
+    } else {
+        format!("{:.1} s", value / 1_000_000.0)
+    }
+}
+
+fn render_spx(value: &Value, style: &Style) -> String {
+    let flag = |key: &str| value.get(key).and_then(Value::as_bool) == Some(true);
+    let mut out = String::new();
+
+    if !flag("supported") {
+        return format!("{}\n", style.dim("php-spx is PHP-only"));
+    }
+
+    // In the order they have to be satisfied: an extension that is not built
+    // cannot be switched on, and a switch does not reach a container that was
+    // already up.
+    let php = value
+        .get("phpVersion")
+        .and_then(Value::as_str)
+        .unwrap_or("?");
+    out.push_str(&if flag("built") {
+        format!("{:<12}{}\n", "built", style.ok(&format!("PHP {php}")))
+    } else {
+        format!(
+            "{:<12}{}\n",
+            "built",
+            style.warn(&format!(
+                "not for PHP {php} — `stackvo spx-build` compiles it"
+            ))
+        )
+    });
+    out.push_str(&format!(
+        "{:<12}{}\n",
+        "switch",
+        if flag("enabled") {
+            style.ok("on")
+        } else {
+            style.dim("off")
+        }
+    ));
+    // "not mounted" is only a fault when the switch is on. Warning about it
+    // for a project that has SPX switched off is telling somebody to recreate a
+    // container to apply a setting they did not ask for — the pane gets this
+    // right by asking the same two questions, and this renderer did not.
+    out.push_str(&format!(
+        "{:<12}{}\n",
+        "container",
+        match (
+            flag("enabled"),
+            value.get("active").and_then(Value::as_bool)
+        ) {
+            (_, None) => style.dim("not running"),
+            (true, Some(true)) => style.ok("mounted"),
+            (true, Some(false)) => style.warn("not mounted — recreate it"),
+            (false, Some(_)) => style.dim("nothing to mount"),
+        }
+    ));
+    if flag("xdebugConflict") {
+        out.push_str(&format!(
+            "{:<12}{}\n",
+            "warning",
+            style.warn("Xdebug is recording too; the numbers will be wrong")
+        ));
+    }
+    if let Some(url) = value.get("controlUrl").and_then(Value::as_str) {
+        out.push_str(&format!("{:<12}{url}\n", "panel"));
+    }
+    out.push('\n');
+
+    let rows: Vec<Vec<String>> = value
+        .get("reports")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|report| {
+            let text = |key: &str| report.get(key).and_then(Value::as_str);
+            let number = |key: &str| report.get(key).and_then(Value::as_u64).unwrap_or(0);
+            vec![
+                text("request")
+                    .or_else(|| text("command"))
+                    .unwrap_or("run")
+                    .to_string(),
+                micros(number("wallTimeUs") as f64),
+                format!("{}", number("callCount")),
+                text("key").unwrap_or("").to_string(),
+            ]
+        })
+        .collect();
+
+    if rows.is_empty() {
+        out.push_str(&style.dim("nothing recorded yet\n"));
+        return out;
+    }
+    out.push_str(&table(&["what", "wall", "calls", "key"], &rows, style));
+    out.push_str(
+        &style.dim("\n`stackvo spx-top <project> <key>` says where one of them spent its time.\n"),
+    );
+    out
+}
+
+/// One recording, reduced to where the time went.
+fn render_spx_top(value: &Value, style: &Style) -> String {
+    let number = |key: &str| value.get(key).and_then(Value::as_u64).unwrap_or(0);
+    let mut out = format!(
+        "{:<12}{} in {} calls across {} functions\n",
+        "run",
+        micros(number("wallTimeUs") as f64),
+        number("callCount"),
+        number("functions")
+    );
+
+    // Said rather than hidden. The shares below are then about the start of the
+    // run, and a reader who is not told that will read them as the whole of it.
+    if value.get("truncated").and_then(Value::as_bool) == Some(true) {
+        out.push_str(&format!(
+            "{:<12}{}\n",
+            "note",
+            style.warn(&format!(
+                "the trace was longer than {} events; this is its start",
+                number("events")
+            ))
+        ));
+    }
+    out.push('\n');
+
+    let rows: Vec<Vec<String>> = value
+        .get("hotspots")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|spot| {
+            let float = |key: &str| spot.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+            vec![
+                spot.get("function")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?")
+                    .to_string(),
+                format!("{:.1}%", float("exclusivePercent")),
+                micros(float("exclusiveUs")),
+                format!("{:.1}%", float("inclusivePercent")),
+                format!("{}", spot.get("calls").and_then(Value::as_u64).unwrap_or(0)),
+            ]
+        })
+        .collect();
+
+    if rows.is_empty() {
+        out.push_str(&style.dim("the trace named no functions\n"));
+        return out;
+    }
+    // "self" and "total" rather than exclusive and inclusive: the column has to
+    // be readable by somebody who has not read a profiler's glossary.
+    out.push_str(&table(
+        &["function", "self", "self time", "total", "calls"],
+        &rows,
+        style,
+    ));
+    out
+}
+
+/// What one recorded request produced.
+fn render_spx_record(value: &Value, style: &Style) -> String {
+    let code = value.get("status").and_then(Value::as_u64).unwrap_or(0);
+    let status = format!("HTTP {code}");
+    let mut out = format!(
+        "{:<12}{}\n",
+        "answered",
+        // A 500 is worth profiling and is not this command failing — the
+        // recording it produced is the one somebody most wants to read.
+        if (200..400).contains(&code) {
+            style.ok(&status)
+        } else {
+            style.warn(&status)
+        }
+    );
+
+    let report = value.get("report").cloned().unwrap_or(Value::Null);
+    let text = |key: &str| report.get(key).and_then(Value::as_str).unwrap_or("");
+    let number = |key: &str| report.get(key).and_then(Value::as_u64).unwrap_or(0);
+
+    out.push_str(&format!("{:<12}{}\n", "recorded", text("key")));
+    out.push_str(&format!(
+        "{:<12}{}, {} calls\n",
+        "cost",
+        micros(number("wallTimeUs") as f64),
+        number("callCount")
+    ));
+    out.push_str(&style.dim(&format!(
+        "\n`stackvo spx-top <project> {}` says where it went.\n",
+        text("key")
+    )));
+    out
+}
+
+/// The three values, who is listening, and each IDE's state.
+///
+/// The listener line is first because it is the one an IDE never says out loud
+/// and the one that makes every value below it irrelevant when it is missing.
+fn render_ide(value: &Value, style: &Style) -> String {
+    let text = |key: &str| value.get(key).and_then(Value::as_str).unwrap_or("?");
+    let port = value.get("port").and_then(Value::as_u64).unwrap_or(0);
+
+    let mut out = String::new();
+    let listener = value.get("listener");
+    let process = listener
+        .and_then(|l| l.get("process"))
+        .and_then(Value::as_str);
+    let unknown = listener
+        .and_then(|l| l.get("unknown"))
+        .and_then(Value::as_bool)
+        == Some(true);
+
+    out.push_str(&match (unknown, process) {
+        (true, _) => format!(
+            "{} could not read this machine's listening sockets\n\n",
+            style.dim("?")
+        ),
+        (false, Some(name)) => format!("{} {name} is listening on {port}\n\n", style.ok("ok")),
+        (false, None) => format!(
+            "{} nothing is listening on {port} — start your IDE's listener\n\n",
+            style.warn("!")
+        ),
+    });
+
+    out.push_str(&format!("{:<14}{port}\n", "port"));
+    out.push_str(&format!("{:<14}{}\n", "ide key", text("ideKey")));
+    out.push_str(&format!("{:<14}{}\n", "server name", text("serverName")));
+    out.push_str(&format!(
+        "{:<14}{} → {}\n\n",
+        "path mapping",
+        value.get("hostPath").and_then(Value::as_str).unwrap_or("?"),
+        text("containerPath")
+    ));
+
+    let rows: Vec<Vec<String>> = value
+        .get("targets")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|row| {
+            let flag = |key: &str| row.get(key).and_then(Value::as_bool) == Some(true);
+            let cell = |key: &str| {
+                row.get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string()
+            };
+            vec![
+                match (cell("method").as_str(), flag("installed"), flag("current")) {
+                    ("shown", _, _) => style.dim("paste"),
+                    (_, true, true) => style.ok("written"),
+                    (_, true, false) => style.warn("outdated"),
+                    _ => style.dim("—"),
+                },
+                cell("id"),
+                cell("label"),
+                cell("path"),
+            ]
+        })
+        .collect();
+
+    out.push_str(&table(&["", "id", "ide", "file"], &rows, style));
+    out.push_str(
+        &style.dim("\n`stackvo ide-install <project> <id>` writes one. PhpStorm is paste-only.\n"),
+    );
+    out
+}
+
 fn render_mcp(value: &Value, style: &Style) -> String {
     let mut out = String::new();
 
@@ -3080,12 +4366,36 @@ mod tests {
 
     /// A command whose arity does not admit its own spelled arguments is one
     /// whose `--help` is a lie.
+    ///
+    /// The ellipsis is the same notation the passthrough rule below uses, and
+    /// it means the same thing in both places: this takes as many as you give
+    /// it. A command spelling one and allowing all of them would be the lie
+    /// this test is named for, so the two halves are checked against each
+    /// other rather than one being exempted.
     #[test]
     fn the_spelled_arguments_match_the_arity() {
         for command in COMMANDS.iter().filter(|c| !c.passthrough()) {
             let spelled = command.args.split_whitespace().count();
             let (min, max) = command.arity;
             assert!(min <= max, "{} has an impossible arity", command.name);
+
+            if command.args.contains('…') {
+                assert_eq!(
+                    max,
+                    usize::MAX,
+                    "`{} {}` is spelled variadic and is not",
+                    command.name,
+                    command.args
+                );
+                continue;
+            }
+            assert_ne!(
+                max,
+                usize::MAX,
+                "`{} {}` takes any number of arguments and does not say so",
+                command.name,
+                command.args
+            );
             assert_eq!(
                 spelled, max,
                 "`{} {}` spells {spelled} arguments and allows {max}",
@@ -3336,6 +4646,7 @@ mod tests {
             name: "shop".into(),
             container: "stackvo-shop".into(),
             running: true,
+            runtime: "php".into(),
             mount: Some("/var/www/html"),
             workdir: Some("/var/www/html".into()),
         }

@@ -41,8 +41,15 @@ use std::sync::{Mutex, OnceLock};
 
 /// Where the current text lives. `main`, not a release tag: the point of
 /// pulling is that a correction reaches people who are on last month's build.
-const REMOTE_BASE: &str =
-    "https://raw.githubusercontent.com/fahrettinaksoy/stackvo-tauri/main/docs/help";
+///
+/// The repository is this one, and "this one" moved: the constant still named
+/// `fahrettinaksoy/stackvo-tauri` after the remote became `stackvo/stackvo`, so
+/// every fetch answered 404. Nothing showed it, because a failed fetch here is
+/// deliberately silent — the panel falls back to the copy the app shipped with,
+/// which is right for a slow connection and indistinguishable from a URL that
+/// can never work. `published_urls.rs` derives the slug from `.git/config` and
+/// fails the build on a third spelling of it.
+const REMOTE_BASE: &str = "https://raw.githubusercontent.com/stackvo/stackvo/main/docs/help";
 
 /// A document is a page of prose. Anything larger is not one, and reading it
 /// into a web view would be somebody else's decision about this app's memory.

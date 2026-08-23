@@ -596,7 +596,7 @@ pub fn remove(text: &str, shape: Shape) -> Result<String> {
 /// file mixes indentation only when somebody is already unhappy with it, and
 /// the first line that is indented at all is the one an editor would have used
 /// to guess the same thing.
-fn render(document: &serde_json::Value, original: &str) -> Result<String> {
+pub(crate) fn render(document: &serde_json::Value, original: &str) -> Result<String> {
     let indent = detect_indent(original);
     let mut out = Vec::new();
     let formatter = serde_json::ser::PrettyFormatter::with_indent(indent.as_bytes());
@@ -627,7 +627,7 @@ fn render(document: &serde_json::Value, original: &str) -> Result<String> {
 ///
 /// Two spaces when there is nothing to read it from, which is what every one of
 /// these clients writes when it creates the file itself.
-fn detect_indent(text: &str) -> String {
+pub(crate) fn detect_indent(text: &str) -> String {
     for line in text.lines() {
         if line.starts_with('\t') {
             return "\t".to_string();

@@ -60,7 +60,16 @@ fn every_command_names_a_real_contract_command() {
 fn reading_commands_are_backed_by_reading_contract_commands() {
     let ipc = contract();
 
-    for command in COMMANDS.iter().filter(|c| !c.writes) {
+    // `Local` is the second exception to "every command names a contract
+    // command" and it is held to its own boundary below, exactly as the shell
+    // commands are. Filtered here rather than given an `if` inside the loop,
+    // so the assertion below stays true of everything it does look at.
+    let backed = COMMANDS
+        .iter()
+        .filter(|c| !c.writes)
+        .filter(|c| !matches!(c.backing, cli::Backing::Local));
+
+    for command in backed {
         assert!(
             !command.contracts().is_empty(),
             "`stackvo {}` is listed under Reads and names no contract command",
@@ -182,6 +191,7 @@ fn every_shell_command_runs_inside_the_container() {
         name: "shop".into(),
         container: "stackvo-shop".into(),
         running: true,
+        runtime: "php".into(),
         mount: Some("/var/www/html"),
         workdir: Some("/var/www/html".into()),
     };
@@ -218,6 +228,148 @@ fn shell_commands_are_classified_as_writing() {
             command.name
         );
         assert!(command.contract().is_none());
+    }
+}
+
+// ------------------------------------------------ the local commands (A-3')
+//
+// `Backing::Local` is the second exception to "every command names a contract
+// command", and an exception nobody checks is a hole — the same sentence the
+// shell block above opens with, and the same reason it is followed by
+// assertions rather than by a comment.
+
+/// A `Local` command reaches nothing and changes nothing.
+///
+/// That pair is the whole of the boundary. The two that exist answer from
+/// `COMMANDS` itself — the stub for a shell, and the candidates for a half-typed
+/// line — and the moment one of them writes, or drives a contract command, the
+/// argument for letting it skip the gate stops holding.
+#[test]
+fn local_commands_reach_nothing_and_change_nothing() {
+    let local: Vec<_> = COMMANDS
+        .iter()
+        .filter(|c| matches!(c.backing, cli::Backing::Local))
+        .collect();
+
+    assert!(
+        !local.is_empty(),
+        "the exception exists and nothing uses it — delete Backing::Local"
+    );
+
+    for command in local {
+        assert!(
+            !command.writes,
+            "`stackvo {}` skips the contract gate and is marked as writing",
+            command.name
+        );
+        assert!(
+            command.contracts().is_empty(),
+            "`stackvo {}` is Local and names a contract command — make it Contract",
+            command.name
+        );
+        assert!(
+            !command.passthrough(),
+            "`stackvo {}` cannot be both Local and a container command",
+            command.name
+        );
+    }
+}
+
+/// The completion surface offers every command, including itself.
+///
+/// The failure this catches is the quiet one: a command added to the table and
+/// never offered by the shell is a command nobody discovers. Asserted through
+/// `candidates` rather than by reading the table twice, because the table is
+/// what `candidates` reads — what is being checked is that nothing filters it.
+#[test]
+fn every_command_is_reachable_by_tab() {
+    let names = stackvo_desktop_lib::completions::Names::default();
+    let offered = stackvo_desktop_lib::completions::candidates(&[], "", &names);
+
+    for command in COMMANDS {
+        assert!(
+            offered.iter().any(|c| c == command.name),
+            "`stackvo {}` is in the table and never offered by tab completion",
+            command.name
+        );
+    }
+}
+
+/// Every runtime this app generates a container for can be run in one.
+///
+/// `php` and `node` had a row from the start and the six other runtimes in
+/// `manifest::LANG_RUNTIMES` did not, which made "run it in the container" read
+/// as a PHP feature. The rule that fixed it is only worth as much as the thing
+/// that holds it: a seventh runtime added to that list and forgotten here would
+/// be a project this app can build and cannot open a `python -V` in.
+///
+/// The row is matched by its **prefix**, not by its name, because the name is a
+/// spelling choice and the program is the claim. Rust's toolchain is `cargo`.
+#[test]
+fn every_runtime_can_be_run_in_its_own_container() {
+    let programs: Vec<&str> = COMMANDS
+        .iter()
+        .filter(|c| c.passthrough())
+        .filter_map(|c| c.prefix.first().copied())
+        .collect();
+
+    for runtime in stackvo_desktop_lib::manifest::LANG_RUNTIMES {
+        // The one runtime whose binary is not the thing you type. `rust` is not
+        // a program; `cargo` is what its own start command runs.
+        let program = if runtime == "rust" { "cargo" } else { runtime };
+        assert!(
+            programs.contains(&program),
+            "`{runtime}` is a runtime this app generates and `stackvo {program}` does not exist"
+        );
+    }
+
+    for runtime in ["php", "node"] {
+        assert!(
+            programs.contains(&runtime),
+            "`stackvo {runtime}` went missing"
+        );
+    }
+}
+
+/// Every package manager the manifest can pin can be run.
+///
+/// Same rule, same reason: `npm` had a row and the two Corepack also pins did
+/// not, so a project that declared `pnpm` had no way to run it.
+#[test]
+fn every_package_manager_the_manifest_pins_can_be_run() {
+    let programs: Vec<&str> = COMMANDS
+        .iter()
+        .filter(|c| c.passthrough())
+        .filter_map(|c| c.prefix.first().copied())
+        .collect();
+
+    for manager in stackvo_desktop_lib::manifest::NODE_PACKAGE_MANAGERS {
+        assert!(
+            programs.contains(&manager),
+            "the manifest can pin `{manager}` and `stackvo {manager}` does not exist"
+        );
+    }
+}
+
+/// No two container commands run the same thing.
+///
+/// A duplicate is not a compile error and not a runtime error — it is a second
+/// row in `--help` that does what the first one does, which is how a list stops
+/// being读able. `find` returns the first, so the second is simply unreachable.
+#[test]
+fn no_two_container_commands_run_the_same_program() {
+    let mut seen: Vec<&[&str]> = Vec::new();
+    for command in COMMANDS.iter().filter(|c| c.passthrough()) {
+        if command.prefix.is_empty() {
+            continue; // `exec` and `shell` name no program of their own.
+        }
+        assert!(
+            !seen.contains(&command.prefix),
+            "`stackvo {}` runs `{}`, which another row already runs",
+            command.name,
+            command.prefix.join(" ")
+        );
+        seen.push(command.prefix);
     }
 }
 
@@ -260,6 +412,7 @@ fn the_advertised_prefix_is_the_argv_that_runs() {
         name: "shop".into(),
         container: "stackvo-shop".into(),
         running: true,
+        runtime: "php".into(),
         mount: Some("/var/www/html"),
         workdir: None,
     };
@@ -296,19 +449,35 @@ fn the_advertised_prefix_is_the_argv_that_runs() {
 #[test]
 fn every_commands_own_usage_parses() {
     for command in COMMANDS.iter().filter(|c| !c.passthrough()) {
+        let wanted = placeholders(command);
         let mut argv = vec![command.name.to_string()];
-        // One placeholder per spelled argument. The value does not matter to
-        // the parser, only the count does.
-        for _ in 0..command.arity.1 {
-            argv.push("placeholder".to_string());
-        }
+        argv.extend(std::iter::repeat_n("placeholder".to_string(), wanted));
 
         let parsed = cli::parse(&argv)
             .unwrap_or_else(|e| panic!("`stackvo {}` does not parse: {}", command.name, e.message));
 
         assert_eq!(parsed.command, Some(command.name));
-        assert_eq!(parsed.args.len(), command.arity.1);
+        assert_eq!(parsed.args.len(), wanted);
     }
+}
+
+/// How many placeholder arguments to hand a command to exercise its usage line.
+///
+/// The maximum, except for a **variadic** one, where the maximum is
+/// `usize::MAX` and `0..max` is a loop that does not finish. That is not a
+/// hypothetical: adding the first variadic command turned two tests in this
+/// file into an eighteen-quintillion-iteration loop that pinned two cores and
+/// grew a Vec until the process was killed — a hang, which is the one failure
+/// that does not look like one.
+///
+/// Its *spelled* count is the right number anyway: what these tests check is
+/// that the usage line parses, and the usage line for a variadic command spells
+/// one argument and an ellipsis.
+fn placeholders(command: &cli::Command) -> usize {
+    if command.arity.1 == usize::MAX {
+        return command.args.split_whitespace().count();
+    }
+    command.arity.1
 }
 
 /// Every flag a command declares is one the parser will take from it.
@@ -321,9 +490,10 @@ fn every_declared_flag_is_accepted_by_the_command_that_declares_it() {
     for command in COMMANDS.iter().filter(|c| !c.passthrough()) {
         for flag in command.flags {
             let mut argv = vec![command.name.to_string()];
-            for _ in 0..command.arity.1 {
-                argv.push("placeholder".to_string());
-            }
+            argv.extend(std::iter::repeat_n(
+                "placeholder".to_string(),
+                placeholders(command),
+            ));
             argv.push(format!("--{}", flag.long));
             if flag.value.is_some() {
                 argv.push("1".to_string());

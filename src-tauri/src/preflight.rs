@@ -302,7 +302,20 @@ pub async fn run() -> Preflight {
                 State::Warn
             },
             detail: mkcert.version,
-            fixable: false,
+            // Fixable since `tooling` — and the gate's own comment is why this
+            // matters more than one flag usually does: it says a row that
+            // reports a problem and offers nothing to do about it is worse than
+            // absent, and names *this* row as the one that had been like that
+            // since it was added. It is only true where the publisher has a
+            // build: offering a button on a platform mkcert has no binary for
+            // would be the same defect one step later.
+            fixable: !mkcert.available
+                && crate::tooling::asset(
+                    &crate::tooling::MKCERT,
+                    std::env::consts::OS,
+                    std::env::consts::ARCH,
+                )
+                .is_some(),
         });
     }
 
@@ -341,6 +354,10 @@ pub async fn fix(id: &str) -> Result<()> {
             }
             crate::hosts::apply(&missing, &[]).map(|_| ())
         }
+        // The same install the Tooling pane runs, against the same compiled-in
+        // digest. Reached from here because this is where somebody first learns
+        // they need it — the gate is on screen before any settings page is.
+        "mkcert" => crate::tooling::install("mkcert").await.map(|_| ()),
         other => Err(crate::error::Error::new(
             crate::error::Code::InvalidInput,
             format!("{other} is not something the app can fix"),

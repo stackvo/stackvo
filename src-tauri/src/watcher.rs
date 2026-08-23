@@ -1,4 +1,4 @@
-//! Watching `projects/*/stackvo.json` for edits.
+//! Watching the project directory: manifest edits, and folders arriving.
 //!
 //! StackVo's config flow is manual: edit a manifest, remember to run
 //! `stackvo generate`, remember to restart. Forgetting either leaves the
@@ -8,9 +8,27 @@
 //! anything on its own — it emits `manifest:changed` and lets the UI offer the
 //! action, because silently rebuilding a container underneath someone who is
 //! mid-edit is worse than the problem it solves.
+//!
+//! ## The second question, added for A-5
+//!
+//! The project directory **is** what Herd and Valet call a park: point the
+//! workspace at it and every child of it is a candidate site. `adoptable`
+//! already reads it and says what each folder is — but only when somebody
+//! opens the dialog and asks. Clone a repository into the parked folder and
+//! the running app said nothing at all, so the answer to "why is my new site
+//! not there" was "reopen this list", which is the part a park is supposed to
+//! remove.
+//!
+//! The watcher was already receiving those events and throwing them away:
+//! [`project_for`] accepts `<projects>/<name>/stackvo.json` and nothing else,
+//! which is right for its own question and drops every `git clone`. So there
+//! is a second reader on the same stream, emitting `folder:appeared`. It still
+//! decides nothing — the UI refetches the list, which is the only thing that
+//! can tell an adoptable folder from one that arrived with its manifest.
 
 use crate::events;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
 use std::time::{Duration, Instant};
@@ -70,6 +88,41 @@ fn project_for(projects: &Path, changed: &Path) -> Option<String> {
     (parts.next().is_some() && parts.next().is_none()).then_some(name)
 }
 
+/// The top-level folder names the projects directory holds right now.
+///
+/// Read once, when the watch starts, so the folders that were already there do
+/// not all announce themselves as new the first time anything is written
+/// inside one of them.
+fn folders_in(projects: &Path) -> HashSet<String> {
+    let Ok(entries) = std::fs::read_dir(projects) else {
+        return HashSet::new();
+    };
+    entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_string))
+        .filter(|name| !name.starts_with('.'))
+        .collect()
+}
+
+/// Which top-level folder under `projects/` a changed path is inside.
+///
+/// Deliberately the opposite shape to [`project_for`]: that one wants one exact
+/// file and this one wants the first component of anything at all, because a
+/// `git clone` announces itself as several hundred paths deep inside a
+/// directory that did not exist a second ago and never as the directory
+/// itself.
+///
+/// Dot-prefixed names are not folders anybody parked. On a real machine the
+/// projects directory grows `.DS_Store` and, if somebody made the whole tree a
+/// repository, `.git` — which during a fetch produces more events than every
+/// real project combined.
+fn folder_for(projects: &Path, changed: &Path) -> Option<String> {
+    let relative = changed.strip_prefix(projects).ok()?;
+    let name = relative.components().next()?.as_os_str().to_str()?;
+    (!name.starts_with('.')).then(|| name.to_string())
+}
+
 /// Start watching. The returned watcher must be kept alive — dropping it stops
 /// the watch, which is why it is parked in Tauri's managed state.
 pub fn start(app: AppHandle, root: PathBuf) -> notify::Result<notify::RecommendedWatcher> {
@@ -94,15 +147,53 @@ pub fn start(app: AppHandle, root: PathBuf) -> notify::Result<notify::Recommende
     watcher.watch(&projects_dir, RecursiveMode::Recursive)?;
 
     let watched = projects_dir.clone();
+    // What was already there when the watch started. A folder is announced
+    // when it becomes new to this set and not on a timer: a clone writes for as
+    // long as the repository takes and every second of it is a create event,
+    // so a time window would either announce the same folder a dozen times or
+    // be long enough to miss the next one.
+    let mut known = folders_in(&projects_dir);
+
     std::thread::spawn(move || {
         let mut last: Vec<(String, Instant)> = Vec::new();
 
         for event in rx {
+            // A folder that goes away is forgotten, so cloning over the same
+            // name again announces it again. Without this the second clone is
+            // silent for the rest of the session, which is the one case where
+            // "it appeared" is most obviously true.
+            if matches!(event.kind, EventKind::Remove(_)) {
+                for path in &event.paths {
+                    if let Some(folder) = folder_for(&watched, path) {
+                        if !watched.join(&folder).exists() {
+                            known.remove(&folder);
+                        }
+                    }
+                }
+                continue;
+            }
+
             if !matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
                 continue;
             }
 
             for path in &event.paths {
+                if let Some(folder) = folder_for(&watched, path) {
+                    // Directories only. A loose file dropped beside the
+                    // projects is not a site, and `adoptable` would not offer
+                    // it either.
+                    if watched.join(&folder).is_dir() && known.insert(folder.clone()) {
+                        events::emit(
+                            &app,
+                            "folder:appeared",
+                            serde_json::json!({
+                                "folder": folder,
+                                "path": watched.join(&folder).display().to_string(),
+                            }),
+                        );
+                    }
+                }
+
                 let Some(project) = project_for(&watched, path) else {
                     continue;
                 };
@@ -134,6 +225,127 @@ mod tests {
     use super::*;
 
     const PROJECTS: &str = "/w/stackvo/projects";
+
+    #[test]
+    fn a_clone_is_recognised_from_any_path_inside_it() {
+        // What `git clone` actually produces. None of these is the directory
+        // itself, and the folder has to be named from every one of them.
+        for deep in [
+            "/w/stackvo/projects/shop/.git/objects/pack/tmp_pack_a1",
+            "/w/stackvo/projects/shop/composer.json",
+            "/w/stackvo/projects/shop/vendor/laravel/framework/README.md",
+        ] {
+            assert_eq!(
+                folder_for(Path::new(PROJECTS), Path::new(deep)),
+                Some("shop".to_string()),
+                "{deep}"
+            );
+        }
+    }
+
+    #[test]
+    fn dotfiles_and_outsiders_are_not_folders() {
+        for path in [
+            // `.DS_Store` and a repository over the whole tree: the second one
+            // writes more paths during one fetch than every project combined.
+            "/w/stackvo/projects/.DS_Store",
+            "/w/stackvo/projects/.git/index",
+            "/elsewhere/shop/composer.json",
+        ] {
+            assert_eq!(
+                folder_for(Path::new(PROJECTS), Path::new(path)),
+                None,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_projects_directory_itself_is_not_a_folder_in_it() {
+        assert_eq!(folder_for(Path::new(PROJECTS), Path::new(PROJECTS)), None);
+    }
+
+    #[test]
+    fn what_is_already_there_is_known_before_the_first_event() {
+        // The whole point of seeding: without it, the first write inside any
+        // existing project announces that project as new.
+        let dir = std::env::temp_dir().join(format!("stackvo-watch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("shop")).unwrap();
+        std::fs::create_dir_all(dir.join(".hidden")).unwrap();
+        std::fs::write(dir.join("loose.txt"), "not a project").unwrap();
+
+        let known = folders_in(&dir);
+        assert!(known.contains("shop"));
+        assert!(
+            !known.contains(".hidden"),
+            "dotfiles are not parked folders"
+        );
+        assert!(!known.contains("loose.txt"), "a file is not a folder");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The assumption everything above rests on, driven against the real thing.
+    ///
+    /// `folder_for` names a folder from a path *inside* it, which is only
+    /// useful if the platform's watcher reports those paths at all. On macOS
+    /// that is FSEvents, and a directory created after the watch began is
+    /// exactly the case where a coalescing backend could report the parent and
+    /// nothing else — in which case the whole feature would be silent on the
+    /// one platform this is developed on, and every test above would still
+    /// pass. So this creates a directory the watcher has never seen, writes a
+    /// file inside it, and asserts a path under that name arrives.
+    #[test]
+    fn the_platform_reports_paths_inside_a_directory_it_has_never_seen() {
+        use notify::Watcher as _;
+
+        let dir = std::env::temp_dir().join(format!("stackvo-appear-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // macOS hands out `/var/...` and reports `/private/var/...`; comparing
+        // the two would fail on the strip_prefix and not on the question.
+        let dir = std::fs::canonicalize(&dir).unwrap();
+
+        let (tx, rx) = mpsc::channel::<Event>();
+        let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
+            if let Ok(event) = res {
+                let _ = tx.send(event);
+            }
+        })
+        .unwrap();
+        watcher.watch(&dir, RecursiveMode::Recursive).unwrap();
+
+        std::fs::create_dir(dir.join("shop")).unwrap();
+        std::fs::write(dir.join("shop/composer.json"), "{}").unwrap();
+
+        // Generous, and it returns the moment the answer arrives. A backend
+        // with a delivery latency is still a backend that delivers.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut seen = false;
+        while !seen && Instant::now() < deadline {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let Ok(event) = rx.recv_timeout(left) else {
+                break;
+            };
+            seen = event
+                .paths
+                .iter()
+                .any(|path| folder_for(&dir, path).as_deref() == Some("shop"));
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            seen,
+            "no event named the new folder; `folder:appeared` would never fire on this platform"
+        );
+    }
+
+    #[test]
+    fn a_missing_directory_is_no_folders_rather_than_a_panic() {
+        // The workspace can be pointed at a path that is not there yet.
+        assert!(folders_in(Path::new("/nowhere/at/all")).is_empty());
+    }
 
     #[test]
     fn matches_a_project_manifest() {

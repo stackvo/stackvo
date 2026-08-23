@@ -11,9 +11,14 @@
 //! derivable rather than typed, and that is what this file checks — because the
 //! old one was typed, and it was wrong in two independent ways at once:
 //!
-//! * **wrong owner.** It named `stackvo/stackvo-tauri`; the remote is
-//!   `fahrettinaksoy/stackvo-tauri`. An updater pointed at a repository nobody
-//!   owns cannot be fixed by publishing a release.
+//! * **wrong owner.** It named `stackvo/stackvo-tauri`; the remote at the time
+//!   was `fahrettinaksoy/stackvo-tauri`. An updater pointed at a repository
+//!   nobody owns cannot be fixed by publishing a release. The repository has
+//!   since moved again — to `stackvo/stackvo` — and the constant went stale a
+//!   second time, which is the argument for deriving it rather than typing it,
+//!   made twice. `published_urls.rs` beside this file now applies the same rule
+//!   to every hard-coded repository URL in the crate, because this one was
+//!   guarded and `help.rs`'s was not.
 //! * **wrong mechanism.** It read `latest.json` off the `main` branch through
 //!   `raw.githubusercontent.com`, and nothing writes that file to `main`.
 //!   `tauri-action` writes it *into the release*, which is where

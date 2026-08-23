@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
+import { readFileSync } from 'node:fs';
 
 /**
  * The operations store is the one piece of front-end state with real logic in
@@ -190,5 +191,28 @@ describe('enabling a service', () => {
     expect(ops.isBusy('mariadb'), 'the finished event clears the spinner').toBe(false);
     expect(ops.operations['op-1'].state).toBe('done');
     expect(ops.operations['op-1'].durationMs).toBe(4200);
+  });
+});
+
+/**
+ * Every group the store binds is a group `EVENTS` declares.
+ *
+ * `bind()` spreads a fixed list of groups, and spreading a name that is not
+ * there throws inside a mounted hook — which surfaces as the shell rendering
+ * an empty projects rail, six failing tests about runtime glyphs, and nothing
+ * anywhere naming the event group somebody had just added. Checking the two
+ * against each other turns that into one failure that says what it is.
+ */
+describe('the event groups the store binds', () => {
+  it('are all declared in EVENTS', async () => {
+    const { EVENTS } = await import('@/lib/events');
+    const source = readFileSync('src/stores/operations.js', 'utf8');
+
+    const bound = [...source.matchAll(/\.\.\.EVENTS\.([a-zA-Z]+)/g)].map((m) => m[1]);
+    expect(bound.length, 'the scan found no groups, so this proves nothing').toBeGreaterThan(3);
+
+    for (const group of bound) {
+      expect(Array.isArray(EVENTS[group]), `EVENTS has no \`${group}\` group`).toBe(true);
+    }
   });
 });

@@ -22,9 +22,13 @@ const api = vi.hoisted(() => ({
   agentsStatus: vi.fn(),
   agentsInstall: vi.fn(),
   agentsRemove: vi.fn(),
+  rulesStatus: vi.fn(),
+  rulesApply: vi.fn(),
+  rulesRemove: vi.fn(),
+  projectsList: vi.fn(),
 }));
 
-vi.mock('@/lib/ipc', () => ({ api }));
+vi.mock('@/lib/ipc', () => ({ api, asList: (v) => (Array.isArray(v) ? v : []) }));
 
 const vuetify = createVuetify({ components, directives });
 
@@ -52,11 +56,28 @@ const STATUS = {
   ],
 };
 
+const rule = (over = {}) => ({
+  id: 'claude',
+  label: 'Claude Code',
+  scope: 'workspace',
+  path: '/Users/x/.stackvo/projects/shop/CLAUDE.md',
+  exists: true,
+  installed: false,
+  current: false,
+  ...over,
+});
+
+const RULES = [rule(), rule({ scope: 'global', path: '/Users/x/.claude/CLAUDE.md' })];
+
 beforeEach(() => {
   vi.clearAllMocks();
   api.agentsStatus.mockResolvedValue(STATUS);
   api.agentsInstall.mockResolvedValue('/Users/x/.cursor/mcp.json');
   api.agentsRemove.mockResolvedValue('/Users/x/.cursor/mcp.json');
+  api.rulesStatus.mockResolvedValue(RULES);
+  api.rulesApply.mockResolvedValue('/Users/x/.stackvo/projects/shop/CLAUDE.md');
+  api.rulesRemove.mockResolvedValue('/Users/x/.stackvo/projects/shop/CLAUDE.md');
+  api.projectsList.mockResolvedValue([{ name: 'shop' }, { name: 'api' }]);
 });
 
 describe('what it refuses to offer', () => {
@@ -186,5 +207,77 @@ describe('the block it tells you to paste', () => {
     const vscode = JSON.parse(wrapper.vm.snippet(client({ id: 'vscode' })));
     expect(vscode.servers.stackvo.type).toBe('stdio');
     expect(vscode.mcpServers).toBeUndefined();
+  });
+});
+
+/**
+ * The rules half.
+ *
+ * Registering the server is settled above; what this half decides is *where*
+ * the rules go, and that decision is the one with a consequence — a rules file
+ * lands in somebody's repository and is usually committed. The tests here are
+ * about the two things only this component knows: which scope a row belongs to,
+ * and which directory the write is aimed at.
+ */
+describe('the rules', () => {
+  it('separates what travels with the repository from what stays on the machine', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('In the project');
+    expect(wrapper.text()).toContain('On this machine');
+    // Both paths named, for the same reason every client row names its file.
+    expect(wrapper.text()).toContain('/Users/x/.stackvo/projects/shop/CLAUDE.md');
+    expect(wrapper.text()).toContain('/Users/x/.claude/CLAUDE.md');
+  });
+
+  it('aims at the workspace root until a project is chosen, and then at the project', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+
+    // `undefined`, not null: the wrapper omits the argument so the command
+    // takes its own default rather than being handed one from the UI.
+    expect(api.rulesStatus).toHaveBeenLastCalledWith(undefined);
+
+    await wrapper.findComponent({ name: 'VSelect' }).setValue('shop');
+    await flushPromises();
+    expect(api.rulesStatus).toHaveBeenLastCalledWith('shop');
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Write rules')
+      .trigger('click');
+    await flushPromises();
+    expect(api.rulesApply).toHaveBeenLastCalledWith('claude', 'workspace', 'shop');
+  });
+
+  it('offers Update rather than Write for a block an older version wrote', async () => {
+    api.rulesStatus.mockResolvedValue([rule({ installed: true, current: false })]);
+    const wrapper = mountPane();
+    await flushPromises();
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Update');
+    expect(wrapper.text()).toContain('Written by an older version');
+  });
+
+  it('offers only Remove once the current block is in place', async () => {
+    api.rulesStatus.mockResolvedValue([rule({ installed: true, current: true })]);
+    const wrapper = mountPane();
+    await flushPromises();
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Remove');
+    expect(labels).not.toContain('Write rules');
+  });
+
+  it('promises, on screen, that the rest of the file survives', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+
+    // The one sentence that decides whether somebody presses the button on a
+    // CLAUDE.md they have been writing for a year.
+    expect(wrapper.text()).toContain('Only the region between the StackVo markers is written');
+    expect(wrapper.text()).toContain('.stackvo-backup');
   });
 });

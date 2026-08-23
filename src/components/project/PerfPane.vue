@@ -11,20 +11,25 @@ import PaneHeader from '@/components/PaneHeader.vue';
  *
  * ## Why this is a list of directories and not a switch
  *
- * A bind mount costs 2–3× a named volume on metadata and writes, and the
- * measured win depends entirely on *which* directory moves —
- * `examples/perf_layer_bench.rs` on the machine this was built on:
+ * A bind mount crosses a filesystem boundary on macOS and Windows, and the
+ * measured win depends entirely on *which* directory moves: `vendor` in a
+ * volume buys the framework **boot** and does nothing at all for writes;
+ * `storage/framework` is the one that buys the **writes**. A single "make it
+ * fast" switch would hide that, and the directories it moved would be a guess
+ * about somebody's project.
  *
- * ```text
- *            bind      vendor in a volume    + storage/framework
- *   boot     1.47s     0.39s  (3.8x)         0.40s  (3.7x)
- *   write    1.14s     1.21s  (none)         0.41s  (2.8x)
- * ```
+ * ## The number is data now, and this comment is no longer where it lives
  *
- * `vendor` buys the framework boot and does nothing at all for writes;
- * `storage/framework` is the one that buys the writes. A single "make it fast"
- * switch would hide that, and the directories it moved would be a guess about
- * somebody's project.
+ * This block used to hold the benchmark's output table — which made a Vue
+ * file's comment the only written record of what `examples/perf_layer_bench.rs`
+ * printed, unreachable from the program that produced it. Worse, `perf.explain`
+ * restated a rounded **average** of the two rows, in two languages, as prose a
+ * translator had to re-derive; and averaging them hides exactly the fact above.
+ *
+ * It is `perf::GAINS` now, arrives on each `layer.gain`, and renders on the row
+ * it was measured for. The bench records what it printed and
+ * `src-tauri/tests/perf_claims.rs` holds the three apart — including a check
+ * that no locale has quietly grown the figure back.
  *
  * ## Two things this pane must never do quietly
  *
@@ -122,7 +127,34 @@ watch(() => [props.name, props.runtime], load, { immediate: true });
 
     <div v-for="layer in layers" :key="layer.path" class="cmd-row" data-test="perf-layer">
       <div class="flex-grow-1 min-width-0">
-        <div class="mono text-body-2">{{ layer.path }}</div>
+        <div class="d-flex align-center ga-2 min-width-0">
+          <span class="mono text-body-2">{{ layer.path }}</span>
+
+          <!-- The measurement, on the row it was measured for. It used to be
+               one averaged figure in the header sentence, which hid the fact
+               the whole design rests on: these two rows buy different things
+               and each is useless for the other's workload. -->
+          <v-chip
+            v-if="layer.gain"
+            size="x-small"
+            variant="tonal"
+            color="success"
+            :title="t('perf.measuredOn')"
+          >
+            {{
+              t('perf.gain', {
+                times: layer.gain.times,
+                workload: t(`perf.workload.${layer.gain.workload}`),
+              })
+            }}
+          </v-chip>
+
+          <!-- Said, rather than left blank. `bootstrap/cache` and
+               `node_modules` are offered and have never been through the
+               bench; a row with no number is a row nobody measured, and
+               borrowing a neighbour's would be the average all over again. -->
+          <span v-else class="text-caption text-disabled">{{ t('perf.notMeasured') }}</span>
+        </div>
         <div class="text-caption text-medium-emphasis">
           <template v-if="layer.enabled">
             {{ t('perf.inVolume', { volume: layer.volume }) }}

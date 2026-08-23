@@ -51,6 +51,13 @@ const PROMISED: &[(&str, &str)] = &[
         "agent_install",
     ),
     ("unregistering it", "agent_remove"),
+    ("writing the AI rules", "rules_apply"),
+    ("writing an IDE's debug configuration", "ide_debug_apply"),
+    (
+        "writing the `PATH` entry into a shell startup file",
+        "tooling_path_apply",
+    ),
+    ("installing a host tool", "tooling_install"),
 ];
 
 #[test]

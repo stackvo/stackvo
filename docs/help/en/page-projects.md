@@ -65,7 +65,7 @@ The panel behind the three-dot menu finds code on this machine that StackVo is n
 
 | Source | What it does |
 | --- | --- |
-| Folders in your projects directory | Lists folders with no `stackvo.json` and turns one into a project with **Adopt**. What it is gets detected from the files in the folder. |
+| Folders in your projects directory | Lists folders with no `stackvo.json` and turns one into a project with **Adopt**. What it is gets detected from the files in the folder. **Adopt all** takes every folder in the list in one pass. |
 | XAMPP and Laragon sites | Reads those tools' installation directories and lists their sites. |
 | Projects with a compose file | Derives a project from an existing `docker-compose.yml`. The `stackvo.json` that would be written, and where each value was read from, are shown first. |
 
@@ -73,5 +73,7 @@ The panel behind the three-dot menu finds code on this machine that StackVo is n
 
 - Importing never writes into the other tool's folder. The site is copied into this workspace. With **Move instead of copy**, the original is deleted once the copy is complete and the other tool stops serving that site.
 - When nothing recognisable is found during adoption, defaults are used, and the panel says so row by row.
+- Your projects directory is watched. Clone a repository into it and the count on the three-dot button goes up on its own — you do not have to reopen this panel to find it.
+- **Adopt all** is one operation, not one per folder: the generator runs once and `/etc/hosts` is written once, so you are asked for your password at most once no matter how many folders there are. Folders that already have a `stackvo.json`, and folders holding nothing but hidden files, are passed over and named afterwards.
 - Importing from compose lists separately any service that has no StackVo equivalent. You have to handle those yourself.
 - Deleting a project does not delete your code. Only the container and the entry are removed.

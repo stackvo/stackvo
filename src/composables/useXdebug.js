@@ -31,8 +31,15 @@ export function useXdebug(name) {
     }
     try {
       status.value = await api.xdebugStatus(name.value);
-    } catch {
-      status.value = null;
+      error.value = null;
+    } catch (e) {
+      // A failed *refresh* keeps what is on screen. The whole pane hangs off
+      // `v-if="status"`, so blanking it empties the switch, the warnings and
+      // the IDE list — and the refreshes happen exactly when the engine is
+      // busiest, because this now re-reads as a container is recreated. Only
+      // the first read has nothing to fall back to.
+      if (!status.value) return null;
+      error.value = e;
     }
     return status.value;
   }

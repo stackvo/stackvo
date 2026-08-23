@@ -126,6 +126,14 @@ jobs:
             test-results/
           retention-days: 7
 
+      # `tauri.conf.json` declares two `externalBin`, and `tauri-build` checks
+      # they exist on every cargo build of this package — including a plain
+      # `cargo test`. Placeholders are enough here: nothing below bundles or
+      # runs them, and building the real pair for three platforms to satisfy an
+      # existence check would be six minutes spent on a file nobody opens.
+      - name: Placeholder sidecars, so the Rust steps can build
+        run: node tools/sidecars.mjs --stubs
+
       # Everything below runs on all three platforms, so the cfg-gated code is
       # actually compiled somewhere rather than only written.
       - name: Check the Rust core
@@ -212,6 +220,12 @@ jobs:
       # same question more or less slowly, one of them was not answering it.
       # `--debug` keeps the compile cheap; `--no-bundle` skips the .deb, which
       # is not what gets driven.
+      # Real ones here, not placeholders: `beforeBuildCommand` refuses to let a
+      # placeholder reach a bundle, and this job's whole claim is that it builds
+      # the application *the way it ships*. Debug, to match the profile below.
+      - name: Build the sidecars
+        run: node tools/sidecars.mjs
+
       - name: Build the application the way it ships
         run: npx tauri build --debug --no-bundle
 

@@ -17,27 +17,96 @@ yanlış bir sayı build'i kırıyor.
 ## 1. Bitenlerin kaydı nerede
 
 * **`CHANGELOG.md`** — her teslimatın ne olduğu ve neden öyle yapıldığı.
-* **`docs/servis-market-mimarisi.md`** — paket ve market mimarisi; tarif ettiği
-  iş bitince silinecek.
 * **§6** — geri alınamayan tercihler, gerekçeleriyle. Koddaki "ADR 0005",
   "ADR 0009" atıfları bu tabloyu kastediyor; numaralar korundu.
 * **git geçmişi** — her satırın hangi turda ve neden değiştiği.
+
+Ve **yapılacak işler yalnız burada**: §2 ürün tarafı, §3 mühendislik tarafı, §4
+ikisinin sırası. `docs/` altındaki öteki iki dosya kayıttır, liste değil, ve
+ikisi de açık maddelerini buraya devretti:
+
+* **`docs/accessibility.md`** — EN 301 549 uygunluk beyanı. Yayımlanmış bir
+  belge ve `tests/accessibility-claims.spec.js` onu okuyor, o yüzden duruyor;
+  açık maddeleri §2'de Y-1…Y-3.
+* **`docs/servis-market-mimarisi.md`** — paket ve market mimarisi. On üç Rust
+  modülü, testler ve sözleşme ona **bölüm numarasıyla** atıf yapıyor
+  (`§4.4`, `§9`, `Faz 2`), o yüzden silinemez; tek açık fazı §2'de P.
 
 ---
 
 ## 2. Ürün boşlukları — kalan
 
-Sahadaki on ürüne karşı ölçüldü (Herd, Lerd, EnvKit, FlyEnv, ServBay, ForgeKit,
-Laragon, Laradock, DDEV, XAMPP).
+On dört rakibe karşı ölçüldü (DDEV, Lando, Yerd, KettleCode, DevTent, dde.sh,
+Laradock, Herd, Lerd, ServBay, EnvKit, Laragon, FlyEnv, ForgeKit). Her satır
+**nasıl bakıldığını** taşıyor: "yok" iddiası bir `grep` sonucu ya da bir dosya
+listesi, "rakipte var" iddiası resmî dokümandan.
 
-| # | Madde | Durum | Nasıl bakıldı |
+Yapılanlar burada durmuyor — `CHANGELOG.md` her teslimatın ne olduğunu ve neden
+öyle yapıldığını taşıyor, ve bu tablo yalnız **kalanı** listeliyor.
+
+| #   | Madde | Durum | Ne eksik, ve nasıl bakıldı |
 | --- | --- | :-: | --- |
-| C | Üçüncü taraf paket **dağıtımı** | ⛔ | **Kod tarafı kapandı** (ADR 0021): imza doğrulayıcı `signing.rs`'te ve `refresh` onu indeksi ayrıştırmadan **önce** koşuyor, anahtar rotasyonu (`known-keys.json`) ve emeklilik var, geri çekilmiş sürüm kuruluma **reddediliyor**, kurulu olanı `doctor` bildiriyor. Kalan üç şeyin üçü de kod değil: resmî anahtarın töreni (§5.3'ün arkasında), moderasyon süreci ve yayıncı kimliği kaydı. **Kurumsal ayna bugün çalışıyor** — kendi anahtarını `policy.market.additionalKeys` ile pinler |
-| D-1 | Yerel AI servisleri (Ollama, Qdrant, pgvector) | ✅ | **Cevaplandı (ADR 0027): yalnız pgvector, ve bir servis değil — `postgres`'in bir sürümü.** Bu depoda değişen kod **hiç**, ve bulgu bu: ADR 0011 uygulamanın hiçbir servis tanımı taşımamasını kararlaştırdığı için yeni servis bir *paket*, ve uygulamanın zaten ifade edebildiği bir paket burada sıfıra mal oluyor. Ayıran şey bir capability: `vector`. `vector_capability.rs` cümleyi tekrar etmiyor, kanıtlıyor. Ollama/Qdrant isteyen `sidecars` yazar (ADR 0023) |
+| C | Üçüncü taraf paket **dağıtımı** | ⛔ | **Kod tarafı kapandı** (ADR 0021): imza doğrulayıcı `signing.rs`'te, `refresh` onu indeksi ayrıştırmadan **önce** koşuyor, anahtar rotasyonu (`known-keys.json`) ve emeklilik var, geri çekilmiş sürüm kuruluma reddediliyor, kurulu olanı `doctor` bildiriyor. Kurumsal ayna bugün çalışıyor. Kalan üç şeyin üçü de kod değil: resmî anahtarın töreni (§5.3'ün arkasında), moderasyon süreci ve yayıncı kimliği kaydı |
+| W | **Windows'ta testlerin koşması** | 🟡 | Tip kontrolü geçiyor — `tools/linux/run.sh --windows`, `cargo-xwin` Microsoft'un SDK'sını indirip `aws-lc-sys`'in `windows.h` engelini kaldırıyor. **Kalan: koşmak.** CI'nın `windows-latest` bacağı `cargo test` koşuyor ve sonucu bu depodan görülmüyor; geliştirme makinesi macOS ve konteyner imajını kurmanın bedeli (Ubuntu + Rust + Node + clang + SDK + tüm crate'in Windows derlemesi) bir disk kararı. `tools/linux/Dockerfile` "testler burada koşamaz" diye bir olgu beyan ediyor ve **bu doğrulanmadı** — `cargo-xwin`'in Wine ile koşabildiği iddiası sınanmadan yazılmamalı |
+| P | **Uzatma noktaları** (market Faz 7) | 🟡 | `docs/servis-market-mimarisi.md` §10'un tek açık fazı: kullanıcının kendi paketi (yerel dizin), workspace override (`skeleton.rs`'in `materialize`/`revert` deseninin paketlere uygulanması), üçüncü taraf kaynak politikası. O dosyanın kalan işi budur; başka hiçbir fazı açık değil |
+| Y-1 | **Ekran okuyucu denetimi** | ⛔ | `docs/accessibility.md` §4. Otomatik araçlar WCAG başarı ölçütlerinin kabaca üçte birine karar veriyor; kalanı — bir etiketin *anlamlı* olup olmadığı, bir hata mesajının ne yapılacağını söyleyip söylemediği, okuma sırasının görsel sırayla eşleşip eşleşmediği — bir insan gerektiriyor ve kimse yapmadı |
+| Y-2 | **Yerel pencerenin denetimi** | ⛔ | `docs/accessibility.md` §4. Ölçüm ön yüzü bir tarayıcı motorunda sürüyor; pencere çerçevesi, menü çubuğu ve tepsi menüsü işletim sisteminin ve kapsam dışı. Bunları kapsayacak olan `tauri-driver` macOS'ta koşmuyor — yani W maddesiyle aynı makineye bağlı |
+| Y-3 | **Geçiş başına dil işareti** | 🟡 | `docs/accessibility.md` §4. Arayüz dili belgede duyuruluyor; iki dili karıştıran bir görünüm — Türkçe arayüzde İngilizce bir günlük satırı — değişimi geçiş başına işaretlemiyor |
+| B-1 | **"Bu istek neden yavaştı" tek ekranı** | 🟡 | Üç ayrı panel var: SPX (`hotspots`), sorgu günlüğü (`querylog.rs`, dört motor), zaman çizelgesi (`timeline.rs`). Eksik olan üçünü **tek bir istek** etrafında birleştiren görünüm ve **N+1 tespiti**. Yeni ölçüm gerekmiyor, ortak bir istek anahtarı ve bir görünüm gerekiyor. Rakiplerin hiçbirinde bu üçlü yok; Herd'ün profil aracı en yakını ve o bile sorgu günlüğünü görmüyor |
+| B-7 | **Tünelde kimlik ve kalıcı ad** | 🟡 | Altı sağlayıcı var ve rakipler 1–4 arası, yani bu taraf zaten önde. Eksik olan **temel kimlik doğrulama** ve **kalıcı adlandırılmış alan adı** — paylaşılan bir bağlantının ikinci sorusu |
+
+### Anlatılmayan güçler
+
+Kod tarafı bitmiş, **söylenmemiş**. Hiçbiri mühendislik değil; her biri bir
+sayfa ya da bir başlık.
+
+* **MCP yüzeyi** — 34 araç. KettleCode 18 aracı, ServBay ve EnvKit birer
+  sunucuyu manşet yapıyor; burada daha fazlası README'nin ortasında anlatılıyor.
+  Ayrıca **AI kural dosyası yazan tek ürün**, ve rakiplerin hiçbirinde yok.
+* **Üretim imajı dışa aktarma** (`release.rs`) — `laradock ship` dışında hiçbir
+  rakipte yok, ve yerel-ikili rakiplerin hiçbiri takip edemez: konteyner
+  soyağacı olmadan mümkün değil. README'nin yol haritasında bile geçmiyor.
+* **Yan yana sürümler** (`instances.rs`) — Herd bunu "Service Version Matrix"
+  diye bir doküman sayfasıyla satıyor, ServBay ve FlyEnv "anında sürüm
+  değiştirme" diyor. İkisi de **değiştirme**; buradaki **birlikte çalıştırma**,
+  yani güçlü olan taraf ve isimsiz olan taraf aynı.
+* **Taranabilir paket dizini** — DDEV'in `addons.ddev.com`'u gibi. Mekanizma
+  bitti (C satırı); eksik olan resmî anahtar töreni ve bir sayfa. 30 paketi bir
+  *ekosisteme* çeviren şey bu.
+
+### Savunulacak alan
+
+On dört rakibin **hiçbirinde** olmayanlar. Kalan iş değil — kaybedilmemesi
+gereken şey, ve yazılı olmasının sebebi bu:
+
+* **OAuth geri çağrıları** (`oauth.rs`) — yalnız Herd'de "Social
+  Authentication" olarak var, o da yerel HTTPS'in bir yan etkisi olarak.
+* **Stripe webhook'ları** (`stripe.rs`), **git worktree desteği**
+  (`worktree.rs`), **dört motorda ajanısız sorgu günlüğü** (`querylog.rs`) —
+  hiçbirinde yok.
+* **MDM politika dosyası** (`policy.rs`) — hiçbirinde yok. Kurumsal alım kararı
+  bu satırdan geçiyor.
+* **İmzalı paket dağıtımı + hava boşluklu kurulum** — hiçbirinde yok.
+* **EN 301 549 uyum beyanı ve onu tutan testler** — hiçbirinde yok. Kamu
+  ihalesi bu satırdan geçiyor.
+* **Sözleşmeyle kapılı üç yüzey** (CLI/TUI/MCP, hepsi `contracts/ipc.json`'a
+  bağlı ve testlerle tutuluyor) — hiçbirinde yok.
+* **Devralma planı** (`handover.rs`) — mevcut bir kurulumun verisini
+  kaybetmeden yeni düzene taşımak. Rakiplerin "import"ları yeni kurulum
+  yapıyor.
+* **Üretim imajı dışa aktarma**, **yan yana sürümler**, **34 araçlık MCP
+  yüzeyi**, **AI kural dosyası yazıcısı** — yukarıdaki "anlatılmayan güçler"le
+  aynı liste, ve aynı sebeple burada: kod var, cümle yok.
+* **MIT.** Herd $99/yıl, ServBay $59/yıl, Laragon ticarileşti, DevTent kendi
+  lisansını yazdı. DDEV, EnvKit ve ForgeKit tam bu çizgiden saldırıyor.
 
 ### Girilmeyecek kavgalar
 
-Yeniden tartışılmaması için yazılı:
+Yeniden tartışılmaması için yazılı. On dört ürünlük tur bu listeye ekleyecek
+bir şey bulmadı ve **bir şeyi çıkardı**: "yerel AI servisleri" kapsam dışı
+duruyordu, ama reddedilen şey ServBay'in **LLM ağ geçidi**ydi ve o hâlâ kapsam
+dışı — Ollama ve Qdrant'ı birer *paket* olarak eklemek ayrı bir soruydu ve ADR
+0027 onu kendi gerekçesiyle cevapladı.
 
 * **Native-binary hız savaşı.** FlyEnv "<100 ms açılış", Laragon "~10 MB RAM"
   yayınlıyor; kazanılamaz. Ama *soğuk açılış* ile *dosya G/Ç* ayrı sorular —
@@ -51,6 +120,11 @@ Yeniden tartışılmaması için yazılı:
 * **LLM sağlayıcı proxy'si** (ServBay'in AI Gateway'i). Kapsam dışı. Yerel AI
   *servisleri* farklı bir soru — §5.2.
 * **FlyEnv'in 50+ aracı** (base64, QR, regex test ediciler). Odaksız.
+* **Konteyner araçlarının host'a indirilmesi** (E'nin reddedilen yarısı):
+  `composer`, `node`, `npm`, `bun`, `wp`. Sürüm projenin özelliği, host
+  dizininin değil. `tooling::TOOLS` bunu bir yorumla değil bir testle tutuyor
+  (`the_catalogue_is_host_tools_only`), çünkü buraya bir satır eklemek tam
+  olarak birinin altı ay sonra iyi niyetle yapacağı şey.
 * **Portable mod.** Docker bağımlılığıyla anlamsız.
 * **Laradock'un 130 servisinin peşine düşmek.** Genişliğin kendisi için
   genişlik, bir kataloğun bakımsız hâle gelme yolu.
@@ -67,19 +141,18 @@ kalitesinde değil, **kalitenin kod dışına, otomatik ve devredilebilir hâle
 çıkarılmasında**: bugün 1 yazar var; ikinci geliştirici geldiği gün ya da
 altıncı ayda hafıza soluklaştığında çalışmayacak olan şey bu.
 
+Kapanmış maddeler bu tablodan **çıkarıldı** — ne yapıldığı ve neden öyle
+yapıldığı `CHANGELOG.md`'de, geri alınamayan tercihler §6'da duruyor. Burası
+yalnız kalanı taşıyor.
+
 | # | Madde | Durum | Nasıl bakıldı |
 | --- | --- | :-: | --- |
-| 2 | Güncelleme endpoint'i | 🟡 | **Karar verildi (ADR 0025) ve endpoint düzeltildi.** Eskisi iki bağımsız yönden yanlıştı ve ikisi de sessizdi: sahibi (`stackvo/…`, oysa remote `fahrettinaksoy/…`) ve mekanizması (`raw.githubusercontent.com/.../main/latest.json` — o dosyayı `main`'e yazan hiçbir şey yok; `tauri-action` onu release'in **içine** yazıyor). `dialog: false` olduğu için 404 hiç görünmüyordu. Artık `releases/latest/download/latest.json`, ve `updater_endpoint.rs` adresi `.git/config`'ten türetip karşılaştırıyor, `includeUpdaterJson` ile imzalama secret'ının workflow'da kaldığını da tutuyor. Kalan **kod değil**: anahtarın repository secret'ı olarak eklenmesi ve bir sürümün yayınlanması |
-| 10 | Ön yüzün tipleri | ✅ | **Her iki yarı da bitti, ve ikincisi birincinin neden yetmediğini gösterdi.** `tauri-specta` bu depo için yanlış alet — burada **hiç TypeScript yok** ve çıktısı hiçbir şeyin okumadığı bir `.ts` modülü olurdu; bedeli üç crate ve 245 fonksiyona bir öznitelik. Tipler `contracts/ipc.json`'dan üretiliyor → `src/lib/ipc.d.ts`: **127 adlandırılmış tip, 242 sarmalayıcı, okunamayan 0 alan** (eskiden 24). **(a)** Sözleşmenin adlandırıp tanımlamadığı 19 tipin hepsi beyan edildi — `CpuStats`, `ContainerDetails`, `Timeline`, `Manifest`, … — artı onları taşıyan alt şekiller; `Plan` hiç yeni bir tip değildi, `PresetPlan`'ın kendisiydi ve `project_requirements_apply` artık onu adlandırıyor. **(b)** `npm run types:tsc` (`tsconfig.json`, `checkJs`, `noEmit` — derleme adımı yok) CI'da koşuyor. Kapıyı kurmak **tam da eksik olan şeyi buldu**: üretilen dosya *hiç derlenmemişti*, ve derlenmiyordu — birinin düzyazısındaki `docs/*/…` yolu JSDoc yorumunu erkenden kapatıyor, dosya o satırda ayrıştırılamıyor ve sonrası kod olarak okunuyordu; `OperationId` 24 kez adlandırılıp bir kez bile tanımlanmıyordu; `StackvoError`'ın kurucusu `Error`'dan miras alınıyordu, oysa uygulama onu bir **nesneyle** kuruyor. Üçü de üretecin kendi hatasıydı ve üçü de tek bir `tsc` koşusunun sorusuydu. Kalan: yok |
+| 2 | Güncelleme endpoint'i | 🟡 | **Karar verildi (ADR 0025) ve endpoint düzeltildi.** Eskisi iki bağımsız yönden yanlıştı ve ikisi de sessizdi: sahibi (`stackvo/stackvo-tauri`, oysa remote o gün `fahrettinaksoy/…`) ve mekanizması (`raw.githubusercontent.com/.../main/latest.json` — o dosyayı `main`'e yazan hiçbir şey yok; `tauri-action` onu release'in **içine** yazıyor). `dialog: false` olduğu için 404 hiç görünmüyordu. Artık `releases/latest/download/latest.json`, ve `updater_endpoint.rs` adresi `.git/config`'ten türetip karşılaştırıyor, `includeUpdaterJson` ile imzalama secret'ının workflow'da kaldığını da tutuyor. Depo sonradan `stackvo/stackvo`'ya taşındı ve sabit geride kaldı; ikisi de düzeltildi ve artık **sınıf** kapılı: `published_urls.rs` bu depoyu adlandıran her sabit URL'i tarayıp `.git/config`'e karşı tutuyor — aynı taşınma `help.rs`'in uzak adresini de bozmuştu, her yardım çekimi 404 dönüyordu ve başarısız bir yardım çekimi bilerek sessiz olduğu için hiçbir şey bunu göstermiyordu. Kalan **kod değil**: anahtarın repository secret'ı olarak eklenmesi ve bir sürümün yayınlanması (bugün depoda sıfır release var, endpoint bu yüzden hâlâ 404 — adresin kendisi artık doğru) |
 | 12 | E2E | 🟢 | **Koştu, ve koşmak dört ayrı kusuru buldu — üçü süitin kendisinde.** Playwright yarısı zaten vardı. `tauri-driver` yarısı `tools/linux/` ile bir konteynerde koşuyor. **(1)** İlk koşuda dört test düştü ve süit yeşil raporladı: `whyNotHere` Linux'ta `null` döndürüyordu ve `node:test` `null` bir `skip`'i direktif okuyor — düşen test `# skipped` altına yazılıp `# fail`'in dışında kalıyor ve süreç 0 ile çıkıyor. **(2)** Dört düşüşün mesajı da aynıydı ve hiçbir şey açıklamıyordu; düşen bir iddia artık sayfanın ve sürücünün ne dediğini basıyor, ve ilk baskıda cevap çıktı: `url: about:blank`, `"Could not connect to localhost"`. **(3)** Sebep `cargo build`'di — `tauri-build` düz bir cargo derlemesi için `cfg(dev)` yayıyor, yani ikili `devUrl`'i gömüyor ve webview `localhost:1420`'yi açıyor. Süitin manşet testi ("derlenmiş paket gerçek webview'de render oluyor") **süitin kendi seçtiği profille geçemezdi**. Eski yorum debug'ı maliyetle savunuyordu; maliyet gerçekti, karşılaştırma değildi — ikisi aynı soruyu farklı hızda cevaplamıyordu, biri cevaplamıyordu. Artık `npx tauri build --debug --no-bundle`. **(4)** `tauri-driver` bir vekil: dinlediği port o ayağa kalkar kalkmaz cevap veriyor, arkasındaki `WebKitWebDriver` ayrı başlıyor — erken sorulan oturum "connection refused" alıyordu; artık sınırlı bir yeniden deneme var. Beşincisi zarfı okumayan bir testti (`box.internals`, oysa `box.value.internals`) — geçmesi mümkün değildi ve dördünün mesajı aynı olduğu için tipo onların kılığındaydı. Sonuç: **5/5 geçiyor, 0 atlandı**. Kalanı CI'da ilk koşu |
-| 21 | Sürüm kanalları, kademeli dağıtım, geri alma | ✅ | **Yazıldı ve bağlandı.** `tauri-plugin-updater` bir manifesto çekip sürüm karşılaştırıyor, imza doğrulayıp kuruyor — hepsi bu; kanal kavramı yok, yüzde yok, ve en önemlisi **durdurma** yok: bozuk çıkan bir sürüm geri çağrılamıyor. `channel.rs` o kararı veriyor, sıra tasarımın kendisi (`paused` her şeyi yener; `supersededBy` sürüm karşılaştırmasından önce gelir çünkü varlık sebebi onu yenmektir; dalga en sonda). Kova `sha256(installId:version) % 100` — rastgele olsaydı her kontrolde yeniden atılır, güncelleme belirip kaybolurdu. **Karar artık kullanıcıdan önce veriliyor**: `checkForUpdate` eklentinin *zaten* çektiği manifestoyu (`rawJson`) `updater_offer`'a veriyor, ikinci istek yok, iki cevabın ayrışması yok — ve reddedilen bir sürüm ekrana hiç çıkmıyor, çünkü sunup sonra kurmayı reddetmek hiç sunmamaktan kötü. Karar okunamazsa sürüm **sunuluyor**, reddedilmiyor: alanlar eklemeli ve bugünkü `latest.json` hiçbirini taşımıyor. 16 Rust + 12 JS testi. `getrandom` eklendi, kilit **tek satır** büyüdü |
 | 22 | Platform kapsamı (Linux aarch64, Win ARM64) | 🟡 | `release.yml` **altı** hedef sayıyor, iki ARM satırı yerel ARM koşucularıyla. `rehearsal` girdisi bu satırları imzalama kararından ayırdı: altısını da derliyor, testi her birinde koşuyor, paketleri run sayfasına bırakıyor ve **hiçbir şey yayımlamıyor**. GitHub Actions burada koşturulamaz ve `release_rehearsal.rs` bunun tersini iddia etmiyor — koşucusuz da ayakta kalan iddiayı tutuyor: **yayınlayabilecek her adım kapılı.** `tagName` ifadesinin yönü de dahil; `inputs.rehearsal && '' || github.ref_name` daha derli toplu görünür ve `''` yanlış-değerli olduğu için `||` ateşler, prova dal adıyla yayın yapar — girdinin önlemek için eklendiği hatanın ta kendisi. Değiştirip düştüğünü doğruladım. Kalan: **birinin çalıştırması** |
 | 31 | Air-gapped kurulum | 🟡 | **Paket yolu yazıldı.** Okuyan yarı `LocalSource`'tan beri vardı; **yazan** yarı yoktu — bir paketi üretmenin tek yolu paket deposunu klonlayıp düzeninin istemcinin okuduğu düzen olmasını ummaktı, ki bu bir kurulum yolu değil işe yarayan bir tahmin. `market::bundle` indeksi ve her paketi tek dizine yazıyor; çıktı **bir kaynak**: uzak uç `market_refresh` + `market_install`'ı ondan koşuyor ve bir checkout'tan ayırt edemiyor (test bunu iki ayrı çalışma alanıyla uçtan uca koşturuyor). `registry.json` **bayt bayt** kopyalanıyor — imza baytların üstünde (ADR 0015) ve `manifestSha256` onlardan zincirleniyor. Her manifest **burada**, ağı olan makinede doğrulanıyor; geri çekilmiş sürüm satırını koruyup dosyalarını bırakıyor (ADR 0014). Yüzey: `stackvo market-bundle <dizin>` — bir düğme değil, çünkü bunu yapan kişi ssh'tan koşan bir operatör. §9'un `stackvo-packages.tar`'ı bu dizinin **paketlenmesi**, ikinci bir mekanizma değil. **GUI karşılığı da var**: Ayarlar → Katalog panelinde bir klasör seçici; paket yazılınca boyutu MiB olarak, imzasızsa uyarıyı ve taşınmayan sürümleri yayıncının kendi sözleriyle gösteriyor — ikisi de koridoru yürümeden önce okunması gereken şeyler. Kalan: tar'ı üreten adım elle (`tar -cf … -C <dizin> .`) |
-| 33 | Sözleşme kapısının harici bağımlılığı | ✅ | **Kusur bir yapılandırma değil bir tasarım sorunuydu.** Suite A `<root>/projects/` altındaki `stackvo.json`'ları okuyor; ne CI'nın checkout'unda ne de bir geliştiricinin makinesinde öyle bir şey var — yani manifest yarısı **hiçbir makinede, bir kez bile** koşmamıştı. Doğrulayıcının kendi girdisi yoktu, dolayısıyla koşup koşmaması yanında ne bulunduğuna bağlıydı. `tools/fixtures/validator-workspace/` o girdi: dört proje, **üçü kasten bozuk** (geçersiz sürüm, matriste olmayan eklenti, Bash çıkarıcısının sessizce düşüreceği bir ad), ve `tests/validate-contracts.spec.js` ürettiği kodları **tam olarak** doğruluyor. **Koşturmak iki ölü kontrol buldu**, ikisi de doğrulayıcının içinde: `EMBEDDED` kazıyıcısı düz bir dizi bekleyen bir regex'ti ve #36'nın bölmesiyle o gün eşleşmeyi bırakmıştı — **boş küme** döndürüyor, 20 anahtar yeniden "`.env`'de yok" diye raporlanıyordu; onarıldığında da yalnız **anahtar adlarını** okuyordu, oysa `.env` yalnızca bir ayar *değiştiğinde* yazılıyor, yani dokunulmamış bir çalışma alanında her proje "listede olmayan" bir PHP koşuyor görünüyordu. Uyarılar 21 → 1 |
-| 34 | Web sürümü / HTTP ikilisi | ✅ | **Karar (ADR 0026), politika, taşıma ve arayüz.** Loopback, token, salt-okunur, artı keystore'a ulaşan sorguların reddi. **İkinci bir dispatcher yazılmadı**: `mcp.rs`'in araç tablosu zaten her aracı bir sözleşme komutuna bağlıyor, ve bir araç tele ancak **iki politika da izin verirse** çıkıyor — `!writes` ve `exposable(command)` — böylece keystore kuralı, keystore'dan hiç bahsetmeyen bir tabloya ulaşıyor (7 araç; `stackvo_doctor` dahil değil, çünkü `doctor` birkaç çağrı ötede keystore'a ulaşıyor). Soket ~40 satır `tokio::net`; `axum` tek metot, tek yol, tek başlık için fazla. **Varsayılan kapalı** ve Ayarlar'da bir panelden açılıyor: haberi olunmayan bir dinleyici, kapatılmayan dinleyicidir. Token **bir kez** dönüyor — `websurface_status` onu taşımıyor ve taşıyamaz, çünkü taşısaydı sonraki her çağırana verirdi ve bunların ilki yüzeyin kendisi. Soket testleri iki gerçek açık buldu: hiçbir şey göndermeyen istemci görevi süresiz tutuyordu (slowloris → 5 sn okuma süresi), ve `stop` gerçekten portu bırakıyor mu (bırakıyor, test bağlanmayı deneyerek doğruluyor). 24 + 9 + 8 test |
 | 35 | Windows ve Linux dallarının çalıştırılması | 🟢 | **İkisi de koşuyor artık, ve ikisi de koşarken derlenmediklerini gösterdi.** Linux: `certs.rs`'in `not(macos)` dalı var olmayan bir fonksiyonu çağırıyordu; `elevate_probe` ve `hosts_roundtrip` konteynerde geçiyor. **Windows dalı da artık tip kontrolünden geçiyor** — `cargo check --target x86_64-pc-windows-msvc` bu makinede `aws-lc-sys`'in `windows.h`'ında düşüyordu, `cargo-xwin` Microsoft'un SDK'sını indirip clang'i ona yönlendirerek tam o engeli kaldırıyor (`tools/linux/run.sh --windows`). İlk koşuda üç şey çıktı: `flate2`'nin sıkıştırma arka ucu hiç seçilmiyordu (`zip`'i `default-features = false` ile alıyoruz ve `deflate-flate2` arka uç seçmiyor; macOS/Linux'ta grafın başka bir yeri tesadüfen açıyordu), `Docker::connect_with_unix` **Windows'ta yok** ve koşulsuz çağrılıyordu (eksik olan Windows kolu olduğu için öteki iki platformda derleniyordu), ve iki `unused` uyarısı — CI clippy'yi `-D warnings` ile koşuyor. Kalan: testlerin Windows'ta **koşması** (tip kontrolü koşma değildir) |
 | 36 | `EMBEDDED`'ın servis yarısı | 🟡 | ADR 0016'dan sonra **yalnız göç için** duruyor. `config.rs` `SETTINGS` (36, kalan) ve `LEGACY_SERVICES` (150, gidecek) taşıyor — "yaklaşık yarısı" yanlıştı, **beşte dördü**. Okuyan dört modül `legacy_env_claims.rs` ile kilitli. **Tarih artık verildi: 0.4.0** (§5). Ve düzyazı değil bir kapı: uygulama 0.4.0'a çıktığı ve sabit hâlâ orada olduğu an build kırılıyor; tarihin 1.0.0'a ötelenmesi de kırıyor. Kalan: **o gün silmek** |
-| 37 | Testin gerçek keystore'a dokunması | ✅ | **Tam Rust koşusu askıda kalıyordu ve sebebi bir testti.** `env_writer`'ın `a_moved_key_is_taken_out_of_the_file_patch`'i `redirect_moved_keys` üzerinden **gerçek macOS Keychain'ine** yazıyor; macOS, soran ikili değiştiğinde izin soruyor — ki `cargo build` sonrası her seferinde değişiyor — ve cevaplayan olmayınca test süresiz bekliyor, bütün koşuyu da beraberinde götürüyor. Testin kendi yorumu "geliştirici makinesinde başarılı olur" diyordu; olmuyordu. Var olduğundan beri böyleydi ve görünmemesinin sebebi belirli: **asılan bir süit, yavaş bir süite benzer.** Çözüm bir env değişkeni **değil** — `hosts.rs`'in `STACKVO_HOSTS_PATH`'i ve `elevate.rs`'in `STACKVO_POWERSHELL`'i doğru şekilde, ama burada aynı desen *parolaları* yayınlanmış bir ikilide OS keystore'undan başka bir yere taşıyan bir değişken olurdu. `cfg(test)` kullanıldı: derleyici zorluyor, yayınlanan yapının ulaşabileceği ikinci bir arka uç yok ve bir unit test'in gerçek olana yolu yok. `cfg_regions.rs` üç işlemin **her birini ayrı ayrı** kontrol ediyor — ilk sürümü dosyayı bir dizgi torbası gibi okuyordu ve `write` kapısını kaybetmişken geçiyordu, çünkü `read` hâlâ taşıyordu |
 
 ---
 
@@ -87,21 +160,51 @@ altıncı ayda hafıza soluklaştığında çalışmayacak olan şey bu.
 
 Karar gerektirmeyenler arasından, etki ÷ efor ile.
 
-**Liste boş.** Yazılmamış kod da, bağlanmamış uç da kalmadı. Kalan her maddede
-kalan şey bir **koşu**, elle bir **adım**, bir **tarih** ya da bir **süreç**:
+Bu depodaki **yapılacak her iş** burada. §2 ürün tarafını, §3 mühendislik
+tarafını tarif ediyor; bu bölüm ikisini tek sıraya diziyor. Başka hiçbir
+dosyada bir yapılacaklar listesi yok — `docs/accessibility.md` bir uygunluk
+beyanı, `docs/servis-market-mimarisi.md` bir mimari kaydı, ve ikisinin de açık
+maddeleri §2'ye taşındı.
 
+**Kod yazılacak olanlar** — ikisi, ve ikisi de küçük değil:
+
+* **§2 B-1** — üç panelin (SPX, sorgu günlüğü, zaman çizelgesi) tek bir istek
+  etrafında birleşmesi ve N+1 tespiti. Yeni ölçüm gerekmiyor; ortak bir istek
+  anahtarı ve bir görünüm gerekiyor.
+* **§2 P** — market Faz 7: kullanıcının kendi paketi, workspace override,
+  üçüncü taraf kaynak politikası.
+
+**Bir makine ya da bir insan gerektirenler** — kod değil, erişim:
+
+* **§2 W / #35** — testlerin Windows'ta koşması. Tip kontrolü geçiyor
+  (`tools/linux/run.sh --windows`); koşmak bir Windows makinesi ya da imajın
+  kurulmasını gerektiriyor, ve `tools/linux/Dockerfile`'ın "testler burada
+  koşamaz" beyanı **doğrulanmadı**.
+* **§2 Y-1, Y-2** — ekran okuyucu ve yerel pencere denetimi. Y-2 W ile aynı
+  makineye bağlı: `tauri-driver` macOS'ta koşmuyor.
 * **#12** — driver süiti bu makinede konteynerde **5/5, 0 atlandı**. Kalanı
   CI'da ilk koşu.
 * **#22** — GitHub Actions burada tetiklenemiyor. Koşucusuz ayakta kalan iddia
   `release_rehearsal.rs`'te; kalanı birinin çalıştırması.
-* **#35** — Linux yarısı geçiyor. Kalanı **Windows dalı**, ki burada
-  derlenemiyor bile (`aws-lc-sys` Windows SDK'sı).
+
+**Elle bir adım, bir tarih ya da bir süreç:**
+
+* **#35** — Linux yarısı geçiyor, Windows dalı **tip kontrolünden geçiyor**
+  (`tools/linux/run.sh --windows`; `cargo-xwin` Microsoft'un SDK'sını indirip
+  `aws-lc-sys`'in `windows.h` engelini kaldırıyor). Kalanı testlerin Windows'ta
+  **koşması** — CI'nın `windows-latest` bacağı `cargo test` koşuyor, ve tip
+  kontrolü koşma değildir.
 * **#31** — tar'ın elle üretilmesi (`tar -cf … -C <dizin> .`).
 * **#2** — anahtarın secret olarak eklenmesi ve bir sürümün yayınlanması. Bu tek
   adım #22'nin provasını gerçek bir yayına, #21'i sahada sınanabilir bir şeye
   çeviriyor ve §2 C'nin son iki maddesinin önünü açıyor.
 * **#36** — 0.4.0'da silmek; kapı o gün build'i kırıyor.
 * **§2 C** — moderasyon süreci ve yayıncı kimliği kaydı; kod değil.
+* **§2 Y-3** — geçiş başına dil işareti. Küçük, ve bir insan denetimi
+  gerektirmiyor.
+* **§2 B-7** — tünelde temel kimlik doğrulama ve kalıcı adlandırılmış alan adı.
+* **§2 "Anlatılmayan güçler"** — dördü de bir sayfa ya da bir başlık; hiçbiri
+  mühendislik değil.
 
 Bu turların bulgusu hep aynı yerden geldi: **koşmayan bir şey doğru görünür** —
 ve bir varyantı: **asılan bir süit, yavaş bir süite benzer.**
@@ -1020,13 +1123,13 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 
 | | Sayı | Nasıl sayıldı |
 |---|---|---|
-| Toplam IPC komutu | **255** | `contracts/ipc.json` → `commands` (252 Rust + 3 `frontend-plugin`) |
-| Bunlardan `#[tauri::command]` olarak yazılmış | **251** | `commands.rs`, `#[cfg(test)]` dışı |
-| Frontend kaynak dosyası | **135** | `src/**/*.{js,vue}`, spec dosyaları hariç |
+| Toplam IPC komutu | **284** | `contracts/ipc.json` → `commands` (281 Rust + 3 `frontend-plugin`) |
+| Bunlardan `#[tauri::command]` olarak yazılmış | **280** | `commands.rs`, `#[cfg(test)]` dışı |
+| Frontend kaynak dosyası | **147** | `src/**/*.{js,vue}`, spec dosyaları hariç |
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
-| `ipc.js` sarmalayıcısı | **248** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **97 modül, 87.006 satır** | `src-tauri/src/*.rs` |
+| `ipc.js` sarmalayıcısı | **277** | `api` nesnesinin üye sayısı |
+| Rust kaynağı | **105 modül, 100.553 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 

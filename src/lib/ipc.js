@@ -321,13 +321,15 @@ export const api = {
   /** Streams straight to the file; resolves with an operationId, not the dump. */
   dbDump: (service, path) => call('db_dump', { service, path }),
   /** DESTRUCTIVE — replaces the target database. Confirm before calling. */
-  dbRestore: (service, path) => call('db_restore', { service, path }),
+  dbRestore: (service, path, snapshotFirst = true) =>
+    call('db_restore', { service, path, snapshotFirst }),
   /** Every named snapshot in the workspace, newest first. */
   dbSnapshots: () => call('db_snapshots'),
   /** Take one under a name. Returns an operation id; progress is on `db:*`. */
   dbSnapshotTake: (service, name) => call('db_snapshot_take', { service, name }),
   /** Put one back, replacing what is in the database. */
-  dbSnapshotRestore: (service, name) => call('db_snapshot_restore', { service, name }),
+  dbSnapshotRestore: (service, name, snapshotFirst = true) =>
+    call('db_snapshot_restore', { service, name, snapshotFirst }),
   dbSnapshotDelete: (service, name) => call('db_snapshot_delete', { service, name }),
   /**
    * The string a client is pasted into, or null for a service without one.
@@ -412,6 +414,54 @@ export const api = {
   xdebugStatus: (name) => call('xdebug_status', { name }),
   xdebugSet: (name, enabled) => call('xdebug_set', { name, enabled }),
 
+  /**
+   * php-spx: the sampling profiler.
+   *
+   * A different instrument from `profilerStatus` above rather than a second
+   * skin on it — that one reads Xdebug's cachegrind output, which costs several
+   * times the request; this samples, so it can be left on while you use the
+   * site. `built` is per PHP version, because the artefact is a function of the
+   * interpreter.
+   */
+  spxStatus: (name) => call('spx_status', { name }),
+  /** Refused rather than stored when there is no build; see spx_build. */
+  spxSet: (name, enabled) => call('spx_set', { name, enabled }),
+  /** Resolves with an operationId as soon as the build starts, not when it ends. */
+  spxBuild: (name) => call('spx_build', { name }),
+  spxDelete: (name, key) => call('spx_delete', { name, key }),
+  spxClear: (name) => call('spx_clear', { name }),
+  /**
+   * How much detail a recording carries.
+   *
+   * php-spx's own default period is 0 — every call — which is a tracing
+   * profiler with the cost this whole feature exists to avoid. Both arguments
+   * are optional and only what is passed is changed.
+   */
+  spxOptions: (name, samplingPeriod, builtins) =>
+    call('spx_options', { name, samplingPeriod, builtins }),
+  /**
+   * Profile one request, without a browser.
+   *
+   * The host is the project's own domain on the Rust side; only the path
+   * crosses, and a path naming another host is refused there.
+   */
+  spxRecordRequest: (name, path) => call('spx_record_request', { name, path }),
+  /** Profile one quick command. Resolves with an operation id, like a build. */
+  spxRecordCommand: (name, id) => call('spx_record_command', { name, id }),
+  /** Where one recording spent its time. */
+  spxReport: (name, key) => call('spx_report', { name, key }),
+  /**
+   * The three values an IDE needs, plus who is listening on the debug port.
+   *
+   * The listener is the half that is in no file: an IDE that is not listening
+   * is the other reason a breakpoint never hits, and nothing in an IDE says so.
+   */
+  ideDebugStatus: (project) => call('ide_debug_status', { project }),
+  /** Write the debug configuration into one IDE's file in the project. */
+  ideDebugApply: (project, target) => call('ide_debug_apply', { project, target }),
+  /** Take it back out; every other configuration in the file stays. */
+  ideDebugRemove: (project, target) => call('ide_debug_remove', { project, target }),
+
   // The project's PHP overrides. `.stackvo/php.ini` was documented for years
   // and mounted by nothing; the mount is a compose overlay this app layers.
   phpIniStatus: (name) => call('php_ini_status', { name }),
@@ -459,7 +509,14 @@ export const api = {
   // extension contract; xdebug.mode=profile needs neither.
   profilerStatus: (name) => call('profiler_status', { name }),
   /** 'debug' or 'profile' — never both: the two want opposite start triggers. */
-  profilerSetMode: (name, mode) => call('profiler_set_mode', { name, mode }),
+  /**
+   * Switch the Xdebug mode, and optionally Xdebug's `develop` alongside it.
+   *
+   * `develop` omitted means "leave it as it was": the picker and the switch are
+   * two controls over one file, and a picker that cleared the other every time
+   * would be a setting nobody could keep.
+   */
+  profilerSetMode: (name, mode, develop) => call('profiler_set_mode', { name, mode, develop }),
   profilerRead: (name, id) => call('profiler_read', { name, id }),
   profilerDelete: (name, id) => call('profiler_delete', { name, id }),
   profilerClear: (name) => call('profiler_clear', { name }),
@@ -654,6 +711,29 @@ export const api = {
    *  over what is on disk. */
   projectAdopt: (name, spec = null, overrides = null) =>
     call('project_adopt', { name, spec, overrides }),
+  /** Every folder in one pass: one generate, one hosts write, one outcome each. */
+  projectAdoptMany: (names) => call('project_adopt_many', { names }),
+  /** What a devcontainer export would write, before any of it is written. */
+  projectDevcontainerPlan: (name) => call('project_devcontainer_plan', { name }),
+  /** Write it into `<project>/.devcontainer/`. */
+  projectDevcontainerWrite: (name) => call('project_devcontainer_write', { name }),
+  /**
+   * A-1. Where this project's data really lives, and what fetching it would do.
+   *
+   * Both directions of every recipe, planned before anything is spawned — the
+   * reader is about to hand somebody else's command their production
+   * credentials. Secrets appear by name and never as values.
+   */
+  projectProviders: (name) => call('project_providers', { name }),
+  /** Per direction: agreeing to fetch is not agreeing to send. */
+  providerConsent: (name, provider, direction, granted) =>
+    call('provider_consent', { name, provider, direction, granted }),
+  /** Into the OS keystore, scoped per project and per provider. */
+  providerSecretSet: (name, provider, key, value) =>
+    call('provider_secret_set', { name, provider, key, value }),
+  /** The verb. A pull lands in `db_restore`, which takes its own copy first. */
+  providerRun: (name, provider, direction, service, snapshotFirst = true) =>
+    call('provider_run', { name, provider, direction, service, snapshotFirst }),
   projectManifestRead: (name) => call('project_manifest_read', { name }),
   projectManifestWrite: (name, manifest) => call('project_manifest_write', { name, manifest }),
 
@@ -667,6 +747,7 @@ export const api = {
   // ones that touch this machine. The digest goes back with the approval on
   // purpose — it is a receipt for the list that was on screen.
   projectHooksPlan: (name) => call('project_hooks_plan', { name }),
+  projectSidecars: (name) => call('project_sidecars', { name }),
   projectHooksApprove: (name, digest) => call('project_hooks_approve', { name, digest }),
   projectHooksRevoke: (name) => call('project_hooks_revoke', { name }),
   /**
@@ -724,6 +805,34 @@ export const api = {
   agentsInstall: (client, allowWrites) => call('agents_install', { client, allowWrites }),
   /** Take the entry back out of that assistant's configuration. */
   agentsRemove: (client) => call('agents_remove', { client }),
+  /**
+   * Which AI rules files exist, and which already carry StackVo's block.
+   *
+   * `project` is optional: omitted, the workspace scope means the workspace
+   * root; named, it means that project's directory — which is where a rules
+   * file actually reaches the assistant somebody has open.
+   */
+  rulesStatus: (project) => call('rules_status', { project }),
+  /** Write the rules into one file, keeping everything already in it. */
+  rulesApply: (target, scope, project) => call('rules_apply', { target, scope, project }),
+  /** Take StackVo's block back out; the rest of the file stays. */
+  rulesRemove: (target, scope, project) => call('rules_remove', { target, scope, project }),
+  /**
+   * Where `stackvo` is installed from, which shells can find it, and which
+   * host tools this machine has.
+   *
+   * Answers with no workspace selected — putting a command on PATH is done
+   * before a folder is chosen.
+   */
+  toolingStatus: () => call('tooling_status'),
+  /** Link both commands and write the PATH entry into one shell's file. */
+  toolingPathApply: (shell) => call('tooling_path_apply', { shell }),
+  /** Take that line back out. The links stay. */
+  toolingPathRemove: (shell) => call('tooling_path_remove', { shell }),
+  /** Fetch one host tool and check it against the digest this build pins. */
+  toolingInstall: (tool) => call('tooling_install', { tool }),
+  /** Remove the copy this app installed; a system copy is left alone. */
+  toolingRemove: (tool) => call('tooling_remove', { tool }),
   /** The desktop's own accent colour, so the app can match it. */
   systemAccent: () => call('system_accent'),
   logsInfo: () => call('logs_info'),

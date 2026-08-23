@@ -21,11 +21,24 @@ globalThis.visualViewport = undefined;
 
 const setLocale = vi.fn();
 
+/** What the backend answers, per test. */
+const replies = {};
+
 vi.mock('@/lib/ipc', () => ({
   StackvoError: class extends Error {},
   call: vi.fn(),
   asList: (value) => (Array.isArray(value) ? value : []),
-  api: new Proxy({}, { get: () => () => Promise.resolve(null) }),
+  api: new Proxy(
+    {},
+    {
+      get:
+        (_t, name) =>
+        (...args) => {
+          const reply = replies[name];
+          return Promise.resolve(typeof reply === 'function' ? reply(...args) : (reply ?? null));
+        },
+    }
+  ),
 }));
 
 vi.mock('@/i18n', async (importOriginal) => ({
@@ -57,6 +70,7 @@ async function render() {
 
 beforeEach(() => {
   setLocale.mockClear();
+  for (const key of Object.keys(replies)) delete replies[key];
   setActivePinia(createPinia());
 });
 
@@ -92,6 +106,132 @@ describe('the localisation pane', () => {
    * output is read by whoever debugs it, which is not always the language the
    * window is in. It belongs to appearance state.
    */
+  /**
+   * A pack that was just created is 0% translated, and has to say so.
+   *
+   * `startPack` seeds the file with **every English string** — which is what a
+   * translation file is, and is the right thing to hand a translator. But the
+   * progress figure counted the strings the file *holds*, so an untouched pack
+   * reported `2000 of 2000 (100%)` the moment it was made: a progress bar that
+   * is full before the work starts, on a language that is entirely English.
+   *
+   * `locale.rs` states the rule this broke, in its own doc comment — "a missing
+   * string that falls back to English is honest; a fabricated one is a sentence
+   * somebody has to find and disbelieve". Two thousand of them, with a number
+   * saying the job was done.
+   */
+  it('reports a freshly seeded pack as untranslated, not as complete', async () => {
+    const english = i18n.global.getLocaleMessage('en');
+    replies.localePacks = [
+      { tag: 'de', label: 'Deutsch', path: '/tmp/de.json', strings: 2000, broken: null },
+    ];
+    // What `startPack` writes: the English catalogue, relabelled.
+    i18n.global.setLocaleMessage('de', { ...english, language: { label: 'Deutsch' } });
+
+    const { wrapper } = await render();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    const row = wrapper.find('[data-test="locale-pack"]');
+    expect(row.exists()).toBe(true);
+    expect(row.text()).toContain('0%');
+    expect(row.text()).not.toContain('100%');
+  });
+
+  it('counts a string as translated when it stops being the English one', async () => {
+    const english = i18n.global.getLocaleMessage('en');
+    replies.localePacks = [
+      { tag: 'de', label: 'Deutsch', path: '/tmp/de.json', strings: 2000, broken: null },
+    ];
+    i18n.global.setLocaleMessage('de', {
+      ...english,
+      language: { label: 'Deutsch' },
+      app: { ...english.app, close: 'Schließen' },
+    });
+
+    const { wrapper } = await render();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    // One string, out of the whole catalogue: the percentage rounds to zero
+    // and the count does not.
+    expect(wrapper.find('[data-test="locale-pack"]').text()).toContain('1 of ');
+    expect(wrapper.find('[data-test="locale-pack"]').text()).toContain('(0%)');
+  });
+
+  /**
+   * A language that reads the other way can say so, and the switch stops
+   * deciding for it.
+   *
+   * Direction was one appearance flag applied to every locale at once. That is
+   * right for the two languages shipped here — both left to right — and wrong
+   * the moment a pack is Arabic or Farsi, which is not hypothetical: two of the
+   * five languages the nearest competitor ships are right-to-left. Before this,
+   * an Arabic pack rendered left to right until its reader found a switch in
+   * Settings, and that switch then mirrored English as well.
+   *
+   * Fact beats preference, and only here. Arabic reads right to left whether or
+   * not anybody chose it; the switch still decides for every locale that has
+   * not stated a fact.
+   */
+  it('lets a pack declare that it reads right to left', async () => {
+    replies.localePacks = [
+      {
+        tag: 'ar',
+        label: 'العربية',
+        path: '/tmp/ar.json',
+        strings: 10,
+        broken: null,
+        direction: 'rtl',
+      },
+    ];
+
+    const { wrapper } = await render();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="locale-pack"]').text()).toContain(
+      i18n.global.t('settings.packRtl')
+    );
+  });
+
+  /**
+   * The file the button just made, named.
+   *
+   * "Adding a language is a JSON file somebody drops in the config directory"
+   * is only a mechanism a person can use if they can find the file — and the
+   * path was in the data the pane already had and on screen nowhere.
+   */
+  it('says where a pack lives', async () => {
+    replies.localePacks = [
+      { tag: 'de', label: 'Deutsch', path: '/home/a/.config/stackvo/locales/de.json', strings: 5 },
+    ];
+
+    const { wrapper } = await render();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="locale-pack"]').text()).toContain(
+      '/home/a/.config/stackvo/locales/de.json'
+    );
+  });
+
+  /**
+   * A file that did not parse is listed with its error rather than quietly
+   * missing from the picker — the worst failure this feature could have.
+   */
+  it('says why a broken pack is not in the picker', async () => {
+    replies.localePacks = [
+      { tag: 'de', label: 'de', path: '/tmp/de.json', strings: 0, broken: 'trailing comma at 12' },
+    ];
+
+    const { wrapper } = await render();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('[data-test="locale-pack"]').text()).toContain('trailing comma at 12');
+  });
+
   it('writes the console locale and the RTL flag to the appearance store', async () => {
     const { wrapper, store } = await render();
     const set = vi.spyOn(store, 'set');

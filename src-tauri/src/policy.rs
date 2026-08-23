@@ -94,6 +94,8 @@ pub struct Policy {
     market: Market,
     /// What an administrator says about a project's lifecycle hooks.
     hooks: Hooks,
+    /// What an administrator says about fetching and sending a project's data.
+    providers: Providers,
     /// Where this came from, for an error message that can be acted on. `None`
     /// when no policy file was found, which is the ordinary case.
     source: Option<PathBuf>,
@@ -302,6 +304,42 @@ impl Hooks {
     }
 }
 
+/// The `providers` block: whether a project may fetch or send its own data.
+///
+/// A-1. Same shape and same asymmetry as [`Hooks`], and for a sharper reason:
+/// a provider command reaches the network **with the developer's credentials**,
+/// and a push writes to somewhere that is not this machine. Both keys default
+/// to on, so an unmanaged machine behaves as though no policy existed.
+///
+/// Neither can turn a check off. `allowPush` false stops sends fleet-wide;
+/// `allowPush` true is the default, so there is no value of it that grants
+/// something the machine did not already grant — and in particular **neither
+/// replaces consent**. An administrator can forbid pushes across three hundred
+/// laptops and cannot approve one on a person's behalf, because approval is
+/// what somebody does after reading a command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Providers {
+    /// Whether providers run at all.
+    pub enabled: bool,
+    /// Whether the direction that writes somewhere else is offered.
+    pub allow_push: bool,
+}
+
+impl Default for Providers {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            allow_push: true,
+        }
+    }
+}
+
+impl Providers {
+    fn is_set(&self) -> bool {
+        *self != Self::default()
+    }
+}
+
 impl Policy {
     /// No administrator has said anything. The ordinary case.
     pub fn none() -> Self {
@@ -314,6 +352,10 @@ impl Policy {
 
     pub fn hooks(&self) -> &Hooks {
         &self.hooks
+    }
+
+    pub fn providers(&self) -> &Providers {
+        &self.providers
     }
 
     /// Is there anything here at all?
@@ -474,6 +516,7 @@ impl Policy {
 
         let market = parse_market(object.get("market"), &mut complaints);
         let hooks = parse_hooks(object.get("hooks"), &mut complaints);
+        let providers = parse_providers(object.get("providers"), &mut complaints);
 
         Self {
             settings,
@@ -481,6 +524,7 @@ impl Policy {
             registry_prefix,
             market,
             hooks,
+            providers,
             source,
             error: (!complaints.is_empty()).then(|| complaints.join("; ")),
         }
@@ -494,6 +538,11 @@ impl Policy {
     /// Does the policy say anything about hooks at all?
     pub fn constrains_hooks(&self) -> bool {
         self.hooks.is_set()
+    }
+
+    /// Does the policy say anything about providers at all?
+    pub fn constrains_providers(&self) -> bool {
+        self.providers.is_set()
     }
 }
 
@@ -610,6 +659,36 @@ fn parse_hooks(given: Option<&serde_json::Value>, complaints: &mut Vec<String>) 
     }
 
     hooks
+}
+
+/// The `providers` block, field by field. Same shape as [`parse_hooks`].
+fn parse_providers(given: Option<&serde_json::Value>, complaints: &mut Vec<String>) -> Providers {
+    let mut providers = Providers::default();
+    let Some(value) = given else {
+        return providers;
+    };
+    let Some(object) = value.as_object() else {
+        complaints.push("providers is not an object and was ignored".to_string());
+        return providers;
+    };
+
+    for (key, value) in object {
+        match key.as_str() {
+            "enabled" => match value.as_bool() {
+                Some(on) => providers.enabled = on,
+                None => complaints
+                    .push("providers.enabled is not a boolean and was ignored".to_string()),
+            },
+            "allowPush" => match value.as_bool() {
+                Some(on) => providers.allow_push = on,
+                None => complaints
+                    .push("providers.allowPush is not a boolean and was ignored".to_string()),
+            },
+            other => complaints.push(format!("providers.{other} is not a key this build knows")),
+        }
+    }
+
+    providers
 }
 
 /// The file this build will look at, override included.

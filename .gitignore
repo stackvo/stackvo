@@ -164,3 +164,7 @@ rust-coverage.txt
 /test-results/
 /playwright-report/
 /blob-report/
+
+# The sidecar copies tools/sidecars.mjs writes for tauri.conf.json's
+# externalBin. Build products, named after a target triple.
+src-tauri/binaries/
