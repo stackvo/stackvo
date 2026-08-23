@@ -1133,6 +1133,41 @@
       "returns": "PackageReport",
       "why": "Recomputes the hashes after an edit and THEN validates — parse, manifest check, compose policy — refusing the whole operation if any fail. Writing the hashes of a fragment the policy rejects would be a tool for producing packages that install and cannot run."
     },
+    "package_files": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "service": "string",
+        "version": "string"
+      },
+      "returns": "Array<{ path: string, kind: 'compose'|'config'|'companion', companion: string|null, overridden: boolean, at: string }>",
+      "why": "The files of one installed version a workspace may take over, and which of them it already has (decision 0031).",
+      "notes": "The list comes from the MANIFEST, not from the directory: the compose fragment, the config templates and each companion's fragment. The manifest itself is never in it — it declares the image, the ports and the volumes, so a workspace that could override it could run one thing while the catalogue reported another. `at` is where an override would live whether or not one is there, so a caller can open the file in the user's editor without a second round trip."
+    },
+    "package_override": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "service": "string",
+        "version": "string",
+        "path": "string"
+      },
+      "returns": "string",
+      "why": "Copy one published file into the workspace so it can be edited, and return where it landed.",
+      "notes": "Writes under <root>/overrides/<service>/<version>/, NOT into the package: nothing under market/packages/ changes, so the manifest's hashes still hold and a reinstall is exactly as safe. Re-sealing the fetched package would have been the other answer and is worse — the next market_install undoes it with no record it existed. Refuses a path the manifest does not ship, refuses one already overridden (that file is somebody's edit), and refuses outright when policy.market.allowOverrides is false. The bytes copied come through the catalogue, so they are bytes pkg::verify has just agreed match the manifest."
+    },
+    "package_override_revert": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "service": "string",
+        "version": "string",
+        "path": "string"
+      },
+      "returns": "void",
+      "why": "Drop the workspace's copy; the published file takes over on the next render.",
+      "notes": "Deletes rather than restoring the published bytes into the override — a pristine copy on disk is what makes 'overridden' mean 'was installed', which is the state skeleton.rs documents at length as the one to stop producing. Reverting something never overridden succeeds: the caller asked for a state, not an operation. Not gated on policy, because it can only move a workspace towards what the publisher shipped. Destructive and not undoable — the front end confirms first."
+    },
     "market_catalog": {
       "new": true,
       "kind": "query",
@@ -1160,7 +1195,7 @@
       },
       "returns": "Bundled",
       "why": "Write everything an air-gapped machine needs into one directory, on a machine that still has a network. ADR 0011 makes market.offlineBundle the only way a catalogue reaches a machine with no network, and until now nothing could produce one — the consuming half shipped without the producing half (§3 #31).",
-      "notes": "The output is a source: `LocalSource` reads it and the far end cannot tell it from a checkout, so `market_refresh` against it and then `market_install` complete the round trip. registry.json is copied byte for byte rather than re-serialised, because the signature is over the bytes (ADR 0015) and manifestSha256 chains from them. Every manifest is verified against the index while bundling — the same check `market_install` makes, moved to the machine with a person at it rather than the one with no network. A withdrawn version keeps its index row and loses its files: ADR 0014 keeps the row so the far end can learn what happened, and market_install refuses to install one before fetching anything. A destination that is not empty is refused; a failed bundle is removed rather than left looking whole. The tar named in servis-market-mimarisi.md §9 is a packaging of this directory, not a second mechanism."
+      "notes": "The output is a source: `LocalSource` reads it and the far end cannot tell it from a checkout, so `market_refresh` against it and then `market_install` complete the round trip. registry.json is copied byte for byte rather than re-serialised, because the signature is over the bytes (ADR 0015) and manifestSha256 chains from them. Every manifest is verified against the index while bundling — the same check `market_install` makes, moved to the machine with a person at it rather than the one with no network. A withdrawn version keeps its index row and loses its files: ADR 0014 keeps the row so the far end can learn what happened, and market_install refuses to install one before fetching anything. A destination that is not empty is refused; a failed bundle is removed rather than left looking whole. A tar of this directory is a packaging of it, not a second mechanism."
     },
     "market_probe": {
       "new": true,
@@ -1188,7 +1223,7 @@
       "args": {},
       "returns": "MarketStatus",
       "why": "A machine that has never fetched a catalogue has none at all — ADR 0011 embeds nothing — so 'not fetched yet' and 'the catalogue is empty' are different sentences and the market page shows a different thing for each.",
-      "notes": "`signed` is always false today and is reported rather than assumed: market::Trust::Signed refuses instead of downgrading, because no registry key is pinned until ADR 0015's ceremony happens."
+      "notes": "`signed` reports whether the CACHED INDEX was signature-verified when it arrived, read back from market/source.json — not whether this build can verify. Those are different sentences and only the first belongs on a screen: a machine that pins the official key still holds an unverified catalogue whenever the last refresh came from a directory somebody picked, which is every offline install. It was a hard-coded false for as long as no key was pinned, which made it true by accident. `verifiedBy` names the key, so \"verified by the official key\" and \"verified by my organisation's mirror key\" are distinguishable."
     },
     "market_uninstall": {
       "new": true,
@@ -1310,7 +1345,7 @@
       "args": {},
       "returns": "{ active: boolean, source: string|null, managed: string[], locked: string[], registryPrefix: string|null, market: PolicyMarket, error: string|null }",
       "why": "A fleet of machines has settings somebody other than the person at the keyboard cares about — the domain suffix, the web server, and on a network without Docker Hub the registry every image is pulled from. Without this the Settings panes can only grey a field out, and a greyed-out field with no reason reads as a broken app rather than a managed one.",
-      "notes": "Reads one JSON file: /Library/Managed Preferences/com.stackvo.desktop.json on macOS, %ProgramData%\\StackVo\\policy.json on Windows, /etc/stackvo/policy.json on Linux; STACKVO_POLICY_FILE overrides all three. Read once per process, like every managed-preferences reader — a restart is how a change is picked up. This is NOT a security boundary and must not be presented as one: the override variable and, usually, the file itself are within the user's reach. `managed` and `locked` carry keys only, never values — env_get redacts secrets and this must not be a way around that. `error` is a parse or rule failure and is returned rather than swallowed, because a policy that quietly does nothing is one the administrator believes is in force; a broken file yields an empty policy and never a refusal to start. See src-tauri/src/policy.rs and docs/durum.md §6, decision 0009. The `market` block reports where packages may come from (docs/servis-market-mimarisi.md §9). It is reported in full rather than as one flag because its whole purpose is to let somebody who has just been refused an install read WHICH rule refused it. `additionalKeys` is a count, not the keys."
+      "notes": "Reads one JSON file: /Library/Managed Preferences/com.stackvo.desktop.json on macOS, %ProgramData%\\StackVo\\policy.json on Windows, /etc/stackvo/policy.json on Linux; STACKVO_POLICY_FILE overrides all three. Read once per process, like every managed-preferences reader — a restart is how a change is picked up. This is NOT a security boundary and must not be presented as one: the override variable and, usually, the file itself are within the user's reach. `managed` and `locked` carry keys only, never values — env_get redacts secrets and this must not be a way around that. `error` is a parse or rule failure and is returned rather than swallowed, because a policy that quietly does nothing is one the administrator believes is in force; a broken file yields an empty policy and never a refusal to start. See src-tauri/src/policy.rs and docs/durum.md §6, decision 0009. The `market` block reports where packages may come from. It is reported in full rather than as one flag because its whole purpose is to let somebody who has just been refused an install read WHICH rule refused it. `additionalKeys` is a count, not the keys."
     },
     "preflight": {
       "new": true,
@@ -3931,8 +3966,9 @@
       "sourceLocation": "string | null",
       "packages": "number",
       "installed": "number — version directories on this machine",
-      "signed": "boolean — whether signatures are being checked; false until a key is pinned",
-      "signatureRequired": "boolean — whether policy.market.requireSignature is set. Reported apart from `signed` because the pair is the story: required and not happening is a refusal, and it is the state a managed machine is in until ADR 0015's key exists.",
+      "signed": "boolean — whether the CACHED INDEX was signature-verified when it arrived. Not whether this build can verify: a machine that pins the official key still holds an unverified catalogue whenever the last refresh came from a directory somebody picked.",
+      "signatureRequired": "boolean — whether policy.market.requireSignature is set. Reported apart from `signed` because the pair is the story: required and not happening is a refusal a user needs explained.",
+      "verifiedBy": "string | null — the key id that verified the cached index. Null whenever `signed` is false. Present so the two states a user can be in — verified by the official key, verified by their organisation's mirror key — are distinguishable, which a bare boolean cannot do.",
       "offlineBundle": "string | null — the bundle policy.market.offlineBundle points at, which wins over the path the user chose. ADR 0011 makes this the only way an air-gapped machine ever gets a catalogue.",
       "constrained": "boolean — whether a policy says anything about the market at all, so the page can explain a refusal before it happens"
     },
@@ -3943,7 +3979,8 @@
       "eolDate": "string | null",
       "sizeBytes": "number | null",
       "installed": "boolean",
-      "inUse": "boolean — an instance names it"
+      "inUse": "boolean — an instance names it",
+      "overridden": "number — how many of this version's files this workspace has taken over (P). On the row rather than behind a click: it is the answer to 'why does this behave unlike the documentation', and somebody asking that will not open a sheet they have no reason to suspect."
     },
     "MemoryStats": {
       "total": "number",
@@ -4041,11 +4078,13 @@
     },
     "PolicyMarket": {
       "constrained": "boolean — whether the policy says anything about the market at all",
-      "registryUrl": "string | null — a mirror the organisation runs; read by the network source (Faz 5)",
+      "registryUrl": "string | null — a mirror the organisation runs; read by the HTTPS source",
       "offlineBundle": "string | null — a directory to install from with no network. ADR 0011 makes this the only way an air-gapped machine gets a catalogue, so it is a first-class install path rather than an enterprise extra",
       "requireSignature": "boolean — the one key in the block that is a lock rather than a note: it can only turn verification ON, and there is no value of it that turns a check off (ADR 0009). Raises market::Trust to Signed, which refuses today because no key is pinned",
       "allowedPackages": "string[] — services that may be installed. EMPTY MEANS NO OPINION, not 'none'",
       "allowedRegistries": "string[] — registries an image may come from; a reference with no host counts as docker.io. Empty means no opinion",
+      "allowedSources": "string[] — catalogue sources this machine may fetch an index from. An https entry matches on its HOST; a local path matches as a directory prefix on a boundary. Empty means no opinion",
+      "allowOverrides": "boolean | null — whether a workspace may put its own copy of a package file in front of the published one (P). null is no opinion, which means allowed. Reported here because it is a rule that refuses an action, and this pane is where somebody who was just refused finds out which rule did it",
       "autoUpdate": "boolean | null",
       "additionalKeys": "number — how many extra signing keys were supplied, not which"
     },

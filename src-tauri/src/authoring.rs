@@ -36,12 +36,13 @@
 //!
 //! ## This authors a package; it does not publish one
 //!
-//! There is no signing here and no upload. `docs/servis-market-mimarisi.md`
-//! §4.6 is explicit that third-party *distribution* needs a moderation process,
-//! a publisher identity and a takedown mechanism, and that opening that gate is
-//! a separate decision. Authoring a package for your own machine, or for a
-//! mirror your organisation already runs, needs none of them — and the
-//! organisation's half of the gate is `policy.market.allowedSources`.
+//! There is no signing here and no upload. Third-party *distribution* needs a
+//! moderation process, a publisher identity and a takedown mechanism, and
+//! opening that gate is a separate decision — `docs/durum.md` §2 C tracks the
+//! three of them, all of which are process rather than code. Authoring a package
+//! for your own machine, or for a mirror your organisation already runs, needs
+//! none of them, and the organisation's half of the gate is
+//! `policy.market.allowedSources`.
 
 use crate::error::{Code, Error, Result};
 use serde::Serialize;
@@ -392,8 +393,8 @@ fn identity_json(service: &str, category: &str, version: &str) -> String {
 /// somebody has to finish before it does anything.
 ///
 /// **One service body, at column zero, with no `services:` header.** The
-/// renderer indents it into place, and a fragment that carried its own header
-/// would be indented twice. `docs/servis-market-mimarisi.md` §3.3.
+/// renderer indents it into place ([`crate::render`]), and a fragment that
+/// carried its own header would be indented twice.
 fn compose_yml(service: &str) -> String {
     format!(
         r#"# The compose fragment for {service}. One service body — the renderer

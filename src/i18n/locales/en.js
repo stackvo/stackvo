@@ -560,6 +560,34 @@ export default {
     bundleNext:
       'On the other machine, choose this folder as the catalogue address — or set market.offlineBundle to it.',
   },
+  /**
+   * A workspace taking over one file of a package it did not write (P).
+   *
+   * `explain` leads with where the copy goes, because that is the fact that
+   * decides whether somebody trusts the feature: the package is not modified,
+   * so a reinstall does not quietly undo the edit and does not break the
+   * hashes StackVo checks on every read.
+   */
+  overrides: {
+    title: 'Files — {service} {version}',
+    explain:
+      'A package states the hash of every file it ships and StackVo checks them on every read, so editing one in place leaves a package that will not load. Take one over instead: the copy lives in your workspace, beside the package rather than inside it, so the package stays intact and your edit survives a reinstall. The manifest itself is never overridable — it declares the image, the ports and the volumes.',
+    inEffect: '{count} file(s) in this workspace are what render, not the published ones.',
+    kind: {
+      compose: 'Compose fragment',
+      config: 'Config template',
+      companion: 'Companion fragment',
+    },
+    take: 'Take over',
+    revert: 'Revert',
+    confirmRevert: 'Delete my copy',
+    none: 'This version ships no file that can be overridden.',
+    landed: 'Your copy is here — edit it in whatever you already use:',
+    thenRegenerate: 'Regenerate afterwards; nothing changes on disk until a render runs.',
+    overriddenCount: '{n} file(s) overridden here',
+    files: 'Files',
+  },
+
   marketView: {
     createTitle: 'New instance: {id}',
     createBody:
@@ -572,6 +600,7 @@ export default {
     sourceTitle: 'Where the catalogue comes from',
     sourceCounts: '{packages} package(s) published, {installed} version(s) installed',
     unsigned: 'not signature-checked',
+    verifiedBy: 'signature verified by {key}',
     sourceInSettings: 'Settings → Catalogue keeps this address and can test it without fetching.',
     noCatalogue: 'No catalogue yet',
     noCatalogueBody:
@@ -2757,7 +2786,7 @@ export default {
       'Install a client that opens this kind of address, or copy the connection string and paste it in yourself.',
     waitForOperation: 'Wait for it to finish, or watch the operation console for progress.',
     noRegistryKey:
-      'This build pins no registry key. An organisation running its own mirror can pin one with the market.registryKey policy.',
+      'This build pins no registry key, so it cannot check a signature. An organisation running its own mirror can pin one with policy.market.additionalKeys.',
     signedByUnknownKey:
       'The index may be from somewhere else, or the publisher may have rotated keys without this machine learning the new one.',
     packageVersionRevoked:
@@ -2781,6 +2810,12 @@ export default {
     packageRefusedByPolicy:
       'This package asks for something StackVo does not let a package have. Report it to whoever published it.',
     packageNotInRegistry: 'Refresh the catalogue, or pick a version it lists.',
+    onlyPackageTemplates:
+      'Only the compose fragment and the config templates a package ships can be overridden — never its manifest, which is what declares the image and the ports.',
+    revertOverrideFirst:
+      'This workspace already has its own copy of that file. Revert it first if you want the published one back.',
+    overridesRefusedByPolicy:
+      "An administrator's policy says the published package files are the ones that run on this machine.",
     bundleNeedsAnEmptyDirectory:
       'Choose a directory that does not exist yet, or an empty one — a bundle written over other files is one nobody can account for.',
     registryWentBackwards:

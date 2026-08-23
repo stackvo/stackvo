@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 138 named types, 277 wrappers, 3 field(s) the
+ * Measured at generation: 138 named types, 280 wrappers, 3 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -1117,12 +1117,18 @@ export interface MarketStatus {
     packages: number;
     /** number — version directories on this machine */
     installed: number;
-    /** boolean — whether signatures are being checked; false until a key is pinned */
+    /**
+     * boolean — whether the CACHED INDEX was signature-verified when it arrived. Not whether this build can verify: a machine that pins the official key still holds an unverified catalogue whenever the last refresh came from a directory somebody picked.
+     */
     signed: boolean;
     /**
-     * boolean — whether policy.market.requireSignature is set. Reported apart from `signed` because the pair is the story: required and not happening is a refusal, and it is the state a managed machine is in until ADR 0015's key exists.
+     * boolean — whether policy.market.requireSignature is set. Reported apart from `signed` because the pair is the story: required and not happening is a refusal a user needs explained.
      */
     signatureRequired: boolean;
+    /**
+     * string | null — the key id that verified the cached index. Null whenever `signed` is false. Present so the two states a user can be in — verified by the official key, verified by their organisation's mirror key — are distinguishable, which a bare boolean cannot do.
+     */
+    verifiedBy: string | null;
     /**
      * string | null — the bundle policy.market.offlineBundle points at, which wins over the path the user chose. ADR 0011 makes this the only way an air-gapped machine ever gets a catalogue.
      */
@@ -1148,6 +1154,10 @@ export interface MarketVersion {
     installed: boolean;
     /** boolean — an instance names it */
     inUse: boolean;
+    /**
+     * number — how many of this version's files this workspace has taken over (P). On the row rather than behind a click: it is the answer to 'why does this behave unlike the documentation', and somebody asking that will not open a sheet they have no reason to suspect.
+     */
+    overridden: number;
 }
 
 export interface MemoryStats {
@@ -1304,7 +1314,7 @@ export interface PhpIniStatus {
 export interface PolicyMarket {
     /** boolean — whether the policy says anything about the market at all */
     constrained: boolean;
-    /** string | null — a mirror the organisation runs; read by the network source (Faz 5) */
+    /** string | null — a mirror the organisation runs; read by the HTTPS source */
     registryUrl: string | null;
     /**
      * string | null — a directory to install from with no network. ADR 0011 makes this the only way an air-gapped machine gets a catalogue, so it is a first-class install path rather than an enterprise extra
@@ -1320,6 +1330,14 @@ export interface PolicyMarket {
      * string[] — registries an image may come from; a reference with no host counts as docker.io. Empty means no opinion
      */
     allowedRegistries: string[];
+    /**
+     * string[] — catalogue sources this machine may fetch an index from. An https entry matches on its HOST; a local path matches as a directory prefix on a boundary. Empty means no opinion
+     */
+    allowedSources: string[];
+    /**
+     * boolean | null — whether a workspace may put its own copy of a package file in front of the published one (P). null is no opinion, which means allowed. Reported here because it is a rule that refuses an action, and this pane is where somebody who was just refused finds out which rule did it
+     */
+    allowOverrides: boolean | null;
     /** boolean | null */
     autoUpdate: boolean | null;
     /** number — how many extra signing keys were supplied, not which */
@@ -2185,6 +2203,16 @@ export interface StackvoApi {
    * Recomputes the hashes after an edit and THEN validates — parse, manifest check, compose policy — refusing the whole operation if any fail. Writing the hashes of a fragment the policy rejects would be a tool for producing packages that install and cannot run.
    */
   packageSeal(category: string, service: string, version: string): Promise<PackageReport>;
+  /**
+   * The files of one installed version a workspace may take over, and which of them it already has (decision 0031).
+   */
+  packageFiles(service: string, version: string): Promise<Record<string, unknown>[]>;
+  /**
+   * Copy one published file into the workspace so it can be edited, and return where it landed.
+   */
+  packageOverride(service: string, version: string, path: string): Promise<string>;
+  /** Drop the workspace's copy; the published file takes over on the next render. */
+  packageOverrideRevert(service: string, version: string, path: string): Promise<void>;
   /**
    * What is published, and for each version whether it is already installed and whether an instance is using it — so the UI can offer Install or refuse Uninstall without a second round trip.
    */

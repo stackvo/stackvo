@@ -106,7 +106,8 @@ fn run(packages: &Path, only: Option<&[String]>) -> Result<usize, String> {
 
     let source = market::LocalSource::new(packages);
     let registry = market::refresh(&root, &source, market::Trust::Unsigned, None)
-        .map_err(|e| format!("reading the catalogue: {}", e.message))?;
+        .map_err(|e| format!("reading the catalogue: {}", e.message))?
+        .registry;
     println!(
         "catalogue  sequence {}, {} package(s)\n",
         registry.sequence,

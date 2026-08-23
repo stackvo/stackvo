@@ -732,8 +732,9 @@ describe('the market page', () => {
     expect(open()).toHaveLength(1);
   });
 
-  /// Reported rather than assumed: no key is pinned, so nothing verifies a
-  /// signature, and the page says which.
+  /// Reported rather than assumed, and about the index this machine HOLDS
+  /// rather than about what the build can verify. A workspace that pins the
+  /// official key and last refreshed from a folder is in exactly this state.
   ///
   /// In the source menu now rather than on a permanent line above the
   /// catalogue. The line said the same three things on every visit and cost a
@@ -751,6 +752,34 @@ describe('the market page', () => {
     expect(document.body.textContent).toContain('not signature-checked');
     // And which source it is talking about, beside it.
     expect(document.body.textContent).toContain('/Users/me/stackvo-service-packages');
+  });
+
+  /**
+   * The other half, and the reason `verifiedBy` is on the wire at all.
+   *
+   * "Verified" and "verified by whose key" are different answers on a machine
+   * that pins the official key *and* an organisation's mirror key through
+   * policy, and a bare boolean cannot tell them apart — so the one state a
+   * security review asks about would read the same as the other.
+   */
+  it('names the key when the catalogue was signature-checked', async () => {
+    api.marketStatus.mockResolvedValue({
+      ...STATUS,
+      signed: true,
+      verifiedBy: 'RWQbD5of/xliJY7W',
+    });
+    const page = mountPage();
+    await flushPromises();
+
+    page.vm.sourceOpen = true;
+    await flushPromises();
+
+    expect(document.body.textContent).toContain('RWQbD5of/xliJY7W');
+    // Asserted positively only. A Vuetify menu teleports to `document.body`
+    // and earlier tests in this file leave theirs there, so "the page does not
+    // say unsigned" would be a claim about the harness rather than about the
+    // page — the same reason the test above reads the body rather than the
+    // wrapper.
   });
   /**
    * The catalogue had no search: twenty-five services and a hundred versions
