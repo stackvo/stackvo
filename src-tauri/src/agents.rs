@@ -1129,13 +1129,17 @@ command = 'echo "prefer the graph"'
         // Serialised against the other environment-reading tests by being the
         // only one that touches this variable.
         let previous = std::env::var_os("CODEX_HOME");
+        // A real directory for this platform, and the expectation built the way
+        // the code builds it. The literal here was `/tmp/elsewhere`, compared
+        // against a rendered string — so on Windows the answer was
+        // `/tmp/elsewhere\\config.toml` and the test failed on the separator
+        // rather than on anything about `CODEX_HOME`.
+        let home = std::env::temp_dir().join("stackvo-codex-home");
         // SAFETY: single-threaded within this test, and restored below.
-        unsafe { std::env::set_var("CODEX_HOME", "/tmp/elsewhere") };
+        unsafe { std::env::set_var("CODEX_HOME", &home) };
         assert_eq!(
-            config_candidates("codex")
-                .first()
-                .map(|p| p.display().to_string()),
-            Some("/tmp/elsewhere/config.toml".to_string())
+            config_candidates("codex").first(),
+            Some(&home.join("config.toml"))
         );
 
         unsafe { std::env::remove_var("CODEX_HOME") };

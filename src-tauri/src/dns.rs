@@ -322,7 +322,13 @@ pub fn plan_for(mechanism: Mechanism, tld: &str) -> Plan {
     match mechanism {
         Mechanism::Resolver => Plan {
             mechanism: Mechanism::Resolver,
-            file: Some(PathBuf::from("/etc/resolver").join(tld)),
+            // Composed as a string, not `PathBuf::join`. These are POSIX paths
+            // for POSIX resolvers, and `join` uses the **host's** separator —
+            // so on Windows the same plan rendered `/etc/resolver\test` and the
+            // command built from it named a file that could not exist anywhere.
+            // A path that belongs to another operating system is a string; only
+            // a path on *this* machine is a `Path`.
+            file: Some(PathBuf::from(format!("/etc/resolver/{tld}"))),
             text: resolver_text(),
             reload: Vec::new(),
         },
@@ -373,7 +379,9 @@ pub fn resolver_path(suffix: &str) -> Option<PathBuf> {
     if mechanism() != Mechanism::Resolver {
         return None;
     }
-    Some(PathBuf::from("/etc/resolver").join(tld_of(suffix)?))
+    // A string, for the reason `plan_for` gives: `join` uses the host's
+    // separator and this is a macOS path.
+    Some(PathBuf::from(format!("/etc/resolver/{}", tld_of(suffix)?)))
 }
 
 // ------------------------------------------------------------ what is in place

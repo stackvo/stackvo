@@ -90,6 +90,14 @@ fi
 # `aws-lc-sys` wants `windows.h`. `cargo-xwin` fetches Microsoft's SDK and
 # points clang at it, so the type checker finally reads those lines.
 if [ "${1:-}" = "--windows" ]; then
+  # `tauri-build` checks the `externalBin` files exist on every cargo build of
+  # this package, and it looks for the **target's** triple — so a host stub is
+  # not one. Without this the check stopped at "resource path
+  # binaries/stackvo-x86_64-pc-windows-msvc.exe doesn't exist", which reads as a
+  # missing file rather than as a missing step and is the last thing anybody
+  # wants between them and a Windows type error.
+  # `run` works from /repo/src-tauri, so the tool is one level up.
+  run node ../tools/sidecars.mjs --stubs --target x86_64-pc-windows-msvc
   run cargo xwin check --target x86_64-pc-windows-msvc --all-targets
   exit $?
 fi
