@@ -263,6 +263,38 @@ fn the_linux_runner_is_still_here_and_matches_what_ci_installs() {
         );
     }
 
+    // Every cargo invocation in a workflow runs from inside `src-tauri`.
+    //
+    // rustup resolves `rust-toolchain.toml` from the **working directory**, so
+    // `cargo … --manifest-path src-tauri/Cargo.toml` started at the repository
+    // root compiles with whatever `stable` means on that runner that day — the
+    // pin is on disk and does nothing. That is not hypothetical: clippy 1.98
+    // failed a release on a lint `tools/before-push.sh` could not reproduce,
+    // because that script runs from inside `src-tauri` and therefore *did* get
+    // 1.96.1. The pin's own comment says why it exists — "the toolchain moving
+    // underneath it is not a reviewable change" — and it was true of exactly
+    // one job in the file.
+    //
+    // `cargo cyclonedx` is exempt and named rather than pattern-matched: it
+    // reads a dependency graph and writes an SBOM, and which compiler resolves
+    // it does not change the answer.
+    for workflow in ["ci.yml", "release.yml"] {
+        let text = std::fs::read_to_string(repo_root().join(".github/workflows").join(workflow))
+            .unwrap_or_else(|e| panic!("reading {workflow}: {e}"));
+        let offenders: Vec<&str> = text
+            .lines()
+            .map(str::trim)
+            .filter(|l| l.contains("--manifest-path src-tauri/Cargo.toml"))
+            .filter(|l| !l.contains("cyclonedx"))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "{workflow} runs cargo from the repository root, where rustup cannot \
+             see the pinned toolchain: {offenders:?}\nUse `working-directory: \
+             src-tauri` instead."
+        );
+    }
+
     let toolchain = std::fs::read_to_string(repo_root().join("src-tauri/rust-toolchain.toml"))
         .expect("rust-toolchain.toml is readable");
     let pinned = toolchain
