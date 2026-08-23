@@ -7,6 +7,54 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`tools/before-push.sh` now asks what CI asks, which it had been claiming
+  since the day it was written.** Its opening line is "everything CI will ask,
+  asked here first" and ADR 0030 is the decision behind it. It was not true, and
+  the first release found out the expensive way: three separate red jobs, each
+  from a gate the script had never run.
+
+  **The bundle budget** had been over its ceiling since the in-app help round —
+  three merges of red CI on a number nobody was reading. `measured` still said
+  1344.7 KB, so "since measured: +170 KB" was reporting drift from a figure last
+  checked several features ago, which the file's own comment calls a formality
+  rather than a budget. Re-measured, and the ceiling raised to 1700 as a stated
+  decision: trimming 15 KB out of `index.js` is the better answer and is not a
+  release-day job.
+
+  **The coverage floors** were failing on an empty report, and the cause was two
+  steps upstream: the `coverage` job never wrote the placeholder sidecars, so
+  `cargo llvm-cov` could not build at all. Both measuring steps are
+  `continue-on-error: true`, so the build error went by as a green tick and the
+  gate two steps later blamed itself. A step that goes green with its work not
+  done is worse than one that fails.
+
+  **And `cargo deny` was never run locally at all.**
+
+  ## The toolchain pin was on disk doing nothing
+
+  `src-tauri/rust-toolchain.toml` pins 1.96.1, and its comment says exactly why:
+  clippy gains lints with every release, this repo runs it with `-D warnings`,
+  so `stable` means the build depends on the day it runs. rustup resolves that
+  file from the **working directory** — and every cargo step in `ci.yml` ran
+  from the repository root with `--manifest-path`, where it is invisible.
+
+  So CI compiled with whatever `stable` was that morning while
+  `tools/before-push.sh`, which runs from inside `src-tauri`, compiled with
+  1.96.1. Clippy 1.98 then failed a release on a `useless_format` lint that
+  could not be reproduced locally — the exact "green here, red there" the pin
+  was written to prevent, and it had been true of one job in the file all along.
+  The `coverage` job had already found the trap and worked around it alone.
+
+  Every workflow now runs cargo from `src-tauri`, and `cfg_regions.rs` refuses a
+  workflow that goes back to the root. `cargo cyclonedx` is exempt and named
+  rather than pattern-matched: it reads a dependency graph, and which compiler
+  resolves it does not change the answer.
+
+  The coverage floors are behind `--all` in the local script, because
+  `cargo llvm-cov` re-instruments and re-runs the whole suite — five minutes
+  against seconds for everything else. What that buys is a place to run it
+  before a release rather than reading about it afterwards.
+
 - **The signing ceremony is written down, and it is a script.** §3 #2 was never
   an engineering problem — the endpoint has been correct since ADR 0025 and the
   updater carries a public key. What was missing is that nobody had performed

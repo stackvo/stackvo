@@ -55,7 +55,16 @@ step "types · generated"    npm run --silent types:check
 step "types · compile"      npm run --silent types:tsc
 step "contracts · fixture"  npm run --silent test:js -- tests/validate-contracts.spec.js
 step "contracts · tree"     node tools/validate-contracts.mjs --allow-no-manifests
+step "front end · build"    npm run --silent build
+# Three gates CI runs and this script did not, which is how three separate
+# failures reached a push that this file had just called clean. The bundle
+# budget had been red for three merges, the coverage floors were failing on an
+# empty report, and `cargo deny` was never asked here at all. A script whose
+# opening line is "everything CI will ask, asked here first" has to be true or
+# it is worse than absent — people stop reading the runs.
+step "front end · bundle"   npm run --silent bundle:budget
 step "supply · audit"       npm audit --omit=dev --audit-level=moderate
+step "supply · deny"        bash -c 'cd src-tauri && cargo deny check'
 step "supply · notice"      npm run --silent notice:check
 # Not what CI asks — CI cannot see the keys — but the same instinct, and the one
 # check whose failure is unrecoverable rather than inconvenient: a private key
@@ -65,6 +74,12 @@ step "supply · notice"      npm run --silent notice:check
 step "keys · ceremony"      tools/keys.sh check
 
 if [ "$all" -eq 1 ]; then
+  # Behind `--all` because `cargo llvm-cov` re-instruments and re-runs the whole
+  # suite — five minutes, against seconds for everything above. CI asks it on
+  # every push and this script cannot afford to; what it can do is be the place
+  # somebody runs it before a release rather than reading about it afterwards.
+  step "coverage · floors"  bash -c 'cd src-tauri && cargo llvm-cov --ignore-run-fail --summary-only >/dev/null && cargo llvm-cov report --json --summary-only > ../rust-coverage.json' \
+    && step "coverage · gate" node tools/check-coverage.mjs --rust
   step "linux · probes"     tools/linux/run.sh
   step "linux · driver"     tools/linux/run.sh --driver
   step "windows · check"    tools/linux/run.sh --windows

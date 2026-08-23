@@ -136,17 +136,30 @@ jobs:
 
       # Everything below runs on all three platforms, so the cfg-gated code is
       # actually compiled somewhere rather than only written.
+      #
+      # `working-directory` rather than `--manifest-path`, and that is the whole
+      # reason this block was rewritten. rustup resolves `rust-toolchain.toml`
+      # from the **working directory**, so a cargo run started at the repository
+      # root never sees the 1.96.1 pin and takes whatever `stable` means on that
+      # runner that day. The coverage job below already documents the trap and
+      # works around it; this job walked into it, and clippy 1.98 failed a
+      # release on a lint nobody could reproduce — `tools/before-push.sh` runs
+      # from inside `src-tauri` and therefore ran 1.96.1.
       - name: Check the Rust core
-        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+        working-directory: src-tauri
+        run: cargo check --all-targets
 
       - name: Test
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        working-directory: src-tauri
+        run: cargo test
 
       - name: Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+        working-directory: src-tauri
+        run: cargo fmt --check
 
   # The other half of §3 #12: the whole binary, under a driver.
   #
@@ -314,15 +327,28 @@ jobs:
 
       - run: npm ci
 
+      # `stackvo` and `stackvo-mcp` ship as `externalBin`, and `tauri-build`
+      # checks the files exist on **every** cargo build of this package —
+      # `cargo llvm-cov` included, because it builds before it measures.
+      #
+      # This step was missing, and how it failed is why it is worth a comment:
+      # both measuring steps are `continue-on-error: true`, so the build error
+      # went by as a green tick, `report` had no profiling data to re-read, and
+      # the floors gate failed two steps later on an empty JSON file — naming
+      # the gate rather than the missing sidecar. A step that goes green with
+      # its work not done is worse than one that fails.
+      - name: Placeholder sidecars, so the Rust steps can build
+        run: node tools/sidecars.mjs --stubs
+
       # `--ignore-run-fail` so a failing test still produces a report. Without
       # it `cargo llvm-cov` exits before printing the table, and this job would
       # go red for a reason the `build` job already covers — reporting nothing
       # exactly when something is wrong is the opposite of what it is for.
       - name: Measure the Rust core
         continue-on-error: true
+        working-directory: src-tauri
         run: |
-          cargo llvm-cov --manifest-path src-tauri/Cargo.toml \
-            --ignore-run-fail --summary-only | tee rust-coverage.txt
+          cargo llvm-cov --ignore-run-fail --summary-only | tee ../rust-coverage.txt
 
       # `report` re-reads the profiling data the step above already produced, so
       # this is a second rendering of one measurement rather than a second run
@@ -331,9 +357,9 @@ jobs:
       # starts silently comparing the wrong number.
       - name: Render the Rust report for the gate
         continue-on-error: true
+        working-directory: src-tauri
         run: |
-          cargo llvm-cov report --manifest-path src-tauri/Cargo.toml \
-            --json --summary-only > rust-coverage.json
+          cargo llvm-cov report --json --summary-only > ../rust-coverage.json
 
       - name: Measure the front end
         continue-on-error: true
@@ -391,7 +417,8 @@ jobs:
       # including why unmaintained transitive crates warn rather than fail, is
       # in src-tauri/deny.toml.
       - name: cargo-deny
-        run: cargo deny --manifest-path src-tauri/Cargo.toml check
+        working-directory: src-tauri
+        run: cargo deny check
 
       - uses: actions/setup-node@v4
         with:
