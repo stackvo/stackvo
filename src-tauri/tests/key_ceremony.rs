@@ -132,27 +132,30 @@ fn tracked_files() -> Vec<PathBuf> {
 /// for the updater key rotating means every machine already running StackVo can
 /// never be updated again. Cheap to check, and the cost of not checking is not
 /// proportional to anything.
+///
+/// ## It asks whether a file **is** a key, not whether it mentions one
+///
+/// The first version searched every tracked file for the header string, and it
+/// passed here and failed on CI — naming this file and `tools/keys.sh` as
+/// committed private keys. Both merely *contain* the words, one as the needle
+/// it searches for and the other in a comment, and both were untracked when it
+/// was written, so `git ls-files` had not yet handed the scanner its own
+/// haystack.
+///
+/// The shape is what distinguishes them, and it is narrow: a minisign secret
+/// key is a comment line and a base64 line, and `tauri signer` writes that pair
+/// base64-encoded again onto a single line. Nothing with prose in it looks like
+/// either. Checking the shape rather than the substring also removes the reason
+/// anybody would ever add an exemption list — an exemption list on a check like
+/// this is how the real thing eventually gets exempted.
 #[test]
 fn no_private_signing_key_is_committed() {
-    // Both spellings: minisign's own header, and Tauri's, which writes its own
-    // wording into the file it generates.
-    const HEADERS: [&str; 2] = ["minisign encrypted secret key", "untrusted comment: rsign"];
-
     let mut offenders = Vec::new();
     for path in tracked_files() {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue; // a binary file is not a key file
         };
-        // The key material is base64 too, so the header is looked for in both
-        // envelopes — a `tauri signer` key file committed as its own base64
-        // blob would otherwise read as an opaque string.
-        let decoded = decode_base64(text.trim())
-            .and_then(|bytes| String::from_utf8(bytes).ok())
-            .unwrap_or_default();
-        if HEADERS
-            .iter()
-            .any(|h| text.contains(h) || decoded.contains(h))
-        {
+        if is_a_private_key(&text) {
             offenders.push(
                 path.strip_prefix(repo_root())
                     .unwrap()
@@ -167,6 +170,39 @@ fn no_private_signing_key_is_committed() {
         "a PRIVATE signing key is committed: {offenders:?}\nIt is public now. \
          Rotate it — deleting the file does not remove it from the history."
     );
+}
+
+/// Is this file's whole content a minisign secret key?
+///
+/// Both spellings of the header: minisign's own, and `rsign`'s, which is what
+/// Tauri's generator writes — measured against a real key rather than guessed,
+/// because a scanner looking for the wrong word is a scanner that reads
+/// everything and finds nothing.
+fn is_a_private_key(text: &str) -> bool {
+    const HEADERS: [&str; 2] = [
+        "minisign encrypted secret key",
+        "rsign encrypted secret key",
+    ];
+    let names_a_key = |line: &str| HEADERS.iter().any(|h| line.contains(h));
+
+    let trimmed = text.trim();
+    let lines: Vec<&str> = trimmed.lines().collect();
+
+    // Plain: a comment line, a base64 line, and nothing else worth the name.
+    if lines.len() <= 3 && lines.first().is_some_and(|l| names_a_key(l)) {
+        return true;
+    }
+
+    // What `tauri signer generate` writes: the whole file, base64 again, on one
+    // line. This is the form a key actually takes on disk, so it is the form
+    // somebody would accidentally commit.
+    if lines.len() == 1 {
+        if let Some(inner) = decode_base64(trimmed).and_then(|b| String::from_utf8(b).ok()) {
+            return inner.lines().next().is_some_and(names_a_key);
+        }
+    }
+
+    false
 }
 
 /// ADR 0015's whole reason for existing, as a rule about this tree.

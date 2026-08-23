@@ -101,6 +101,15 @@ fn stub_pkexec(case: &str, code: i32, message: &str) -> PathBuf {
     // Ahead of the real one rather than instead of it: a machine that has
     // polkit installed must still take this stub, and a machine that does not
     // must not start finding a real `pkexec` because this test emptied `PATH`.
+    // Says out loud that the elevator is a stub, which is what lets
+    // `hosts::elevated_here` run its polkit branch. That guard refuses whenever
+    // `STACKVO_HOSTS_PATH` is set — rightly, because a test must never raise a
+    // password dialog — and this test needs the branch it guards. A stub cannot
+    // raise a dialog, so naming it is the honest way through rather than
+    // weakening the guard.
+    // SAFETY: see below.
+    unsafe { std::env::set_var("STACKVO_ELEVATOR_STUB", &path) };
+
     let existing = std::env::var("PATH").unwrap_or_default();
     // SAFETY: this binary runs one test function, and every case in it is
     // sequential. Nothing else in this process reads `PATH` concurrently.
