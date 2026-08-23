@@ -143,6 +143,29 @@ export default {
    * `explain` yalnız özelliği değil riski adlandırıyor. Onaylamayı okumaktan
    * kolaylaştıran bir ekran, bu ekranın var olma nedeninin tersi olurdu.
    */
+  projectAgent: {
+    tab: 'Yapay zekâ',
+    title: 'Bir asistana bu proje hakkında ne söyleniyor',
+    explain:
+      'Depoda çalışan bir asistanın neyin içinde çalıştığını bilmesi için uygulamanın depoya yazdığı iki dosya.',
+    markers:
+      'Yalnızca StackVo işaretleri arasındaki bölüm yazılır. Dosyadaki her şey olduğu gibi kalır ve önce yanına .stackvo-backup adıyla bir kopya bırakılır.',
+    contextTitle: 'Bağlam dosyası',
+    contextBody:
+      'Her üretimde her proje için yazılır: alan adı, çalışma zamanı, container içindeki yol ve çalışan her servisin adresi. Yalnız adlar ve adresler — parolalar projenin kendi .env dosyasında kalır.',
+    contextNoMount:
+      'Bu çalışma zamanında kaynak bağlama yok; dosya container\u2019a hemen değil, bir sonraki derlemede ulaşır.',
+    serverElsewhere:
+      'MCP sunucusunun kendisini tanıtmak ve bu makinedeki her proje için geçerli kurallar Ayarlar \u2192 Yapay zekâ asistanları altında.',
+  },
+  sidecars: {
+    title: 'Bildirilen konteynerler',
+    explain:
+      'Bu deponun kendisiyle getirdiği konteynerler; projenin kendi compose bloğuna render edilir ve projeyle birlikte kalkıp iner.',
+    reachedAt: 'Uygulama şuradan ulaşır:',
+    noHost:
+      'Bildirilen bir konteynerin host portu ve host yolu yoktur; yalnız bu projenin ağı içinden erişilebilir.',
+  },
   hooks: {
     title: 'Bu proje başlarken ve dururken',
     explain:
@@ -192,7 +215,14 @@ export default {
   perf: {
     title: 'Performans katmanı',
     explain:
-      'Bind mount, metadata ve yazmada adlandırılmış birimin 2–3 katına mal oluyor; macOS ve Windows’ta Docker akışını yavaş hissettiren yer burası. Bu dizinleri konteyner içindeki araçlar yazıyor ve her istekte yine onlar okuyor — host dosya sisteminden çıkarmak, framework açılışında 3,8 kat, bir isteğin yazmalarında 2,8 kat ölçüldü. Kendi kodunuz editörünüzün gördüğü yerde kalıyor.',
+      'macOS ve Windows’ta bind mount bir dosya sistemi sınırını geçiyor; Docker akışını yavaş hissettiren yer burası. Bu dizinleri konteyner içindeki araçlar yazıyor ve her istekte yine onlar okuyor, yani karşılığını veren kısım onları host dosya sisteminden çıkarmak. Kendi kodunuz editörünüzün gördüğü yerde kalıyor.',
+    gain: '{workload} {times} kat hızlı',
+    workload: {
+      boot: 'framework açılışında',
+      write: 'bir isteğin yazmalarında',
+    },
+    measuredOn: 'bu sürümün çıktığı makinede ölçüldü',
+    notMeasured: 'ölçülmedi',
     inVolume: 'Birimde ({volume})',
     onHost: 'Host’ta — {files}+ dosya',
     notThereYet: 'Projede henüz yok; konteyner içindeki araçlar oluşturacak.',
@@ -899,12 +929,13 @@ export default {
     mkcert: 'mkcert',
     mkcertHint: {
       macos:
-        'SSL açık, yani her alan adı HTTPS üzerinden sunuluyor. mkcert olmadan sertifika üretilmez ve tarayıcılar siteyi açmayı reddeder. `brew install mkcert` ile kurun.',
+        'SSL açık, yani her alan adı HTTPS üzerinden sunuluyor. mkcert olmadan sertifika üretilmez ve tarayıcılar siteyi açmayı reddeder. StackVo onu bu yapıya gömülü bir sağlama toplamıyla indirebilir — ya da `brew install mkcert` ile kendiniz kurun.',
       linux:
-        'SSL açık, yani her alan adı HTTPS üzerinden sunuluyor. mkcert olmadan sertifika üretilmez ve tarayıcılar siteyi açmayı reddeder. Paket yöneticinizden kurun, sonra `mkcert -install` çalıştırın.',
+        'SSL açık, yani her alan adı HTTPS üzerinden sunuluyor. mkcert olmadan sertifika üretilmez ve tarayıcılar siteyi açmayı reddeder. StackVo onu bu yapıya gömülü bir sağlama toplamıyla indirebilir — ya da paket yöneticinizden kendiniz kurun.',
       windows:
-        'SSL açık, yani her alan adı HTTPS üzerinden sunuluyor. mkcert olmadan sertifika üretilmez ve tarayıcılar siteyi açmayı reddeder. `choco install mkcert` ile kurun.',
+        'SSL açık, yani her alan adı HTTPS üzerinden sunuluyor. mkcert olmadan sertifika üretilmez ve tarayıcılar siteyi açmayı reddeder. StackVo onu bu yapıya gömülü bir sağlama toplamıyla indirebilir — ya da `choco install mkcert` ile kendiniz kurun.',
     },
+    mkcertAction: 'mkcert kur',
   },
   imports: {
     found: '{tool} içinde bulundu: {n} site',
@@ -946,6 +977,12 @@ export default {
     from: '{files} dosyasından algılandı',
     noEvidence: 'tanınan bir şey yok — varsayılanlar kullanılacak',
     action: 'Sahiplen',
+    all: '{n} klasörün hepsini sahiplen',
+    batchDone: '{n} tanesi sahiplenildi. Bunlar atlandı:',
+    reason: {
+      alreadyManaged: 'zaten yönetiliyor',
+      empty: 'nokta dosyalarından başka bir şey yok',
+    },
   },
   migrate: {
     read: 'Compose’u oku',
@@ -1051,6 +1088,8 @@ export default {
     restore: 'Geri yükle',
     dumped: '{path} dosyasına yazıldı',
     restored: '{path} dosyasından geri yüklendi',
+    netFailed:
+      'Mevcut veritabanının kopyası alınamadı: {reason}\n\nYine de geri yüklensin mi? Şu an orada olan değiştirilecek ve geri alınamayacak.',
     confirmRestore:
       '{db} içeriği seçilen dosyanın içeriğiyle değiştirilecek. Şu anda içinde ne varsa kaybolur.',
   },
@@ -1067,6 +1106,25 @@ export default {
     restored: '{name} geri yüklendi',
   },
   xdebug: {
+    ide: {
+      title: 'IDE kurulumu',
+      listening: '{process} {port} portunu dinliyor — kesme noktası yakalanır.',
+      notListening:
+        '{port} portunu dinleyen bir şey yok. IDE\u2019nizin hata ayıklama dinleyicisini başlatın; aksi hâlde burası ne kadar doğru yapılandırılırsa yapılandırılsın kesme noktasına hiç varılmaz.',
+      someProcess: 'Bir süreç',
+      detected: 'bu projede kullanılıyor',
+      write: 'Yapılandırmayı yaz',
+      neverClobbers:
+        'Yalnızca bu proje için adlandırılan yapılandırma yazılır. Dosyadaki diğer her şey korunur ve önce yanına .stackvo-backup adıyla bir kopya bırakılır.',
+      state: {
+        absent: 'Yapılandırılmadı',
+        written: 'Yapılandırıldı',
+        stale: 'Yapılandırıldı, ama değerler değişmiş',
+        shown:
+          'Bunu yapıştırın — bu dosyayı bellekte tutuyor ve yapılan düzenlemenin üzerine yazardı',
+        unparseable: 'Bu dosya yorum satırı içeriyor, güvenle düzenlenemez',
+      },
+    },
     title: 'Xdebug',
     subtitle: 'Bu proje için adım adım hata ayıklama.',
     on: 'Etkin',
@@ -1075,6 +1133,9 @@ export default {
       'İlk kez açmak uzantıyı imaja ekliyor ve yeniden derleme gerektiriyor. Ondan sonra aç/kapa yalnızca konteyneri yeniden başlatıyor — uzantı kalıyor ve kapalıyken hiçbir maliyeti yok.',
     staysInstalled:
       'Bu kapalıyken uzantı imajda kalıyor. Orada bir maliyeti yok, ve hata ayıklamayı yeniden açmak yeniden derleme değil bir konteyner yeniden başlatması.',
+    stillActive:
+      'Çalışan konteynerde hâlâ açık. Ayar kapalı, ama bir konteynerin ortam değişkenleri oluşturulurken sabitlenir — konteyneri yeniden oluşturun, hata ayıklama durur. Eklenti imajda kaldığı için bu, yeniden derleme değil saniyelik bir iştir.',
+    rebuildNow: 'Şimdi yeniden üret ve derle',
     needsRebuild:
       'Eklenti imaja derleniyor, bu yüzden proje yeniden üretilip derlenene kadar bunun bir etkisi olmaz.',
     notActive:
@@ -1149,6 +1210,39 @@ export default {
       'dump() isteği sürdürür. dd() ise dökümü alıp isteği bitirir ve Symfony bunu 500 olarak işaretler — tarayıcıda hata görürken dökümün burada belirmesi normaldir.',
   },
 
+  devcontainer: {
+    title: 'Devcontainer',
+    explain:
+      'Bu projeyi, makinesinde StackVo olmayan bir takım arkadaşının VS Code ya da GitHub Codespaces ile açabileceği bir `.devcontainer/` olarak yazar.',
+    preview: 'Ne yazılacağını göster',
+    write: 'Projeye {n} dosya yaz',
+    written: '{n} dosya yazıldı. Bunlar commit edilmek için.',
+    secrets: '{n} parola değer olarak değil ad olarak çıkıyor. .devcontainer/.env içinde doldurun:',
+  },
+  providers: {
+    title: 'Veri çekme ve gönderme',
+    explain:
+      'Bu projenin verisinin gerçekten durduğu, adlandırılmış yerler. Tarif stackvo.json içinde yazılı ve depoyla birlikte geziyor; komut bu makinede değil bir konteynerde koşuyor, ve koşmadan önce olduğu gibi gösteriliyor.',
+    database: 'Veritabanı',
+    pull: 'çek',
+    push: 'gönder',
+    usesSecrets:
+      'Gerekenler: {names}. Bunlar işletim sisteminin anahtarlığında tutuluyor, proje dosyasında değil.',
+    pushWarning: 'Bu, bu makine olmayan bir yere yazar. Burada onu geri alabilecek hiçbir şey yok.',
+    policyOff: 'Bir yönetici bunu bu makinede kapattı.',
+    approve: {
+      pull: 'Çekmeyi onayla',
+      push: 'Göndermeyi onayla',
+    },
+    run: {
+      pull: 'Şimdi çek',
+      push: 'Şimdi gönder',
+    },
+    fillIn: 'Koşabilmesi için {names} doldurulmalı.',
+    saveSecret: 'Kaydet',
+    snapshotFirst: 'Önce yerine geçeceği şeyin kopyasını al',
+    revoke: 'Onayı geri çek',
+  },
   release: {
     pushExplain:
       'Bir registry’ye gönderin ya da çalıştıracak bir compose dosyası alın. StackVo yalnız doğrulanmış bir imajı ve yalnız registry adı taşıyan bir etikete gönderir — registry katmanları saklar, sonradan etiketi silmek içindekini kaldırmaz.',
@@ -1178,7 +1272,78 @@ export default {
     save: 'Tarball olarak kaydet…',
   },
 
+  spx: {
+    title: 'Örnekleyici profilleyici (php-spx)',
+    explain:
+      'Açık bırakabileceğiniz profilleyici. Xdebug her çağrıyı birebir kaydeder ve isteğin birkaç katına mal olur; bu örnekleme yapar, sayfa sayfa gibi kalır.',
+    notBuilt:
+      'PHP {php} için henüz derlenmedi. Kendisini yükleyecek PHP ile eşleşsin diye, bu projenin kendi imajından tek kullanımlık bir konteynerde kaynaktan derlenir \u2014 birkaç dakika, PHP sürümü başına bir kez, o sürümdeki tüm projeler paylaşır.',
+    build: 'Derle',
+    on: 'Profilleyici bağlandı',
+    off: 'Profilleyici kapalı',
+    cost: 'Kontrol panelinden istemedikçe hiçbir şey kaydedilmez \u2014 eklentinin yüklü olması tek başına neredeyse hiçbir şeye mal olmaz.',
+    needsRecreate:
+      'Çalışan konteynerde henüz yok. Bağlamalar konteyner oluşturulurken sabitlenir; bu, bir sonraki yeniden oluşturmada ulaşır.',
+    xdebugConflict:
+      'Xdebug de kayıt yapıyor. Tek bir motora iki profilleyicinin bağlanmasını ikisi de desteklemiyor ve belirtisi hata değil yanlış sayılar \u2014 Xdebug modunu adım adım hata ayıklamaya geri alın.',
+    openPanel: 'SPX kontrol panelini aç',
+    howToRecord:
+      'Panel, eklenti tarafından bu sitenin kendi adresinden sunulur. Kaydı orada açın, siteyi kullanın; koşular aşağıda belirir.',
+    recorded: 'Kaydedilen ({n})',
+    clear: 'Hepsini sil ({size})',
+    remove: 'Bu raporu sil',
+    nothingYet: 'Henüz bir kayıt yok.',
+    unnamedRun: 'Koşu',
+    cli: 'komut satırı',
+    request: 'istek',
+
+    recordHere: 'Buradan kaydet',
+    recordExplain:
+      'Kontrol paneli bir tarayıcı ve bir insan ister. Bunlar istemez — profilleyiciyi isteğin kendisi tetikler, yani bir sayfa ya da bir komut bu pencereden, terminalden veya bir asistan tarafından kaydedilebilir.',
+    recordPath: 'Yol',
+    recordPathHint: 'Bu sitede bir yol. Adres projeden gelir.',
+    record: 'Bu isteği kaydet',
+    recording: 'Sayfa bekleniyor…',
+    recordedOne: '{what} kaydedildi — {took}.',
+    recordCommand: 'Ya da bir komut',
+    recordCommandGo: 'Kaydet',
+    recordCommandHint:
+      'Yavaş olan çoğu zaman bir sayfa değildir. Bir göç, bir kuyruk işçisi veya bir test koşusu aynı şekilde profillenir ve aynı listeye düşer.',
+    recordNoCommands: 'Bu proje çalıştırılacak bir komut tanımlamıyor.',
+
+    detail: 'Ayrıntı',
+    sampling: 'Örnekleme',
+    detailSampled: '{us} µs’de bir örnekle',
+    detailExact: 'Her çağrı (birebir, ve pahalı)',
+    detailHint:
+      'Bir örnekleme aralığı verilmedikçe php-spx her çağrıyı kaydeder; bu araç zaten o maliyetten kaçınmak için var. Açık bırakmayı güvenli kılan örneklemedir; birebir sayım ise hızlı bir fonksiyonu tam saymak için doğrudur.',
+    builtins: 'PHP’nin kendi fonksiyonları da profillensin',
+    builtinsHint:
+      'İzi kabaca ikiye katlar. Cevabın projedeki bir fonksiyon değil de yerleşik bir fonksiyon olduğu durumlarda değer.',
+    settingsHere:
+      'Bunlar buradan başlatılan bir kayıt için geçerlidir — isteği ve komutu bunlar taşır. SPX’in kendi kontrol panelinden başlatılan bir kayıt ise o panelin kendi denetimlerini kullanır; eklenti ini dosyasını yalnızca profillemediği istekler için okur.',
+
+    view: 'SPX görüntüleyicisinde aç',
+    hotspots: 'Zaman nereye gitti',
+    hotspotsFor: '{what} zamanını nerede harcadı',
+    hotspotFunction: 'Fonksiyon',
+    hotspotSelf: 'Kendisi',
+    hotspotTotal: 'Çağrılarıyla',
+    hotspotCalls: 'Çağrı',
+    hotspotsTruncated:
+      'İz, buranın okuduğundan uzundu. Aşağıdaki, koşunun tamamı değil başlangıcı.',
+    hotspotsEmpty: 'İz hiçbir fonksiyon adlandırmadı.',
+    hotspotsClose: 'Kapat',
+  },
   profiler: {
+    lockedWhileWorking:
+      'Konteyner yeniden oluşturulurken mod kilitli — şimdi seçmek, compose\u2019un okumakta olduğu dosyayı yeniden yazardı. İş bitince kendiliğinden açılır.',
+    modeCoverage: 'Kapsam',
+    coverageNote:
+      'Kapsam kendi başına bir şey kaydetmez — PHPUnit\u2019in çağırdığı API\u2019yi açar, raporu PHPUnit yazar. Testlerinizi kapsam bayrağıyla çalıştırın; aşağıdaki listede hiçbir şey belirmez.',
+    develop: 'Okunabilir dump ve yığın izleri (develop)',
+    developDetail:
+      'Yukarıdaki modun yanına Xdebug\u2019ın develop modunu ekler: var_dump okunabilir hâle gelir ve bir uyarı yığın izi taşır. Kodunuzun bastığı çıktıyı değiştirdiği için istenmedikçe kapalıdır.',
     title: 'Profilleyici',
     explain:
       'Xdebug’in kendi profilleyicisi; çıktıyı bu uygulamanın okuduğu dosyalara yazar. Hesap da ek eklenti de gerekmez — adım adım hata ayıklamayı yapan Xdebug’in ta kendisi.',
@@ -1570,6 +1735,7 @@ export default {
     theme: 'Tema',
     language: 'Dil',
     packProgress: '{total} dizeden {done} tanesi ({percent}%) — kalanı İngilizce görünür',
+    packRtl: 'sağdan sola',
     packRemove: 'Kaldır',
     packTag: 'Dil etiketi',
     packHint:
@@ -1635,6 +1801,60 @@ export default {
       example: 'Deneyin',
       served: '{count} araç servis ediliyor',
     },
+    tooling: {
+      title: 'Araçlar',
+      sectionDesc:
+        'stackvo’yu PATH’e ekleyin ve bu uygulamanın host’ta çalıştırdığı araçlara bakın.',
+      binDir: 'Kurulduğu yer',
+      openANewShell:
+        'Başlangıç dosyası yazıldı. Bu kabuk ondan önce açılmıştı — stackvo’nun bulunması için yeni bir terminal açın ya da o dosyayı source edin.',
+      remove: 'Kaldır',
+      update: 'Güncelle',
+      commands: {
+        title: 'Komutlar',
+        description: 'stackvo ve stackvo-mcp, bu uygulamanın kendi dizinine bağlanıyor.',
+        whatItDoes:
+          'stackvo yığını terminalden çalıştırır; stackvo-mcp ise asistanlar sayfasının tanıttığı sunucudur. İkisi de tek bir dizine bağlanır, sonraki grup da o dizini PATH’inize koyar.',
+        notShims:
+          'Bunlar uygulamanın kendi komutları; composer, node ya da wp için birer sarmalayıcı değil — onlar projenin konteynerinde, projenin bildirdiği sürümle çalışır.',
+        noBinary:
+          'İki komut da bu uygulamanın yanında bulunamadı. Kurulu bir StackVo ikisini de taşır; bir checkout ise aşağıdaki komutla derler.',
+        buildCommand: 'npm run sidecars',
+        notBuilt: 'derlenmemiş',
+      },
+      shells: {
+        title: 'PATH’iniz',
+        description: 'Bir kabuğun başlangıç dosyasına tek satır.',
+        whatItDoes:
+          'Ekleme, dosyanın bir kopyasını yanına aldıktan sonra iki işaret arasına tek bir satır yazar. O dosyadaki başka her şey olduğu gibi kalır.',
+        markers:
+          'Satır bu uygulamanın dizinini başa koyar; böylece yönettiği bir araç, yarım kaldırılmış bir sistem kopyasına üstün gelir. Kaldırma satırı geri alır, bağlantılara dokunmaz.',
+        yours: 'sizinki',
+        add: 'Ekle',
+        copyLine: 'Satırı kopyala',
+        state: {
+          installed: 'PATH’inizde',
+          stale: 'Eski bir dizini gösteriyor',
+          absent: 'PATH’inizde değil',
+          noFile: 'Burada başlangıç dosyası yok',
+        },
+      },
+      tools: {
+        title: 'Host araçları',
+        description: 'Bu uygulamanın her konteynerin dışında çalıştırdığı dört program.',
+        whatItDoes:
+          'Bunlar host’ta çalışır, bu uygulamanın işi olmalarının sebebi de bu: Docker bütün projeleri tutar, git dallarınızı okur, mkcert de tarayıcı uyarısını kesen sertifikayı üretir.',
+        inTheContainer:
+          'composer, node, npm ve wp bilerek burada değil. Onlar projenin konteynerinde, projenin bildirdiği sürümle çalışır; host’taki ikinci bir kopya “hangisi çalışıyor” sorusuna yanlış cevap olurdu.',
+        yours: 'sizinki',
+        managed: 'yönetilen',
+        install: '{version} kur',
+        ownInstaller: 'Kendi kurulumuyla kurulur',
+        noBuildHere: 'Bu platform için yapı yok',
+        pinned:
+          'İndirilen dosya, yanında getirilen değil bu yapıya gömülü bir sağlama toplamıyla karşılaştırılır. Eşleşmeden hiçbir şey yazılmaz.',
+      },
+    },
     agents: {
       title: 'Yapay zekâ asistanları',
       sectionDesc: 'StackVo MCP sunucusunu bu makinedeki asistanlara tanıtın.',
@@ -1650,7 +1870,7 @@ export default {
       serverBinary: 'Tanıtılacak sunucu',
       allowWrites: 'Asistan değişiklik yapabilsin',
       allowWritesDetail:
-        'Kapalıyken asistan yalnızca okuyabilir. Açıkken stack_up, stack_down, project_start, project_stop, generate, xdebug_set ve certificates_reissue de eklenir — yani stack’in tamamını durdurmak dahil. Bu ayar, eklediğiniz bir sonraki asistan için geçerlidir.',
+        'Kapalıyken asistan yalnızca okuyabilir. Açıkken stack_up, stack_down, project_start, project_stop, project_restart, service_start, service_stop, service_restart, generate, xdebug_set, certificates_reissue ve snapshot_take de eklenir — yani stack’in tamamını durdurmak ve her projenin bağlı olduğu ortak bir servisi durdurmak dahil. Bu ayar, eklediğiniz bir sonraki asistan için geçerlidir.',
       state: {
         registered: 'Tanıtıldı',
         stale: 'Tanıtıldı, ama başka bir kopyayı işaret ediyor',
@@ -1663,7 +1883,30 @@ export default {
       remove: 'Kaldır',
       copyBlock: 'Bloğu kopyala',
       notListed:
-        'Codex ve Zed listede yok: Codex yapılandırmasını TOML’da tutuyor, Zed’in biçimi ise doğrulanamadı. İkisi de yukarıdaki blokla elle yapılandırılabilir.',
+        'Codex’in dosyası TOML ve biçimi koruyan bir düzenleyiciyle yazılıyor, böylece yorumları ve anahtar sırası olduğu gibi geri geliyor. Zed’in yolu kuruluma göre değiştiği için ayarlarını tuttuğu iki yer de kontrol edilip hangisi varsa ona yazılıyor.',
+      rules: {
+        title: 'Yapay zekâ kuralları',
+        description:
+          'Sunucuyu tanıtmak, asistanın bu araçları kullanabilmesini sağlar. Bu bölüm ise ne zaman kullanacağını ve neye dokunmayacağını söyler.',
+        whatItDoes:
+          'Asistanın zaten okuduğu yönerge dosyasına kısa bir bölüm yazar: hangi soruyu hangi aracın cevapladığı, üretilmiş dosyaların üzerine yazıldığı ve yazma araçlarından birinin stack’in tamamını durdurabileceği.',
+        markers:
+          'Yalnızca StackVo işaretleri arasındaki bölüm yazılır. Dosyadaki diğer her şey olduğu gibi kalır ve yazmadan önce yanına .stackvo-backup adıyla bir kopya bırakılır.',
+        writeInto: 'Proje kuralları nereye yazılsın',
+        writeIntoDetail:
+          'Genellikle doğru cevap bir projedir: kurallar, o depoda açılan asistana ulaşır. Çalışma alanı kökü ise stack’in tamamı üzerinde açılan bir asistan içindir.',
+        workspaceRoot: 'Çalışma alanı kökü',
+        scopeWorkspace: 'Proje içinde',
+        scopeGlobal: 'Bu makinede',
+        globalDetail:
+          'O asistanın her oturumu için geçerli olur, StackVo’ya ait olmayan projeler dahil. Yalnızca bazı asistanlar genel bir dosya okuduğu için burada yalnızca onlar listeleniyor.',
+        add: 'Kuralları yaz',
+        state: {
+          absent: 'Yazılmadı',
+          installed: 'Yazıldı',
+          stale: 'Eski bir sürüm tarafından yazılmış',
+        },
+      },
     },
     policy: {
       title: 'Bu makine yönetiliyor',
@@ -1933,6 +2176,9 @@ export default {
     horizon: 'Horizon',
     horizonDesc:
       'php artisan horizon — Laravel Horizon süpervizörü; composer.json gerektirdiği için sunulur.',
+    reverb: 'Reverb',
+    reverbDesc:
+      'php artisan reverb:start — projenin kendi alan adında /app ve /apps altında yönlendirilir; böylece wss:// mevcut sertifikayla çalışır.',
     start: 'Başlat',
     stop: 'Durdur',
     restarts:
@@ -2396,6 +2642,11 @@ export default {
     perfNothingToSeed:
       'O dizin projede henüz yok. Önce bağımlılıkları kurun ya da açıp konteyner içindeki araçların oluşturmasına izin verin.',
     perfSeedFailed: 'Dizin birime kopyalanamadı, bu yüzden hiçbir şey değiştirilmedi.',
+    providerWroteNothing:
+      'Komut bir dump bırakmadan bitti. Ne yazdığına bakın — başarısız olan uzak bir komut genelde yine de temiz çıkar.',
+    providerNeedsConsent: 'Karttaki komutu okuyup onaylayın. Tarifi düzenlemek yeniden sordurur.',
+    providerSecretMissing:
+      'Bu tarifin adlandırdığı değerleri doldurun. İşletim sisteminin anahtarlığında tutulur, proje dosyasında değil.',
     tldIsOneLabel: 'Sonek tek bir etiketle biter: harf, rakam ve tire — stackvo.loc gibi.',
     dnsPlaceTheLineYourself:
       'Gösterilen satırı bu makinede adları çözen şeye ekleyin ve onu yeniden yükleyin.',
@@ -2436,8 +2687,26 @@ export default {
       'Anahtar zincirinizi açıp yeniden deneyin — bu ayarın şifresi orada saklanıyor.',
     onlyCredentialsMove:
       'Anahtar deposunda yalnızca şifreler, token’lar ve sunucu kimlikleri tutulabilir.',
+    spxNeedsBuilding:
+      'Önce derleyin — bu projenin kullandığı imajdan tek kullanımlık bir konteynerde derlenir; birkaç dakika sürer ve PHP sürümü başına bir kez yapılır.',
+    launchJsonHasComments:
+      'VS Code bu dosyada yorum satırına izin veriyor; onları silmeden güvenle düzenlenemez. Dosyayı açıp burada gösterilen bloğu yapıştırın.',
+    phpstormIsNotWritten:
+      'PhpStorm bu dosyayı bellekte tutuyor ve çıkarken yeniden yazıyor; altından yapılan bir düzenleme kaybolurdu. Gösterilen bloğu kopyalayıp yapıştırın.',
     agentConfigUnparseable:
       'Bu dosya düz JSON değil — birkaç editör içinde yorum satırına izin veriyor ve bunlar silinmeden dosya güvenle düzenlenemez. Dosyayı açıp burada gösterilen bloğu yapıştırın.',
+    spxRecordAPath:
+      'Bu sitede eğik çizgiyle başlayan bir yol verin — `/`, `/odeme`, `/api/siparisler?page=2`. Adresin kendisi projeden gelir.',
+    spxTraceIsMissing:
+      'Bir kayıt iki dosyadır ve büyük olanı yok. Bu raporu silin ve yeniden kaydedin.',
+    spxRecordNeedsTheMount:
+      'Kayda başlanabilmesi için profilleyicinin açık olması ve çalışan konteynerde bulunması gerekir — panel henüz orada olmadığını söylüyorsa konteyneri yeniden oluşturun.',
+    spxRecordedNothing:
+      'İstek geçti ve profilleyici hiçbir şey yazmadı. Anahtar uyuşmazlığı böyle görünür: projeyi yeniden başlatın ki ini dosyasını yeniden okusun, sonra bir kez daha deneyin.',
+    spxNeedsTheLocalCa:
+      'Site, bu çalışma alanının ürettiği sertifika otoritesiyle HTTPS üzerinden sunuluyor ve uygulamanın bir sertifikayı doğrulamak için onu okuması gerekiyor. Ayarlar’da bunun için bir sertifika bölümü var.',
+    spxRecordNeedsTheSite:
+      'Site cevap vermedi. Bir istek kaydetmeden önce projeyi başlatın ve tarayıcıda bir kez açın.',
     buildTheMcpServer:
       'Önce derleyin: StackVo checkout’unda `cargo build --release --bin stackvo-mcp`.',
     keystoreEntryIsGone:
@@ -2504,6 +2773,14 @@ export default {
     removeTheInstanceFirst: 'Bu paketi hâlâ bir örnek kullanıyor. Önce onu kaldırın, sonra paketi.',
     serviceIsSingleInstance:
       'Bu servis aynı anda tek sürüm çalıştırır. Önce elinizdeki örneği kaldırın.',
+    cliNotBuilt:
+      'İki komut da bu uygulamanın yanında bulunamadı. `cargo build --release --bin stackvo --bin stackvo-mcp` ile derleyip yeniden deneyin.',
+    pathEntryByHand:
+      'Araçlar sayfasında gösterilen satırı o başlangıç dosyasına kendiniz ekleyin — bu boyuttaki bir dosya sorulmadan yeniden yazılacak bir dosya değil.',
+    toolIsNotManaged:
+      'Bunu StackVo değil, kendi kurulumu kuruyor. Nereden alınacağını Araçlar sayfası söylüyor.',
+    toolDigestMismatch:
+      'İndirilen dosya bu yapıya gömülü sağlama toplamıyla eşleşmedi ve atıldı. Yeniden deneyin; iki kez olursa bildirin.',
   },
 
   errors: {

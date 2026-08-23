@@ -373,8 +373,16 @@ pub fn compose_base_args(root: &Path) -> Vec<String> {
         args.push("-f".to_string());
         args.push(crate::perf::overlay_path(root).display().to_string());
     }
-    // Per-project environment variables and the SSH agent (M-5, M-10). Fourth
-    // and independent for the same reason as the three above it.
+    // php-spx: the built extension, its web UI and the report directory. Fourth
+    // and independent for the same reason as the three above it — a project
+    // that has never asked for it renders no entry, and a fault here must not
+    // stop anybody else's container starting.
+    if crate::spx::sync(root) {
+        args.push("-f".to_string());
+        args.push(crate::spx::overlay_path(root).display().to_string());
+    }
+    // Per-project environment variables and the SSH agent (M-5, M-10). Fifth
+    // and independent for the same reason as the four above it.
     if crate::site::sync(root) {
         args.push("-f".to_string());
         args.push(crate::site::overlay_path(root).display().to_string());

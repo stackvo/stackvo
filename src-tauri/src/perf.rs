@@ -158,6 +158,55 @@ pub fn volume_name(project: &str, path: &str) -> String {
     format!("{VOLUME_PREFIX}{project}--{}", path.replace('/', "-"))
 }
 
+/// What moving one directory measured, and on which workload.
+///
+/// The measurement as **data**, in one place. It was in four: this module's own
+/// doc comment, `PerfPane.vue`'s, the `PerfLayer` note in the contract, and —
+/// worst of the four — `perf.explain` in both locale files, where a number
+/// somebody measured had to be restated correctly by a translator who has no
+/// way to know it is a measurement rather than a phrase.
+///
+/// Rounded to a tenth and held as an integer so the table is exact: a `f32`
+/// literal here and a `f32` literal in a test are two roundings of the same
+/// decimal, and comparing them is a question about IEEE 754 rather than about
+/// the benchmark.
+///
+/// `examples/perf_layer_bench.rs` produced these and now records them; the
+/// bench's own doc comment is the source and `perf_claims.rs` holds this
+/// against it.
+pub const GAINS: [(&str, &str, u16); 2] = [
+    // `vendor` buys the framework boot and does nothing at all for writes.
+    ("vendor", "boot", 38),
+    // `storage/framework` is the one that buys the writes.
+    ("storage/framework", "write", 28),
+];
+
+/// A measured multiple, as the wire carries it.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Gain {
+    /// `boot` or `write` — which of them got faster. Never both: the two
+    /// directories this table has disagree about which one they buy, and that
+    /// disagreement is the reason the feature is a list rather than a switch.
+    pub workload: &'static str,
+    pub times: f32,
+}
+
+/// What this directory measured, if anybody has measured it.
+///
+/// `None` for `bootstrap/cache` and `node_modules`, which are offered and have
+/// never been run through the bench. Borrowing a neighbour's figure would be
+/// the same act as the average this replaced, one row down.
+pub fn gain(path: &str) -> Option<Gain> {
+    GAINS
+        .iter()
+        .find(|(candidate, _, _)| *candidate == path)
+        .map(|(_, workload, times_ten)| Gain {
+            workload,
+            times: f32::from(*times_ten) / 10.0,
+        })
+}
+
 /// The directories worth offering for a project, given what it is.
 ///
 /// Offered, never applied on its own: this changes where a running application
@@ -337,6 +386,10 @@ pub struct Layer {
     /// magnitude, and walking a real `node_modules` to the end costs seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub host_files: Option<usize>,
+    /// What moving *this* directory measured. Absent when nobody has measured
+    /// it, which is the honest answer and not a zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gain: Option<Gain>,
 }
 
 /// Copy the host's own directory into the volume, before anything reads it.
@@ -559,6 +612,7 @@ pub async fn status(root: &Path, project: &str) -> Result<Vec<Layer>> {
                 bytes: sizes.get(&volume).copied(),
                 host_files: on_host.then(|| count_files(&host, FILE_COUNT_CAP)),
                 on_host,
+                gain: gain(&path),
                 volume,
                 path,
             }
@@ -611,6 +665,36 @@ pub fn count_files(dir: &Path, cap: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_two_measured_directories_buy_different_things() {
+        // The fact the whole feature is shaped around, and the one an averaged
+        // figure hid. If these ever agree, the list of directories has stopped
+        // being a list and should be a switch.
+        let vendor = gain("vendor").expect("vendor is measured");
+        let storage = gain("storage/framework").expect("storage/framework is measured");
+        assert_eq!(vendor.workload, "boot");
+        assert_eq!(storage.workload, "write");
+        assert_ne!(vendor.workload, storage.workload);
+    }
+
+    #[test]
+    fn a_directory_nobody_measured_carries_no_figure() {
+        // Not a zero and not a neighbour's number: both are claims, and only
+        // one of the three possible answers here is true.
+        for unmeasured in ["bootstrap/cache", "node_modules"] {
+            assert!(gain(unmeasured).is_none(), "{unmeasured}");
+        }
+        assert!(gain("vendor/../storage").is_none());
+    }
+
+    #[test]
+    fn the_multiple_reaches_the_wire_as_a_decimal() {
+        // Held as tenths so the table is exact; what a reader sees is `3.8`.
+        let json = serde_json::to_string(&gain("vendor").unwrap()).unwrap();
+        assert!(json.contains("\"times\":3.8"), "{json}");
+        assert!(json.contains("\"workload\":\"boot\""), "{json}");
+    }
 
     #[test]
     fn a_path_that_could_escape_the_project_is_refused() {

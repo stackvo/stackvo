@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 129 named types, 249 wrappers, 0 field(s) the
+ * Measured at generation: 138 named types, 277 wrappers, 3 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -23,6 +23,26 @@ export interface Adoptable {
     hasFiles: boolean;
     /** string? */
     composeFile?: string;
+}
+
+export interface AdoptBatch {
+    /** string? — the single generate this batch ran; absent when it had nothing to generate */
+    operationId?: string;
+    /** number */
+    adopted: number;
+    /** AdoptOutcome[] */
+    results: AdoptOutcome[];
+}
+
+export interface AdoptOutcome {
+    /** string */
+    name: string;
+    /** string — `adopted`, `skipped` or `failed` */
+    outcome: string;
+    /** string? — `already_managed`, `empty` or `error` */
+    code?: string;
+    /** string? — why, whenever it is not `adopted` */
+    reason?: string;
 }
 
 export interface App {
@@ -375,6 +395,26 @@ export interface Detected {
     evidence: string[];
 }
 
+export interface DevcontainerFile {
+    /** string — relative to `.devcontainer/` */
+    path: string;
+    /** string */
+    contents: string;
+}
+
+export interface DevcontainerPlan {
+    /** string */
+    project: string;
+    /** DevcontainerFile[] */
+    files: DevcontainerFile[];
+    /** string[] — the `${DEV_…}` names the reader has to fill in */
+    secrets: string[];
+    /** string[] — services or config files that could not be carried, with why */
+    skipped: string[];
+    /** string[] — true things a reader would otherwise discover by failing */
+    notes: string[];
+}
+
 export interface DevServerStatus {
     /** bool */
     supported: boolean;
@@ -687,6 +727,32 @@ export interface HookStep {
     command: string;
     /** string? — policy-off | policy-host | needs-consent; absent means it runs */
     blocked?: string;
+}
+
+export interface DeclaredSidecar {
+    /** string — the key the manifest gave it */
+    id: string;
+    /** string — with a tag, always */
+    image: string;
+    /** string — one line the repository wrote, so a reader knows what the extra container is for */
+    about: string;
+    /** string[] — argv, empty when the image's own command stands */
+    command: string[];
+    /** Record<string, string> */
+    env: Record<string, unknown>;
+    /** SidecarVolume[] */
+    volumes: SidecarVolume[];
+    /** string — `stackvo-<project>-<id>`, the hostname the application connects to */
+    container: string;
+}
+
+export interface SidecarVolume {
+    /** string — the handle the manifest gave it */
+    name: string;
+    /** string — where it is mounted inside the container */
+    path: string;
+    /** string — what `docker volume ls` calls it */
+    volume: string;
 }
 
 export interface HostStats {
@@ -1202,6 +1268,10 @@ export interface PerfLayer {
     onHost: boolean;
     /** number? — files in the host copy, counted up to a cap */
     hostFiles?: number;
+    /**
+     * { workload: 'boot'|'write', times: number }? — what moving THIS directory measured; absent when nobody has measured it
+     */
+    gain?: Record<string, unknown>;
 }
 
 export interface PhpIniStatus {
@@ -1429,6 +1499,23 @@ export type ProjectManifest = Record<string, unknown>;
 
 export interface ProjectSpec {
 
+}
+
+export interface Provider {
+    /** string */
+    name: string;
+    /** string? */
+    about?: string;
+    /** string */
+    image: string;
+    /** string[] — empty when this direction is not offered */
+    pull: string[];
+    /** string[] — empty when this direction is not offered */
+    push: string[];
+    /** Record<string, string> */
+    env: Record<string, unknown>;
+    /** string[] — names only */
+    secrets: string[];
 }
 
 export interface PruneReport {
@@ -1995,6 +2082,36 @@ export interface XdebugStatus {
     overlayPath: string;
 }
 
+export interface ProviderSet {
+    /** Provider[] */
+    recipes: Provider[];
+    /** ProviderPlan[] — both directions of every recipe */
+    plans: ProviderPlan[];
+    /** { provider: string, message: string }[] — recipes that could not be read, named */
+    problems: (Record<string, unknown>)[];
+}
+
+export interface ProviderPlan {
+    /** string */
+    provider: string;
+    /** 'pull' | 'push' */
+    direction: 'pull' | 'push';
+    /** string */
+    image: string;
+    /** string[] */
+    command: string[];
+    /** Record<string, string> */
+    env: Record<string, unknown>;
+    /** string[] — names, never values */
+    secrets: string[];
+    /** string — what a consent screen would grant */
+    digest: string;
+    /**
+     * 'policy-off' | 'not-offered' | 'needs-consent' | { missingSecrets: { names: string[] } } | null
+     */
+    blocked: 'policy-off' | 'not-offered' | 'needs-consent' | Record<string, unknown> | null;
+}
+
 export interface StackvoApi {
   /**
    * The web UI never needed this — it ran inside the StackVo repo, so its root was `/app` by mount. A desktop app has to be told, or work it out. Returns the resolved root plus how it was resolved, so the UI can show the user which checkout it is driving.
@@ -2270,7 +2387,7 @@ export interface StackvoApi {
    */
   dbDump(service: string, path: string): Promise<OperationId>;
   /** A backup nobody has restored is a file, not a backup. */
-  dbRestore(service: string, path: string): Promise<OperationId>;
+  dbRestore(service: string, path: string, snapshotFirst: boolean): Promise<OperationId>;
   /**
    * Competitive review G-2: `ddev snapshot` and `lerd db:snapshot` name a point in time and restore it by that name. db_dump could already write a file to a path chosen in a save dialog, which is raw material — a dump in Downloads is not something anybody comes back to.
    */
@@ -2280,7 +2397,7 @@ export interface StackvoApi {
    */
   dbSnapshotTake(service: string, name: string): Promise<string>;
   /** Puts a named snapshot back, replacing what is in the database. */
-  dbSnapshotRestore(service: string, name: string): Promise<string>;
+  dbSnapshotRestore(service: string, name: string, snapshotFirst: boolean): Promise<string>;
   /** Removes one copy. The way out of a directory that would otherwise only grow. */
   dbSnapshotDelete(service: string, name: string): Promise<void>;
   /**
@@ -2352,6 +2469,50 @@ export interface StackvoApi {
    */
   xdebugSet(name: string, enabled: boolean): Promise<XdebugStatus>;
   /**
+   * php-spx samples, so it can be left on during a real page load where Xdebug's profiler costs several times the request \u2014 the case Xdebug's profiler cannot cover, and the one Herd and Lerd both ship. The extension is NOT in contracts/php-extensions.json and cannot be: SPX is not on PECL, and the contract's `special` install method is documented as v1-MUST-REJECT. So it never enters the manifest, the Dockerfile or that contract; it is built into a directory this app owns and mounted, the way the debug bridge is.
+   */
+  spxStatus(name: string): Promise<Record<string, unknown>>;
+  /**
+   * The switch. Writes `projects/<name>/.stackvo/spx.json` and re-renders the compose overlay so the reply describes something that is already true.
+   */
+  spxSet(name: string, enabled: boolean): Promise<unknown>;
+  /**
+   * An extension has to match the exact PHP version, ABI and thread-safety of the binary that loads it, and SPX is built from source.
+   */
+  spxBuild(name: string): Promise<OperationId>;
+  /** One report is a pair of files and deleting one of them leaves the other unreadable. */
+  spxDelete(name: string, key: string): Promise<void>;
+  /** Sampling is cheap enough to leave on, which is exactly why the directory fills. */
+  spxClear(name: string): Promise<Record<string, unknown>>;
+  /**
+   * php-spx's OWN default sampling period is 0, which means it records every call — a tracing profiler with the cost this feature exists to avoid. StackVo defaults to 100 microseconds so the claim on the pane, the profiler you can leave on, is true; 0 is still the right answer for counting a fast function exactly, so it stays reachable.
+   */
+  spxOptions(name: string, samplingPeriod: number | null, builtins: boolean | null): Promise<unknown>;
+  /**
+   * Recording used to need a browser: SPX's control panel is the documented way in and its switch is a cookie only a person can set. The same trigger is a plain request header — php-spx's README profiles a page with `curl --cookie "SPX_ENABLED=1; SPX_KEY=…"` — so the app can send the request itself. That is what makes profiling reachable from a terminal, and from an assistant that cannot open a browser.
+   */
+  spxRecordRequest(name: string, path?: string | null): Promise<unknown>;
+  /**
+   * The slow thing is often not a page. A queue worker, a migration or a test suite is where minutes go, and none of them can be profiled from a browser.
+   */
+  spxRecordCommand(name: string, id: string): Promise<OperationId>;
+  /**
+   * A report row could say a request took 900ms and nothing about which function held it. That answer is in the trace half of the pair and was readable only in SPX's own web UI — which needs a browser, a key and a person.
+   */
+  spxReport(name: string, key: string): Promise<Record<string, unknown>>;
+  /**
+   * Every competitor's step-debugging page is the same page — here is the port, here is the host, here is the path mapping, now type them into your IDE — and all five name the path mapping as the usual reason a breakpoint never hits. xdebug_status already computes both halves of that mapping and left them on screen as two strings to copy. This is the read half of filling them in.
+   */
+  ideDebugStatus(project: string): Promise<Record<string, unknown>>;
+  /**
+   * Writes the debug configuration into the project so the mapping is right the first time rather than after somebody has typed it twice.
+   */
+  ideDebugApply(project: string, target: string): Promise<string>;
+  /**
+   * The undo. A tool that writes into somebody's repository and cannot take it back out is one they do not press the first time.
+   */
+  ideDebugRemove(project: string, target: string): Promise<string>;
+  /**
    * Every competitor exposes memory_limit and upload_max_filesize; StackVo could not, because .stackvo/php.ini was documented but never real — docs/*\/configuration/project.md lists it and the old web UI's DockerService.js:388 lists it, but `php.ini` appears NOWHERE in core/cli. No generator mounted it, so dropping the file in did nothing. The mount had to exist before a form was worth building.
    */
   phpIniStatus(name: string): Promise<PhpIniStatus>;
@@ -2396,7 +2557,7 @@ export interface StackvoApi {
    * P3-17 named Blackfire and SPX, and both are the wrong door. Blackfire ships a template already and needs an ACCOUNT — a signup wall in a local development tool. SPX, XHProf and Excimer are not in contracts/php-extensions.json (only xdebug is), so adding one is a change to a contract shared with upstream, the same class of decision as the Mailpit swap. **Xdebug is already a profiler**: xdebug.mode=profile writes cachegrind files, the extension is in the catalog, and the overlay that sets XDEBUG_MODE already belongs to this app. That is the one route with no contract change attached.
    */
   profilerStatus(name: string): Promise<ProfilerStatus>;
-  profilerSetMode(name: string, mode: 'debug' | 'profile'): Promise<ProfilerStatus>;
+  profilerSetMode(name: string, mode: 'debug' | 'profile' | 'trace' | 'coverage', develop?: boolean): Promise<ProfilerStatus>;
   profilerRead(name: string, id: string): Promise<ProfileReport>;
   profilerDelete(name: string, id: string): Promise<void>;
   /**
@@ -2539,7 +2700,7 @@ export interface StackvoApi {
   /** Turning it off has to be as easy as turning it on. */
   stripeStop(name: string): Promise<void>;
   /**
-   * Every card in the interface carries a help button; this is what the button reads. The documents are markdown under docs/help/<locale>/<topic>.md and are read off disk on every call rather than compiled into the binary — what a button does is prose somebody will want to correct the day after a release, and a correction that costs a rebuild is a correction that does not get made. The cost is that the directory travels with the application, which is what bundle.resources in tauri.conf.json is for.
+   * Every card in the interface carries a help button; this is what the button reads. What a button does is prose somebody will want to correct the day after a release, so the current copy is pulled from the repository (raw.githubusercontent.com, docs/help/<locale>/<topic>.md on main) rather than being as old as the build. Documented in PRIVACY.md: the request names the topic and the locale, which is a fact about what the person was stuck on.
    */
   helpDoc(topic: string, locale: string): Promise<string>;
   /**
@@ -2592,6 +2753,28 @@ export interface StackvoApi {
    * Writes stackvo.json for a directory that is already there, then regenerates. The counterpart of project_create, which requires the directory to be absent.
    */
   projectAdopt(name: string, spec?: ProjectSpec, overrides?: Record<string, unknown>): Promise<OperationId>;
+  /**
+   * The project directory IS what Herd and Valet call a park, and `project_adoptable` already reads every child of it and says what each one is — but the list offered one button per row, so a machine with eleven unmanaged checkouts needed eleven clicks. On the checkout project_adoptable was written against, 11 of 21 directories were in that state.
+   */
+  projectAdoptMany(names: string[]): Promise<AdoptBatch>;
+  /**
+   * A-7. The competitor row read "the generator already renders compose, and .devcontainer/devcontainer.json is a small sibling of it" — and that was written without reading render_compose_service. What the generator writes is bound to THIS machine in five ways, every one load-bearing: absolute paths under the user's home, a `context:` relative to `generated/`, the shared `stackvo-net`, Traefik labels in a file with no Traefik in it, and the backing services in a different compose file rendered with values pulled from the OS keystore. Copied into a repository it cannot start anywhere. So this is a second rendering of the same manifest, not the first one relabelled.
+   */
+  projectDevcontainerPlan(name: string): Promise<DevcontainerPlan>;
+  /** The other half. The plan is what the user reads; this is what puts it in the repository. */
+  projectDevcontainerWrite(name: string): Promise<string[]>;
+  /**
+   * A-1, and the largest gap the competitor review found: DDEV ships `ddev pull`/`ddev push` with recipes for Upsun, Acquia, Lagoon and Pantheon, Lando and Herd have their own, and the concept did not exist here at all — `grep -rn 'fn pull|pull_db|remote_db|rsync' src-tauri/src` returned nothing.
+   */
+  projectProviders(name: string): Promise<ProviderSet>;
+  /**
+   * A provider command is declared by a repository and reaches the network with the developer's credentials. That is hooks.rs's threat model word for word, so this borrows its answer: consent is per project, keyed on a digest of what would run.
+   */
+  providerConsent(name: string, provider: string, direction: 'pull' | 'push', granted: boolean): Promise<void>;
+  /** A recipe names what it needs and never carries it. The manifest is committed. */
+  providerSecretSet(name: string, provider: string, key: string, value: string): Promise<void>;
+  /** The verb. Everything else in this group decides whether it may happen. */
+  providerRun(name: string, provider: string, direction: 'pull' | 'push', service: string, snapshotFirst: boolean): Promise<OperationId>;
   projectManifestRead(name: string): Promise<ProjectManifest>;
   /**
    * Editing an existing project is impossible today — the UI can only create and delete. MUST honour the write rules in project.schema.json (extensions last, one runtime block).
@@ -2609,6 +2792,10 @@ export interface StackvoApi {
    * B-3. A hook is a command from a repository somebody cloned, so what would run has to be readable before it does.
    */
   projectHooksPlan(name: string): Promise<HookPlan[]>;
+  /**
+   * ADR 0023 let a repository declare a container of its own, and ADR 0027 answers 'can I have Ollama or Qdrant' with 'write a sidecars block'. Both were true and neither was reachable: the block was parsed, validated and rendered into the project's compose file, and NOTHING showed it. `hooks` — the sibling block, from the same manifest — has had a pane since it was written. So the answer an ADR points at was a feature nobody could find, which is the same as not having it.
+   */
+  projectSidecars(name: string): Promise<DeclaredSidecar[]>;
   /**
    * Approves this project's HOST commands exactly as they are now. The digest is sent back rather than recomputed server-side, and that round trip is the point: it is a receipt for the list the person actually read. MUST refuse when the manifest changed between the screen being drawn and the button being pressed — that refusal is what makes this consent rather than a checkbox. Container steps are never gated: the container already runs the repository's code.
    */
@@ -2677,6 +2864,36 @@ export interface StackvoApi {
   /** The way back out. A registration that can only be added is one people avoid adding. */
   agentsRemove(client: string): Promise<string>;
   /**
+   * agents_install makes the MCP tools reachable; it does not make them used. An assistant that has never seen this stack reads the source, guesses at nginx and edits a generated file, because nothing told it stackvo_doctor answers that question in one call. Every rival ships this half — ServBay files 'AI Rule' beside its MCP documentation, EnvKit installs a skill, Lerd writes context files — and this repository had no answer to it. This is the read half: which rules files exist, which carry a StackVo block and which carry an older one.
+   */
+  rulesStatus(project?: string): Promise<Record<string, unknown>[]>;
+  /**
+   * The write half of rules_status. Puts the guidance an assistant needs — which tool answers which question, that generated files are overwritten, that a writing tool can stop the whole stack — into the file that assistant already reads.
+   */
+  rulesApply(target: string, scope: 'workspace' | 'global', project?: string): Promise<string>;
+  /**
+   * The undo. A feature that writes into somebody's repository and cannot take it back out again is one they do not press the first time.
+   */
+  rulesRemove(target: string, scope: 'workspace' | 'global', project?: string): Promise<string>;
+  /**
+   * Every rival ships a Tooling page — Yerd's installs composer, node, bun, the Laravel installer and wp-cli onto the host and shims them onto PATH. Half of that page has no place here and half of it was missing entirely. The half with no place: those five run in the project's container at the version the project declared, and a host copy would be a second answer to "which composer runs" whose answer is wrong. The half that was missing: `stackvo` and `stackvo-mcp` are programs this repository builds, the README documents them, agents_install registers one of them with six assistants — and nothing put either where a shell would find it. This reads that state: the directory, the links in it, the four shells' startup files, and the four HOST tools this app itself shells out to.
+   */
+  toolingStatus(): Promise<Record<string, unknown>>;
+  /**
+   * The `yerd path install` half, which this app had no equivalent of. Links `stackvo` and `stackvo-mcp` into the directory the app owns and writes one line into one shell's startup file.
+   */
+  toolingPathApply(shell: 'zsh' | 'bash' | 'fish' | 'powershell'): Promise<string>;
+  /**
+   * The undo. A feature that edits somebody's .zshrc and cannot take it back out is one they do not press the first time.
+   */
+  toolingPathRemove(shell: 'zsh' | 'bash' | 'fish' | 'powershell'): Promise<string>;
+  /**
+   * mkcert is a host requirement this app could report and never obtain: without it the stack runs and every browser warns. It is one static binary its author publishes, which makes it the one tool in the catalogue where fetching is the right answer rather than a second copy of `docker pull`.
+   */
+  toolingInstall(tool: string): Promise<string>;
+  /** The undo for tooling_install. */
+  toolingRemove(tool: string): Promise<string>;
+  /**
    * The desktop's own accent colour, so the app can match it instead of shipping a brand colour that clashes with everyone's system theme.
    */
   systemAccent(): Promise<Record<string, unknown>>;
@@ -2690,7 +2907,7 @@ export interface StackvoApi {
    */
   localeGet(): Promise<'en' | 'tr'>;
   /**
-   * The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why M-7 sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was.
+   * The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why M-7 sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was. The progress figure counted the strings a pack HELD, and the seed is the whole English catalogue — so an untouched pack read `2000 of 2000 (100%)` the moment it was created. It counts what differs from English now.
    */
   localePacks(): Promise<Record<string, unknown>[]>;
   /** The messages, for the front end to merge over English. */

@@ -33,6 +33,35 @@
 //! - `write`  — two thousand small files created, read back and removed, in the
 //!   directory a framework writes its compiled views and cache into
 //!
+//! ## What it measured
+//!
+//! On the machine this shipped from, and the table is here rather than only in
+//! the reader's terminal because it is the **source** of a number the product
+//! states. It lived in a Vue file's comment: `PerfPane.vue` carried the only
+//! written record of what this program printed, and the two locale files
+//! restated a rounded average of it as prose a translator had to re-derive.
+//! `src-tauri/tests/perf_claims.rs` reads the block below and holds
+//! `perf::GAINS` against it, so the number in the product and the number this
+//! produced cannot drift apart in silence.
+//!
+//! ```text
+//! MEASURED
+//! vendor             boot   3.8
+//! storage/framework  write  2.8
+//! ```
+//!
+//! Two rows and not four. `perf::suggestions` also offers `bootstrap/cache`
+//! and `node_modules`, and neither has been run through this — so neither
+//! carries a figure anywhere, and the pane says nothing about them rather than
+//! borrowing one of these. A row with no number is a row nobody measured.
+//!
+//! The shape matters more than the multiples: `vendor` in a volume buys the
+//! **boot** and does nothing at all for writes; `storage/framework` is the one
+//! that buys the **writes**. That is the whole reason the feature is a list of
+//! directories rather than one switch, and averaging the two into a single
+//! "2–3×" — which is what the product said — hides exactly the fact the design
+//! rests on.
+//!
 //! ## What it leaves behind
 //!
 //! Nothing. A scratch directory under the OS temp directory and two named

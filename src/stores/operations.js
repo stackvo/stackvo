@@ -90,6 +90,7 @@ export const useOperationsStore = defineStore('operations', () => {
       ...EVENTS.build,
       ...EVENTS.generate,
       ...EVENTS.compose,
+      ...EVENTS.spx,
       ...EVENTS.project,
       ...EVENTS.service,
     ];

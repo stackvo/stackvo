@@ -221,6 +221,34 @@ pub struct Pack {
     /// Set when the file is on disk and unreadable as JSON, so a typo in a
     /// hand-edited pack is reported rather than silently ignored.
     pub broken: Option<String>,
+    /// `rtl` or `ltr`, when the pack says so.
+    ///
+    /// Direction was one global appearance switch applied to every locale at
+    /// once — right for the two languages shipped here, both left to right, and
+    /// wrong the moment a pack is Arabic or Farsi. Of the five languages the
+    /// nearest competitor ships, two are right-to-left; a translator had no way
+    /// to state it, so their window rendered left to right until they found a
+    /// switch in Settings that then mirrored English as well.
+    ///
+    /// `None` when the pack does not say, which leaves that preference in
+    /// charge. Anything other than the two words is `None` rather than an
+    /// error: a pack is a hand-edited file, and one typo in one optional key
+    /// should cost the direction, not the language.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<&'static str>,
+}
+
+/// The two words a pack may use, or nothing.
+///
+/// `&'static str` rather than the pack's own bytes: this is read out of a file
+/// somebody hand-edited and travels to a front end that puts it in an
+/// attribute, so what leaves here is one of two constants or nothing at all.
+fn direction_of(value: &serde_json::Value) -> Option<&'static str> {
+    match value.get("language")?.get("direction")?.as_str()? {
+        "rtl" => Some("rtl"),
+        "ltr" => Some("ltr"),
+        _ => None,
+    }
 }
 
 fn count_strings(value: &serde_json::Value) -> usize {
@@ -255,7 +283,7 @@ pub fn packs() -> Vec<Pack> {
             continue;
         }
 
-        let (label, strings, broken) = match std::fs::read_to_string(&path)
+        let (label, strings, broken, direction) = match std::fs::read_to_string(&path)
             .ok()
             .map(|text| serde_json::from_str::<serde_json::Value>(&text))
         {
@@ -268,9 +296,15 @@ pub fn packs() -> Vec<Pack> {
                     .to_string(),
                 count_strings(&value),
                 None,
+                direction_of(&value),
             ),
-            Some(Err(e)) => (tag.to_string(), 0, Some(e.to_string())),
-            None => (tag.to_string(), 0, Some("could not be read".to_string())),
+            Some(Err(e)) => (tag.to_string(), 0, Some(e.to_string()), None),
+            None => (
+                tag.to_string(),
+                0,
+                Some("could not be read".to_string()),
+                None,
+            ),
         };
 
         out.push(Pack {
@@ -279,6 +313,7 @@ pub fn packs() -> Vec<Pack> {
             path: path.display().to_string(),
             strings,
             broken,
+            direction,
         });
     }
     out.sort_by(|a, b| a.tag.cmp(&b.tag));
@@ -350,6 +385,33 @@ pub fn delete_pack(tag: &str) -> crate::error::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pack_may_state_which_way_it_reads() {
+        let rtl = serde_json::json!({ "language": { "label": "العربية", "direction": "rtl" } });
+        assert_eq!(direction_of(&rtl), Some("rtl"));
+        assert_eq!(
+            direction_of(&serde_json::json!({ "language": { "direction": "ltr" } })),
+            Some("ltr")
+        );
+    }
+
+    #[test]
+    fn a_pack_that_says_nothing_leaves_the_preference_in_charge() {
+        // And so does one that says something else. A pack is a hand-edited
+        // file: one typo in one optional key should cost the direction, not the
+        // language.
+        for value in [
+            serde_json::json!({ "language": { "label": "Deutsch" } }),
+            serde_json::json!({ "language": { "direction": "RTL" } }),
+            serde_json::json!({ "language": { "direction": "right-to-left" } }),
+            serde_json::json!({ "language": { "direction": true } }),
+            serde_json::json!({ "app": { "close": "Schließen" } }),
+            serde_json::json!("not an object at all"),
+        ] {
+            assert_eq!(direction_of(&value), None, "{value}");
+        }
+    }
 
     #[test]
     fn every_shape_a_locale_arrives_in_reads_as_turkish() {

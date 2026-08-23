@@ -161,6 +161,16 @@ hints! {
     PERF_SEED_FAILED = "perfSeedFailed",
         "The directory could not be copied into the volume, so nothing was changed.";
 
+    // ------------------------------------------------------------- providers
+    PROVIDER_WROTE_NOTHING = "providerWroteNothing",
+        "The command finished without leaving a dump. Check what it prints — a remote \
+         command that failed usually still exits cleanly.";
+    PROVIDER_NEEDS_CONSENT = "providerNeedsConsent",
+        "Read the command on the card and approve it. Editing the recipe asks again.";
+    PROVIDER_SECRET_MISSING = "providerSecretMissing",
+        "Fill in the values this recipe names. They are kept in the OS keystore, \
+         never in the project file.";
+
     // ---------------------------------------------------------------- local DNS
     TLD_IS_ONE_LABEL = "tldIsOneLabel",
         "A suffix ends in one label of letters, digits and hyphens — stackvo.loc.";
@@ -225,6 +235,32 @@ hints! {
     AGENT_CONFIG_UNPARSEABLE = "agentConfigUnparseable",
         "This file is not plain JSON — several editors allow comments in it, which cannot be \
          edited safely without deleting them. Open it and paste the block shown here.";
+    LAUNCH_JSON_HAS_COMMENTS = "launchJsonHasComments",
+        "VS Code allows comments in this file, which cannot be edited safely without deleting \
+         them. Open it and paste the block shown here.";
+    PHPSTORM_IS_NOT_WRITTEN = "phpstormIsNotWritten",
+        "PhpStorm keeps this file in memory and rewrites it on exit, so an edit made underneath \
+         it would be lost. Copy the block shown and paste it in.";
+    SPX_NEEDS_BUILDING = "spxNeedsBuilding",
+        "Build it first — it is compiled in a throwaway container of the image this project \
+         uses, which takes a few minutes and is done once per PHP version.";
+    SPX_RECORD_A_PATH = "spxRecordAPath",
+        "Give a path on this site, starting with a slash — `/`, `/checkout`, `/api/orders?page=2`. \
+         The address itself comes from the project.";
+    SPX_TRACE_IS_MISSING = "spxTraceIsMissing",
+        "A recording is two files and the larger one is gone. Delete this report and record again.";
+    SPX_RECORD_NEEDS_THE_MOUNT = "spxRecordNeedsTheMount",
+        "The profiler has to be switched on and in the running container before a recording can \
+         be started — recreate the container if the pane says it is not there yet.";
+    SPX_RECORDED_NOTHING = "spxRecordedNothing",
+        "The request went through and the profiler wrote nothing. That is what a key mismatch \
+         looks like: restart the project so it reads the ini again, then try once more.";
+    SPX_NEEDS_THE_LOCAL_CA = "spxNeedsTheLocalCa",
+        "The site is served over HTTPS with the certificate authority this workspace generated, \
+         and the app has to read it to verify one. Settings has a certificates section for it.";
+    SPX_RECORD_NEEDS_THE_SITE = "spxRecordNeedsTheSite",
+        "The site did not answer. Start the project and open it in a browser once before \
+         recording a request against it.";
     BUILD_THE_MCP_SERVER = "buildTheMcpServer",
         "Build it first: `cargo build --release --bin stackvo-mcp` in the StackVo checkout.";
     KEYSTORE_ENTRY_IS_GONE = "keystoreEntryIsGone",
@@ -325,6 +361,20 @@ hints! {
         "An instance is still using this package. Remove it, then uninstall.";
     SERVICE_IS_SINGLE_INSTANCE = "serviceIsSingleInstance",
         "This service runs one version at a time. Remove the instance you have first.";
+
+    // ---------------------------------------------------------------- tooling
+    CLI_NOT_BUILT = "cliNotBuilt",
+        "Neither command was found beside this application. Build them with \
+         `cargo build --release --bin stackvo --bin stackvo-mcp`, then try again.";
+    PATH_ENTRY_BY_HAND = "pathEntryByHand",
+        "Copy the line shown on the Tooling page into that startup file yourself — \
+         a file this large is not one to rewrite unasked.";
+    TOOL_IS_NOT_MANAGED = "toolIsNotManaged",
+        "This one is installed by its own installer rather than by StackVo. \
+         The Tooling page says where to get it.";
+    TOOL_DIGEST_MISMATCH = "toolDigestMismatch",
+        "The download does not match the checksum compiled into this build and was \
+         discarded. Try again, and report it if it happens twice.";
 }
 
 #[cfg(test)]

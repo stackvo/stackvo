@@ -69,15 +69,27 @@ use serde::Serialize;
 /// standing between it and a password is one boolean argument, and
 /// `service_connection` proves that boolean is caller-controlled.
 ///
-/// Fifteen of a hundred and twelve reads. Wide enough to be safe, narrow enough
-/// that the surface still answers almost everything.
-pub const REACHES_THE_KEYSTORE: [&str; 15] = [
+/// Sixteen of a hundred and sixteen reads. Wide enough to be safe, narrow
+/// enough that the surface still answers almost everything.
+///
+/// `tunnel_providers` is the sixteenth and arrived with the eight providers.
+/// It hands back a `hasToken` boolean and no token, which is precisely the
+/// argument this constant already refuses to accept: `tunnel::providers` calls
+/// `secrets::read` to compute that boolean, and a list named for what is
+/// proved rather than for what is suspected has to hold every path, including
+/// the ones that look harmless today. The fixpoint found it; nothing else had.
+pub const REACHES_THE_KEYSTORE: [&str; 17] = [
     "db_targets",
     "doctor",
     "generator_verify",
     "instance_reveal",
     "instance_settings",
     "mail_relay_get",
+    // It hands back no value — a provider plan carries secret *names* and has
+    // nowhere to put one. It is here anyway, because presence is information:
+    // "this machine holds a production SSH key for this project" is a sentence
+    // this surface should not be answering over loopback either.
+    "project_providers",
     "query_log",
     "request_timeline",
     "secrets_status",
@@ -85,6 +97,7 @@ pub const REACHES_THE_KEYSTORE: [&str; 15] = [
     "service_db_clients",
     "service_reveal",
     "stripe_status",
+    "tunnel_providers",
     "worktree_plan",
     "worktree_support",
 ];
@@ -318,11 +331,12 @@ mod transport_tests {
                 .find(|t| t.name == name)
                 .expect("a served tool is in the table");
             assert!(!tool.writes, "{name} writes");
-            assert!(
-                exposable(tool.command),
-                "{name} stands for `{}`, which is not exposable",
-                tool.command
-            );
+            for command in tool.commands() {
+                assert!(
+                    exposable(command),
+                    "{name} reaches `{command}`, which is not exposable"
+                );
+            }
         }
         assert!(
             !tools().is_empty(),
@@ -332,6 +346,28 @@ mod transport_tests {
             tools().len() < crate::mcp::TOOLS.len(),
             "every tool is served, so neither policy is doing anything"
         );
+    }
+
+    /// The regression this rule was written for, named rather than implied.
+    ///
+    /// A container's log is kept off this surface because `container_logs_open`
+    /// is a `stream`. Serving an application log's contents beside it would be
+    /// the same bytes through a different door — and the door was open, because
+    /// the tool that reads them names the command that merely *lists* them.
+    #[test]
+    fn no_log_file_contents_reach_this_surface() {
+        assert!(
+            !tools().contains(&"stackvo_log_read"),
+            "application log contents are served while container logs are not"
+        );
+        assert!(
+            !tools().contains(&"stackvo_logs"),
+            "container logs are served"
+        );
+
+        // And the listing halves still are: what is denied is the content, not
+        // the knowledge that a file changed a minute ago.
+        assert!(tools().contains(&"stackvo_log_files"));
     }
 
     #[test]
@@ -691,13 +727,24 @@ pub fn route(request: &Request, expected_token: &str) -> Result<Asked, (u16, &'s
 /// Every tool this surface will actually run.
 ///
 /// The intersection of the two policies, computed rather than listed. A tool
-/// added to `mcp::TOOLS` joins this set only if it reads and if its contract
-/// command passes `exposable` — so the keystore rule reaches a surface that
-/// never mentions it.
+/// added to `mcp::TOOLS` joins this set only if it reads and if **every**
+/// contract command it reaches passes `exposable` — so the keystore rule
+/// reaches a surface that never mentions it.
+///
+/// Every, not just the one it names. A tool is allowed to answer more than one
+/// question — `stackvo_project` reads the certificate and the PHP limits along
+/// with the manifest, because that is the answer somebody wanted — and asking
+/// `exposable` about the headline command alone was therefore a check with a
+/// gap in it exactly the width of whatever else the dispatch touched.
+/// `stackvo_log_read` is what walked through: it names `app_logs`, a `query`
+/// that lists files, and returns the tail of one, which is `app_log_open` — a
+/// `mutation`. Container logs were kept off this surface by their `stream`
+/// kind, and application log *contents* would have been served beside them.
+/// `mcp::Tool::also` is where that reach is declared, and this is what reads it.
 pub fn tools() -> Vec<&'static str> {
     let mut out: Vec<&'static str> = crate::mcp::TOOLS
         .iter()
-        .filter(|t| !t.writes && exposable(t.command))
+        .filter(|t| !t.writes && t.commands().all(exposable))
         .map(|t| t.name)
         .collect();
     out.sort_unstable();

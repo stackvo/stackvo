@@ -35,3 +35,17 @@ Alev grafiği çok uzun bir izin tamamını çizemez. Böyle bir durumda kart, g
 
 - Önce Xdebug açık olmalı. Profilleme aynı eklentinin bir kipidir.
 - Kip değişikliği konteyner yeniden oluşturulana kadar geçerli olmaz. Kart uyuşmazlığı söyler.
+
+## Kapsam (coverage)
+
+Dördüncü mod ve kendi başına hiçbir şey kaydetmeyen tek mod: PHPUnit'in çağırdığı API'yi açar, raporu PHPUnit yazar. Uygulandıktan sonra testlerinizi bir kapsam bayrağıyla çalıştırın — kayıt listesinde onun için hiçbir şey belirmez ve panel bunu sizi bekletmek yerine söyler.
+
+Bu mod olmadan `--coverage-html` boş bir rapor ve çoğu kişinin hiç okumadığı bir uyarı üretir.
+
+## Okunabilir dump ve yığın izleri
+
+Xdebug'ın `develop`'ı beşinci bir mod değildir. `xdebug.mode` bir **listedir** ve `develop` seçtiğiniz modun yanında yer alır — yani `XDEBUG_MODE` seçiminizin yerine geçmek yerine `debug,develop` olur. `var_dump`'ı okunabilir yapar ve bir uyarıya yığın izi ekler.
+
+İstenmedikçe kapalıdır, çünkü kendi kodunuzun bastığı çıktıyı değiştirir; hata ayıklanan kodun çıktısını değiştiren bir aracın sizin seçiminiz olması gerekir.
+
+Anahtar ile mod düğmeleri tek bir dosya üzerindeki iki kontroldür: birini oynatmak diğerini olduğu gibi bırakır.

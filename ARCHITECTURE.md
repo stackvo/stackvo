@@ -20,8 +20,8 @@ Three parts, in the order a request travels:
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | `src/`               | 38k lines               |
-| Back end — Rust, 97 modules         | `src-tauri/src/`     | 76k lines               |
-| The boundary between them           | `contracts/ipc.json` | 255 commands, 69 events |
+| Back end — Rust, 105 modules        | `src-tauri/src/`     | 76k lines               |
+| The boundary between them           | `contracts/ipc.json` | 284 commands, 70 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -71,7 +71,7 @@ document behind it:
 
 ### 3.1 Layers
 
-`src-tauri/src/` is flat — 97 modules, no subdirectories — but it is not
+`src-tauri/src/` is flat — 105 modules, no subdirectories — but it is not
 unstructured. There are four bands, and the dependency arrows only ever point
 downward:
 
@@ -82,7 +82,7 @@ downward:
   commands.rs       12.8k   the IPC surface: 247 #[tauri::command] functions
       │                     argument validation, orchestration, nothing else
       ▼
-  domain            53.3k   97 modules: generator, manifest, certs, hosts,
+  domain            53.3k   105 modules: generator, manifest, certs, hosts,
       │                     mail, xdebug, profile, preset, migrate, worktree, …
       │                     one subject each; no Tauri types
       ▼
@@ -106,19 +106,20 @@ once.
 
 ### 3.2 The modules, by subject
 
-| Subject        | Modules                                                                     | What it owns                                                                                                               |
-| -------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Rendering      | `generator`, `template`, `skeleton`, `scaffold`                             | Everything under `generated/`, the per-project Dockerfile, and the files a new project starts with                         |
-| The manifest   | `manifest`, `detect`, `migrate`                                             | `stackvo.json`: its schema, guessing one for an adopted folder, and moving old ones forward                                |
-| Docker         | `engine`, `runner`, `inflight`                                              | Talking to the daemon (bollard), running `docker compose` as a streamed operation, and refusing two at once on one subject |
-| Networking     | `certs`, `hosts`, `elevate`, `tunnel`                                       | TLS via mkcert, `/etc/hosts`, the one privileged call, and the Cloudflare sidecar                                          |
-| Services       | `db`, `worker`, `quickcmd`, `repl`, `release`, `stats`                      | The optional stack, the per-project sidecars, the command catalogue, the snippet workbench, and the production image       |
-| PHP            | `phpini`, `xdebug`, `profile`, `debugbridge`                                | The overlay that reaches a running container, and the profiler's output                                                    |
-| Node           | `devserver`                                                                 | The dev-server sidecar and the `allowedHosts` snippet                                                                      |
-| Mail           | `mail`                                                                      | The catcher, its search, and the HTML/link checks                                                                          |
-| Branches       | `git`, `worktree`                                                           | Cloning with the user's own git, and giving a branch its own directory, hostname, database and environment                 |
-| Diagnosis      | `doctor`, `preflight`, `diagnostics`, `applog`, `crash`                     | What is wrong, what can be fixed automatically, and what to send when it cannot                                            |
-| The app itself | `workspace`, `preset`, `config`, `locale`, `watcher`, `tray`, `menu`, `mcp`, `cli` | Where things live, sharing that setup, and the three surfaces other than the window: the tray, the MCP server and `stackvo` |
+| Subject        | Modules                                                                            | What it owns                                                                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rendering      | `generator`, `template`, `skeleton`, `scaffold`                                    | Everything under `generated/`, the per-project Dockerfile, and the files a new project starts with                                                                                                   |
+| The manifest   | `manifest`, `detect`, `migrate`                                                    | `stackvo.json`: its schema, guessing one for an adopted folder, and moving old ones forward                                                                                                          |
+| Docker         | `engine`, `runner`, `inflight`                                                     | Talking to the daemon (bollard), running `docker compose` as a streamed operation, and refusing two at once on one subject                                                                           |
+| Networking     | `certs`, `hosts`, `elevate`, `tunnel`                                              | TLS via mkcert, `/etc/hosts`, the one privileged call, and the Cloudflare sidecar                                                                                                                    |
+| Services       | `db`, `worker`, `quickcmd`, `repl`, `release`, `stats`                             | The optional stack, the per-project sidecars, the command catalogue, the snippet workbench, and the production image                                                                                 |
+| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`                                | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — and their output                                                                      |
+| Node           | `devserver`                                                                        | The dev-server sidecar and the `allowedHosts` snippet                                                                                                                                                |
+| Mail           | `mail`                                                                             | The catcher, its search, and the HTML/link checks                                                                                                                                                    |
+| Branches       | `git`, `worktree`                                                                  | Cloning with the user's own git, and giving a branch its own directory, hostname, database and environment                                                                                           |
+| Diagnosis      | `doctor`, `preflight`, `diagnostics`, `applog`, `crash`                            | What is wrong, what can be fixed automatically, and what to send when it cannot                                                                                                                      |
+| The app itself | `workspace`, `preset`, `config`, `locale`, `watcher`, `tray`, `menu`, `mcp`, `cli` | Where things live, sharing that setup, and the three surfaces other than the window: the tray, the MCP server and `stackvo`                                                                          |
+| Assistants     | `agents`, `rules`, `agentctx`, `ide`                                               | Registering the MCP server with the clients on this machine, writing the rules that say when to use it, the context file an agent inside a container reads, and the debug configuration an IDE needs |
 
 ### 3.3 State
 
@@ -197,7 +198,7 @@ rejections".
 
 ## 5. The contract
 
-`contracts/ipc.json` is the specification of the boundary: 255 commands, 69
+`contracts/ipc.json` is the specification of the boundary: 284 commands, 70
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
@@ -278,13 +279,13 @@ One document, [`docs/durum.md`](docs/durum.md). It replaced five — two
 competitive reviews, a readiness review, a platform matrix and ten ADR files —
 when keeping "what is left" in five places stopped being readable.
 
-| Section | Answers |
-| --- | --- |
-| §1 | Where the record of delivered work is — `CHANGELOG.md`, §6 and the git history. Finished items leave that document. |
-| §2–§3 | What the product cannot do against ten rivals, and what the engineering will not carry at ten developers and three hundred machines. |
-| §4–§5 | What to do next, and what is waiting on a decision only the owner can make. |
-| §6 | **The decisions**, numbered. Comments in this codebase say "ADR 0005"; that is §6. |
-| §7 | The measurements, held to the tree by `platform_matrix_claims.rs`. |
+| Section | Answers                                                                                                                              |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| §1      | Where the record of delivered work is — `CHANGELOG.md`, §6 and the git history. Finished items leave that document.                  |
+| §2–§3   | What the product cannot do against ten rivals, and what the engineering will not carry at ten developers and three hundred machines. |
+| §4–§5   | What to do next, and what is waiting on a decision only the owner can make.                                                          |
+| §6      | **The decisions**, numbered. Comments in this codebase say "ADR 0005"; that is §6.                                                   |
+| §7      | The measurements, held to the tree by `platform_matrix_claims.rs`.                                                                   |
 
 Two of those sections have gates and three do not, and the document says which:
 §6 and §7 fail the build when they drift, while "not done" is not a measurable
@@ -300,7 +301,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (97 modules, 255 commands) come from
+covers `README.md`; the counts above (105 modules, 284 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 

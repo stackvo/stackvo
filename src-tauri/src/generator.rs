@@ -644,6 +644,18 @@ fn lang_image(runtime: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
+/// `FROM` line for a lang runtime, without the rest of the Dockerfile.
+///
+/// Public for [`crate::devcontainer`], which needs the same base image and
+/// none of what follows it: the dev Dockerfile copies the source, installs and
+/// sets a `CMD`, and a container somebody develops *inside* must do none of
+/// those three. Derived here rather than there so the two cannot disagree
+/// about which image a runtime means.
+pub fn lang_base_image(runtime: &str, version: &str) -> Option<String> {
+    let (image, suffix) = lang_image(runtime)?;
+    Some(format!("{image}:{version}{suffix}"))
+}
+
 pub fn lang_dockerignore(runtime: &str) -> Option<&'static str> {
     match runtime {
         "python" => Some(
@@ -2398,6 +2410,31 @@ mod tests {
 
         // And no host port reaches the file, ever.
         assert!(!out.contains("ports:"), "{out}");
+
+        // **The same network as the project's own service**, which is what
+        // makes the container name a hostname the application can resolve.
+        // `SidecarsPane` tells the reader "the application reaches it at
+        // stackvo-shop-search"; that sentence is true only while this holds,
+        // and nothing else in this file would notice it stopping.
+        assert!(
+            out.contains("    networks:\n      - stackvo-net\n"),
+            "{out}"
+        );
+        // The project's own service block names the same one, so the two are
+        // asserted against each other rather than against a literal twice.
+        assert_eq!(
+            out.matches("      - stackvo-net\n").count(),
+            out.matches("    networks:\n").count(),
+            "every block in this file must be on the one network:\n{out}"
+        );
+
+        // The compose key and the container name are one string, so the name
+        // resolves whichever of the two Docker's DNS is asked for.
+        assert!(out.contains("  stackvo-shop-search:\n"), "{out}");
+        assert!(
+            out.contains(r#"container_name: "stackvo-shop-search""#),
+            "{out}"
+        );
     }
 
     /// The property the whole design rests on: two clones cannot collide.

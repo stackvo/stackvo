@@ -30,7 +30,7 @@ vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(), openPath: vi.fn(
 vi.mock('@/lib/events', () => ({
   listenAll: async () => () => {},
   // The operations store spreads these at bind(); an empty object throws.
-  EVENTS: { build: [], generate: [], compose: [], project: [], service: [] },
+  EVENTS: { build: [], generate: [], compose: [], spx: [], project: [], service: [] },
   REFRESH_TRIGGERS: [],
 }));
 /**

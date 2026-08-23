@@ -174,7 +174,10 @@ test('says the engine is down rather than rendering an empty stack', async ({ pa
 test('a menu row is rounded to the same radius as the menu around it', async ({ page }) => {
   await page.goto('/');
 
-  await page.getByRole('button', { name: /language|dil/i }).first().click();
+  await page
+    .getByRole('button', { name: /language|dil/i })
+    .first()
+    .click();
   const row = page.locator('.v-overlay--active .v-list-item').first();
   await expect(row).toBeVisible();
 
@@ -191,4 +194,40 @@ test('a menu row is rounded to the same radius as the menu around it', async ({ 
 
   expect(measured.item, 'the menu row does not follow the radius setting').toBe(measured.app);
   expect(measured.overlay, 'the hover highlight does not follow the row').toBe(measured.app);
+});
+
+/**
+ * The help button stays visible while the pointer is on it.
+ *
+ * It used to take the accent colour on hover, and the button every page carries
+ * sits in `PageLayout`'s toolbar, which is `bg-primary` — so the one place the
+ * control is guaranteed to appear is the one place hovering it painted primary
+ * on primary and the glyph disappeared under the cursor. The same header colour
+ * is `SideSheet`'s.
+ *
+ * Both halves are measurable only here: jsdom resolves no cascade, so the
+ * colour a surface hands its text is invisible to it, and a box that is 12px
+ * around an 18px icon is a rect it reports as zero.
+ */
+test('the help button in the page banner survives its own hover', async ({ page }) => {
+  await page.goto('/#/settings');
+
+  const help = page.locator('.v-toolbar.bg-primary .help-btn').first();
+  await expect(help).toBeVisible();
+
+  // Big enough to aim at. `size` follows the density setting, and at compact an
+  // x-small icon button computes to 12px — smaller than the icon drawn in it.
+  const box = await help.boundingBox();
+  expect(box.width, 'the help button is too small to press').toBeGreaterThanOrEqual(24);
+  expect(box.height, 'the help button is too small to press').toBeGreaterThanOrEqual(24);
+
+  await help.hover();
+
+  // Not "is it a particular colour" — that would pin the design. The claim is
+  // only that the glyph is not the field behind it.
+  const { icon, banner } = await help.evaluate((el) => ({
+    icon: getComputedStyle(el.querySelector('.v-icon')).color,
+    banner: getComputedStyle(el.closest('.v-toolbar')).backgroundColor,
+  }));
+  expect(icon, 'the hovered help icon is the colour of the bar behind it').not.toBe(banner);
 });

@@ -578,7 +578,7 @@ onUnmounted(() => {
               <v-tooltip activator="parent" location="bottom">{{ t('app.socialMedia') }}</v-tooltip>
             </v-btn>
           </template>
-          <v-list>
+          <v-list class="px-2 py-2">
             <v-list-item v-for="s in SOCIAL" :key="s.title" @click="openUrl(s.url)">
               <template #prepend
                 ><v-icon>{{ s.icon }}</v-icon></template

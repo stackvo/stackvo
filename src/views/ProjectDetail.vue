@@ -11,6 +11,7 @@ import IndicatorPane from '@/components/project/IndicatorPane.vue';
 import ContainerPane from '@/components/project/ContainerPane.vue';
 import DockerfilePane from '@/components/project/DockerfilePane.vue';
 import DumpsPane from '@/components/project/DumpsPane.vue';
+import ProvidersPane from '@/components/project/ProvidersPane.vue';
 import QueryLogPane from '@/components/project/QueryLogPane.vue';
 import TimelinePane from '@/components/project/TimelinePane.vue';
 import DevServerPane from '@/components/project/DevServerPane.vue';
@@ -21,10 +22,12 @@ import PhpIniPane from '@/components/project/PhpIniPane.vue';
 import ManifestPane from '@/components/project/ManifestPane.vue';
 import LocalOverridePane from '@/components/project/LocalOverridePane.vue';
 import HooksPane from '@/components/project/HooksPane.vue';
+import SidecarsPane from '@/components/project/SidecarsPane.vue';
 import WorktreePane from '@/components/project/WorktreePane.vue';
 import RequirementsPane from '@/components/project/RequirementsPane.vue';
 import OverviewPane from '@/components/project/OverviewPane.vue';
 import ProfilerPane from '@/components/project/ProfilerPane.vue';
+import SpxPane from '@/components/project/SpxPane.vue';
 import TunnelPane from '@/components/project/TunnelPane.vue';
 import OAuthPane from '@/components/project/OAuthPane.vue';
 import StripePane from '@/components/project/StripePane.vue';
@@ -34,6 +37,8 @@ import TerminalPane from '@/components/project/TerminalPane.vue';
 import ReplPane from '@/components/project/ReplPane.vue';
 import XdebugPane from '@/components/project/XdebugPane.vue';
 import ReleasePane from '@/components/project/ReleasePane.vue';
+import DevcontainerPane from '@/components/project/DevcontainerPane.vue';
+import AgentPane from '@/components/project/AgentPane.vue';
 import { useOperationsStore } from '@/stores/operations';
 import { useAppStore } from '@/stores/app';
 import { api, asList } from '@/lib/ipc';
@@ -121,8 +126,17 @@ const SECTIONS = [
   // layers rather than through the manifest: php.ini for PHP, the dev server
   // for Node. A project is one or the other, so the tab is whichever applies.
   { key: 'runtime', icon: 'mdi-tune', label: 'projectDetail.runtime', runtime: true },
-  // The one artefact here that leaves the machine.
+  // The two artefacts here that leave the machine: an image to deploy, and a
+  // devcontainer to commit. Together rather than in two tabs — both answer
+  // "how does this project run somewhere that is not this laptop", and they
+  // differ only in whether the answer is a registry or a git tree.
   { key: 'release', icon: 'mdi-package-variant-closed', label: 'release.title' },
+  // The files this app writes into the repository for an assistant. Its own
+  // entry rather than a pane inside Configuration, because those panes all
+  // describe what the project *is* and these two describe what something else
+  // is told about it — and because the rules are per project, so the project
+  // page is where somebody looking for them looks first.
+  { key: 'agent', icon: 'mdi-robot-outline', label: 'projectAgent.tab' },
 ];
 const section = ref('indicator');
 
@@ -296,6 +310,17 @@ watch(section, () =>
   })
 );
 
+/**
+ * Run one operation against this project.
+ *
+ * The `load()` here is deliberately **not** the reload that matters. Every one
+ * of these commands returns an operation id as soon as the work starts — that
+ * is what the operation console is for — so this `await` resolves while docker
+ * is still building or recreating, and reading the project at that moment reads
+ * the state that is about to change. It is kept because it clears the buttons
+ * and picks up whatever is already true; the watcher below is what re-reads
+ * once the work has actually finished.
+ */
 async function act(fn) {
   error.value = null;
   ops.markBusy(props.name, true);
@@ -307,6 +332,21 @@ async function act(fn) {
     ops.markBusy(props.name, false);
   }
 }
+
+/**
+ * Re-read when the operation ends, which is a different moment from when the
+ * call returned.
+ *
+ * The busy flag is cleared by the operation's own `finished` event, so its
+ * falling edge is the first instant at which the container on disk is the one
+ * this page is describing.
+ */
+watch(
+  () => ops.isBusy(props.name),
+  (busyNow, wasBusy) => {
+    if (wasBusy && !busyNow) load();
+  }
+);
 
 /**
  * Read the manifest fresh rather than trusting the list payload: the file may
@@ -776,6 +816,8 @@ onUnmounted(() => {
             :runtime="project?.runtime"
             :running="running"
             @changed="reloadManifest"
+            @rebuild="act((n) => api.projectBuild(n))"
+            @apply="applyToContainer"
           />
         </template>
 
@@ -804,6 +846,11 @@ onUnmounted(() => {
             :running="running"
             @apply="applyToContainer"
           />
+          <!-- Beside the Xdebug profiler rather than replacing it: that one
+               records every call exactly and costs several times the request,
+               this one samples. They answer different questions and the pane
+               above says which. -->
+          <SpxPane :name="name" :runtime="project?.runtime" @apply="applyToContainer" />
         </template>
 
         <!-- DUMPS ---------------------------------------------------------- -->
@@ -812,6 +859,10 @@ onUnmounted(() => {
              cannot drift between them. -->
         <template v-if="shows('debug')">
           <DumpsPane :name="name" @apply="applyToContainer" />
+          <!-- A-1. Beside the dumps because it is the same act with a longer
+               arm: a pull ends in the restore the dumps pane already offers,
+               with the copy that restore takes of what it replaces. -->
+          <ProvidersPane :name="name" />
           <!-- F-1. Beside the dumps because they answer the same question from
                two ends: `dd()` says what the code thought, this says what the
                database was actually asked. -->
@@ -828,6 +879,18 @@ onUnmounted(() => {
              trusted. -->
         <template v-if="shows('release')">
           <ReleasePane :name="name" />
+          <!-- A-7. The generated compose cannot travel — it names paths under
+               this machine's home, a network another file creates and a Traefik
+               that is not in it — so this is a second rendering of the same
+               manifest rather than a copy of the first. -->
+          <DevcontainerPane :name="name" />
+        </template>
+
+        <!-- AI ------------------------------------------------------------- -->
+        <!-- Same three commands Settings → AI rules drives, aimed at this
+             project rather than at a name picked out of a dropdown. -->
+        <template v-if="shows('agent')">
+          <AgentPane :name="name" :runtime="project?.runtime" />
         </template>
 
         <!-- PHP.INI -------------------------------------------------------- -->
@@ -923,6 +986,9 @@ onUnmounted(() => {
              the only way to approve one. -->
         <template v-if="shows('configuration')">
           <HooksPane :name="name" />
+          <!-- Beside the hooks, because they are the other half of the same
+               question: what did this repository bring with it besides code. -->
+          <SidecarsPane :name="name" />
         </template>
 
         <!-- WORKTREES (N) ------------------------------------------------- -->

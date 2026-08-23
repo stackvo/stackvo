@@ -12,6 +12,22 @@
 //! writes a `sidecars` block — ADR 0023 made exactly that possible, which is
 //! part of why the answer can be no without being a refusal.
 //!
+//! ## Ollama: the softest half of that reason is now the hardest
+//!
+//! "Wants a GPU it may not find" was written as a risk. It is not a risk on the
+//! platform most of these users are on, it is a **certainty**: Docker Desktop
+//! on macOS cannot pass the Apple GPU into a container at all — Apple's
+//! virtualisation framework exposes no GPU API for it — so a containerised
+//! Ollama on an Apple Silicon Mac is CPU-only and runs **3–5× slower** than the
+//! native application it would be replacing. That is not a gap a newer image
+//! closes; it held from M1 through the M5 line and the answer from Ollama's own
+//! side is "on a Mac, run it natively".
+//!
+//! So the package that people ask for would be measurably worse than doing
+//! nothing, with no way to fix it from here. Re-measured August 2026, against a
+//! competitive review that listed Ollama in Laradock, ServBay and FlyEnv — all
+//! three of which either run it natively or accept the loss.
+//!
 //! ## Why pgvector is not a service
 //!
 //! It is PostgreSQL. Same wire protocol, same port, same volume layout, same

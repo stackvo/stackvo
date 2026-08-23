@@ -38,6 +38,23 @@ export function duration(seconds) {
   return `${minutes}m`;
 }
 
+/**
+ * A profiler's timings, which span four orders of magnitude.
+ *
+ * Microseconds in, because that is the unit php-spx reports a run in — under
+ * the name `wall_time_ms`, which it is not. A request can take 700 µs or nine
+ * seconds and both have to read at a glance, so the unit follows the number
+ * rather than the column.
+ */
+export function micros(value, decimals = 1) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+
+  const us = Number(value);
+  if (Math.abs(us) < 1000) return `${Math.round(us)} µs`;
+  if (Math.abs(us) < 1_000_000) return `${(us / 1000).toFixed(decimals)} ms`;
+  return `${(us / 1_000_000).toFixed(decimals)} s`;
+}
+
 /** Threshold colour shared by every meter, so they read consistently. */
 export function loadColor(value, { warn = 70, danger = 90 } = {}) {
   const n = Number(value);

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { applyAppearance } from '@/lib/appearance.js';
 import vuetify from '@/plugins/vuetify';
-import { i18n } from '@/i18n';
+import { i18n, packDirections } from '@/i18n';
 
 /**
  * The right-to-left switch, held to what it claims.
@@ -23,6 +23,7 @@ import { i18n } from '@/i18n';
 
 /** Vuetify's rtl map is module state; leave it as it was found. */
 afterEach(() => {
+  for (const tag of Object.keys(packDirections)) delete packDirections[tag];
   applyAppearance({ rtl: false });
 });
 
@@ -66,6 +67,60 @@ describe('the right-to-left setting', () => {
     for (const locale of shipped) {
       expect(vuetify.locale.rtl.value[locale]).toBe(false);
     }
+  });
+
+  /**
+   * A language that reads right to left, against a switch that says otherwise.
+   *
+   * Direction was one flag for every locale, which is right for the two shipped
+   * here and wrong for a pack. Arabic reads right to left whether or not
+   * anybody prefers it — so a pack that states it wins for its own locale, and
+   * the preference keeps deciding everywhere else.
+   */
+  it('lets a pack that declared a direction outrank the switch', () => {
+    const started = i18n.global.locale.value;
+    i18n.global.setLocaleMessage('ar', { app: { close: 'إغلاق' } });
+    packDirections.ar = 'rtl';
+
+    applyAppearance({ rtl: false });
+    expect(vuetify.locale.rtl.value.ar, 'the pack said so').toBe(true);
+    expect(vuetify.locale.rtl.value.en, 'and only for itself').toBe(false);
+
+    i18n.global.locale.value = started;
+  });
+
+  /**
+   * The document attribute follows the **active** locale, not the switch.
+   *
+   * They were the same value while one flag decided everything. Now a pack can
+   * disagree, and an Arabic window whose dialogs and menus laid out left to
+   * right would be exactly the failure the `dir` attribute was added to fix,
+   * reintroduced one line further down.
+   */
+  it('turns the document round for a right-to-left pack the reader is in', () => {
+    const started = i18n.global.locale.value;
+    i18n.global.setLocaleMessage('ar', { app: { close: 'إغلاق' } });
+    packDirections.ar = 'rtl';
+
+    i18n.global.locale.value = 'ar';
+    applyAppearance({ rtl: false });
+    expect(document.documentElement.getAttribute('dir')).toBe('rtl');
+
+    i18n.global.locale.value = 'en';
+    applyAppearance({ rtl: false });
+    expect(document.documentElement.getAttribute('dir')).toBe('ltr');
+
+    i18n.global.locale.value = started;
+  });
+
+  /** A pack that says `ltr` says something, and it beats the switch too. */
+  it('lets a pack opt out of a switch somebody left on', () => {
+    i18n.global.setLocaleMessage('de', { app: { close: 'Schließen' } });
+    packDirections.de = 'ltr';
+
+    applyAppearance({ rtl: true });
+    expect(vuetify.locale.rtl.value.de).toBe(false);
+    expect(vuetify.locale.rtl.value.en, 'the preference still holds elsewhere').toBe(true);
   });
 
   /**

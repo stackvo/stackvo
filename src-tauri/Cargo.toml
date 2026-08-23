@@ -11,10 +11,13 @@ rust-version = "1.82"
 # dev` runs a bare `cargo run`, which refuses to guess. Naming the app here
 # keeps that working; the other two are reached with an explicit `--bin`.
 #
-# Neither of the two is bundled with the app: `tauri.conf.json` declares no
-# `externalBin` and `release.yml` does not build them, so both are `cargo build
-# --release --bin …`. `agents::binary` searches rather than assumes for exactly
-# that reason, and the CLI section of README.md says the same.
+# Both are bundled with the app: `tauri.conf.json` declares them as
+# `externalBin` and `tools/sidecars.mjs` builds them into `src-tauri/binaries/`
+# under the target-triple name the bundler looks for. On macOS they land in
+# `Contents/MacOS/` beside this binary — measured, not assumed — which is where
+# `agents::binary` and `tooling::shipped` already looked. Those two still
+# *search* rather than assume, because a checkout has them in `target/` and an
+# installed app does not.
 default-run = "stackvo-desktop"
 
 [lib]
@@ -270,6 +273,28 @@ criterion = { version = "0.7", default-features = false, features = ["cargo_benc
 [[bench]]
 name = "render"
 harness = false
+
+# Measured before it was written, because the number is the argument: this
+# crate's `target/debug` had grown to **33 GB across 168,000 files** — 78 test
+# binaries at ~80 MB each, plus every stale generation cargo never collects —
+# and a `cargo test` linking them eight at a time exhausted a 24 GB machine and
+# was killed (exit 137). Debug information is nearly all of that weight.
+#
+# `line-tables-only` keeps the half that gets read and drops the half that does
+# not. A panic still names the file and the line, which is what every failing
+# assertion in this repository is diagnosed from; what goes is variable-level
+# information for a step debugger, and stepping through a test is not how
+# anything here is debugged. `[profile.test]` inherits this, so the 37
+# integration binaries inherit it too.
+[profile.dev]
+debug = "line-tables-only"
+
+# And **none at all** for the ~800 crates we depend on. Their line numbers are
+# not the ones in a backtrace anybody acts on — a panic inside `serde` is read
+# at the frame where this code called it — and they are most of the bytes,
+# because they are most of the code.
+[profile.dev.package."*"]
+debug = false
 
 [profile.release]
 codegen-units = 1
