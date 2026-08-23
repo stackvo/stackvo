@@ -1276,7 +1276,7 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
 | `ipc.js` sarmalayıcısı | **280** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **106 modül, 101.747 satır** | `src-tauri/src/*.rs` |
+| Rust kaynağı | **106 modül, 101.760 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 

@@ -379,7 +379,20 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
 /// a broken test rather than a reason to ask a human for a password, and the
 /// error says which.
 fn elevated_here(from: &Path, to: &Path) -> crate::error::Result<bool> {
-    if std::env::var_os("STACKVO_HOSTS_PATH").is_some() {
+    // The refusal is about a *dialog*, not about the seam. A stubbed elevator
+    // cannot raise one, and refusing anyway made the one test that exercises
+    // this branch unable to reach it — `elevate_probe.rs` sets the hosts path
+    // precisely so the unprivileged write fails first, which is the whole shape
+    // of the thing it is checking. The guard below was written later, to stop a
+    // suite that hung on a real `osascript` prompt, and it took that test with
+    // it: green here, red on CI, for as long as nobody ran the Linux branch.
+    //
+    // So the exemption is as narrow as the problem: the elevator has to have
+    // been replaced by a file this process can see. It relaxes a guard that only
+    // ever applies when `STACKVO_HOSTS_PATH` is already set — a seam no shipped
+    // build has — so it cannot widen anything a user is standing in front of.
+    let stubbed = std::env::var_os("STACKVO_ELEVATOR_STUB").is_some();
+    if !stubbed && std::env::var_os("STACKVO_HOSTS_PATH").is_some() {
         return Err(crate::error::Error::new(
             crate::error::Code::PermissionDenied,
             format!(

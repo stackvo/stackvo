@@ -195,8 +195,30 @@ check() {
   fi
 
   head_ "Nothing secret is in the tree"
-  if git -C "$repo" grep -qI 'minisign encrypted secret key' -- . 2>/dev/null; then
-    bad "a PRIVATE key is committed. Rotate it now — it is public the moment it is pushed"
+  # Asks whether a file **is** a key, not whether it mentions one. Grepping for
+  # the header was the first version and it reported this script and its own
+  # Rust gate — both merely contain the words, one of them as the needle. The
+  # shape is what tells them apart: a secret key is a comment line and a base64
+  # line, and `tauri signer` writes that pair base64-encoded again onto a single
+  # line, which is the form one would actually be committed in.
+  local leaked=""
+  while IFS= read -r file; do
+    [ -f "$repo/$file" ] || continue
+    # Only files small enough and short enough to be a key at all. Anything with
+    # prose in it fails this before it is ever decoded.
+    [ "$(wc -c <"$repo/$file")" -le 4096 ] || continue
+    [ "$(wc -l <"$repo/$file")" -le 3 ] || continue
+    local head
+    head="$(head -c 4096 "$repo/$file" | base64 -d 2>/dev/null | head -1)"
+    case "$head" in
+      *"encrypted secret key"*) leaked="$leaked $file" ;;
+      *) head="$(head -1 "$repo/$file")"
+         case "$head" in *"encrypted secret key"*) leaked="$leaked $file" ;; esac ;;
+    esac
+  done < <(git -C "$repo" ls-files)
+
+  if [ -n "$leaked" ]; then
+    bad "a PRIVATE key is committed:$leaked — rotate it, it is public the moment it is pushed"
     problems=$((problems + 1))
   else
     ok "no private key is committed"
