@@ -259,7 +259,7 @@ async fn instance_of(root: &Path, id: &str, reveal: bool) -> Result<Option<Conne
     let Some(instance) = table.get(id) else {
         return Ok(None);
     };
-    let tree = crate::pkg::Tree::open(&crate::market::dir(root))?;
+    let tree = crate::market::catalogue(root)?;
     let Ok(manifest) = tree.load(&instance.service, &instance.version) else {
         return Ok(None);
     };

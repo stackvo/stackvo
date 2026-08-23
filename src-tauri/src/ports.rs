@@ -1,12 +1,12 @@
 //! Deciding which host port an instance publishes on.
 //!
-//! Faz 2 of `docs/servis-market-mimarisi.md`, and the half of multiple versions
-//! that is not about names. Two MySQL instances cannot both publish 3306, and
-//! nothing in the tree today decides that for anybody: the number is written
-//! into a template, by hand, once per service.
+//! The half of running several versions at once that is not about names. Two
+//! MySQL instances cannot both publish 3306, and until this module nothing
+//! decided that for anybody: the number was written into a template, by hand,
+//! once per service.
 //!
-//! Measured before writing this, because the state it replaces is worse than it
-//! looks:
+//! Measured before writing it, because the state it replaced was worse than it
+//! looked:
 //!
 //! * There are **two** key families, `HOST_PORT_<ID>` (17 keys) and
 //!   `SERVICE_<ID>_HOST_PORT` (14). `contracts/env.schema.json` records the

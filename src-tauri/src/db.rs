@@ -520,7 +520,7 @@ fn declared(root: &Path, service: &str) -> (Value, Value, Value) {
 fn declared_for(root: &Path, instance: &crate::instances::Instance) -> (Value, Value, Value) {
     let nothing = || (Value::default(), Value::default(), Value::default());
 
-    let Ok(tree) = crate::pkg::Tree::open(&crate::market::dir(root)) else {
+    let Ok(tree) = crate::market::catalogue(root) else {
         return nothing();
     };
     let Ok(manifest) = tree.load(&instance.service, &instance.version) else {

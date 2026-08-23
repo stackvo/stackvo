@@ -100,7 +100,8 @@ fn attempt(root: &Path, packages: &Path) -> Result<(), String> {
     // ---- install both versions ------------------------------------------
     let source = market::LocalSource::new(packages);
     let registry = market::refresh(root, &source, market::Trust::Unsigned, None)
-        .map_err(|e| format!("reading the catalogue: {}", e.message))?;
+        .map_err(|e| format!("reading the catalogue: {}", e.message))?
+        .registry;
     println!("  catalogue  sequence {}", registry.sequence);
 
     for version in VERSIONS {

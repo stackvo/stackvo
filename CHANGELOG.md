@@ -7,6 +7,209 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The signing ceremony is written down, and it is a script.** §3 #2 was never
+  an engineering problem — the endpoint has been correct since ADR 0025 and the
+  updater carries a public key. What was missing is that nobody had performed
+  the ceremony, and the reason nobody had is that there was no ceremony to
+  perform: the updater key had one sentence in a workflow comment, the content
+  key (ADR 0015) had nothing at all, and the two were reached by different
+  tools.
+
+  `tools/keys.sh` is the procedure now — `generate`, `check`, `sign`. A script
+  rather than a page, for the reason this release deletes a design document: a
+  ceremony written as prose drifts, and prose that has gone stale about *keys*
+  is discovered after somebody has already generated one and put it somewhere.
+
+  **Writing it found a real defect, and it was in the load-bearing part.** ADR
+  0015 pays for two keys with two places to leak from, and what buys that back
+  is that the *procedure* is shared — same tool, same storage, same rotation.
+  `tauri signer` is the tool the updater ceremony already uses, and a signature
+  it produced was one the app **refused**: it wraps the whole minisign file in
+  base64 (its updater manifest carries a signature as one JSON string) and
+  `signing::verify` read only the plain form. The refusal said "invalid encoding
+  in minisign data" — a message about bytes, for a problem about an envelope,
+  raised at the one moment somebody is closing the chain for the first time. So
+  the registry key would have needed a second tool, which is the second
+  procedure ADR 0015 says goes unmaintained.
+
+  `verify` peels either envelope now. It widens what can be *read*, not what is
+  accepted: a wrapper around bytes no trusted key signed still fails one line
+  later, and three tests say so. The passing one uses a signature the real tool
+  really produced, against a throwaway key whose private half never left the
+  scratch directory — the same reasoning the existing vector has for coming from
+  `minisign-verify`'s own tests rather than from this repository.
+
+  **The chain's first link had never been shown to work.** Every test of the
+  signed path was a refusal — no key pinned, key checked before the signature
+  file, index going backwards — and a chain with no passing case is one whose
+  first success is somebody's first release. `tests/signed_refresh.rs` is that
+  case: a signed index, a machine that trusts the key through
+  `policy.market.additionalKeys`, and a refresh that completes. Its own binary,
+  because `policy::current()` is a `OnceLock` and a test that points
+  `STACKVO_POLICY_FILE` somewhere has to own its process.
+
+  `tests/key_ceremony.rs` holds four rules a script cannot hold on its own,
+  because they are about the tree rather than about a run. **No private key is
+  committed** — the one failure that is unrecoverable rather than inconvenient,
+  since rotating the updater key means every machine already running StackVo can
+  never be updated again. **The updater key and the registry key are not the
+  same key**, which is vacuous today and is exactly why it is worth writing: the
+  moment somebody fills `PINNED` is the moment reusing the working pair saves an
+  afternoon and costs the property the separation was for. **No key is both
+  pinned and retired**, a state `verify` skips silently, so the retirement would
+  look done. And **the ceremony never puts a password on a command line**, where
+  the process table and the shell history both keep it.
+
+  `tools/before-push.sh` runs `keys.sh check`. Not something CI asks — CI cannot
+  see the keys — but the same instinct, and the last place an unrecoverable
+  mistake is visible before a push.
+
+  **The ceremony was then performed** (ADR 0033). Both key pairs exist, the
+  updater's public half is in `tauri.conf.json` and the registry's is in
+  `signing::PINNED` — separate keys, which `key_ceremony.rs` now enforces from
+  both sides.
+
+  Pinning a key turned two tests over rather than breaking them. The pair that
+  asserted `PINNED` was empty and that a signed refresh failed on the *missing
+  key* could not survive a build that has one; what a build with a key does is
+  get past the key check and be refused for the **signature** it cannot find,
+  which is a different sentence and the honest one.
+
+  It also found a field that was right by accident. `market_status.signed` was a
+  hard-coded `false`, true only for as long as nothing could verify. It reads
+  `market/source.json` now and answers the question that belongs on a screen —
+  *was the index this machine holds verified* — rather than *can this build
+  verify*, which a machine that pins the official key and last refreshed from a
+  folder would have answered wrongly. `verifiedBy` names the key, because
+  "verified" and "verified by whose key" are different answers on a machine with
+  a mirror.
+
+  What is left of #2 is two acts and neither is code: the repository secrets,
+  and a `v*` tag. And one more for the chain's far end — a pinned key signs
+  nothing, so the packages repository still has to sign and publish its own
+  `registry.json` with the private half, which is why that key is deliberately
+  not a CI secret.
+
+### Removed
+
+- **`docs/servis-market-mimarisi.md`**, and its own closing section is what asked
+  for this: _a design document, once the thing it describes exists, is a second
+  source of truth and it drifts._ It said what the package system should become,
+  in what order, at what risk and with what exit criterion. All eight phases
+  shipped. Everything it described now has a code path, a contract file or a
+  decision, and a report that describes those from the outside is a fourth place
+  for them to disagree.
+
+  **What kept it alive past that point was not its content but its citations.**
+  Thirteen Rust modules, its tests and three contract files pointed at it by
+  section number (`§4.4`, `§9`, `Faz 2`), and deleting it would have left every
+  one of them addressing nothing — worse than a stale document, because a reader
+  who cannot find a reference does not learn that the reference was wrong, they
+  learn that this repository's comments cannot be followed.
+
+  So each citation went to whatever is now the source rather than being dropped:
+  the version manifest to `contracts/package-version.schema.json`, the compose
+  allowlist to `contracts/compose-policy.json`, the index and its hash chain to
+  `contracts/registry.schema.json`, and the **threat model to `SECURITY.md`** —
+  which had no row for packages at all, despite the app having started
+  downloading service definitions and handing them to Docker. T-1 to T-8 are
+  there now with the thing that answers each, and that is a gap closed rather
+  than a paragraph moved.
+
+  Two decisions in it were nowhere else and are now ADRs. **0032** records why a
+  version is a directory and not a template with a version variable — the
+  differences between series are real and measured (MySQL 5.7's authentication
+  plugin, Elasticsearch 8's security default, RabbitMQ's `management` tag,
+  MongoDB's config keys), and a template carrying them with conditionals would be
+  a *program* fetched from a repository and run, which is the one thing the whole
+  design exists to prevent. **0013** gained the four transports it rejected and
+  why: a git submodule, a full clone, an npm package, and one large
+  `services.json`.
+
+  **The phase numbers went with it.** `Faz 1`…`Faz 7` were a delivery plan, and a
+  delivery plan stops being true by succeeding; a module doc opening with "Faz 2
+  of <deleted file>" tells a reader the order the work happened in — which git
+  already carries — instead of telling them what the module does. Eleven module
+  docs were rewritten to say the second thing, and three of them were describing
+  a tree that no longer exists ("nothing in the tree today decides that", "a
+  fixed array of twenty-five compiled-in templates").
+
+  `src-tauri/tests/no_dangling_docs.rs` holds all of it: the file is gone,
+  nothing cites it, and nothing dates itself by a phase. `docs/durum.md` §1
+  carries the tombstone — the sentence a reader who half-remembers the document
+  needs — and `CHANGELOG.md` is deliberately outside the scan, because an entry
+  that described the file while it existed is still a true account of that
+  release and rewriting it would be editing history to keep a test quiet.
+
+### Added
+
+- **A workspace can take over one file of a package it did not write.** P, and
+  the last of the package system's three extension points — the other two,
+  authoring a package and the enterprise half of a third-party source, were
+  already here.
+
+  **The obstacle was a hash, not a missing editor.** Before packages, somebody
+  who needed one line of the Redis configuration different edited
+  `core/templates/services/redis/…` and `skeleton.rs` made that edit win. ADR
+  0016 deleted that directory and the replacement is a _verified_ tree: a
+  manifest states the sha256 of every file it ships and `pkg::verify` checks
+  them on every read. So the same edit now produces a package that refuses to
+  load, complaining about bytes rather than about the line just typed — the
+  exact obstacle `authoring.rs` was written for, arriving from the other side.
+
+  **Re-sealing the fetched package was the obvious answer and is the wrong
+  one.** Sealing is right for a package you are writing; applied to one you
+  fetched it rewrites somebody else's manifest so it describes your edit, and
+  the next `market_install` undoes it with no record that it ever existed. An
+  override has to survive a reinstall and it has to be visible.
+
+  **So the copy lives beside the package rather than inside it** —
+  `<root>/overrides/<service>/<version>/<the file's own path>`. Nothing under
+  `market/packages/` is touched, so the hash chain is exactly as it was and a
+  reinstall is exactly as safe. This is `skeleton.rs`'s mechanism with the one
+  change that matters: skeleton's overrides live _at_ the path they replace, and
+  these live next to it, because that path is now covered by a hash.
+
+  **Templates, never the manifest, and that is the load-bearing rule.** The
+  manifest declares the image, the ports, the volumes and the settings, and the
+  render context is built from it; a workspace that could override it could run
+  one thing while the catalogue reported the published one, and every statement
+  this app makes about what is installed would become a statement about what
+  _was_ installed. A template cannot do that — whatever it says is substituted
+  from a context the manifest defines and then passed through `compose_policy`,
+  the same allowlist a downloaded fragment goes through, on the same code path,
+  after substitution.
+
+  **One rule needed a gate, and writing it found a real inconsistency.** The
+  layering is a single line in `pkg::Tree::file` and works only for a tree
+  opened _with_ the overrides attached, which `market::catalogue` is the one
+  place that does. An override only some screens honoured would be worse than
+  none: compose would render from the workspace's fragment while the connection
+  string, the settings sheet and the doctor described a different one, and the
+  symptom is a service that behaves unlike everything written about it.
+  `overrides_claims.rs` holds that, and on its first run named `doctor.rs`,
+  which was still opening a bare tree.
+
+  Two more rules are held the same way: the overridable list is built from
+  manifest _fields_ rather than from whatever is on disk — the kind of thing a
+  later refactor generalises into "every file in the directory" without noticing
+  what it has opened — and `overrides.rs` never writes into the package tree.
+
+  Reverting deletes and does not restore. Writing the published bytes back into
+  the override would leave a file on disk that means nothing, which is the state
+  `skeleton.rs` documents at length as the one it exists to stop producing.
+
+  `policy.market.allowOverrides` is the organisation's half. A note rather than a
+  lock (ADR 0009), and when it is off the files stay on disk and `doctor` names
+  them — bytes that are being ignored are exactly the thing somebody needs told.
+  Two policy keys that refuse an action, `allowedSources` and this one, were also
+  missing from `policy_status`, whose own comment says the pane exists so that a
+  person who has just been refused can read _which_ rule refused them; both are
+  on the wire now.
+
+  Recorded as **ADR 0031**. It was the last open item in the package
+  architecture's plan, and closing it closed the plan — see Removed.
+
 - **A project can fetch its data from where it really runs, and send it back.**
   A-1, the largest gap the competitor review found and the only one that is a
   whole category rather than a feature: DDEV ships `ddev pull`/`ddev push` with

@@ -1,10 +1,9 @@
 //! Getting a package onto this machine, and being able to say why you believe
 //! it.
 //!
-//! Faz 4 of `docs/servis-market-mimarisi.md`. [`crate::pkg`] reads a package
-//! that is already here and [`crate::render`] turns it into a compose file;
-//! this is the step in front of both — where bytes somebody else wrote first
-//! arrive.
+//! [`crate::pkg`] reads a package that is already here and [`crate::render`]
+//! turns it into a compose file; this is the step in front of both — where bytes
+//! somebody else wrote first arrive.
 //!
 //! ## The chain, and which link this module owns
 //!
@@ -27,20 +26,26 @@
 //! the index is parsed — the same ordering this module applies to a manifest,
 //! for the same reason.
 //!
-//! What is **not** here is the official key. ADR 0015 gives the registry its
-//! own ed25519 pair and `docs/durum.md` §5 still holds the ceremony that would
-//! produce one as an open decision, so `signing::PINNED` is empty and a signed
-//! refresh on a stock build is refused **naming that** as the missing half.
-//! Shipping a placeholder would be worse than the gap: every later reader
-//! would believe the chain was closed.
+//! The official key is pinned now. ADR 0015 gives the registry its own ed25519
+//! pair, separate from the updater's, and the ceremony that produces both is
+//! `tools/keys.sh`; `signing::PINNED` carries the public half. For a long time
+//! it was empty and said so loudly, because shipping a placeholder would have
+//! been worse than the gap — every later reader would have believed the chain
+//! was closed.
 //!
-//! An organisation running its own mirror is not waiting on any of that. It
-//! signs its own index and names its own key in
-//! `policy.market.additionalKeys`, and gets the whole chain today — which is
-//! what makes third-party distribution an operational decision rather than a
-//! missing feature.
+//! **What a pinned key does not do is sign anything.** An index is signed by
+//! the private half, by hand, on the machine that holds it; until a signed
+//! `registry.json` is published, [`refresh`] under `Trust::Signed` gets past
+//! the key check and is refused for the *signature* it cannot find — which is
+//! a different sentence and the honest one.
 //!
-//! Faz 5 has since landed [`HttpSource`], and that changes who this costs. A
+//! An organisation running its own mirror never waited on any of that. It signs
+//! its own index and names its own key in `policy.market.additionalKeys`, which
+//! is added to the pinned set rather than replacing it — that is what makes
+//! third-party distribution an operational decision rather than a missing
+//! feature.
+//!
+//! [`HttpSource`] changes who that costs. A
 //! directory the user picked is trusted on the strength of where it came from,
 //! and that is honest. A URL is not: over HTTPS the transport is now the *whole*
 //! of what stands between an index and whoever is on the path, which is why
@@ -79,6 +84,29 @@ pub fn registry_path(root: &Path) -> PathBuf {
 /// Where verified packages live.
 pub fn packages_dir(root: &Path) -> PathBuf {
     dir(root).join("packages")
+}
+
+/// The catalogue as this workspace actually sees it.
+///
+/// Verified packages, with whatever files the workspace has taken over layered
+/// on top ([`crate::overrides`], ADR 0031). **The** way to open a tree for a
+/// workspace, and the reason it exists rather than each caller opening one: an
+/// override that only some screens honoured would be worse than none — the
+/// compose file would render from the workspace's bytes while the connection
+/// string, the doctor and the settings sheet described the published ones, and
+/// the difference would show up as a service that behaves unlike everything
+/// said about it.
+///
+/// `policy.market.allowOverrides` is read here for the same reason. An
+/// organisation that switches overrides off gets a catalogue where they are not
+/// consulted at all — the files stay on disk and `doctor` names them, because
+/// bytes that are being ignored are exactly the thing somebody needs told.
+pub fn catalogue(root: &Path) -> Result<pkg::Tree> {
+    let tree = pkg::Tree::open(&dir(root))?;
+    if !crate::policy::current().market().allows_overrides() {
+        return Ok(tree);
+    }
+    Ok(tree.with_overrides(crate::overrides::dir(root)))
 }
 
 // ---------------------------------------------------------------- the index
@@ -278,13 +306,13 @@ impl Source for LocalSource {
 
 /// The most any single file from a source may be.
 ///
-/// T-8 in `docs/servis-market-mimarisi.md` §4.1. A manifest is a few kilobytes
+/// T-8 in `SECURITY.md`. A manifest is a few kilobytes
 /// and the index is a few hundred; a body that keeps arriving is a disk that
 /// keeps filling, and the check has to be on the bytes read rather than on
 /// `Content-Length`, which the sender chooses.
 const MOST_BYTES: u64 = 8 * 1024 * 1024;
 
-/// A catalogue served over HTTPS. Faz 5.
+/// A catalogue served over HTTPS.
 ///
 /// ## `https` only, and it is checked here
 ///
@@ -625,6 +653,19 @@ pub struct SourceRef {
     /// disk and read back by a build that may be older than the value.
     pub kind: String,
     pub location: String,
+    /// The key id that verified the cached index, when one did.
+    ///
+    /// Recorded rather than derived, because "can this build verify" and "was
+    /// this index verified" are different questions and only the second is
+    /// worth putting on a screen. A build that pins a key still holds an
+    /// unverified index if the last refresh was `Trust::Unsigned` — which is
+    /// every refresh from a directory the user picked.
+    ///
+    /// `#[serde(default)]` so a `source.json` written before this field existed
+    /// reads as "not verified", which is the safe direction: the alternative is
+    /// a machine claiming a check that never ran.
+    #[serde(default)]
+    pub verified_by: Option<String>,
 }
 
 fn source_ref_path(root: &Path) -> PathBuf {
@@ -704,12 +745,25 @@ pub fn kind_of(location: &str) -> &'static str {
 /// `previous` is what this machine already has, or `None` on a first refresh.
 /// An index that goes backwards is refused: withdrawing a version has to mean
 /// something, and replaying yesterday's index is how it stops meaning anything.
+#[derive(Debug, Clone)]
+pub struct Refreshed {
+    pub registry: Registry,
+    /// The key that verified this index, when one did.
+    ///
+    /// `None` for an unsigned refresh, which is every refresh from a directory
+    /// somebody picked. Returned rather than inferred from what the build pins,
+    /// because "this build can verify" and "this index was verified" are
+    /// different sentences and only the second belongs on a screen.
+    pub verified_by: Option<String>,
+}
+
 pub fn refresh(
     root: &Path,
     source: &dyn Source,
     trust: Trust,
     previous: Option<&Registry>,
-) -> Result<Registry> {
+) -> Result<Refreshed> {
+    let mut verified_by: Option<String> = None;
     let bytes = source.fetch("registry.json")?;
 
     // The first link of the chain, and the order matters: the bytes are
@@ -739,6 +793,7 @@ pub fn refresh(
             String::from_utf8_lossy(&source.fetch("registry.json.minisig")?).to_string();
         let by = keys.verify(&bytes, &signature)?;
         tracing::info!(source = %source.describe(), key = %by.id(), "index signature verified");
+        verified_by = Some(by.id());
     }
 
     let registry: Registry = serde_json::from_slice(&bytes).map_err(|e| {
@@ -779,7 +834,10 @@ pub fn refresh(
         ),
     )?;
 
-    Ok(registry)
+    Ok(Refreshed {
+        registry,
+        verified_by,
+    })
 }
 
 /// The cached index, or `None` when nothing has been fetched.
@@ -1068,10 +1126,11 @@ pub struct Bundled {
 /// is a source: `LocalSource::new(dest)` and the far end cannot tell it from a
 /// checkout.
 ///
-/// ## A directory, not the tar `servis-market-mimarisi.md` §9 names
+/// ## A directory, not an archive
 ///
-/// The design says `stackvo-packages.tar`. A tar is a *packaging* of this, not
-/// a second mechanism — `tar -cf stackvo-packages.tar -C <dest> .` produces it,
+/// The design called for a `stackvo-packages.tar`. A tar is a *packaging* of
+/// this, not a second mechanism — `tar -cf stackvo-packages.tar -C <dest> .`
+/// produces it,
 /// and the far end unpacks it into a directory because that is what the reader
 /// reads. Shipping the archive format first would have meant a second `Source`
 /// implementation, on the argument that a USB stick prefers one file. It does
@@ -1359,7 +1418,9 @@ mod tests {
         let source = LocalSource::new(publish(&root, 1));
 
         assert!(cached(&root).unwrap().is_none(), "nothing fetched yet");
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
         assert_eq!(registry.sequence, 1);
         assert_eq!(registry.recommended("mysql").unwrap().version, "8.0");
         assert_eq!(cached(&root).unwrap().unwrap(), registry);
@@ -1375,7 +1436,8 @@ mod tests {
             Trust::Unsigned,
             None,
         )
-        .unwrap();
+        .unwrap()
+        .registry;
 
         let older = scratch("replay-old");
         let source = LocalSource::new(publish(&older, 3));
@@ -1389,43 +1451,51 @@ mod tests {
     fn the_same_index_can_be_fetched_again() {
         let root = scratch("again");
         let source = LocalSource::new(publish(&root, 4));
-        let first = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let first = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
         refresh(&root, &source, Trust::Unsigned, Some(&first)).unwrap();
     }
 
     /// A security check that silently does nothing is worse than one that is
     /// absent, because the absent one is visible.
     ///
-    /// The refusal moved rather than went away (C): it used to be "not
-    /// implemented", and it is now "this build pins no key". The verifier is
-    /// real — `signing.rs` proves it against a signature it did not make — and
-    /// what is missing is the ceremony that produces the official key, which
-    /// `docs/durum.md` §5 still holds open.
+    /// This pair used to assert the *other* refusal. For as long as `PINNED`
+    /// was empty, a signed refresh failed on the missing key, and a second test
+    /// held the ordering — that the key was checked **before** the signature
+    /// file was fetched, so a machine with no key was not sent to the publisher
+    /// to ask for a signature that would not have helped.
+    ///
+    /// The ceremony has happened and this build pins a key, so that refusal is
+    /// no longer reachable from here and the ordering it guarded cannot be
+    /// observed through `refresh` any more. It did not go unheld: the message
+    /// for an empty key set is `signing.rs`'s own test, and the ordering is
+    /// still the only reason the key check sits above the fetch in `refresh`.
+    /// What is left to assert here is what a build *with* a key does — refuse,
+    /// and refuse for the honest reason.
     #[test]
     fn asking_for_a_signed_index_is_refused_rather_than_downgraded() {
         let root = scratch("signed");
-        let source = LocalSource::new(publish(&root, 1));
-        let err = refresh(&root, &source, Trust::Signed, None).unwrap_err();
-        assert_eq!(err.code, Code::Unsupported);
-        assert!(err.message.contains("no registry key"), "{}", err.message);
-    }
-
-    /// And it fails on the **key**, not on the signature file being absent —
-    /// the check that a machine with a key would get as far as looking for one.
-    #[test]
-    fn a_signed_refresh_asks_for_the_key_before_the_signature_file() {
-        let root = scratch("signed-order");
         let dir = publish(&root, 1);
         assert!(
             !dir.join("registry.json.minisig").exists(),
             "the fixture publishes no signature"
         );
+
         let err = refresh(&root, &LocalSource::new(&dir), Trust::Signed, None).unwrap_err();
-        assert_eq!(
-            err.code,
-            Code::Unsupported,
-            "a missing key is reported before a missing signature: {}",
+
+        // Past the key check and into the fetch — which is what a pinned key
+        // buys, and the difference between "this build cannot verify" and "this
+        // publisher did not sign".
+        assert!(
+            err.message.contains("minisig"),
+            "a build with a key should be refused for the missing SIGNATURE, \
+             not for the missing key: {}",
             err.message
+        );
+        assert!(
+            !registry_path(&root).is_file(),
+            "an index that failed verification was cached anyway"
         );
     }
 
@@ -1439,7 +1509,9 @@ mod tests {
     fn a_withdrawn_version_is_refused_with_the_publishers_reason() {
         let root = scratch("revoked");
         let source = LocalSource::new(publish(&root, 1));
-        let mut registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let mut registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
 
         // Installing it is fine until the publisher says otherwise.
         let market = crate::policy::Market::default();
@@ -1460,7 +1532,9 @@ mod tests {
     fn a_withdrawal_with_no_reason_still_refuses() {
         let root = scratch("revoked-bare");
         let source = LocalSource::new(publish(&root, 1));
-        let mut registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let mut registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
         registry.packages[0].versions[0].revoked = true;
 
         let err = install(
@@ -1482,7 +1556,9 @@ mod tests {
     fn a_withdrawal_is_refused_even_where_the_source_is_gone() {
         let root = scratch("revoked-offline");
         let source = LocalSource::new(publish(&root, 1));
-        let mut registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let mut registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
         registry.packages[0].versions[0].revoked = true;
 
         let gone = LocalSource::new(root.join("nowhere-at-all"));
@@ -1507,7 +1583,9 @@ mod tests {
     fn installing_puts_a_package_where_the_tree_finds_it() {
         let root = scratch("install");
         let source = LocalSource::new(publish(&root, 1));
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
 
         let done = install(&root, &source, &registry, "mysql", "8.0", &unmanaged()).unwrap();
         assert_eq!(done.files, 3, "manifest, fragment, config");
@@ -1524,7 +1602,9 @@ mod tests {
         let root = scratch("tampered");
         let source_dir = publish(&root, 1);
         let source = LocalSource::new(&source_dir);
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
 
         // A change that leaves the manifest perfectly valid, and only the hash
         // disagrees — which is the shape of the attack this link is for.
@@ -1552,7 +1632,9 @@ mod tests {
         let root = scratch("halfway");
         let source_dir = publish(&root, 1);
         let source = LocalSource::new(&source_dir);
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
 
         std::fs::write(
             source_dir.join("packages/databases/mysql/versions/8.0/compose.yml.tpl"),
@@ -1614,7 +1696,9 @@ mod tests {
     fn uninstalling_removes_the_package_and_nothing_else() {
         let root = scratch("uninstall");
         let source = LocalSource::new(publish(&root, 1));
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
         install(&root, &source, &registry, "mysql", "8.0", &unmanaged()).unwrap();
 
         uninstall(&root, "databases", "mysql", "8.0").unwrap();
@@ -1643,7 +1727,9 @@ mod tests {
     fn a_package_outside_the_allow_list_is_refused_before_it_is_fetched() {
         let root = scratch("policy-package");
         let source = LocalSource::new(publish(&root, 1));
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
 
         let market = crate::policy::Market {
             allowed_packages: ["postgres".to_string()].into_iter().collect(),
@@ -1667,7 +1753,9 @@ mod tests {
     fn an_image_from_an_unlisted_registry_is_refused() {
         let root = scratch("policy-registry");
         let source = LocalSource::new(publish(&root, 1));
-        let registry = refresh(&root, &source, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&root, &source, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
 
         let market = crate::policy::Market {
             allowed_registries: ["registry.corp.example".to_string()].into_iter().collect(),
@@ -1878,7 +1966,9 @@ mod tests {
         let far = scratch("bundle-far");
         let carried = LocalSource::new(here.join("carry"));
 
-        let registry = refresh(&far, &carried, Trust::Unsigned, None).unwrap();
+        let registry = refresh(&far, &carried, Trust::Unsigned, None)
+            .unwrap()
+            .registry;
         assert_eq!(registry.sequence, 4);
         assert_eq!(registry.recommended("mysql").unwrap().version, "8.0");
 

@@ -156,6 +156,17 @@ export const api = {
   packageLint: (category, service, version) => call('package_lint', { category, service, version }),
   packageSeal: (category, service, version) => call('package_seal', { category, service, version }),
 
+  // Decision 0031. A package that is nearly right, and one line of it that
+  // has to be different. The workspace's copy lives beside the package rather
+  // than in it, so the manifest's hashes still hold and a reinstall is as safe
+  // as it was.
+  packageFiles: (service, version) => call('package_files', { service, version }),
+  /** Copy one published file into the workspace; resolves to its absolute path. */
+  packageOverride: (service, version, path) => call('package_override', { service, version, path }),
+  /** Delete the workspace's copy. The published file takes over on the next render. */
+  packageOverrideRevert: (service, version, path) =>
+    call('package_override_revert', { service, version, path }),
+
   marketCatalog: () => call('market_catalog'),
   marketInstall: (service, version) => call('market_install', { service, version }),
   marketUninstall: (service, version) => call('market_uninstall', { service, version }),

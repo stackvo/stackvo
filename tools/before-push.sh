@@ -57,6 +57,12 @@ step "contracts · fixture"  npm run --silent test:js -- tests/validate-contract
 step "contracts · tree"     node tools/validate-contracts.mjs --allow-no-manifests
 step "supply · audit"       npm audit --omit=dev --audit-level=moderate
 step "supply · notice"      npm run --silent notice:check
+# Not what CI asks — CI cannot see the keys — but the same instinct, and the one
+# check whose failure is unrecoverable rather than inconvenient: a private key
+# in a commit is public the moment it is pushed. `keys.sh check` also reports
+# the states nobody has closed yet (no pinned registry key, no release), which
+# is the last place they are visible before a push.
+step "keys · ceremony"      tools/keys.sh check
 
 if [ "$all" -eq 1 ]; then
   step "linux · probes"     tools/linux/run.sh

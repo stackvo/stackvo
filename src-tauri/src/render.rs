@@ -1,15 +1,13 @@
 //! Assembling `docker-compose.dynamic.yml` from the instance table.
 //!
-//! The last piece of Faz 2 in `docs/servis-market-mimarisi.md`. What
-//! `template::render_dynamic_compose` does today is walk a fixed array of
-//! twenty-five compiled-in templates and include the ones whose
-//! `SERVICE_<ID>_ENABLE` says `true`. This does the same job from the other
-//! end: it walks [`instances::Table`] and renders each instance's package
-//! fragment.
+//! What it replaced walked a fixed array of twenty-five compiled-in templates
+//! and included the ones whose `SERVICE_<ID>_ENABLE` said `true`. This does the
+//! same job from the other end: it walks [`instances::Table`] and renders each
+//! instance's package fragment. The compiled-in array is gone (decision 0016).
 //!
-//! ADR 0002 is untouched and is the reason this is safe to swap: the file has
+//! ADR 0002 is untouched and is the reason that swap was safe: the file has
 //! always been rendered from scratch on every run and never edited in place, so
-//! changing what it is rendered *from* changes no invariant anybody depends on.
+//! changing what it is rendered *from* changed no invariant anybody depends on.
 //!
 //! ## The render context is the whole of what a fragment can see
 //!
@@ -610,6 +608,56 @@ networks:
             "stackvo.loc",
             &no_secrets,
         )
+    }
+
+    /// A workspace's own copy of a fragment is what ends up in the file.
+    ///
+    /// The layering itself is `overrides`' own test; this is the other half —
+    /// that it survives the whole render, `compose_policy` included. An
+    /// override that reached the tree and was then dropped by substitution or
+    /// refused by the validator would pass every test in that module and do
+    /// nothing here.
+    #[test]
+    fn an_overridden_fragment_is_what_renders_and_still_passes_the_policy() {
+        let root = scratch("overridden");
+        plant(&root, "mysql", "8.0", FRAGMENT);
+
+        // One line the published fragment does not have. Appended rather than
+        // substituted so the test does not depend on the fixture's wording, and
+        // `restart` is on the policy's allowlist — a line the validator refused
+        // would prove the wrong thing.
+        let mine = format!("{FRAGMENT}restart: \"unless-stopped\"\n");
+        let at = crate::overrides::dir(&root).join("mysql/8.0");
+        std::fs::create_dir_all(&at).unwrap();
+        std::fs::write(at.join("compose.yml.tpl"), &mine).unwrap();
+
+        let mut instance = instance("mysql", "8.0", true);
+        instance.ports.insert("main".into(), 3306);
+
+        let tree = pkg::Tree::open(&root)
+            .unwrap()
+            .with_overrides(crate::overrides::dir(&root));
+        let out = dynamic_compose(
+            &root,
+            &Table {
+                schema_version: SCHEMA_VERSION,
+                instances: vec![instance],
+            },
+            &tree,
+            "stackvo-net",
+            "stackvo.loc",
+            &no_secrets,
+        )
+        .unwrap();
+
+        assert!(
+            out.compose.contains("restart: \"unless-stopped\""),
+            "the workspace's fragment did not reach the file:\n{}",
+            out.compose
+        );
+        // And the package underneath is untouched, so a reinstall is as safe as
+        // it was and the next read still verifies.
+        assert!(tree.load("mysql", "8.0").is_ok());
     }
 
     /// The whole point: two versions of one service in one file, sharing
