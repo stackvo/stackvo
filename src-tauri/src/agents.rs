@@ -861,7 +861,7 @@ mod tests {
         );
         assert_eq!(
             remove(&out, Shape::McpServers).unwrap(),
-            format!("{{\n    \"a\": {{\n        \"b\": 1\n    }},\n    \"mcpServers\": {{}}\n}}\n"),
+            "{\n    \"a\": {\n        \"b\": 1\n    },\n    \"mcpServers\": {}\n}\n",
             "everything but the map we created has to come back"
         );
 
