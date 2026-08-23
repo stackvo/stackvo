@@ -1,5 +1,5 @@
 import vuetify from '@/plugins/vuetify';
-import { i18n } from '@/i18n';
+import { i18n, packDirections } from '@/i18n';
 import { readable } from '@/lib/contrast';
 
 /**
@@ -320,10 +320,15 @@ export function applyAppearance(appearance, systemAccent = null) {
   //
   // Written into the per-locale map rather than onto `isRtl`, which is a
   // computed derived from that map — assigning to it is silently discarded.
-  // Every locale the app ships gets the flag, so the choice survives switching
-  // language; the locales Vuetify already knows to be RTL are left alone.
+  //
+  // A locale whose pack **declared** a direction keeps it; the switch decides
+  // for everything else, so the preference still survives switching between the
+  // two built-in languages. See `packDirections` for why a language outranks a
+  // preference here and only here: Arabic reads right to left whether or not
+  // anybody chose it, and before this an Arabic pack rendered left to right
+  // until its reader found a switch that then mirrored English as well.
   for (const name of i18n.global.availableLocales) {
-    vuetify.locale.rtl.value[name] = a.rtl;
+    vuetify.locale.rtl.value[name] = rtlFor(name, a.rtl);
   }
 
   // And on the document, which is not the same element and not a duplicate of
@@ -343,7 +348,19 @@ export function applyAppearance(appearance, systemAccent = null) {
   // is not inside a Vuetify component. Written explicitly in both directions
   // rather than removed when off: an attribute that is sometimes absent is one
   // a user stylesheet or a screen reader has to guess about.
+  //
+  // The **active** locale's direction, not the switch's. They were the same
+  // value while one flag decided for everything; now a pack can disagree with
+  // it, and an Arabic window whose overlays laid out left to right would be the
+  // exact failure the paragraph above describes, reintroduced one line down.
   if (typeof document !== 'undefined') {
-    document.documentElement.setAttribute('dir', a.rtl ? 'rtl' : 'ltr');
+    const rtl = rtlFor(i18n.global.locale.value, a.rtl);
+    document.documentElement.setAttribute('dir', rtl ? 'rtl' : 'ltr');
   }
+}
+
+/** What a locale's direction is: what its pack said, or what was chosen. */
+function rtlFor(locale, chosen) {
+  const declared = packDirections[locale];
+  return declared ? declared === 'rtl' : chosen;
 }

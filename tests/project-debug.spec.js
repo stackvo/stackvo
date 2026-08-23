@@ -49,6 +49,8 @@ const { useProfiler } = await import('@/composables/useProfiler');
 const { i18n } = await import('@/i18n');
 const XdebugPane = (await import('@/components/project/XdebugPane.vue')).default;
 const DumpsPane = (await import('@/components/project/DumpsPane.vue')).default;
+const ProfilerPane = (await import('@/components/project/ProfilerPane.vue')).default;
+const SpxPane = (await import('@/components/project/SpxPane.vue')).default;
 
 const vuetify = createVuetify({ components, directives });
 const ref = (value) => ({ value });
@@ -61,13 +63,67 @@ beforeEach(() => {
   calls.length = 0;
   for (const key of Object.keys(replies)) delete replies[key];
   replies.xdebugStatus = { enabled: true, needsRebuild: false, active: true, running: true };
+  replies.spxStatus = {
+    supported: true,
+    enabled: false,
+    built: true,
+    phpVersion: '8.4',
+    active: null,
+    running: false,
+    domain: 'shop.loc',
+    samplingPeriod: 100,
+    builtins: false,
+    controlUrl: 'https://shop.loc/?SPX_KEY=abc&SPX_UI_URI=/',
+    viewBase: 'https://shop.loc/?SPX_KEY=abc&SPX_UI_URI=/report.html&key=',
+    xdebugConflict: false,
+    reports: [],
+    bytes: 0,
+    directory: '/ws/logs/projects/shop/spx',
+  };
+  replies.ideDebugStatus = {
+    project: 'shop',
+    port: 9003,
+    ideKey: 'STACKVO',
+    serverName: 'shop.loc',
+    hostPath: '/ws/projects/shop',
+    containerPath: '/var/www/html',
+    listener: { port: 9003, process: null, pid: null, unknown: false },
+    targets: [
+      {
+        id: 'vscode',
+        label: 'VS Code',
+        method: 'written',
+        path: '/ws/projects/shop/.vscode/launch.json',
+        detected: true,
+        exists: false,
+        parseable: true,
+        installed: false,
+        current: false,
+        snippet: '{}',
+      },
+      {
+        id: 'phpstorm',
+        label: 'PhpStorm',
+        method: 'shown',
+        path: '/ws/projects/shop/.idea/php.xml',
+        detected: false,
+        exists: false,
+        parseable: true,
+        installed: false,
+        current: false,
+        snippet: '<component/>',
+      },
+    ],
+  };
   replies.profilerStatus = {
     mode: 'profile',
+    develop: false,
+    modeValue: 'profile',
     trigger: 'XDEBUG_TRIGGER=1',
     profiles: PROFILES,
     bytes: 4096,
     directory: '/ws/projects/shop/.stackvo/profiles',
-    xdebug: { running: true, active: true, activeMode: 'profile' },
+    xdebug: { enabled: true, running: true, active: true, activeMode: 'profile' },
   };
 });
 
@@ -117,7 +173,7 @@ describe('xdebug', () => {
         template:
           '<v-app><XdebugPane name="shop" runtime="php" @changed="$attrs.onSeen" /></v-app>',
       },
-      { attrs: { onSeen: vi.fn() }, global: { plugins: [vuetify, i18n] } }
+      { attrs: { onSeen: vi.fn() }, global: { plugins: [createPinia(), vuetify, i18n] } }
     );
     await vi.waitFor(() => expect(wrapper.find('input[type="checkbox"]').exists()).toBe(true));
 
@@ -319,5 +375,792 @@ describe('the dumps pane', () => {
       calls.some(([n]) => n === 'composeUpProject'),
       'the pane must not run the project lifecycle itself'
     ).toBe(false);
+  });
+});
+
+/**
+ * The IDE half of step debugging.
+ *
+ * Every competitor's page ends at "now type these three values into your IDE",
+ * and every one of them then names the path mapping as the usual reason a
+ * breakpoint never hits. What is pinned here is the pair of decisions that
+ * makes filling it in safe rather than merely convenient: which IDE is written
+ * and which is only shown, and the fact that is in no file at all.
+ */
+describe('the IDE setup', () => {
+  const mountPane = () =>
+    mount(
+      {
+        components: { XdebugPane },
+        template: '<v-app><XdebugPane name="shop" runtime="php" /></v-app>',
+      },
+      { global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+
+  it('says out loud when nothing is listening on the debug port', async () => {
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    // The half that is in no file. An IDE that is not listening is silent
+    // about it, and this is the only place that says so.
+    expect(wrapper.text()).toContain('Nothing is listening on port 9003');
+    wrapper.unmount();
+  });
+
+  it('names the process when something is', async () => {
+    replies.ideDebugStatus = {
+      ...replies.ideDebugStatus,
+      listener: { port: 9003, process: 'phpstorm', pid: 4242, unknown: false },
+    };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    expect(wrapper.text()).toContain('phpstorm is listening on port 9003');
+    wrapper.unmount();
+  });
+
+  it('offers to write VS Code and only to copy PhpStorm', async () => {
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Write configuration');
+    expect(labels).toContain('Copy block');
+
+    // And the reason, on screen rather than in a comment: PhpStorm rewrites
+    // its own file on exit, so an edit made underneath it is an edit lost.
+    expect(wrapper.text()).toContain('keeps this file in memory');
+    wrapper.unmount();
+  });
+
+  it('sends the write to the right project and IDE, and re-reads afterwards', async () => {
+    replies.ideDebugApply = '/ws/projects/shop/.vscode/launch.json';
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Write configuration')
+      .trigger('click');
+
+    await vi.waitFor(() => expect(calls.some(([n]) => n === 'ideDebugApply')).toBe(true));
+    expect(calls.find(([n]) => n === 'ideDebugApply')).toEqual(['ideDebugApply', 'shop', 'vscode']);
+    // Re-read after the write, so the row is not left describing the old file.
+    await vi.waitFor(() =>
+      expect(calls.filter(([n]) => n === 'ideDebugStatus').length).toBeGreaterThan(1)
+    );
+    wrapper.unmount();
+  });
+
+  /**
+   * A launch.json with comments in it is what VS Code itself creates, so this
+   * is the common case rather than a corner one: no write button, a block to
+   * paste, and the reason named.
+   */
+  it('withholds the button for a file it cannot parse', async () => {
+    replies.ideDebugStatus = {
+      ...replies.ideDebugStatus,
+      targets: [{ ...replies.ideDebugStatus.targets[0], parseable: false }],
+    };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).not.toContain('Write configuration');
+    expect(labels).toContain('Copy block');
+    expect(wrapper.text()).toContain('cannot be edited safely');
+    wrapper.unmount();
+  });
+
+  it('offers Update rather than Write once the values have moved', async () => {
+    replies.ideDebugStatus = {
+      ...replies.ideDebugStatus,
+      targets: [
+        { ...replies.ideDebugStatus.targets[0], installed: true, current: false, exists: true },
+      ],
+    };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Update');
+    expect(labels).toContain('Remove');
+    expect(labels).not.toContain('Write configuration');
+    wrapper.unmount();
+  });
+});
+
+/**
+ * The two modes that arrived after the first three.
+ *
+ * `coverage` is the one every other tool's documentation covers and this one
+ * did not, and `develop` is the one Herd's own recommended configuration pairs
+ * with stepping. Both are pinned here because both are easy to model wrongly:
+ * coverage as a mode that records something, and develop as a fifth mode
+ * instead of the second item of a list.
+ */
+describe('the develop flag and the coverage mode', () => {
+  const mountPane = () =>
+    mount(
+      {
+        components: { ProfilerPane },
+        template: '<v-app><ProfilerPane name="shop" runtime="php" /></v-app>',
+      },
+      { global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+
+  /**
+   * The regression this comparison exists to prevent. `XDEBUG_MODE` is a list,
+   * so a project with develop on runs `debug,develop` while the picker still
+   * says `debug` — and comparing those two put a "recreate the container"
+   * warning on screen for a container that was already correct.
+   */
+  it('does not call debug,develop a mismatch with debug', async () => {
+    replies.profilerStatus = {
+      ...replies.profilerStatus,
+      mode: 'debug',
+      develop: true,
+      modeValue: 'debug,develop',
+      xdebug: { enabled: true, running: true, active: true, activeMode: 'debug,develop' },
+    };
+    const p = useProfiler(ref('shop'));
+    await p.load('php');
+
+    expect(p.needsRestart.value).toBe(false);
+  });
+
+  /** And a real mismatch is still one. */
+  it('still catches a container left in the previous mode', async () => {
+    replies.profilerStatus = {
+      ...replies.profilerStatus,
+      mode: 'debug',
+      develop: true,
+      modeValue: 'debug,develop',
+      xdebug: { enabled: true, running: true, active: true, activeMode: 'profile' },
+    };
+    const p = useProfiler(ref('shop'));
+    await p.load('php');
+
+    expect(p.needsRestart.value).toBe(true);
+  });
+
+  /** The switch keeps the mode; it is a companion, not an alternative. */
+  it('keeps the chosen mode when develop is toggled', async () => {
+    replies.profilerStatus = { ...replies.profilerStatus, mode: 'trace', modeValue: 'trace' };
+    replies.profilerSetMode = { ...replies.profilerStatus, develop: true };
+    const p = useProfiler(ref('shop'));
+    await p.load('php');
+
+    await p.setDevelop(true);
+    expect(calls.find(([n]) => n === 'profilerSetMode')).toEqual([
+      'profilerSetMode',
+      'shop',
+      'trace',
+      true,
+    ]);
+  });
+
+  it('offers coverage as a fourth mode', async () => {
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Coverage'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Coverage');
+    wrapper.unmount();
+  });
+
+  /**
+   * Coverage produces no file here, so the "trigger a request and it appears
+   * below" note would be three wrong sentences.
+   */
+  it('does not promise a recording for coverage', async () => {
+    replies.profilerStatus = {
+      ...replies.profilerStatus,
+      mode: 'coverage',
+      modeValue: 'coverage',
+      profiles: [],
+      traces: [],
+    };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Coverage'));
+
+    expect(wrapper.text()).toContain('PHPUnit writes the report');
+    expect(wrapper.text()).not.toContain('XDEBUG_TRIGGER');
+    wrapper.unmount();
+  });
+});
+
+/**
+ * A warning with no way to act on it.
+ *
+ * Switching Xdebug on for the first time compiles the extension into the image,
+ * so nothing happens until the project is regenerated and rebuilt — and the
+ * pane said exactly that and stopped, leaving the reader holding a sentence and
+ * a page to go hunting through. The work it names is the header's Rebuild
+ * button, so it is offered where the problem is stated.
+ *
+ * Deliberately a button and not an automatic rebuild: it is minutes and it
+ * recreates the container, and a switch that quietly started one would be a
+ * surprise nobody asked for.
+ */
+describe('acting on the Xdebug warnings', () => {
+  const mountPane = (attrs = {}) =>
+    mount(
+      {
+        components: { XdebugPane },
+        template:
+          '<v-app><XdebugPane name="shop" runtime="php" @rebuild="$attrs.onRebuild" @apply="$attrs.onApply" /></v-app>',
+      },
+      { attrs, global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+
+  it('offers the rebuild the warning asks for, and asks rather than doing it', async () => {
+    replies.xdebugStatus = {
+      enabled: true,
+      compiledIn: false,
+      needsRebuild: true,
+      active: false,
+      running: false,
+    };
+    const onRebuild = vi.fn();
+    const wrapper = mountPane({ onRebuild });
+    await vi.waitFor(() => expect(wrapper.text()).toContain('rebuild'));
+
+    const button = wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Regenerate and rebuild now');
+    expect(button, 'the warning has no button to act on').toBeTruthy();
+
+    // Nothing has run yet — the switch does not start a build on its own.
+    expect(onRebuild).not.toHaveBeenCalled();
+    await button.trigger('click');
+    expect(onRebuild).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  /**
+   * The other warning is a different fault with a different fix: the image has
+   * the extension and the container predates the overlay. That is a recreate,
+   * which is seconds. Offering the expensive one here would teach people to
+   * reach for it every time.
+   */
+  it('offers a recreate, not a rebuild, for a container that is merely behind', async () => {
+    replies.xdebugStatus = {
+      enabled: true,
+      compiledIn: true,
+      needsRebuild: false,
+      active: false,
+      running: true,
+    };
+    const onApply = vi.fn();
+    const wrapper = mountPane({ onApply });
+    await vi.waitFor(() =>
+      expect(wrapper.findAllComponents({ name: 'VBtn' }).length).toBeGreaterThan(0)
+    );
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).not.toContain('Regenerate and rebuild now');
+
+    const apply = wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Recreate the container');
+    expect(apply, 'nothing offered for a container that is behind').toBeTruthy();
+    await apply.trigger('click');
+    expect(onApply).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  /** And a project that is already working is offered neither. */
+  it('offers nothing once it is actually active', async () => {
+    replies.xdebugStatus = {
+      enabled: true,
+      compiledIn: true,
+      needsRebuild: false,
+      active: true,
+      running: true,
+    };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).not.toContain('Regenerate and rebuild now');
+    expect(labels).not.toContain('Recreate the container');
+    wrapper.unmount();
+  });
+});
+
+/**
+ * The button that worked and said it had not.
+ *
+ * Every one of these operations returns an operation id **as soon as the work
+ * starts**, not when it ends, so the caller's `await` resolves while docker is
+ * still recreating. The panes re-read nothing at all, which is why "the
+ * container is in debug, the setting is profile" survived pressing the button
+ * that fixed it: the work was done and the screen never asked again.
+ */
+describe('the panes re-read when the operation finishes', () => {
+  const useOperationsStore = async () => (await import('@/stores/operations')).useOperationsStore;
+
+  it('re-reads the Xdebug pane on the falling edge of busy, not on the call', async () => {
+    const pinia = createPinia();
+    const wrapper = mount(
+      {
+        components: { XdebugPane },
+        template: '<v-app><XdebugPane name="shop" runtime="php" /></v-app>',
+      },
+      { global: { plugins: [pinia, vuetify, i18n] } }
+    );
+    await vi.waitFor(() => expect(calls.some(([n]) => n === 'xdebugStatus')).toBe(true));
+
+    const ops = (await useOperationsStore())();
+    const before = calls.filter(([n]) => n === 'xdebugStatus').length;
+
+    // While it runs, nothing is re-read — the container is still changing.
+    ops.markBusy('shop', true);
+    await wrapper.vm.$nextTick();
+    expect(calls.filter(([n]) => n === 'xdebugStatus').length).toBe(before);
+
+    // The operation's finished event clears the flag; that is the first moment
+    // the container on disk is the one being described.
+    ops.markBusy('shop', false);
+    await vi.waitFor(() =>
+      expect(calls.filter(([n]) => n === 'xdebugStatus').length).toBeGreaterThan(before)
+    );
+    wrapper.unmount();
+  });
+
+  it('re-reads the profiler pane the same way', async () => {
+    const pinia = createPinia();
+    const wrapper = mount(
+      {
+        components: { ProfilerPane },
+        template: '<v-app><ProfilerPane name="shop" runtime="php" /></v-app>',
+      },
+      { global: { plugins: [pinia, vuetify, i18n] } }
+    );
+    await vi.waitFor(() => expect(calls.some(([n]) => n === 'profilerStatus')).toBe(true));
+
+    const ops = (await useOperationsStore())();
+    const before = calls.filter(([n]) => n === 'profilerStatus').length;
+
+    ops.markBusy('shop', true);
+    // A tick between the two: without it the watcher sees the value end where
+    // it started and never fires, which is a fact about Vue rather than about
+    // the pane — and is why the assertion below would otherwise pass on a pane
+    // that re-reads nothing.
+    await wrapper.vm.$nextTick();
+    ops.markBusy('shop', false);
+    await vi.waitFor(() =>
+      expect(calls.filter(([n]) => n === 'profilerStatus').length).toBeGreaterThan(before)
+    );
+    wrapper.unmount();
+  });
+
+  /**
+   * Switching Xdebug off leaves the running container debugging until it is
+   * recreated, and the pane used to say nothing at all about that — the same
+   * silence that made switching it *on* a lie, pointing the other way.
+   */
+  it('says a container is still debugging after the switch went off', async () => {
+    replies.xdebugStatus = {
+      enabled: false,
+      compiledIn: true,
+      needsRebuild: false,
+      active: true,
+      running: true,
+    };
+    const onApply = vi.fn();
+    const wrapper = mount(
+      {
+        components: { XdebugPane },
+        template: '<v-app><XdebugPane name="shop" runtime="php" @apply="$attrs.onApply" /></v-app>',
+      },
+      { attrs: { onApply }, global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Still switched on'));
+
+    const apply = wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Recreate the container');
+    expect(apply, 'nothing offered for a container still carrying Xdebug').toBeTruthy();
+    await apply.trigger('click');
+    expect(onApply).toHaveBeenCalledTimes(1);
+
+    // And not the expensive one: the extension stays in the image on purpose.
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).not.toContain('Regenerate and rebuild now');
+    wrapper.unmount();
+  });
+});
+
+/**
+ * A failed refresh must not empty the pane.
+ *
+ * The whole screen hangs off `v-if="status"`, and the refreshes now happen
+ * exactly when the engine is busiest — this re-reads as a container is being
+ * recreated. A call that lost a race with docker used to take the mode buttons,
+ * the warnings and the recorded list down with it, which reads as the pane
+ * having broken rather than as one reply having been missed.
+ */
+describe('a refresh that fails', () => {
+  it('keeps the profiler on screen and reports the error beside it', async () => {
+    const p = useProfiler(ref('shop'));
+    await p.load('php');
+    expect(p.status.value).toBeTruthy();
+
+    replies.profilerStatus = () => Promise.reject({ code: 'ENGINE_UNREACHABLE', message: 'down' });
+    await p.load('php');
+
+    expect(p.status.value, 'the pane was emptied by one failed read').toBeTruthy();
+    expect(p.error.value.code).toBe('ENGINE_UNREACHABLE');
+  });
+
+  it('keeps the Xdebug pane the same way', async () => {
+    const x = useXdebug(ref('shop'));
+    await x.load('php');
+    expect(x.status.value).toBeTruthy();
+
+    replies.xdebugStatus = () => Promise.reject({ code: 'ENGINE_UNREACHABLE', message: 'down' });
+    await x.load('php');
+
+    expect(x.status.value).toBeTruthy();
+    expect(x.error.value.code).toBe('ENGINE_UNREACHABLE');
+  });
+
+  /** The first read has nothing to keep, so it still reports nothing. */
+  it('still has nothing to show when the very first read fails', async () => {
+    replies.profilerStatus = () => Promise.reject({ code: 'ENGINE_UNREACHABLE', message: 'down' });
+    const p = useProfiler(ref('shop'));
+
+    expect(await p.load('php')).toBe(null);
+    expect(p.status.value).toBe(null);
+  });
+
+  /** And a successful refresh clears an error left by a previous one. */
+  it('clears the error once a read succeeds again', async () => {
+    const p = useProfiler(ref('shop'));
+    await p.load('php');
+    replies.profilerStatus = () => Promise.reject({ code: 'ENGINE_UNREACHABLE', message: 'down' });
+    await p.load('php');
+    expect(p.error.value).toBeTruthy();
+
+    replies.profilerStatus = {
+      mode: 'profile',
+      develop: false,
+      modeValue: 'profile',
+      trigger: 'XDEBUG_TRIGGER=1',
+      profiles: PROFILES,
+      bytes: 4096,
+      directory: '/ws/projects/shop/.stackvo/profiles',
+      xdebug: { enabled: true, running: true, active: true, activeMode: 'profile' },
+    };
+    await p.load('php');
+    expect(p.error.value).toBe(null);
+  });
+});
+
+/**
+ * The mode cannot be moved while the container is being recreated.
+ *
+ * Choosing a mode rewrites the compose overlay, and compose is reading that
+ * file right now — the two racing produce a container whose `XDEBUG_MODE` is
+ * neither of the things the screen said, and the only symptom is a debugger
+ * that does not attach. It has to unlock itself, though, or it is a control
+ * that has gone quiet.
+ */
+describe('the mode buttons while an operation runs', () => {
+  it('locks them, says why, and unlocks when the work finishes', async () => {
+    const pinia = createPinia();
+    const wrapper = mount(
+      {
+        components: { ProfilerPane },
+        template: '<v-app><ProfilerPane name="shop" runtime="php" /></v-app>',
+      },
+      { global: { plugins: [pinia, vuetify, i18n] } }
+    );
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Coverage'));
+
+    const modes = () =>
+      wrapper
+        .findAllComponents({ name: 'VBtn' })
+        .filter((b) => ['Step debugging', 'Profiling', 'Trace', 'Coverage'].includes(b.text()));
+    expect(modes().length).toBe(4);
+    expect(modes().every((b) => b.props('disabled'))).toBe(false);
+
+    const { useOperationsStore } = await import('@/stores/operations');
+    const ops = useOperationsStore();
+
+    ops.markBusy('shop', true);
+    await wrapper.vm.$nextTick();
+    expect(modes().every((b) => b.props('disabled'))).toBe(true);
+    expect(wrapper.text()).toContain('The mode is held while the container is being rebuilt');
+
+    ops.markBusy('shop', false);
+    await vi.waitFor(() => expect(modes().some((b) => b.props('disabled'))).toBe(false));
+    wrapper.unmount();
+  });
+});
+
+/**
+ * The sampling profiler.
+ *
+ * Three states that have to be satisfied in order — built, switched on, in the
+ * container — and the pane is only honest if it refuses to skip one. The build
+ * is the interesting case: it is minutes long, it returns an operation id as
+ * soon as it starts, and until it finishes there is nothing to switch on.
+ */
+describe('php-spx', () => {
+  const mountPane = () =>
+    mount(
+      {
+        components: { SpxPane },
+        template: '<v-app><SpxPane name="shop" runtime="php" @apply="$attrs.onApply" /></v-app>',
+      },
+      { attrs: {}, global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+
+  it('offers the build and nothing else until there is one', async () => {
+    replies.spxStatus = { ...replies.spxStatus, built: false };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Not built for PHP 8.4'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Build it');
+    // No switch: turning it on without a build mounts an empty directory over
+    // the extension path, which stops PHP starting at all.
+    expect(wrapper.findAllComponents({ name: 'VSwitch' }).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('sends the build and re-reads when the operation finishes', async () => {
+    replies.spxStatus = { ...replies.spxStatus, built: false };
+    replies.spxBuild = 'spx-1';
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Not built'));
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Build it')
+      .trigger('click');
+    await vi.waitFor(() => expect(calls.some(([n]) => n === 'spxBuild')).toBe(true));
+
+    const before = calls.filter(([n]) => n === 'spxStatus').length;
+    const { useOperationsStore } = await import('@/stores/operations');
+    const ops = useOperationsStore();
+    ops.markBusy('shop', true);
+    await wrapper.vm.$nextTick();
+    ops.markBusy('shop', false);
+    await vi.waitFor(() =>
+      expect(calls.filter(([n]) => n === 'spxStatus').length).toBeGreaterThan(before)
+    );
+    wrapper.unmount();
+  });
+
+  it('says the switch has not reached a container that was already up', async () => {
+    replies.spxStatus = { ...replies.spxStatus, enabled: true, running: true, active: false };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Not in the running container yet'));
+
+    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
+    expect(labels).toContain('Recreate the container');
+    wrapper.unmount();
+  });
+
+  /**
+   * Two profilers hooking one engine is unsupported by both projects and the
+   * symptom is wrong numbers rather than an error — so it is said rather than
+   * prevented: which one to turn off is not this app's decision.
+   */
+  it('warns when Xdebug is recording as well, and does not switch anything off', async () => {
+    replies.spxStatus = { ...replies.spxStatus, enabled: true, xdebugConflict: true };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Xdebug is recording as well'));
+
+    expect(calls.some(([n]) => n === 'profilerSetMode')).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('lists a recorded run with what it cost', async () => {
+    replies.spxStatus = {
+      ...replies.spxStatus,
+      enabled: true,
+      bytes: 4096,
+      reports: [
+        {
+          key: 'spx-full-1',
+          recordedAt: 1787426207,
+          cli: false,
+          request: 'GET /api/health',
+          wallTimeUs: 736_000,
+          peakMemory: 1808984,
+          callCount: 1240,
+          bytes: 4096,
+        },
+      ],
+    };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('GET /api/health'));
+
+    expect(wrapper.text()).toContain('736.0 ms');
+    expect(wrapper.text()).toContain('1240');
+    wrapper.unmount();
+  });
+
+  /**
+   * Recording needs the extension in the container that will serve the request.
+   * Offering it otherwise sends a request that succeeds and records nothing,
+   * which reads as a broken button rather than as a container that predates the
+   * switch.
+   */
+  it('offers a recording only once the profiler is in the running container', async () => {
+    replies.spxStatus = { ...replies.spxStatus, enabled: true, running: true, active: false };
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Not in the running container yet'));
+    expect(wrapper.text()).not.toContain('Record from here');
+    wrapper.unmount();
+  });
+
+  /**
+   * The path is the only thing that crosses. The address is the project's, on
+   * the Rust side, where a path naming another host is refused — a text field
+   * that could name a host would make this button a request forger.
+   */
+  it('records a request without a browser, and says what it got', async () => {
+    replies.spxStatus = { ...replies.spxStatus, enabled: true, running: true, active: true };
+    replies.quickCommands = [];
+    replies.spxRecordRequest = {
+      key: 'spx-full-9',
+      recordedAt: 1787426207,
+      cli: false,
+      request: 'GET /checkout',
+      wallTimeUs: 912_000,
+      peakMemory: 1,
+      callCount: 2,
+      bytes: 3,
+    };
+
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Record from here'));
+
+    await wrapper.findComponent({ name: 'VTextField' }).setValue('/checkout');
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Record this request')
+      .trigger('click');
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain('GET /checkout — 912.0 ms'));
+    expect(calls.find(([n]) => n === 'spxRecordRequest')).toEqual([
+      'spxRecordRequest',
+      'shop',
+      '/checkout',
+    ]);
+    wrapper.unmount();
+  });
+
+  /** Interactive commands are not offered: a recording has to finish. */
+  it('leaves an interactive command out of the ones it can record', async () => {
+    replies.spxStatus = { ...replies.spxStatus, enabled: true, running: true, active: true };
+    replies.quickCommands = [
+      { id: 'tinker', display: 'php artisan tinker', interactive: true },
+      { id: 'migrate', display: 'php artisan migrate', interactive: false },
+    ];
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Record from here'));
+
+    const select = wrapper.findAllComponents({ name: 'VSelect' }).at(0);
+    expect(select.props('items').map((c) => c.id)).toEqual(['migrate']);
+    wrapper.unmount();
+  });
+
+  /**
+   * The question a report row could never answer. Read on demand rather than
+   * with the list: it decompresses and replays a trace, and most rows are never
+   * asked about.
+   */
+  it('reads where one recording spent its time, only when asked', async () => {
+    replies.spxStatus = {
+      ...replies.spxStatus,
+      enabled: true,
+      reports: [
+        {
+          key: 'spx-full-1',
+          recordedAt: 1787426207,
+          cli: false,
+          request: 'GET /api/health',
+          wallTimeUs: 736_000,
+          peakMemory: 1,
+          callCount: 1240,
+          bytes: 4096,
+        },
+      ],
+    };
+    replies.spxReport = {
+      key: 'spx-full-1',
+      wallTimeUs: 736_000,
+      callCount: 1240,
+      functions: 2,
+      events: 40,
+      truncated: false,
+      hotspots: [
+        {
+          function: 'App\\Repository::all',
+          calls: 3,
+          exclusiveUs: 500_000,
+          exclusivePercent: 68,
+          inclusiveUs: 600_000,
+          inclusivePercent: 81,
+        },
+      ],
+    };
+
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('GET /api/health'));
+    expect(calls.some(([n]) => n === 'spxReport')).toBe(false);
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.attributes('aria-label') === 'Where the time went')
+      .trigger('click');
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain('App\\Repository::all'));
+    expect(wrapper.text()).toContain('68.0%');
+    expect(wrapper.text()).toContain('500.0 ms');
+    wrapper.unmount();
+  });
+
+  /**
+   * php-spx's own default period is 0 — every call — which is a tracing
+   * profiler with the cost this pane's first sentence claims to avoid.
+   */
+  it('records sampled by default and can be told to count every call', async () => {
+    replies.spxStatus = { ...replies.spxStatus, enabled: true };
+    replies.spxOptions = { ...replies.spxStatus, enabled: true, samplingPeriod: 0 };
+
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Sampled every 100 µs'));
+
+    const sampling = wrapper
+      .findAllComponents({ name: 'VSelect' })
+      .find((s) => s.props('label') === 'Sampling');
+    sampling.vm.$emit('update:modelValue', 0);
+    await vi.waitFor(() => expect(calls.some(([n]) => n === 'spxOptions')).toBe(true));
+    expect(calls.find(([n]) => n === 'spxOptions')).toEqual(['spxOptions', 'shop', 0, null]);
+    wrapper.unmount();
+  });
+
+  /** A node project has no PHP to load an extension into, so there is no card. */
+  it('draws nothing for a project that is not PHP', async () => {
+    const wrapper = mount(
+      {
+        components: { SpxPane },
+        template: '<v-app><SpxPane name="shop" runtime="node" /></v-app>',
+      },
+      { global: { plugins: [createPinia(), vuetify, i18n] } }
+    );
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.findComponent({ name: 'VCard' }).exists()).toBe(false);
+    expect(calls.some(([n]) => n === 'spxStatus')).toBe(false);
+    wrapper.unmount();
   });
 });

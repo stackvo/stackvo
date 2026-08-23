@@ -35,13 +35,81 @@ const newTag = ref('');
 const busy = ref(false);
 const packError = ref(null);
 
-const englishStrings = computed(() => count(i18n.global.getLocaleMessage('en')));
+/**
+ * The English catalogue a pack is measured against.
+ *
+ * `$vuetify` is dropped, exactly as `startPack` drops it when it seeds a file:
+ * those are the library's own labels, they ship translated for dozens of
+ * languages already, and a pack has no reason to carry them. Leaving them in
+ * put 89 strings in the denominator that no pack could ever fill, so every
+ * finished translation would have stopped short of 100%.
+ */
+const english = computed(() => {
+  const { $vuetify, ...rest } = i18n.global.getLocaleMessage('en');
+  void $vuetify;
+  return rest;
+});
+
+const englishStrings = computed(() => count(english.value));
 
 function count(value) {
   if (typeof value === 'string') return 1;
   if (value && typeof value === 'object')
     return Object.values(value).reduce((n, v) => n + count(v), 0);
   return 0;
+}
+
+/**
+ * How much of a pack is actually **translated**.
+ *
+ * Counting the strings a pack *holds* was the obvious arithmetic and it was
+ * wrong in the way that matters: `startPack` seeds the file with every English
+ * string — which is what a translation file is, and is the right thing to hand
+ * a translator — so an untouched pack reported `2000 of 2000 (100%)` the moment
+ * it was created. A progress figure that is full before the work begins, on a
+ * language that is entirely English.
+ *
+ * `locale.rs` states the rule that broke, in its own doc comment: *a missing
+ * string that falls back to English is honest; a fabricated one is a sentence
+ * somebody has to find and disbelieve.* Two thousand of them, with a number
+ * saying the job was done.
+ *
+ * A leaf counts when it **differs from the English one**, which is how every
+ * translation tool decides the same question. It handles both shapes of pack at
+ * once — a seeded file full of English and a sparse file missing keys both fall
+ * back to English at runtime, and both read as untranslated here.
+ *
+ * It understates: `Docker`, `PHP` and `OK` are the same word in most languages
+ * and are counted as untranslated. That is the safe direction. A translator who
+ * sees 98% on a finished pack goes looking for the last few; one who sees 100%
+ * on an untouched file learns that the number is a lie.
+ *
+ * The pack's messages come from vue-i18n rather than from a second read over
+ * IPC: `loadLocalePacks` already registered every pack as English with the
+ * pack's own strings merged on top, so the merged catalogue is exactly what a
+ * reader sees, and comparing it against English answers the question directly.
+ */
+function translatedCount(messages, source) {
+  if (typeof source === 'string') {
+    return typeof messages === 'string' && messages !== source ? 1 : 0;
+  }
+  if (!source || typeof source !== 'object') return 0;
+  return Object.entries(source).reduce(
+    (n, [key, value]) => n + translatedCount(messages?.[key], value),
+    0
+  );
+}
+
+/**
+ * Walked over the English tree, not the pack's.
+ *
+ * The denominator is the app. A pack carrying keys the app no longer has would
+ * otherwise inflate its own score with strings nothing renders.
+ */
+function progress(pack) {
+  const done = translatedCount(i18n.global.getLocaleMessage(pack.tag), english.value);
+  const total = englishStrings.value || 1;
+  return { done, total, percent: Math.min(100, Math.round((done / total) * 100)) };
 }
 
 const options = computed(() => [
@@ -129,18 +197,24 @@ onMounted(loadPacks);
       <v-icon size="16" :color="pack.broken ? 'error' : 'success'" class="mr-2">
         {{ pack.broken ? 'mdi-alert-circle-outline' : 'mdi-translate' }}
       </v-icon>
-      <span class="font-weight-medium mr-2">{{ pack.label }}</span>
-      <span class="text-caption text-medium-emphasis">
-        {{
-          pack.broken
-            ? pack.broken
-            : t('settings.packProgress', {
-                done: pack.strings,
-                total: englishStrings,
-                percent: Math.min(100, Math.round((pack.strings / (englishStrings || 1)) * 100)),
-              })
-        }}
-      </span>
+      <div class="grow">
+        <div>
+          <span class="font-weight-medium mr-2">{{ pack.label }}</span>
+          <!-- A language that reads the other way says so here. Otherwise the
+               only way to find out whether the pack's declaration took effect
+               is to switch to it and look at the window. -->
+          <v-chip v-if="pack.direction === 'rtl'" size="x-small" variant="tonal" class="mr-2">
+            {{ t('settings.packRtl') }}
+          </v-chip>
+          <span class="text-caption text-medium-emphasis">
+            {{ pack.broken ? pack.broken : t('settings.packProgress', progress(pack)) }}
+          </span>
+        </div>
+        <!-- The file. "Drop a JSON file in the config directory" is only a
+             mechanism somebody can use if they can find the file the button
+             just made. -->
+        <div class="text-caption text-disabled path">{{ pack.path }}</div>
+      </div>
       <v-spacer />
       <v-btn size="x-small" variant="text" :loading="busy" @click="removePack(pack.tag)">
         {{ t('settings.packRemove') }}
@@ -212,6 +286,14 @@ onMounted(loadPacks);
 </template>
 
 <style scoped>
+.grow {
+  min-width: 0;
+}
+
+.path {
+  overflow-wrap: anywhere;
+}
+
 .pack {
   display: flex;
   align-items: center;

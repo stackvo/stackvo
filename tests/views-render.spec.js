@@ -374,6 +374,7 @@ describe('the project page', () => {
     debug: () => en.profiler.title,
     runtime: () => en.phpIni.title,
     release: () => en.release.excluded,
+    agent: () => en.projectAgent.contextTitle,
   };
 
   /**
@@ -424,7 +425,7 @@ describe('the project page', () => {
     const wrapper = await render(ProjectDetail, 'en', { name: 'shop' });
 
     const rail = wrapper.findAll('.detail-nav .nav-item');
-    expect(rail.length, 'a PHP project offers every section').toBe(7);
+    expect(rail.length, 'a PHP project offers every section').toBe(8);
     expect(Object.keys(OWN_TEXT)).toHaveLength(rail.length);
 
     for (const key of Object.keys(OWN_TEXT)) {
@@ -476,7 +477,7 @@ describe('the project page', () => {
     expect(nav.classes()).toContain('detail-nav--rail');
 
     const items = nav.findAll('.nav-item');
-    expect(items.length).toBe(7);
+    expect(items.length).toBe(8);
     expect(nav.text()).not.toContain(en.projectDetail.runtime);
     expect(items.map((i) => i.attributes('aria-label'))).toContain(en.projectDetail.runtime);
     expect(items.every((i) => i.attributes('aria-label')?.trim())).toBe(true);

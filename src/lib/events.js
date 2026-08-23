@@ -33,8 +33,15 @@ export const EVENTS = {
     'service:restarted',
   ],
   build: ['build:start', 'build:progress', 'build:built', 'build:success', 'build:error'],
+  // A directory arriving in the parked project folder. Not `project:*`: it is
+  // not a project yet, and the lifecycle group is what makes lists refetch as
+  // if one had started.
+  folder: ['folder:appeared'],
   generate: ['generate:start', 'generate:progress', 'generate:done'],
   compose: ['compose:progress', 'compose:done'],
+  // The php-spx build: a compiler, a clone and a make, in a throwaway
+  // container. Long enough to belong in the operation console.
+  spx: ['spx:progress', 'spx:done'],
   logs: ['logs:line', 'logs:closed'],
   // Declared in the contract since the port and unlisted here until a view
   // finally opened a session — which is the same ten-month gap that left the

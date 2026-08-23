@@ -35,6 +35,17 @@
 //!   * registering the MCP server with an assistant, and unregistering it,
 //!     which edits a file belonging to another application and — with
 //!     `--allow-writes` — hands that assistant the ability to stop the stack.
+//!   * writing the AI rules into a project or a home directory, which puts text
+//!     into a file the user owns — one that is usually committed, and that
+//!     every future session of that assistant reads as instructions.
+//!   * writing an IDE's debug configuration into a project, which is the same
+//!     kind of act on the same kind of file — `launch.json` is committed, and
+//!     what it configures is a debugger that attaches to running code.
+//!   * writing the `PATH` entry into a shell startup file, which edits a file
+//!     every shell the user opens reads, and puts a directory this app writes
+//!     into ahead of the rest of their `PATH`.
+//!   * installing a host tool, which is the only act here that fetches an
+//!     executable over the network and leaves it somewhere a shell will run it.
 //!
 //! Starting a container is not here, and neither is reading anything. An audit
 //! trail that records routine traffic is one nobody reads, and a trail nobody

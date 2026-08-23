@@ -193,3 +193,145 @@ fn a_symlink_is_not_walked_into() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// --------------------------------------------------------------- the gate
+
+/// Every source the backend reads has a button, and every button reaches a
+/// source the backend reads.
+///
+/// The drift is silent in both directions and that is the whole reason this is
+/// a test rather than a comment: an id in the view the backend refuses is a
+/// button that errors when clicked, and a source the backend can read with no
+/// id in the view is a tool nobody can point at. Three of the five sources sat
+/// in the second state once already.
+#[test]
+fn the_views_source_list_and_the_backends_agree() {
+    let view = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../src/views/Projects.vue"
+    ))
+    .expect("the projects view");
+
+    let line = view
+        .lines()
+        .find(|line| line.contains("const IMPORT_SOURCES"))
+        .expect("IMPORT_SOURCES in the view");
+    let inside = line
+        .split_once('[')
+        .and_then(|(_, rest)| rest.split_once(']'))
+        .expect("an array literal")
+        .0;
+
+    let mut from_view: Vec<String> = inside
+        .split(',')
+        .map(|item| item.trim().trim_matches('\'').trim_matches('"').to_string())
+        .filter(|item| !item.is_empty())
+        .collect();
+    let mut from_backend: Vec<String> = imports::ALL
+        .iter()
+        .map(|source| source.as_str().to_string())
+        .collect();
+
+    from_view.sort();
+    from_backend.sort();
+    assert_eq!(
+        from_view, from_backend,
+        "Projects.vue's IMPORT_SOURCES and imports::ALL have come apart"
+    );
+
+    // A button is only worth anything if the command layer accepts its id.
+    for id in &from_view {
+        assert!(
+            Source::from_id(id).is_some(),
+            "the view offers `{id}` and from_id refuses it"
+        );
+    }
+}
+
+/// Herd is Valet's shape with a different root, and the point of the test is
+/// that a real tree goes through the reader that already existed — and comes
+/// out carrying the one thing Valet cannot say.
+#[test]
+fn a_herd_tree_is_read_by_valets_reader_and_keeps_its_pinned_version() {
+    let root = scratch("herd");
+    let config = root.join("config");
+    let sites = config.join("Sites");
+    let code = root.join("code");
+
+    write(&code.join("shop/artisan"), "#!/usr/bin/env php\n");
+    write(
+        &code.join("shop/composer.json"),
+        r#"{"require":{"php":"^8.1","laravel/framework":"^11.0"}}"#,
+    );
+    std::fs::create_dir_all(code.join("shop/public")).unwrap();
+    std::fs::create_dir_all(&sites).unwrap();
+    write(&config.join("config.json"), r#"{"tld":"test","paths":[]}"#);
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(code.join("shop"), sites.join("shop")).unwrap();
+    write(
+        &config.join("Nginx/shop.test.conf"),
+        "server {\n  location ~ \\.php$ {\n    fastcgi_pass unix:/x/herd-83.sock;\n  }\n}\n",
+    );
+
+    let install = imports::scan_at(Source::Herd, &config, None).expect("a Herd installation");
+    assert_eq!(install.source, Source::Herd);
+    assert_eq!(install.sites.len(), 1, "{:?}", install.sites);
+
+    let site = &install.sites[0];
+    assert_eq!(site.name, "shop");
+    assert_eq!(site.domain.as_deref(), Some("shop.test"));
+    assert_eq!(site.detected.framework, Some("laravel"));
+    // `^8.1` is what the framework needs. `8.3` is what Herd was serving it
+    // with, and only Herd writes that down.
+    assert_eq!(site.detected.php_version.as_deref(), Some("8.3"));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The one source that declares instead of implying, read off a real tree:
+/// the registry finds the project, and the project's own file settles the
+/// version, the server, the document root and the database.
+#[test]
+fn a_ddev_registry_finds_a_project_and_its_file_settles_the_rest() {
+    let root = scratch("ddev");
+    let home = root.join("ddev-home");
+    let project = root.join("work/shop");
+
+    write(&project.join("artisan"), "#!/usr/bin/env php\n");
+    write(
+        &project.join("composer.json"),
+        r#"{"require":{"php":"^8.1","laravel/framework":"^11.0"}}"#,
+    );
+    std::fs::create_dir_all(project.join("public")).unwrap();
+    write(
+        &project.join(".ddev/config.yaml"),
+        "name: shop\ntype: laravel\ndocroot: public\nphp_version: \"8.4\"\n\
+         webserver_type: apache-fpm\ndatabase:\n  type: mysql\n  version: \"8.0\"\n\n\
+         # php_version: \"7.4\"  # PHP version to use\n",
+    );
+    write(
+        &home.join("global_config.yaml"),
+        &format!(
+            "project_tld: ddev.site\nproject_info:\n  shop:\n    approot: {}\n",
+            project.display()
+        ),
+    );
+
+    let install = imports::scan_at(Source::Ddev, &home, None).expect("a DDEV registry");
+    assert_eq!(install.sites.len(), 1, "{:?}", install.sites);
+
+    let site = &install.sites[0];
+    assert_eq!(site.name, "shop");
+    assert_eq!(site.domain.as_deref(), Some("shop.ddev.site"));
+    // The declaration wins over the constraint, and over detection's default
+    // server — and the commented example at the bottom of the file loses.
+    assert_eq!(site.detected.php_version.as_deref(), Some("8.4"));
+    assert_eq!(site.detected.server, "apache");
+    assert_eq!(site.detected.document_root.as_deref(), Some("public"));
+    // Detection still owns what it reads from the code.
+    assert_eq!(site.detected.framework, Some("laravel"));
+    // And the database is the same question the catalogue answers.
+    assert_eq!(site.services, vec!["mysql".to_string()]);
+
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -75,6 +75,35 @@ fn main() {
         }
     );
 
+    // Which way it reads, off the real file. A pack that states `rtl` is what
+    // makes Arabic and Farsi possible without a rebuild — and the way this
+    // breaks is that a hand-edited value nobody validated reaches a `dir`
+    // attribute. Written and read back rather than unit-tested alone, because
+    // the value crosses JSON, the file system and serde on the way.
+    for (declared, expected) in [
+        (serde_json::json!("rtl"), Some("rtl")),
+        (serde_json::json!("ltr"), Some("ltr")),
+        // A typo costs the direction, not the language.
+        (serde_json::json!("RTL"), None),
+        (serde_json::json!("right-to-left"), None),
+        (serde_json::json!(true), None),
+    ] {
+        let pack = serde_json::json!({
+            "language": { "label": "Qqish", "direction": declared },
+        });
+        let _ = locale::write_pack(TAG, &pack);
+        let got = locale::packs().into_iter().find(|p| p.tag == TAG);
+        let direction = got.as_ref().and_then(|p| p.direction);
+        println!(
+            "  {} direction {declared} reads as {direction:?}",
+            if direction == expected {
+                "ok  "
+            } else {
+                "FAIL"
+            }
+        );
+    }
+
     // The failure this catches: a file with a trailing comma that vanishes from
     // the picker instead of saying what is wrong with it.
     let _ = std::fs::write(dir.join(format!("{TAG}.json")), "{ \"a\": 1, }");

@@ -4,7 +4,7 @@ Ağır dizinleri host dosya sisteminden çıkarıp Docker biriminde tutar. macOS
 
 ## Neden bir liste, tek bir anahtar değil
 
-Kazanç hangi dizini taşıdığınıza bağlıdır. Ölçülen değerler:
+Kazanç hangi dizini taşıdığınıza bağlıdır. `examples/perf_layer_bench.rs` ile, **bu sürümün derlendiği makinede** ölçüldü — sizinki farklı çıkacaktır, ve Linux'ta geçilecek bir dosya sistemi sınırı zaten yok:
 
 | Taşınan | Framework açılışı | İstek yazmaları |
 | --- | --- | --- |
@@ -12,7 +12,9 @@ Kazanç hangi dizini taşıdığınıza bağlıdır. Ölçülen değerler:
 | `vendor` | 0,39 s (3,8 kat) | değişmedi |
 | `vendor` + `storage/framework` | 0,40 s | 0,41 s (2,8 kat) |
 
-`vendor` açılışı hızlandırır, yazmalara hiç dokunmaz. Yazmaları hızlandıran `storage/framework`'tür.
+`vendor` açılışı hızlandırır, yazmalara hiç dokunmaz. Yazmaları hızlandıran `storage/framework`'tür. Karttaki her satır kendi sayısını bu yüzden taşıyor.
+
+`bootstrap/cache` ve `node_modules` sunuluyor ama ölçülmedi; o yüzden satırları yukarıdaki sayılardan birini ödünç almak yerine bunu söylüyor.
 
 ## Kontroller
 

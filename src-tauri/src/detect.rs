@@ -736,6 +736,27 @@ pub fn compose_file(dir: &Path) -> Option<std::path::PathBuf> {
         .find(|path| path.is_file())
 }
 
+/// Does this directory hold anything worth adopting?
+///
+/// Dotfiles do not count as contents. On the checkout this was written
+/// against, an empty directory held one `.DS_Store` and would otherwise have
+/// been offered for adoption as if it had code in it.
+///
+/// Public because `project_adopt_many` asks the same question: the single
+/// adoption is a folder somebody picked out by name, the batch is everything
+/// under the parked directory, and an empty one there is not a choice anybody
+/// made. A second copy of the dotfile rule would be a second thing to be wrong
+/// about.
+pub fn has_files(dir: &Path) -> bool {
+    std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .any(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        })
+        .unwrap_or(false)
+}
+
 /// Every directory under `projects/` with no `stackvo.json`.
 pub fn adoptable(root: &Path) -> Vec<Adoptable> {
     let mut out = Vec::new();
@@ -760,16 +781,7 @@ pub fn adoptable(root: &Path) -> Vec<Adoptable> {
             continue;
         }
 
-        // Dotfiles do not count as contents. On the checkout this was written
-        // against, an empty directory held one `.DS_Store` and would otherwise
-        // have been offered for adoption as if it had code in it.
-        let has_files = std::fs::read_dir(&path)
-            .map(|entries| {
-                entries
-                    .flatten()
-                    .any(|e| !e.file_name().to_string_lossy().starts_with('.'))
-            })
-            .unwrap_or(false);
+        let has_files = has_files(&path);
 
         out.push(Adoptable {
             name: name.to_string(),

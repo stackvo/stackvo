@@ -45,6 +45,33 @@ use std::time::{Duration, SystemTime};
 /// never start with it, because [`safe_name`] refuses it.
 pub const AUTO_PREFIX: &str = "auto-";
 
+/// What the copy taken **before a restore** is called.
+///
+/// A restore replaces what is in a database with what is in a file, and it is
+/// the one operation here with nothing behind it: the rows that were there are
+/// gone the moment it succeeds. So one is taken first, and this is what it is
+/// named.
+///
+/// **Deliberately not under [`AUTO_PREFIX`].** Two things would go wrong if it
+/// were. `last_automatic` matches on that prefix, so a restore would push the
+/// schedule's next backup out by a full interval — a silent delay nobody would
+/// connect to having restored something. And `expired` prunes automatic
+/// snapshots against one retention window, so a run of restores would evict the
+/// scheduled copies that window exists to keep.
+///
+/// It gets its own window instead ([`SAFETY_KEEP`]), pruned when one is taken
+/// rather than by the scheduler — because the schedule defaults to `Off` and a
+/// net that only tidies up when a feature nobody switched on runs is a disk
+/// that fills.
+pub const SAFETY_PREFIX: &str = "before-restore-";
+
+/// How many of them to keep, per service.
+///
+/// Three, and the reasoning is what the net is for: "I restored the wrong file"
+/// is realised in minutes. A week of them would be a week of full database
+/// copies bought against a mistake that is noticed immediately.
+pub const SAFETY_KEEP: usize = 3;
+
 /// How often the scheduler takes one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -126,6 +153,11 @@ pub fn safe_name(name: &str) -> Result<String> {
     if trimmed.starts_with(AUTO_PREFIX) {
         return refuse("`auto-` is reserved for scheduled snapshots, which are pruned by age");
     }
+    if trimmed.starts_with(SAFETY_PREFIX) {
+        return refuse(
+            "`before-restore-` is reserved for the copy taken before a restore, which is pruned by count",
+        );
+    }
 
     Ok(trimmed.to_string())
 }
@@ -133,6 +165,36 @@ pub fn safe_name(name: &str) -> Result<String> {
 /// The name the schedule gives the snapshot it is about to take.
 pub fn auto_name(stamp: &str) -> String {
     format!("{AUTO_PREFIX}{stamp}")
+}
+
+/// The name the copy taken before a restore is given.
+pub fn safety_name(stamp: &str) -> String {
+    format!("{SAFETY_PREFIX}{stamp}")
+}
+
+/// Which of one service's safety copies to remove, oldest first.
+///
+/// Per service and by count, which is what makes it independent of the
+/// schedule. `expired` cannot be reused: it works on `automatic`, and the whole
+/// point of the separate prefix is that these two kinds do not prune each
+/// other.
+pub fn expired_safety(snapshots: &[Snapshot], service: &str, keep: usize) -> Vec<String> {
+    let mut mine: Vec<&Snapshot> = snapshots
+        .iter()
+        .filter(|s| s.service == service && s.name.starts_with(SAFETY_PREFIX))
+        .collect();
+
+    // The same tie-break `expired` uses, for the same reason: `taken_at` has
+    // one-second resolution and two copies can share it.
+    mine.sort_by(|a, b| a.taken_at.cmp(&b.taken_at).then(a.name.cmp(&b.name)));
+
+    if mine.len() <= keep {
+        return Vec::new();
+    }
+    mine[..mine.len() - keep]
+        .iter()
+        .map(|s| s.name.clone())
+        .collect()
 }
 
 /// Is another automatic snapshot due?
@@ -304,10 +366,9 @@ pub fn remove(root: &Path, service: &str, name: &str) -> Result<()> {
     // Through `safe_name` even on the way out: this is the one argument that
     // becomes a path, and `remove` is the one direction where a traversal
     // deletes rather than merely reads.
-    let name = if name.starts_with(AUTO_PREFIX) {
-        auto_checked(name)?
-    } else {
-        safe_name(name)?
+    let name = match reserved_checked(name) {
+        Some(checked) => checked?,
+        None => safe_name(name)?,
     };
 
     let path = path_for(root, service, &name)?;
@@ -319,21 +380,36 @@ pub fn remove(root: &Path, service: &str, name: &str) -> Result<()> {
 }
 
 /// The same check for a name that is *supposed* to carry the prefix.
-fn auto_checked(name: &str) -> Result<String> {
-    let rest = name.strip_prefix(AUTO_PREFIX).unwrap_or_default();
-    if rest.is_empty()
-        || !rest
+/// A name this app wrote itself, checked for the characters that matter.
+///
+/// The reserved prefixes cannot go through [`safe_name`] — it refuses them,
+/// precisely so nobody can type one — so the rest of the name is checked
+/// instead. Both prefixes go through here rather than one having a branch of
+/// its own: a second copy of this rule is a second thing to forget when a third
+/// prefix arrives, and there already was one, in `commands.rs`.
+///
+/// `None` when the name carries neither prefix, which is the caller's signal to
+/// use [`safe_name`].
+pub fn reserved_checked(name: &str) -> Option<Result<String>> {
+    let rest = [AUTO_PREFIX, SAFETY_PREFIX]
+        .into_iter()
+        .find_map(|prefix| name.strip_prefix(prefix))?;
+
+    let ok = !rest.is_empty()
+        && !rest.starts_with('.')
+        && rest
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        || rest.starts_with('.')
-    {
-        return Err(Error::new(
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+
+    Some(if ok {
+        Ok(name.to_string())
+    } else {
+        Err(Error::new(
             Code::InvalidInput,
-            "not a scheduled snapshot name".to_string(),
+            "not a snapshot this app wrote".to_string(),
         )
-        .with_hint(crate::hints::SNAPSHOT_NAME_CHARSET));
-    }
-    Ok(name.to_string())
+        .with_hint(crate::hints::SNAPSHOT_NAME_CHARSET))
+    })
 }
 
 #[cfg(test)]
@@ -369,6 +445,155 @@ mod tests {
     fn a_person_cannot_name_a_snapshot_the_way_the_scheduler_does() {
         assert!(safe_name("auto-keepme").is_err());
         assert!(safe_name("auto").is_ok(), "only the prefix is reserved");
+
+        // The same rule for the second reserved prefix, and for the same
+        // reason: a hand-typed `before-restore-keepme` would be pruned by
+        // count without its owner ever having agreed to that.
+        assert!(safe_name("before-restore-keepme").is_err());
+        assert!(safe_name("before-restore").is_ok(), "only the prefix");
+    }
+
+    /// Both reserved prefixes go through one check.
+    ///
+    /// There were two copies of this rule — one here and one in `commands.rs` —
+    /// and only one of them would have learned about a second prefix. That is
+    /// exactly what happened when the second one arrived.
+    #[test]
+    fn a_name_this_app_wrote_is_checked_whichever_prefix_it_carries() {
+        for good in [
+            "auto-2026-08-01T00-00-00",
+            "before-restore-2026-08-01T00-00-00",
+        ] {
+            assert_eq!(reserved_checked(good).unwrap().unwrap(), good);
+        }
+        // Still a path, and still the direction where a traversal deletes.
+        for bad in [
+            "auto-../escape",
+            "before-restore-../escape",
+            "auto-",
+            "before-restore-.h",
+        ] {
+            assert!(
+                reserved_checked(bad).is_some_and(|r| r.is_err()),
+                "{bad:?} must be refused"
+            );
+        }
+        // No prefix is not this function's answer to give.
+        assert!(reserved_checked("before-migration").is_none());
+    }
+
+    /// The two windows must not prune each other.
+    ///
+    /// This is the whole reason the safety copies did not go under `auto-`. A
+    /// run of restores under one shared window would evict the scheduled copies
+    /// the window exists to keep — and the scheduled ones, taken hourly, would
+    /// evict the net somebody might still need.
+    #[test]
+    fn the_scheduled_window_and_the_safety_window_are_separate() {
+        let snapshots = [
+            snap("auto-2026-08-01T00-00-00", "2026-08-01T00:00:00Z"),
+            snap("auto-2026-08-02T00-00-00", "2026-08-02T00:00:00Z"),
+            snap("before-restore-2026-08-03T00-00-00", "2026-08-03T00:00:00Z"),
+            snap("before-restore-2026-08-04T00-00-00", "2026-08-04T00:00:00Z"),
+            snap("before-restore-2026-08-05T00-00-00", "2026-08-05T00:00:00Z"),
+            snap("before-migration", "2026-07-01T00:00:00Z"),
+        ];
+
+        // The scheduler's window sees only its own, however many nets exist.
+        assert_eq!(
+            expired(&snapshots, 1),
+            vec!["auto-2026-08-01T00-00-00".to_string()]
+        );
+
+        // And the net's window sees only its own, oldest first.
+        assert_eq!(
+            expired_safety(&snapshots, "mysql", 2),
+            vec!["before-restore-2026-08-03T00-00-00".to_string()]
+        );
+
+        // Neither one can ever reach a name a person typed.
+        for keep in 0..4 {
+            assert!(!expired(&snapshots, keep).contains(&"before-migration".to_string()));
+            assert!(!expired_safety(&snapshots, "mysql", keep)
+                .contains(&"before-migration".to_string()));
+        }
+    }
+
+    /// **The claim the separate prefix was chosen for.**
+    ///
+    /// `last_automatic` matches on `auto-`, and the scheduler measures its
+    /// interval from whatever that returns. Had the net been named `auto-…`,
+    /// restoring a database would have pushed the next scheduled backup out by
+    /// a full interval — hours or a day of no backups, with nothing on screen
+    /// connecting the two. Asserted against the real directory, because the
+    /// function reads one.
+    #[test]
+    fn a_copy_taken_before_a_restore_does_not_delay_the_schedule() {
+        let root = std::env::temp_dir().join(format!("stackvo-net-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mysql = dir(&root, "mysql");
+        std::fs::create_dir_all(&mysql).unwrap();
+
+        // Nothing scheduled has ever run, so a backup is due now.
+        assert!(last_automatic(&root, "mysql").is_none());
+        assert!(is_due(Schedule::Daily, None, SystemTime::now()));
+
+        // A restore happens. Its copy must not register as a scheduled one.
+        std::fs::write(
+            mysql.join(format!("{}2026-08-01T00-00-00.sql", SAFETY_PREFIX)),
+            "",
+        )
+        .unwrap();
+        assert!(
+            last_automatic(&root, "mysql").is_none(),
+            "the net was counted as a scheduled backup"
+        );
+        assert!(
+            is_due(
+                Schedule::Daily,
+                last_automatic(&root, "mysql"),
+                SystemTime::now()
+            ),
+            "restoring a database silently delayed the schedule"
+        );
+
+        // A real scheduled one does register.
+        std::fs::write(
+            mysql.join(format!("{}2026-08-01T00-00-00.sql", AUTO_PREFIX)),
+            "",
+        )
+        .unwrap();
+        assert!(last_automatic(&root, "mysql").is_some());
+        assert!(!is_due(
+            Schedule::Daily,
+            last_automatic(&root, "mysql"),
+            SystemTime::now()
+        ));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The net's window is per service, so restoring MySQL twice cannot evict
+    /// the copy taken before a Postgres restore.
+    #[test]
+    fn the_safety_window_is_counted_per_service() {
+        let mut snapshots: Vec<Snapshot> = ["01", "02", "03", "04"]
+            .iter()
+            .map(|d| {
+                snap(
+                    &format!("before-restore-2026-08-{d}T00-00-00"),
+                    &format!("2026-08-{d}T00:00:00Z"),
+                )
+            })
+            .collect();
+        let mut theirs = snap("before-restore-2026-07-01T00-00-00", "2026-07-01T00:00:00Z");
+        theirs.service = "postgres".into();
+        snapshots.push(theirs);
+
+        let go = expired_safety(&snapshots, "mysql", 3);
+        assert_eq!(go, vec!["before-restore-2026-08-01T00-00-00".to_string()]);
+        // The other service's older copy is not a candidate at all.
+        assert!(expired_safety(&snapshots, "postgres", 3).is_empty());
     }
 
     #[test]

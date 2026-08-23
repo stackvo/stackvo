@@ -96,6 +96,21 @@ pub fn logs() -> Option<PathBuf> {
     }
 }
 
+/// Where the commands this app puts on `PATH` live.
+///
+/// Under the OS data directory rather than under `~/.stackvo`, for the reason
+/// the module comment gives about the log: `~/.stackvo` is the *stack's* state,
+/// the user chooses where it points and deleting it is a supported way to start
+/// over. A `PATH` entry that vanishes when somebody resets their stack is a
+/// `PATH` entry pointing at nothing — and `agents.rs` will by then have written
+/// the linked path into six assistants' configuration files.
+///
+/// macOS: `~/Library/Application Support/StackVo/bin`, Windows:
+/// `%APPDATA%\StackVo\bin`, Linux: `~/.local/share/stackvo/bin`.
+pub fn bin() -> Option<PathBuf> {
+    Some(dirs::data_dir()?.join(name()).join("bin"))
+}
+
 /// The folder name every one of these used before the rename.
 ///
 /// Read-only, and only by the migration below and by `workspace`'s reader for a

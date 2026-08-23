@@ -150,6 +150,29 @@ export default {
    * `explain` names the risk rather than only the feature. A screen that made
    * approving easier than reading would be the opposite of what this is for.
    */
+  projectAgent: {
+    tab: 'AI',
+    title: 'What an assistant is told about this project',
+    explain:
+      'Two files this app writes into the repository so an assistant working in it knows what it is working in.',
+    markers:
+      'Only the region between the StackVo markers is written. Everything else in the file is kept exactly as it was, and a copy is saved beside it as .stackvo-backup first.',
+    contextTitle: 'The context file',
+    contextBody:
+      'Written for every project on every generate: the domain, the runtime, the path inside the container and the address of each running service. Names and addresses only — passwords stay in the project\u2019s own .env.',
+    contextNoMount:
+      'This runtime has no source bind mount, so the file reaches the container at the next build rather than immediately.',
+    serverElsewhere:
+      'Registering the MCP server itself, and the rules that apply to every project on this machine, are in Settings \u2192 AI assistants.',
+  },
+  sidecars: {
+    title: 'Declared containers',
+    explain:
+      'Containers this repository brought with it, rendered into this project\u2019s own compose block. They come up and go down with the project.',
+    reachedAt: 'The application reaches it at',
+    noHost:
+      'A declared container has no host port and no host path, so it is reachable only from inside this project\u2019s network.',
+  },
   hooks: {
     title: 'When this project starts and stops',
     explain:
@@ -199,7 +222,14 @@ export default {
   perf: {
     title: 'Performance layer',
     explain:
-      'A bind mount costs 2–3× a named volume on metadata and on writes, and that is where a Docker workflow feels slow on macOS and Windows. These directories are written by the tooling inside the container and read by it on every request — moving them off the host filesystem measured 3.8× on a framework boot and 2.8× on the writes a request makes. Your own code stays where your editor can see it.',
+      'On macOS and Windows a bind mount crosses a filesystem boundary, and that is where a Docker workflow feels slow. These directories are written by the tooling inside the container and read by it on every request, so moving them off the host filesystem is the part that pays. Your own code stays where your editor can see it.',
+    gain: '{times}× faster on {workload}',
+    workload: {
+      boot: 'a framework boot',
+      write: 'the writes a request makes',
+    },
+    measuredOn: 'measured on the machine this shipped from',
+    notMeasured: 'not measured',
     inVolume: 'In a volume ({volume})',
     onHost: 'On the host — {files}+ files',
     notThereYet: 'Not in the project yet; the tooling will create it inside the container.',
@@ -916,12 +946,13 @@ export default {
     mkcert: 'mkcert',
     mkcertHint: {
       macos:
-        'SSL is on, so every domain is served over HTTPS. Without mkcert the certificate is not issued and browsers refuse the site. Install it with `brew install mkcert`.',
+        'SSL is on, so every domain is served over HTTPS. Without mkcert the certificate is not issued and browsers refuse the site. StackVo can fetch it, against a checksum compiled into this build — or install it yourself with `brew install mkcert`.',
       linux:
-        'SSL is on, so every domain is served over HTTPS. Without mkcert the certificate is not issued and browsers refuse the site. Install it from your package manager, then run `mkcert -install`.',
+        'SSL is on, so every domain is served over HTTPS. Without mkcert the certificate is not issued and browsers refuse the site. StackVo can fetch it, against a checksum compiled into this build — or install it yourself from your package manager.',
       windows:
-        'SSL is on, so every domain is served over HTTPS. Without mkcert the certificate is not issued and browsers refuse the site. Install it with `choco install mkcert`.',
+        'SSL is on, so every domain is served over HTTPS. Without mkcert the certificate is not issued and browsers refuse the site. StackVo can fetch it, against a checksum compiled into this build — or install it yourself with `choco install mkcert`.',
     },
+    mkcertAction: 'Install mkcert',
   },
   imports: {
     found: 'Found in {tool}: {n} site(s)',
@@ -964,6 +995,12 @@ export default {
     from: 'detected from {files}',
     noEvidence: 'nothing recognisable — defaults will be used',
     action: 'Adopt',
+    all: 'Adopt all {n}',
+    batchDone: '{n} adopted. These were passed over:',
+    reason: {
+      alreadyManaged: 'already managed',
+      empty: 'nothing in it but dotfiles',
+    },
   },
   migrate: {
     read: 'Read compose',
@@ -1072,6 +1109,8 @@ export default {
     restore: 'Restore',
     dumped: 'Written to {path}',
     restored: 'Restored from {path}',
+    netFailed:
+      'A copy of the current database could not be taken: {reason}\n\nRestore anyway? What is there now will be replaced and cannot be recovered.',
     confirmRestore:
       'This replaces the contents of {db} with the contents of the chosen file. Anything currently in it is lost.',
   },
@@ -1088,6 +1127,24 @@ export default {
     restored: 'Restored from {name}',
   },
   xdebug: {
+    ide: {
+      title: 'IDE setup',
+      listening: '{process} is listening on port {port} — a breakpoint will be caught.',
+      notListening:
+        'Nothing is listening on port {port}. Start your IDE\u2019s debug listener, or a breakpoint will never be reached however this is configured.',
+      someProcess: 'Something',
+      detected: 'used on this project',
+      write: 'Write configuration',
+      neverClobbers:
+        'Only the configuration named for this project is written. Everything else in the file is kept, and a copy is saved beside it as .stackvo-backup first.',
+      state: {
+        absent: 'Not configured',
+        written: 'Configured',
+        stale: 'Configured, but the values have moved',
+        shown: 'Copy this in — it keeps this file in memory and would overwrite an edit',
+        unparseable: 'This file has comments in it and cannot be edited safely',
+      },
+    },
     title: 'Xdebug',
     subtitle: 'Step debugging for this project.',
     on: 'Enabled',
@@ -1096,6 +1153,9 @@ export default {
       'Switching on the first time adds the extension to the image and needs a rebuild. After that, turning it on and off only restarts the container — the extension stays, and costs nothing while it is off.',
     staysInstalled:
       'The extension stays in the image while this is off. It costs nothing there, and turning debugging back on is a container restart rather than a rebuild.',
+    stillActive:
+      'Still switched on inside the running container. The setting is off, but a container\u2019s environment is fixed when it is created — recreate it and debugging stops. The extension stays in the image, so this is seconds rather than a rebuild.',
+    rebuildNow: 'Regenerate and rebuild now',
     needsRebuild:
       'The extension is compiled into the image, so this does nothing until the project is regenerated and rebuilt.',
     notActive:
@@ -1170,6 +1230,39 @@ export default {
       'dump() lets the request continue. dd() takes the dump and ends it, and Symfony marks that as a 500 — so a dump appearing here while the browser shows an error is expected.',
   },
 
+  devcontainer: {
+    title: 'Devcontainer',
+    explain:
+      'This project as a `.devcontainer/` a teammate can open in VS Code or GitHub Codespaces, with no StackVo on their machine.',
+    preview: 'Show what would be written',
+    write: 'Write {n} file(s) into the project',
+    written: '{n} file(s) written. They are meant to be committed.',
+    secrets: '{n} password(s) leave as names, not values. Fill them in in .devcontainer/.env:',
+  },
+  providers: {
+    title: 'Fetch and send data',
+    explain:
+      "Named places this project's data really lives. A recipe is declared in stackvo.json and travels with the repository; the command runs in a container, never on this machine, and it is shown in full before it does.",
+    database: 'Database',
+    pull: 'fetch',
+    push: 'send',
+    usesSecrets: 'Needs: {names}. These are kept in the OS keystore, never in the project file.',
+    pushWarning:
+      'This writes to somewhere that is not this machine. There is nothing here that can undo it.',
+    policyOff: 'An administrator has switched this off on this machine.',
+    approve: {
+      pull: 'Approve fetching',
+      push: 'Approve sending',
+    },
+    run: {
+      pull: 'Fetch now',
+      push: 'Send now',
+    },
+    fillIn: 'Fill in {names} before this can run.',
+    saveSecret: 'Save',
+    snapshotFirst: 'Copy what this replaces first',
+    revoke: 'Withdraw approval',
+  },
   release: {
     pushExplain:
       'Push it to a registry, or take a compose file to run it with. StackVo pushes only a verified image and only to a tag that names a registry — a registry keeps layers, so deleting a tag later does not remove what was in it.',
@@ -1199,7 +1292,78 @@ export default {
     save: 'Save as a tarball…',
   },
 
+  spx: {
+    title: 'Sampling profiler (php-spx)',
+    explain:
+      'The profiler you can leave on. Xdebug records every call exactly and costs several times the request; this samples, so the page still feels like the page.',
+    notBuilt:
+      'Not built for PHP {php} yet. It is compiled from source in a throwaway container of this project’s own image, so it matches the PHP that will load it \u2014 a few minutes, once per PHP version, shared by every project on it.',
+    build: 'Build it',
+    on: 'Profiler mounted',
+    off: 'Profiler off',
+    cost: 'Nothing is recorded until you ask for it in the control panel \u2014 the extension being loaded costs almost nothing on its own.',
+    needsRecreate:
+      'Not in the running container yet. Mounts are fixed when a container is created, so this reaches it on the next recreate.',
+    xdebugConflict:
+      'Xdebug is recording as well. Two profilers hooking one engine is not supported by either of them, and the symptom is wrong numbers rather than an error \u2014 switch the Xdebug mode back to step debugging.',
+    openPanel: 'Open the SPX control panel',
+    howToRecord:
+      'The panel is served by the extension from this site\u2019s own address. Switch recording on there, use the site, and the runs appear below.',
+    recorded: 'Recorded ({n})',
+    clear: 'Delete all ({size})',
+    remove: 'Delete this report',
+    nothingYet: 'Nothing recorded yet.',
+    unnamedRun: 'Run',
+    cli: 'command line',
+    request: 'request',
+
+    recordHere: 'Record from here',
+    recordExplain:
+      'The control panel needs a browser and a person. These do not — the profiler is triggered by the request itself, so a page or a command can be recorded from this window, from the terminal, or by an assistant.',
+    recordPath: 'Path',
+    recordPathHint: 'A path on this site. The address comes from the project.',
+    record: 'Record this request',
+    recording: 'Waiting for the page…',
+    recordedOne: 'Recorded {what} — {took}.',
+    recordCommand: 'Or a command',
+    recordCommandGo: 'Record it',
+    recordCommandHint:
+      'The slow thing is often not a page. A migration, a queue worker or a test run is profiled the same way and lands in the same list.',
+    recordNoCommands: 'This project declares no commands to run.',
+
+    detail: 'Detail',
+    sampling: 'Sampling',
+    detailSampled: 'Sampled every {us} µs',
+    detailExact: 'Every call (exact, and expensive)',
+    detailHint:
+      'php-spx records every call unless a sampling period is set, which is the cost this instrument exists to avoid. Sampling is what makes it safe to leave on; exact is right for counting a fast function.',
+    builtins: 'Profile PHP’s own functions too',
+    builtinsHint:
+      'Roughly doubles a trace. Worth it when the answer turns out to be a built-in rather than a function in the project.',
+    settingsHere:
+      'These apply to a recording started here — the request and the command carry them. A recording started in SPX’s own control panel uses that panel’s own controls instead; the extension reads its ini only for requests it is not profiling.',
+
+    view: 'Open in the SPX viewer',
+    hotspots: 'Where the time went',
+    hotspotsFor: 'Where {what} spent its time',
+    hotspotFunction: 'Function',
+    hotspotSelf: 'Itself',
+    hotspotTotal: 'With its calls',
+    hotspotCalls: 'Calls',
+    hotspotsTruncated:
+      'The trace was longer than this reads. What is below is the start of the run, not all of it.',
+    hotspotsEmpty: 'The trace named no functions.',
+    hotspotsClose: 'Close',
+  },
   profiler: {
+    lockedWhileWorking:
+      'The mode is held while the container is being rebuilt — choosing one now would rewrite the file compose is reading. It unlocks itself when the work finishes.',
+    modeCoverage: 'Coverage',
+    coverageNote:
+      'Coverage records nothing on its own — it switches on the API PHPUnit calls, and PHPUnit writes the report. Run your tests with a coverage flag; nothing will appear in the list below.',
+    develop: 'Readable dumps and stack traces (develop)',
+    developDetail:
+      'Adds Xdebug\u2019s develop mode alongside the one above: var_dump becomes readable and a warning carries a stack trace. It changes what your code prints, which is why it is off until asked for.',
     title: 'Profiler',
     explain:
       'Xdebug’s own profiler, recorded into files this app reads. No account and no extra extension — it is the same Xdebug that does the step debugging.',
@@ -1599,6 +1763,7 @@ export default {
     theme: 'Theme',
     language: 'Language',
     packProgress: '{done} of {total} strings ({percent}%) — the rest falls back to English',
+    packRtl: 'right to left',
     packRemove: 'Remove',
     packTag: 'Language tag',
     packHint:
@@ -1662,6 +1827,59 @@ export default {
       example: 'Try it',
       served: '{count} tools served',
     },
+    tooling: {
+      title: 'Tooling',
+      sectionDesc: 'Put stackvo on your PATH, and check the tools this app runs on the host.',
+      binDir: 'Installed into',
+      openANewShell:
+        'The startup file is written. This shell was started before it — open a new terminal, or source that file, for stackvo to be found.',
+      remove: 'Remove',
+      update: 'Update',
+      commands: {
+        title: 'The commands',
+        description: 'stackvo and stackvo-mcp, linked into a directory this app owns.',
+        whatItDoes:
+          'stackvo runs the stack from a terminal; stackvo-mcp is the server the assistants page registers. Both are linked into one directory, and the next group puts that directory on your PATH.',
+        notShims:
+          'These are the app’s own commands, not shims for composer, node or wp — those run inside the project’s container, at the version the project declares.',
+        noBinary:
+          'Neither command was found beside this application. An installed StackVo ships both; a checkout builds them with the command below.',
+        buildCommand: 'npm run sidecars',
+        notBuilt: 'not built',
+      },
+      shells: {
+        title: 'Your PATH',
+        description: 'One line in one shell’s startup file.',
+        whatItDoes:
+          'Adding writes a single line between two markers, after keeping a copy of the file beside it. Everything else in that file is left exactly as it is.',
+        markers:
+          'The line puts this app’s directory first, so a tool it manages wins over a half-removed system copy. Removing takes the line back out and leaves the links alone.',
+        yours: 'yours',
+        add: 'Add',
+        copyLine: 'Copy line',
+        state: {
+          installed: 'On your PATH',
+          stale: 'Points at an older directory',
+          absent: 'Not on your PATH',
+          noFile: 'No startup file here',
+        },
+      },
+      tools: {
+        title: 'Host tools',
+        description: 'The four programs this app runs outside every container.',
+        whatItDoes:
+          'These run on the host, which is what makes them this app’s business: Docker holds every project, git reads your branches, mkcert issues the certificate that stops the browser warning.',
+        inTheContainer:
+          'composer, node, npm and wp are deliberately not here. They run in the project’s container at the version the project declared, and a second copy on the host would be an answer to “which one runs” that is wrong.',
+        yours: 'yours',
+        managed: 'managed',
+        install: 'Install {version}',
+        ownInstaller: 'Installed by its own installer',
+        noBuildHere: 'No build for this platform',
+        pinned:
+          'A download is checked against a checksum compiled into this build, not one fetched alongside it. Nothing is written until it matches.',
+      },
+    },
     agents: {
       title: 'AI assistants',
       sectionDesc: 'Register the StackVo MCP server with the assistants on this machine.',
@@ -1677,7 +1895,7 @@ export default {
       serverBinary: 'Server that will be registered',
       allowWrites: 'Let the assistant change things',
       allowWritesDetail:
-        'Off, the assistant can only read. On, it also gets stack_up, stack_down, project_start, project_stop, generate, xdebug_set and certificates_reissue — which includes stopping the whole stack. This applies to the next assistant you add.',
+        'Off, the assistant can only read. On, it also gets stack_up, stack_down, project_start, project_stop, project_restart, service_start, service_stop, service_restart, generate, xdebug_set, certificates_reissue and snapshot_take — which includes stopping the whole stack and stopping a shared service every project depends on. This applies to the next assistant you add.',
       state: {
         registered: 'Registered',
         stale: 'Registered, but pointing at another copy',
@@ -1690,7 +1908,30 @@ export default {
       remove: 'Remove',
       copyBlock: 'Copy block',
       notListed:
-        'Codex and Zed are not listed: Codex keeps its configuration in TOML, and Zed’s format could not be verified. Both can be configured by hand with the block above.',
+        'Codex is TOML and is edited with a format-preserving editor, so its comments and key order come back as they were. Zed’s path differs between installations, so both of the places it keeps settings are checked and whichever exists is written.',
+      rules: {
+        title: 'AI rules',
+        description:
+          'Registering the server lets an assistant use these tools. This tells it when to — and what not to touch.',
+        whatItDoes:
+          'Writes a short section into the instructions file the assistant already reads: which tool answers which question, that generated files are overwritten, and that a writing tool can stop the whole stack.',
+        markers:
+          'Only the region between the StackVo markers is written. Everything else in the file is kept exactly as it was, and a copy is saved beside it as .stackvo-backup first.',
+        writeInto: 'Write workspace rules into',
+        writeIntoDetail:
+          'A project is usually the right answer: the rules reach the assistant opened in that repository. The workspace root is for an assistant opened on the whole stack.',
+        workspaceRoot: 'The workspace root',
+        scopeWorkspace: 'In the project',
+        scopeGlobal: 'On this machine',
+        globalDetail:
+          'Applies to every session of that assistant, including projects that are not StackVo’s. Only some assistants read a global file, so only those are listed.',
+        add: 'Write rules',
+        state: {
+          absent: 'Not written',
+          installed: 'Written',
+          stale: 'Written by an older version',
+        },
+      },
     },
     policy: {
       title: 'This machine is managed',
@@ -1966,6 +2207,9 @@ export default {
     horizon: 'Horizon',
     horizonDesc:
       'php artisan horizon — Laravel Horizon supervisor, offered because composer.json requires it.',
+    reverb: 'Reverb',
+    reverbDesc:
+      'php artisan reverb:start — routed on this project\u2019s own domain under /app and /apps, so wss:// works with the certificate you already have.',
     start: 'Start',
     stop: 'Stop',
     restarts:
@@ -2425,6 +2669,12 @@ export default {
     perfNothingToSeed:
       'That directory does not exist in the project yet. Install the dependencies first, or enable it and let the tooling create it inside the container.',
     perfSeedFailed: 'The directory could not be copied into the volume, so nothing was changed.',
+    providerWroteNothing:
+      'The command finished without leaving a dump. Check what it prints — a remote command that failed usually still exits cleanly.',
+    providerNeedsConsent:
+      'Read the command on the card and approve it. Editing the recipe asks again.',
+    providerSecretMissing:
+      'Fill in the values this recipe names. They are kept in the OS keystore, never in the project file.',
     tldIsOneLabel: 'A suffix ends in one label of letters, digits and hyphens — stackvo.loc.',
     dnsPlaceTheLineYourself:
       'Add the line shown to whatever resolves names on this machine, then reload it.',
@@ -2461,8 +2711,26 @@ export default {
     unlockTheKeystore:
       'Unlock your keychain and try again — the password for this setting is stored there.',
     onlyCredentialsMove: 'Only passwords, tokens and server ids can be kept in the keystore.',
+    spxNeedsBuilding:
+      'Build it first — it is compiled in a throwaway container of the image this project uses, which takes a few minutes and is done once per PHP version.',
+    launchJsonHasComments:
+      'VS Code allows comments in this file, which cannot be edited safely without deleting them. Open it and paste the block shown here.',
+    phpstormIsNotWritten:
+      'PhpStorm keeps this file in memory and rewrites it on exit, so an edit made underneath it would be lost. Copy the block shown and paste it in.',
     agentConfigUnparseable:
       'This file is not plain JSON — several editors allow comments in it, which cannot be edited safely without deleting them. Open it and paste the block shown here.',
+    spxRecordAPath:
+      'Give a path on this site, starting with a slash — `/`, `/checkout`, `/api/orders?page=2`. The address itself comes from the project.',
+    spxTraceIsMissing:
+      'A recording is two files and the larger one is gone. Delete this report and record again.',
+    spxRecordNeedsTheMount:
+      'The profiler has to be switched on and in the running container before a recording can be started — recreate the container if the pane says it is not there yet.',
+    spxRecordedNothing:
+      'The request went through and the profiler wrote nothing. That is what a key mismatch looks like: restart the project so it reads the ini again, then try once more.',
+    spxNeedsTheLocalCa:
+      'The site is served over HTTPS with the certificate authority this workspace generated, and the app has to read it to verify one. Settings has a certificates section for it.',
+    spxRecordNeedsTheSite:
+      'The site did not answer. Start the project and open it in a browser once before recording a request against it.',
     buildTheMcpServer:
       'Build it first: `cargo build --release --bin stackvo-mcp` in the StackVo checkout.',
     keystoreEntryIsGone:
@@ -2526,6 +2794,14 @@ export default {
     removeTheInstanceFirst: 'An instance is still using this package. Remove it, then uninstall.',
     serviceIsSingleInstance:
       'This service runs one version at a time. Remove the instance you have first.',
+    cliNotBuilt:
+      'Neither command was found beside this application. Build them with `cargo build --release --bin stackvo --bin stackvo-mcp`, then try again.',
+    pathEntryByHand:
+      'Copy the line shown on the Tooling page into that startup file yourself — a file this large is not one to rewrite unasked.',
+    toolIsNotManaged:
+      'This one is installed by its own installer rather than by StackVo. The Tooling page says where to get it.',
+    toolDigestMismatch:
+      'The download does not match the checksum compiled into this build and was discarded. Try again, and report it if it happens twice.',
   },
 
   errors: {

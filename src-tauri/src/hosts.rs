@@ -350,7 +350,7 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
     // It is also what makes §3 #35 testable at all: with `STACKVO_HOSTS_PATH`
     // pointing at a temporary file, this branch is the one that runs, on every
     // platform, without a prompt nobody could answer in CI.
-    let ok = write_in_place(&path, &plan.preview) || elevated_copy(&staged, &path)?;
+    let ok = write_in_place(&path, &plan.preview) || elevated_here(&staged, &path)?;
     let _ = std::fs::remove_file(&staged);
 
     if !ok {
@@ -361,6 +361,35 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
     }
 
     Ok(plan)
+}
+
+/// [`elevated_copy`], unless we were pointed at a file by `STACKVO_HOSTS_PATH`.
+///
+/// **A test must never be able to raise a password dialog**, and this is what
+/// makes the sentence above `write_in_place` — "this branch is the one that
+/// runs, on every platform, without a prompt nobody could answer in CI" —
+/// something other than a hope. It was a hope, and it cost a hung suite: on a
+/// busy machine `hosts_roundtrip` fell through to the elevated path, macOS put
+/// up `osascript`'s administrator dialog behind every other window, and the
+/// whole `cargo test` sat at 0% CPU until it was killed. That is §3 #37's
+/// failure exactly — a hanging suite looks like a slow one — one seam over.
+///
+/// The refusal is the honest answer as well as the safe one. The seam exists
+/// precisely to point this at a file we may write; being unable to write it is
+/// a broken test rather than a reason to ask a human for a password, and the
+/// error says which.
+fn elevated_here(from: &Path, to: &Path) -> crate::error::Result<bool> {
+    if std::env::var_os("STACKVO_HOSTS_PATH").is_some() {
+        return Err(crate::error::Error::new(
+            crate::error::Code::PermissionDenied,
+            format!(
+                "STACKVO_HOSTS_PATH points at {} and it could not be written; \
+                 refusing to ask for a password for a file a test owns",
+                to.display()
+            ),
+        ));
+    }
+    elevated_copy(from, to)
 }
 
 /// Replace the file's contents without asking anybody, if we already may.

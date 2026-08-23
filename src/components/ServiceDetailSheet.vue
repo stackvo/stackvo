@@ -559,6 +559,31 @@ async function dumpDatabase() {
   await runDb('dump', () => api.dbDump(props.service.id, path), path);
 }
 
+/**
+ * Restore, with a copy of what is about to be replaced taken first.
+ *
+ * The net is on by default because a restore is the one operation here with
+ * nothing behind it. It is not unconditional, because a database too broken to
+ * dump is exactly the one somebody is restoring over — and a net that cannot be
+ * lifted would trap them. So the second question is asked **only** when the
+ * copy actually fails, which is where it belongs: nobody should have to answer
+ * it on the way past a working one.
+ */
+async function restoreWithNet(run) {
+  try {
+    return await run(true);
+  } catch (e) {
+    if (!e?.message) throw e;
+    const { confirm } = await import('@tauri-apps/plugin-dialog');
+    const anyway = await confirm(t('db.netFailed', { reason: e.message }), {
+      title: t('db.restore'),
+      kind: 'warning',
+    });
+    if (!anyway) throw e;
+    return run(false);
+  }
+}
+
 async function restoreDatabase() {
   const { open, confirm } = await import('@tauri-apps/plugin-dialog');
   const path = await open({ multiple: false, directory: false });
@@ -573,7 +598,9 @@ async function restoreDatabase() {
   });
   if (!ok) return;
 
-  await runDb('restore', () => api.dbRestore(props.service.id, path), path);
+  await restoreWithNet((net) =>
+    runDb('restore', () => api.dbRestore(props.service.id, path, net), path)
+  );
 }
 
 // -------------------------------------------------------------- snapshots
@@ -707,7 +734,7 @@ async function restoreSnapshot(snapshot) {
   snapshotBusy.value = snapshot.name;
   error.value = null;
   try {
-    await api.dbSnapshotRestore(props.service.id, snapshot.name);
+    await restoreWithNet((net) => api.dbSnapshotRestore(props.service.id, snapshot.name, net));
     dbResult.value = t('snapshots.restored', { name: snapshot.name });
   } catch (e) {
     error.value = e;

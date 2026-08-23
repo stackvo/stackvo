@@ -31,7 +31,7 @@ plane moves.
 | Stopping the stack | impossible (kills the UI)                | `compose_down`                     |
 | Hosts file         | manual `sudo tee -a /etc/hosts`          | reviewed diff, one elevated write  |
 | Windows            | WSL2 only                                | native — no shell, no bash         |
-| Install size       | ~600 MB of images                        | ~10 MB                             |
+| Install size       | ~600 MB of images                        | ~27 MB, CLI included               |
 
 ## Status
 
@@ -133,16 +133,48 @@ red without a commit.
 `stackvo` is a command-line interface over the same core the window drives.
 
 ```bash
-cargo build --release --bin stackvo
+stackvo path-install          # link it into the app's own directory, and onto PATH
 stackvo status
 stackvo logs shop --follow
 stackvo doctor --json | jq '.ports[] | select(.state != "ok")'
 ```
 
-Twenty commands, split in `--help` into the ten that read and the ten that
-change the stack. Every one takes `--json`, and the table you see is rendered
-*from* that value rather than from a second query, so the two cannot come to
-describe different things.
+Both `stackvo` and `stackvo-mcp` **ship inside the app** — `externalBin` in
+`tauri.conf.json`, built by `tools/sidecars.mjs`, landing beside the main binary
+in `Contents/MacOS/`. `path-install` is the step that used to be "remember where
+you built it": it links them into a directory the app owns and writes one line,
+between markers and after a backup, into your shell's startup file. `stackvo
+tools` shows the whole state and `stackvo path-remove` takes the line back out.
+Settings → Tooling is the same thing with buttons.
+
+From a checkout, `npm run sidecars` builds them; `cargo build --release --bin
+stackvo` still works and `tooling.rs` finds either copy.
+
+`--help` splits them by what they do: sixteen that read, twenty-one that change
+the stack, one screen, nineteen that run a program in the project's own
+container, and two for shell completion. Every one takes `--json`, and the table you see is
+rendered _from_ that value rather than from a second query, so the two cannot
+come to describe different things.
+
+**Tab completion, in all four shells.** `stackvo path-install` writes it into
+the same marked block as the `PATH` line, so one `path-remove` takes both back
+out; `stackvo completions zsh` prints the stub on its own for a package
+manager. The shell side is four lines and knows nothing — it collects what has
+been typed and asks `stackvo complete`, which answers from the same table
+`--help` is rendered from. So a command added to the CLI is completable the
+moment it exists, and one removed stops being offered; there is no second copy
+of the command list in a language no test reads.
+
+It completes commands, flags, and the positionals whose placeholder names a
+list this app already keeps — `<project>` from your own projects, `<client>`,
+`<target>`, `<tool>`, `[shell]`, and a literal `on|off`. It deliberately offers
+**nothing** after a passthrough: `stackvo artisan migrate --<TAB>` must not
+suggest `--json`, because the parser stopped at `artisan` and that flag would
+reach artisan instead. `examples/completion_probe.rs` drives real bash and zsh
+and checks all of it, which is not ceremony — the first version of the bash
+stub narrowed `IFS` before expanding the word list, and on the bash macOS ships
+that silently collapsed `artisan migrate` into one word. Every Rust test passed
+while it did.
 
 **stdout is the answer, stderr is the narration.** A compose build scrolls past
 on stderr while `--json` stays clean on stdout, and a failure leaves stdout
@@ -202,9 +234,24 @@ wrong is somebody's shell.
 stackvo php -v          # the PHP that project declares, on a host with none
 stackvo artisan migrate --force
 stackvo composer install
+stackvo wp plugin list  # and console, rails, bundle, yarn, pnpm
+stackvo python -V       # and ruby, go, cargo, bun, deno
 stackvo shell           # an interactive shell in the container
 stackvo exec <program>  # anything else
 ```
+
+**Every runtime this app generates a container for has a row**, not just PHP and
+Node — `manifest::LANG_RUNTIMES` names six more and `cli_surface.rs` fails the
+build if one of them has no way to be run. The images are built in a single
+stage, so `stackvo cargo test` reaches a cargo that is still there. The
+framework rows come from `quickcmd`'s catalogue rather than from a README, which
+is why `wp` carries `--allow-root` (the container runs as root and wp-cli
+refuses without it) and why there is no `drush` row: nothing in this app says
+how Drupal is driven, and a row that usually fails is worse than no row.
+
+Running one that is not there exits **127**, the way a shell does, and adds one
+line naming what the project actually is — Docker's own message says `python`
+is not on `PATH` and cannot know that this is a PHP project.
 
 Which project comes from the working directory — matched against the real
 project list rather than a folder name, deepest first, so a worktree wins over
@@ -255,13 +302,46 @@ notes:
 { "mcpServers": { "stackvo": { "command": "/path/to/stackvo-mcp" } } }
 ```
 
-**Read-only by default.** 7 of the 17 tools change things and appear only with
+The 34 tools cover the questions an assistant is actually asked. The reads go
+wider than the stack's own state: `system` and `container_stats` for a machine
+that has run out of memory, `hosts` for a domain that does not resolve,
+`log_read` for the application's own exception rather than the container's
+stdout, `service_connection` for a connection string, `service_instances` for a
+workspace running MySQL 8.0 and 8.4 side by side, `packages` for what could be
+installed, `mail_message` for the body of a mail the application sent, and
+`snapshots` for what could be restored, `ide_debug` for why a breakpoint is
+not being hit — the port, the mapping, and whether anything is listening — and
+`profiler` for why one page is slow, which is the sampling profiler rather than
+the one that costs several times the request, and `hotspots` for the answer that
+question actually wants — the functions one recorded run spent its time in,
+read from the trace rather than from SPX's own web UI.
+
+**Read-only by default.** 12 of the 34 tools change things and appear only with
 `--allow-writes`: `xdebug_set`, `certificates_reissue`, `project_start`,
-`project_stop`, `stack_up`, `stack_down`, `generate`. Read that list before
-passing the flag — it grants an assistant the ability to **stop the whole
-stack**, not just to toggle Xdebug. Every tool is annotated `readOnlyHint` /
+`project_stop`, `project_restart`, `service_start`, `service_stop`,
+`service_restart`, `snapshot_take`, `stack_up`, `stack_down`, `generate`. Read
+that list before passing the flag — it grants an assistant the ability to **stop
+the whole stack** and to stop a shared service every project depends on, not
+just to toggle Xdebug. Every tool is annotated `readOnlyHint` /
 `destructiveHint`, so a client can require confirmation for a tool it has never
 seen.
+
+Restoring a snapshot is deliberately **not** a tool. Taking one is: it is the
+call to make before asking for a migration, it adds a file and changes nothing.
+Putting data back over live rows is a decision for the app's own confirmation,
+not for a tool call.
+
+No tool returns a password, and no tool takes an argument that asks for one —
+`service_connection` is hard-coded to the unrevealed form, and a test asserts
+that no schema on this surface has a `reveal`, `password`, `secret` or `token`
+property. The app shows a credential on a click, to the person sitting there;
+this surface has no equivalent and is not going to grow one.
+
+The server speaks protocol revisions `2025-06-18`, `2025-03-26` and
+`2024-11-05`, and answers `initialize` with the one the client asked for. A
+server that answers with a revision the client did not request is entitled to be
+hung up on, which reads to the user as "it does not work" with nothing in any
+log.
 
 The tool table names, for each tool, the `contracts/ipc.json` command it
 implements, and three tests cross-check the two: a tool naming a command that
@@ -271,11 +351,54 @@ guarding nothing. Generating the list outright was the obvious move and is the
 wrong one: dispatch cannot be generated, so a generated list advertises tools
 that fail when called.
 
-**Not exposed:** the rest of the mutating surface. 60 of the 251 commands take
+**Not exposed:** the rest of the mutating surface. 67 of the 280 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it
-fail.
+fail. Service control is no longer in that set — `progress::Null` is what let
+`instance_start` and its pair off the window, which is why starting Redis from
+a chat window works here and did not a release ago.
+
+### Telling the assistant when to use it
+
+Registering the server makes the tools reachable. It does not make them used: an
+assistant that has never seen this stack reads the source, guesses at nginx, and
+suggests editing a generated file — because nothing told it that
+`stackvo_doctor` answers that question in one call.
+
+**Settings → AI rules** writes that into the instructions file the assistant
+already reads. Six files, one per file rather than one per product, because
+Codex and Zed both read `AGENTS.md`:
+
+| File                                           | Read by                 |
+| ---------------------------------------------- | ----------------------- |
+| `CLAUDE.md`                                    | Claude Code             |
+| `AGENTS.md`                                    | Codex, Zed              |
+| `.cursor/rules/stackvo.mdc`                    | Cursor                  |
+| `.github/instructions/stackvo.instructions.md` | VS Code, GitHub Copilot |
+| `.windsurf/rules/stackvo.md`                   | Windsurf                |
+| `GEMINI.md`                                    | Gemini CLI              |
+
+In the project, or in the home directory for the three clients that read a
+global file. `stackvo rules` prints the same table in a terminal,
+`stackvo rules-install <id>` does the same write, and `--project <name>` aims it
+at one project rather than the workspace root. A project's own detail page
+carries the same three controls under **AI**, scoped to that project — the
+rules are per project, so that is where somebody looks for them first. What it says is what a model gets wrong without being told, in the
+order it gets it wrong: which tool answers which question; that everything under
+the generated directory is overwritten and the input is what to change; that
+`docker compose` by hand takes a name and a port the next generate expects to
+own; and that a writing tool can stop the whole stack, so take a snapshot first
+and ask before calling one.
+
+Only the region between `<!-- stackvo:rules:begin -->` and
+`<!-- stackvo:rules:end -->` is ever written. This is somebody's own `CLAUDE.md`
+— a file with no markers is appended to, never replaced, everything else comes
+back byte for byte, and a copy is kept beside it as `.stackvo-backup` first. The
+front matter Cursor and VS Code need to apply the file at all is written when
+the file is created and never again, because a user who narrowed `applyTo` meant
+it. A test asserts that every tool the rules name is a tool that exists — rules
+that send an assistant at a tool the server would refuse are worse than no rules.
 
 ### When something goes wrong
 

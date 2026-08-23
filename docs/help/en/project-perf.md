@@ -4,7 +4,7 @@ Moves heavy directories off the host filesystem and into a Docker volume. This i
 
 ## Why a list and not one switch
 
-The win depends on which directory you move. Measured:
+The win depends on which directory you move. Measured with `examples/perf_layer_bench.rs`, **on the machine this version was built on** — your own will differ, and on Linux there is no filesystem boundary to cross at all:
 
 | Moved | Framework boot | Request writes |
 | --- | --- | --- |
@@ -12,7 +12,9 @@ The win depends on which directory you move. Measured:
 | `vendor` | 0.39s (3.8x) | unchanged |
 | `vendor` + `storage/framework` | 0.40s | 0.41s (2.8x) |
 
-`vendor` buys the boot and does nothing for writes. `storage/framework` is what buys the writes.
+`vendor` buys the boot and does nothing for writes. `storage/framework` is what buys the writes. Each row on the card carries its own figure for that reason.
+
+`bootstrap/cache` and `node_modules` are offered and have not been measured, so their rows say so rather than borrowing one of the numbers above.
 
 ## Controls
 
