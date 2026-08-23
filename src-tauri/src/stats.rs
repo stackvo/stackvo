@@ -408,6 +408,20 @@ impl Default for Sampler {
 /// windows that do not line up would have to allow. In points it is 28 apart,
 /// which nothing sane calls agreement. The measured disagreements are 28 and
 /// 12 points; ordinary window skew on this machine is 1 to 5.
+/// How far the four parts may be from summing to a hundred.
+///
+/// Two points, not ten: this is arithmetic rather than agreement between two
+/// measurements taken over different windows, and rounding four f32s cannot
+/// drift further than that.
+///
+/// A module-level constant because the test asserts the same rule, and it used
+/// to assert a *stricter* one — a point rather than two. Windows accounts for
+/// interrupt time outside these four and hands back 98.78, which this function
+/// calls credible and that test called a failure. A test tighter than the code
+/// it checks fails on machines the code is happy with, and the number it
+/// disagrees with is right there.
+const ACCOUNTED: f32 = 2.0;
+
 fn breakdown_is_credible(breakdown: &CpuBreakdown, reference: f32) -> bool {
     const TOLERANCE: f32 = 10.0;
 
@@ -418,10 +432,6 @@ fn breakdown_is_credible(breakdown: &CpuBreakdown, reference: f32) -> bool {
     // 94.16, and the dashboard would have drawn four slices, labelled them a
     // split, and quietly lost six percent of a second.
     //
-    // Two points, not ten: this is arithmetic rather than agreement between two
-    // measurements taken over different windows, and rounding four f32s cannot
-    // drift further than that.
-    const ACCOUNTED: f32 = 2.0;
     let total = breakdown.user + breakdown.nice + breakdown.system + breakdown.idle;
     if (total - 100.0).abs() > ACCOUNTED {
         return false;
@@ -508,8 +518,9 @@ mod tests {
 
         let total = b.user + b.nice + b.system + b.idle;
         assert!(
-            (total - 100.0).abs() < 1.0,
-            "breakdown summed to {total}, not ~100"
+            (total - 100.0).abs() <= ACCOUNTED,
+            "breakdown summed to {total}, which is further from 100 than \
+             `breakdown_is_credible` allows"
         );
         for value in [b.user, b.nice, b.system, b.idle] {
             assert!(
