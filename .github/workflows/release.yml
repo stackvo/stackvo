@@ -169,7 +169,12 @@ jobs:
       # The contract is compiled into the binary, so a release must not ship
       # one that disagrees with the code.
       - name: Verify the contract surface
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        # From inside `src-tauri`, so rustup applies the 1.96.1 pin. Started at
+        # the repository root this took whatever `stable` meant on the runner
+        # that day, which is how a release was gated by a toolchain no developer
+        # was running.
+        working-directory: src-tauri
+        run: cargo test
 
       # Windows Authenticode. Tauri reads the certificate thumbprint from
       # tauri.conf.json, so the .pfx has to be imported into the runner's store
