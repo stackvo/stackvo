@@ -1500,15 +1500,36 @@ volumes:
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("Sites")).unwrap();
         std::fs::write(dir.join("config.json"), config).unwrap();
-        // `name` is read only by the symlink below, which Windows does not
-        // have — the fixture there is the parked directory alone. Found by
-        // `tools/linux/run.sh --windows`, where `-D warnings` makes it an error.
-        #[cfg_attr(not(unix), allow(unused_variables))]
+        // Windows has directory symlinks too, and the fixture used to skip them
+        // there — so `Sites/` was empty, `valet_sites` found nothing, and three
+        // tests failed on `sites[0]` rather than on anything they were about.
+        // Skipping was the older reading of "Windows does not have symlinks";
+        // what it does not have is the *unprivileged* kind, which is a
+        // different sentence.
+        //
+        // So the link is attempted on every platform and a refusal is named
+        // rather than swallowed. If this ever fails on a runner, the answer is
+        // Developer Mode or an elevated shell — not a fixture that quietly
+        // builds less than it says it does.
         for (name, target) in links {
             let target = dir.join(target);
             std::fs::create_dir_all(&target).unwrap();
+            let link = dir.join("Sites").join(name);
+
             #[cfg(unix)]
-            std::os::unix::fs::symlink(&target, dir.join("Sites").join(name)).unwrap();
+            let made = std::os::unix::fs::symlink(&target, &link);
+            #[cfg(windows)]
+            let made = std::os::windows::fs::symlink_dir(&target, &link);
+
+            made.unwrap_or_else(|e| {
+                panic!(
+                    "this fixture is a Valet layout and a Valet layout is symlinks: \
+                     linking {} -> {}: {e}. On Windows this needs Developer Mode \
+                     or an elevated shell.",
+                    link.display(),
+                    target.display()
+                )
+            });
         }
         dir
     }

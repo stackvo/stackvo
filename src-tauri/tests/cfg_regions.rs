@@ -295,6 +295,39 @@ fn the_linux_runner_is_still_here_and_matches_what_ci_installs() {
         );
     }
 
+    // `runner.rs`'s tests do not spawn a POSIX shell.
+    //
+    // Nine of the nineteen failures in the first CI run that reached the suite
+    // on Windows were one sentence: these tests drove `sh -c` with POSIX
+    // payloads, and Windows has no `sh`. Not a small gap — `runner.rs` is the
+    // module that spawns `docker compose`, so it had no Windows coverage at all
+    // while the file looked thoroughly tested.
+    //
+    // The replacement is `node`: already required to build this repository,
+    // writes exact bytes on every platform, and needs one payload rather than a
+    // per-platform pair that would have to be kept in step. This refuses the
+    // habit coming back, because the next person wanting a subprocess in a test
+    // will reach for the shell they are sitting in front of.
+    //
+    // **Scoped to this one file on purpose.** `quickcmd.rs` names `sh` all over
+    // its tests and is right to: that `sh` is the argv handed to `docker exec`
+    // and runs inside a Linux container, which is a different machine from the
+    // one running the test. A gate that read every module would have called
+    // that a bug — it did, on the first run — and the version of this check
+    // that flags correct code is the version people learn to work around.
+    let runner = std::fs::read_to_string(repo_root().join("src-tauri/src/runner.rs"))
+        .expect("runner.rs is readable");
+    if let Some(tests) = runner.split("\n#[cfg(test)]\n").nth(1) {
+        for spelling in ["(\"sh\"", "\"sh\",", "\"bash\"", "\"/bin/sh\""] {
+            assert!(
+                !tests.contains(spelling),
+                "runner.rs's tests spawn a POSIX shell ({spelling}), which \
+                 Windows does not have. Use the `node` helper beside them: it \
+                 writes the bytes it is given, on every platform."
+            );
+        }
+    }
+
     let toolchain = std::fs::read_to_string(repo_root().join("src-tauri/rust-toolchain.toml"))
         .expect("rust-toolchain.toml is readable");
     let pinned = toolchain

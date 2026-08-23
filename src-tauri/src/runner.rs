@@ -529,7 +529,13 @@ mod tests {
 
         let args = compose_base_args(&dir);
         assert!(args.iter().any(|a| a == "--env-file"));
-        assert!(args.iter().any(|a| a.ends_with("/.env")));
+        // By file name rather than by a `/.env` suffix. The path is built with
+        // `PathBuf::join`, so on Windows it ends `\\.env` and the old assertion
+        // could not pass there however right the argument was — a test that
+        // hard-codes a separator is testing the platform it was written on.
+        assert!(args
+            .iter()
+            .any(|a| Path::new(a).file_name().is_some_and(|n| n == ".env")));
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -775,6 +781,35 @@ mod tests {
 
     /// A redrawn progress bar arrives as separate lines, not as one long one.
     ///
+    /// A program that emits exactly the bytes a test asks for, on every
+    /// platform.
+    ///
+    /// These tests drove `sh -c` with POSIX payloads, which is a shell Windows
+    /// does not have. Nine of them failed there with "could not run sh", so
+    /// `runner.rs` — the module that spawns `docker compose` — had no Windows
+    /// coverage at all, and the first CI run to reach the suite there is what
+    /// said so.
+    ///
+    /// **Node rather than `cmd`.** Half of what this module decides is where a
+    /// line ends, and `cmd` can neither write a bare carriage return nor leave
+    /// off a trailing newline — the two cases these tests exist for. Node
+    /// writes the bytes it is given, `process.stdout.write` does no newline
+    /// translation, and it is already required to build this repository. One
+    /// payload rather than a per-platform pair also means there is no second
+    /// version to keep in step.
+    fn node(script: &str) -> (&'static str, Vec<String>) {
+        ("node", vec!["-e".to_string(), script.to_string()])
+    }
+
+    /// Somewhere a child process can be started from.
+    ///
+    /// `/tmp` was hard-coded, and it is not a directory Windows has. A cwd that
+    /// does not exist fails the spawn before the program is ever consulted, so
+    /// it would have kept these red even after the shell was dealt with.
+    fn cwd() -> std::path::PathBuf {
+        std::env::temp_dir()
+    }
+
     /// Measured against a real `git clone --progress`: its "Receiving objects"
     /// phase writes one line over and over with carriage returns and no newline
     /// until the phase ends, so a `\n`-only reader emitted the whole phase as a
@@ -782,18 +817,11 @@ mod tests {
     #[tokio::test]
     async fn a_carriage_return_ends_a_line_like_a_newline_does() {
         let mut seen = Vec::new();
-        let out = stream(
-            "sh",
-            &[
-                "-c".into(),
-                // No trailing newline on the CR run, exactly as git leaves it.
-                "printf 'a: 10%%\\ra: 50%%\\ra: 100%%\\ndone\\n'".into(),
-            ],
-            Path::new("/tmp"),
-            |line| seen.push(line.to_string()),
-        )
-        .await
-        .unwrap();
+        // No trailing newline on the CR run, exactly as git leaves it.
+        let (program, args) = node("process.stdout.write('a: 10%\\ra: 50%\\ra: 100%\\ndone\\n')");
+        let out = stream(program, &args, &cwd(), |line| seen.push(line.to_string()))
+            .await
+            .unwrap();
 
         assert!(out.success);
         assert_eq!(seen, vec!["a: 10%", "a: 50%", "a: 100%", "done"]);
@@ -804,14 +832,10 @@ mod tests {
     #[tokio::test]
     async fn crlf_output_is_not_read_as_blank_lines() {
         let mut seen = Vec::new();
-        stream(
-            "sh",
-            &["-c".into(), "printf 'one\\r\\ntwo\\r\\n'".into()],
-            Path::new("/tmp"),
-            |line| seen.push(line.to_string()),
-        )
-        .await
-        .unwrap();
+        let (program, args) = node("process.stdout.write('one\\r\\ntwo\\r\\n')");
+        stream(program, &args, &cwd(), |line| seen.push(line.to_string()))
+            .await
+            .unwrap();
 
         assert_eq!(seen, vec!["one", "two"]);
     }
@@ -824,13 +848,14 @@ mod tests {
         std::env::set_var("STACKVO_RUNNER_INHERITED", "yes");
 
         let mut seen = Vec::new();
+        let (program, args) = node(
+            "process.stdout.write(process.env.STACKVO_RUNNER_PINNED + ' ' + \
+             process.env.STACKVO_RUNNER_INHERITED + '\\n')",
+        );
         stream_with_env(
-            "sh",
-            &[
-                "-c".into(),
-                "echo \"$STACKVO_RUNNER_PINNED $STACKVO_RUNNER_INHERITED\"".into(),
-            ],
-            Path::new("/tmp"),
+            program,
+            &args,
+            &cwd(),
             &[("STACKVO_RUNNER_PINNED", "pinned")],
             |line| seen.push(line.to_string()),
         )
@@ -844,14 +869,10 @@ mod tests {
     #[tokio::test]
     async fn streams_lines_as_they_arrive_and_reports_exit_code() {
         let mut seen = Vec::new();
-        let out = stream(
-            "sh",
-            &["-c".into(), "echo one; echo two >&2; exit 3".into()],
-            Path::new("/tmp"),
-            |line| seen.push(line.to_string()),
-        )
-        .await
-        .unwrap();
+        let (program, args) = node("console.log('one'); console.error('two'); process.exit(3)");
+        let out = stream(program, &args, &cwd(), |line| seen.push(line.to_string()))
+            .await
+            .unwrap();
 
         assert!(!out.success);
         assert_eq!(out.code, Some(3));
@@ -872,7 +893,7 @@ mod tests {
     // operation console and `contracts/ipc.json` all depend on the name, the
     // order and the fields, and none of that was verified anywhere.
 
-    fn operation<'a>(program: &'a str, args: &'a [String]) -> Operation<'a> {
+    fn operation<'a>(program: &'a str, args: &'a [String], cwd: &'a Path) -> Operation<'a> {
         Operation {
             operation_id: "op-1",
             subject: "shop",
@@ -880,7 +901,7 @@ mod tests {
             finished_event: "generate:finished",
             program,
             args,
-            cwd: Path::new("/tmp"),
+            cwd,
             env: &[],
         }
     }
@@ -888,9 +909,11 @@ mod tests {
     #[tokio::test]
     async fn a_successful_run_reports_every_line_then_one_finished_event() {
         let sink = progress::Recording::new();
-        let args = vec!["-c".into(), "echo one; echo two".into()];
+        let (program, args) = node("console.log('one'); console.log('two')");
 
-        run_operation(&sink, operation("sh", &args)).await.unwrap();
+        run_operation(&sink, operation(program, &args, &cwd()))
+            .await
+            .unwrap();
 
         assert_eq!(
             sink.names(),
@@ -938,9 +961,10 @@ mod tests {
     #[tokio::test]
     async fn a_failing_run_emits_a_failure_and_returns_an_error() {
         let sink = progress::Recording::new();
-        let args = vec!["-c".into(), "echo working; echo boom >&2; exit 3".into()];
+        let (program, args) =
+            node("console.log('working'); console.error('boom'); process.exit(3)");
 
-        let error = run_operation(&sink, operation("sh", &args))
+        let error = run_operation(&sink, operation(program, &args, &cwd()))
             .await
             .expect_err("exit 3 must not read as success");
         assert!(error.message.contains("code 3"), "{}", error.message);
@@ -967,7 +991,7 @@ mod tests {
         let sink = progress::Recording::new();
         let args: Vec<String> = vec![];
 
-        let error = run_operation(&sink, operation("stackvo-no-such-program", &args))
+        let error = run_operation(&sink, operation("stackvo-no-such-program", &args, &cwd()))
             .await
             .expect_err("a missing binary is an error");
 
@@ -988,15 +1012,17 @@ mod tests {
     /// report to, still does the work and still answers through its `Result`.
     #[tokio::test]
     async fn a_sink_with_no_window_changes_nothing_but_the_reporting() {
-        let args = vec!["-c".into(), "echo one; exit 0".into()];
-        run_operation(&progress::Null, operation("sh", &args))
+        let (program, args) = node("console.log('one')");
+        run_operation(&progress::Null, operation(program, &args, &cwd()))
             .await
             .expect("headless must not change the outcome");
 
-        let args = vec!["-c".into(), "exit 1".into()];
-        assert!(run_operation(&progress::Null, operation("sh", &args))
-            .await
-            .is_err());
+        let (program, args) = node("process.exit(1)");
+        assert!(
+            run_operation(&progress::Null, operation(program, &args, &cwd()))
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -1006,14 +1032,14 @@ mod tests {
         let marker = std::env::temp_dir().join("stackvo-injection-canary");
         let _ = std::fs::remove_file(&marker);
 
-        let out = stream(
-            "echo",
-            &[format!("hi; touch {}", marker.display())],
-            Path::new("/tmp"),
-            |_| {},
-        )
-        .await
-        .unwrap();
+        // `echo` was the program here, and on Windows that is a `cmd` builtin
+        // rather than a file — so the spawn failed before the claim could be
+        // tested. Node prints its own argv back, which is the same experiment
+        // and one that exists on every platform.
+        let (program, mut args) = node("process.stdout.write(process.argv.slice(1).join(' '))");
+        args.push(format!("hi; touch {}", marker.display()));
+
+        let out = stream(program, &args, &cwd(), |_| {}).await.unwrap();
 
         assert!(out.success);
         assert!(
