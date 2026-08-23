@@ -9,7 +9,7 @@ import { useHostsPrompt } from '@/composables/useHostsPrompt';
 import { useAppStore } from '@/stores/app';
 import { parentDomain, runtimeLook } from '@/lib/manifest';
 import { bytes } from '@/lib/format';
-import { listenAll, REFRESH_TRIGGERS } from '@/lib/events';
+import { EVENTS, listenAll, REFRESH_TRIGGERS } from '@/lib/events';
 import { api, asList } from '@/lib/ipc';
 import PageLayout from '@/components/PageLayout.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
@@ -675,13 +675,18 @@ const unmanagedCount = computed(
 /**
  * The tools a person can point at (L).
  *
- * All five, and two of them are only reachable this way: Valet is a composer
+ * All seven, and two of them are only reachable this way: Valet is a composer
  * package on PATH and Sail is one inside each project, so neither has an
  * installation directory for the scan to find. The list used to be the two that
  * were written first — which meant somebody whose MAMP is not in
  * /Applications had no way to say so.
+ *
+ * Held against the Rust list by `foreign_import.rs`, because that failure is
+ * silent in both directions: an id here the backend refuses is a button that
+ * errors, and a source the backend reads with no id here is a tool nobody can
+ * point at.
  */
-const IMPORT_SOURCES = ['xampp', 'laragon', 'mamp', 'valet', 'sail'];
+const IMPORT_SOURCES = ['xampp', 'laragon', 'mamp', 'valet', 'sail', 'herd', 'ddev'];
 
 /**
  * Only the installations that turned something up.
@@ -763,6 +768,67 @@ async function adopt(folder) {
     actionError.value = e;
   } finally {
     adopting.value = null;
+  }
+}
+
+/**
+ * Every folder in the list, in one press.
+ *
+ * The park half of A-5. The list is already the park — the project directory
+ * is what Herd and Valet mean by one, and every child of it is here with its
+ * detected runtime beside it. What was missing is that adopting them was one
+ * click per row, and the machine this was written against had eleven.
+ *
+ * One call rather than a loop over `adopt`, and the difference is not
+ * ergonomic: each adoption regenerates the whole projects scope under a global
+ * lock and can raise the system password prompt for its hosts entry, so eleven
+ * calls are eleven full generates and up to eleven prompts. The batch writes
+ * every manifest first, generates once, and writes the hosts file once.
+ *
+ * The ones with nothing in them are left out here as well as skipped there.
+ * The backend has to defend itself — the CLI and the MCP server reach the same
+ * command — but sending a folder we already know will be passed over would
+ * report a skip the user could not have avoided.
+ */
+const adoptingAll = ref(false);
+const adoptReport = ref(null);
+
+const adoptableWithFiles = computed(() => adoptable.value.filter((f) => f.hasFiles));
+
+/**
+ * A passed-over folder, in the reader's language where that is possible.
+ *
+ * `code` and not the prose. The two skips are a closed set the backend decides,
+ * and `reason` is the same thing in English for a log; a failure's reason came
+ * from somewhere else entirely and there is nothing to translate it against, so
+ * it is shown as it arrived — the way every other backend message in this view
+ * is.
+ */
+function passedReason(row) {
+  if (row.code === 'already_managed') return t('adopt.reason.alreadyManaged');
+  if (row.code === 'empty') return t('adopt.reason.empty');
+  return row.reason;
+}
+
+async function adoptAll() {
+  const names = adoptableWithFiles.value.map((f) => f.name);
+  if (!names.length) return;
+
+  adoptingAll.value = true;
+  actionError.value = null;
+  adoptReport.value = null;
+  try {
+    const batch = await api.projectAdoptMany(names);
+    // Kept only when there is something to say. All of them adopted is what
+    // the emptied list already shows, and a summary repeating it is a line
+    // people learn to dismiss without reading.
+    const passed = asList(batch.results).filter((r) => r.outcome !== 'adopted');
+    adoptReport.value = passed.length ? { adopted: batch.adopted, passed } : null;
+    await Promise.all([inventory.loadProjects(), loadAdoptable()]);
+  } catch (e) {
+    actionError.value = e;
+  } finally {
+    adoptingAll.value = false;
   }
 }
 
@@ -862,10 +928,24 @@ onMounted(async () => {
 
   const offHosts = await listenAll(['hosts:changed'], () => inventory.loadProjects());
 
+  // A folder arriving in the parked directory. This is what makes the badge a
+  // live number instead of one from whenever the view last mounted: clone a
+  // repository into the project folder and the count goes up, which is the
+  // whole of what parking a directory means.
+  //
+  // Refetch rather than believe the payload. The event names a folder that
+  // appeared; only `project_adoptable` can say whether it is adoptable, and a
+  // clone of a repository that ships its own `stackvo.json` is not.
+  const offFolder = await listenAll(EVENTS.folder, () => {
+    loadAdoptable();
+    inventory.loadProjects();
+  });
+
   teardown = () => {
     offRefresh();
     offManifest();
     offHosts();
+    offFolder();
   };
 });
 
@@ -1163,6 +1243,23 @@ onUnmounted(() => teardown?.());
             <div class="section-head d-flex align-center ga-1">
               <v-icon size="small">mdi-folder-search-outline</v-icon>
               {{ t('adopt.found', { n: adoptable.length }) }}
+              <v-spacer />
+
+              <!-- The park verb. Absent rather than disabled when every folder
+                   in the list is empty: a button that can never do anything is
+                   a question about why not. -->
+              <v-btn
+                v-if="adoptableWithFiles.length > 1"
+                size="x-small"
+                variant="tonal"
+                color="primary"
+                prepend-icon="mdi-folder-multiple-plus-outline"
+                :loading="adoptingAll"
+                :disabled="!!adopting || migrationBusy"
+                @click="adoptAll"
+              >
+                {{ t('adopt.all', { n: adoptableWithFiles.length }) }}
+              </v-btn>
             </div>
 
             <!-- The directory itself, named, the way the tool sections above
@@ -1177,6 +1274,32 @@ onUnmounted(() => teardown?.());
             <div v-if="app.workspace?.projectsDir" class="text-caption text-medium-emphasis mb-2">
               {{ t('adopt.where', { path: app.workspace.projectsDir }) }}
             </div>
+
+            <!-- What the batch passed over, and only that. A folder that was
+                 already managed or holds nothing but dotfiles is an ordinary
+                 outcome, not a failure — but it is one the user did not ask
+                 for and cannot see anywhere else, so it is said once here
+                 rather than coloured red on the row. -->
+            <v-alert
+              v-if="adoptReport"
+              type="info"
+              variant="tonal"
+              density="compact"
+              class="mb-2"
+              closable
+              @click:close="adoptReport = null"
+            >
+              <div class="text-caption">
+                {{ t('adopt.batchDone', { n: adoptReport.adopted }) }}
+              </div>
+              <div
+                v-for="row in adoptReport.passed"
+                :key="row.name"
+                class="text-caption text-medium-emphasis"
+              >
+                {{ row.name }} — {{ passedReason(row) }}
+              </div>
+            </v-alert>
 
             <v-table density="compact" hover fixed-header class="adopt-table">
               <thead>
@@ -1404,7 +1527,7 @@ onUnmounted(() => teardown?.());
             </v-btn>
           </template>
 
-          <v-list density="compact">
+          <v-list density="compact" class="py-2 px-2">
             <v-list-subheader>{{ t('projectsView.filter.status') }}</v-list-subheader>
             <!-- Checkmarks rather than a radio group: the state has to be
                  readable at a glance in a menu that stays open, and a list item

@@ -124,6 +124,16 @@ pub enum Mode {
     Debug,
     Profile,
     Trace,
+    /// Line coverage, for a test run that reports it.
+    ///
+    /// The fourth mode and the only one that produces nothing on its own:
+    /// `coverage` switches on the API PHPUnit calls, and the report is written
+    /// by PHPUnit rather than by Xdebug. So there is no list of recordings for
+    /// it and `records_to_disk` says so — a screen that offered one would be
+    /// promising a file this app never sees. DDEV exposes the same mode for
+    /// the same reason: `--coverage-html` without it produces an empty report
+    /// and a warning most people never read.
+    Coverage,
 }
 
 impl Mode {
@@ -132,6 +142,7 @@ impl Mode {
             Mode::Debug => "debug",
             Mode::Profile => "profile",
             Mode::Trace => "trace",
+            Mode::Coverage => "coverage",
         }
     }
 
@@ -155,6 +166,31 @@ impl Mode {
 pub struct ModeConfig {
     #[serde(default)]
     pub mode: Mode,
+    /// Add Xdebug's `develop` alongside whichever mode is set.
+    ///
+    /// Not a fourth value of [`Mode`], because it is not an alternative to one:
+    /// `xdebug.mode` is a **list**, and `develop` is what makes `var_dump`
+    /// readable and puts a stack trace on a warning. Herd's own documented
+    /// configuration is `debug,develop` for exactly that reason, and modelling
+    /// it as a mode would have made "step debugging with readable dumps"
+    /// unreachable.
+    ///
+    /// Off by default: it overloads `var_dump` and changes what an error looks
+    /// like, and a debugging tool that alters the output of the code being
+    /// debugged should be something somebody asked for.
+    #[serde(default)]
+    pub develop: bool,
+}
+
+/// What `XDEBUG_MODE` is set to, which is not always one word.
+pub fn mode_value(mode: Mode, develop: bool) -> String {
+    // `develop` second: Xdebug does not care about the order, and a reader
+    // comparing this against the mode they chose should see it first.
+    if develop {
+        format!("{},develop", mode.as_str())
+    } else {
+        mode.as_str().to_string()
+    }
 }
 
 pub const MODE_FILE: &str = "xdebug.json";
@@ -167,12 +203,15 @@ pub fn mode_path(root: &Path, name: &str) -> PathBuf {
         .join(MODE_FILE)
 }
 
-pub fn read_mode(root: &Path, name: &str) -> Mode {
+pub fn read_config(root: &Path, name: &str) -> ModeConfig {
     std::fs::read_to_string(mode_path(root, name))
         .ok()
         .and_then(|text| serde_json::from_str::<ModeConfig>(&text).ok())
-        .map(|c| c.mode)
         .unwrap_or_default()
+}
+
+pub fn read_mode(root: &Path, name: &str) -> Mode {
+    read_config(root, name).mode
 }
 
 /// Where the generated ini is mounted inside the container.
@@ -229,6 +268,8 @@ pub struct Entry {
     /// right path mapping without the user selecting it on every session.
     pub server_name: Option<String>,
     pub mode: Mode,
+    /// Whether `develop` rides along with it. See [`ModeConfig::develop`].
+    pub develop: bool,
     /// Host path of the generated ini, when profiling.
     pub ini_path: Option<String>,
 }
@@ -267,7 +308,10 @@ pub fn overlay_yaml(entries: &[Entry]) -> Option<String> {
         // The env var, not the ini: `XDEBUG_MODE` takes precedence over
         // `xdebug.mode`, so setting both and letting them disagree would be a
         // bug waiting for somebody to hand-edit one of them.
-        out.push_str(&format!("      XDEBUG_MODE: \"{}\"\n", entry.mode.as_str()));
+        out.push_str(&format!(
+            "      XDEBUG_MODE: \"{}\"\n",
+            mode_value(entry.mode, entry.develop)
+        ));
         out.push_str(&format!("      XDEBUG_CONFIG: \"{}\"\n", xdebug_config()));
         if let Some(name) = &entry.server_name {
             out.push_str(&format!("      PHP_IDE_CONFIG: \"serverName={name}\"\n"));
@@ -540,7 +584,8 @@ fn entries(root: &Path) -> Vec<Entry> {
             continue;
         }
 
-        let mode = read_mode(root, name);
+        let config = read_config(root, name);
+        let mode = config.mode;
 
         // Written here rather than by the toggle, for the reason the overlay
         // itself is derived: an ini left behind by a project that has since
@@ -581,6 +626,7 @@ fn entries(root: &Path) -> Vec<Entry> {
             service: name.to_string(),
             server_name: manifest.domain.clone(),
             mode,
+            develop: config.develop,
             ini_path,
         });
     }
@@ -878,6 +924,7 @@ mod tests {
             service: "shop".into(),
             server_name: Some("shop.loc".into()),
             mode: Mode::Debug,
+            develop: false,
             ini_path: None,
         }])
         .expect("one project renders a file");
@@ -897,12 +944,65 @@ mod tests {
     /// but silently ignores `use_compression`, and Xdebug 3.4 gzips by default
     /// — one compressed file is the difference between a profile view and a
     /// parse error.
+    /// `xdebug.mode` is a list, and `develop` is the second item rather than a
+    /// fifth mode. Modelling it as a mode would have made "step debugging with
+    /// readable dumps" — which is Herd's own documented configuration —
+    /// unreachable.
+    #[test]
+    fn develop_rides_alongside_the_mode_rather_than_replacing_it() {
+        assert_eq!(mode_value(Mode::Debug, false), "debug");
+        assert_eq!(mode_value(Mode::Debug, true), "debug,develop");
+        assert_eq!(mode_value(Mode::Profile, true), "profile,develop");
+        assert_eq!(mode_value(Mode::Coverage, false), "coverage");
+    }
+
+    /// And it reaches the container, which is the half a pure function cannot
+    /// prove on its own: `XDEBUG_MODE` takes precedence over `xdebug.mode`, so
+    /// this string is the one that decides.
+    #[test]
+    fn the_overlay_carries_the_whole_mode_list() {
+        let yaml = overlay_yaml(&[Entry {
+            service: "shop".into(),
+            server_name: None,
+            mode: Mode::Debug,
+            develop: true,
+            ini_path: None,
+        }])
+        .unwrap();
+
+        assert!(yaml.contains("XDEBUG_MODE: \"debug,develop\""), "{yaml}");
+    }
+
+    /// Coverage records nothing of its own — PHPUnit writes the report — so it
+    /// must not mount the profile ini or claim a recording directory. A screen
+    /// that offered a list for it would be promising a file this app never sees.
+    #[test]
+    fn coverage_records_nothing_this_app_reads_back() {
+        assert!(!Mode::Coverage.records_to_disk());
+        assert!(Mode::Profile.records_to_disk());
+        assert!(Mode::Trace.records_to_disk());
+        assert!(!Mode::Debug.records_to_disk());
+    }
+
+    /// The stored file is the one a teammate's clone carries, so an old one
+    /// written before `develop` existed has to keep working.
+    #[test]
+    fn a_mode_file_from_before_develop_still_reads() {
+        let config: ModeConfig = serde_json::from_str(r#"{"mode":"trace"}"#).unwrap();
+        assert_eq!(config.mode, Mode::Trace);
+        assert!(!config.develop, "an absent flag is off, not an error");
+
+        let coverage: ModeConfig = serde_json::from_str(r#"{"mode":"coverage"}"#).unwrap();
+        assert_eq!(coverage.mode, Mode::Coverage);
+    }
+
     #[test]
     fn only_the_profile_mode_mounts_an_ini() {
         let stepping = overlay_yaml(&[Entry {
             service: "shop".into(),
             server_name: None,
             mode: Mode::Debug,
+            develop: false,
             ini_path: None,
         }])
         .unwrap();
@@ -913,6 +1013,7 @@ mod tests {
             service: "shop".into(),
             server_name: None,
             mode: Mode::Profile,
+            develop: false,
             ini_path: Some("/w/generated/xdebug/shop.ini".into()),
         }])
         .unwrap();
@@ -969,12 +1070,14 @@ mod tests {
                 service: "zebra".into(),
                 server_name: None,
                 mode: Mode::Debug,
+                develop: false,
                 ini_path: None,
             },
             Entry {
                 service: "apple".into(),
                 server_name: None,
                 mode: Mode::Debug,
+                develop: false,
                 ini_path: None,
             },
         ];
@@ -991,6 +1094,7 @@ mod tests {
             service: "shop".into(),
             server_name: None,
             mode: Mode::Debug,
+            develop: false,
             ini_path: None,
         }])
         .unwrap();

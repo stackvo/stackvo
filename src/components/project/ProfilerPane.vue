@@ -1,5 +1,5 @@
 <script setup>
-import { toRef, watch } from 'vue';
+import { computed, toRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { bytes } from '@/lib/format';
 import { useOperationsStore } from '@/stores/operations';
@@ -41,10 +41,35 @@ const {
   cost,
   load,
   setMode,
+  setDevelop,
   open,
   remove,
   clear,
 } = useProfiler(toRef(props, 'name'));
+
+/**
+ * Does the chosen mode write a file this app reads back?
+ *
+ * Two of the four do. `debug` connects to an IDE and `coverage` switches on an
+ * API PHPUnit calls — neither leaves anything in the recording directory, so
+ * the "trigger a request and it will appear here" note is three wrong
+ * sentences for them.
+ */
+const records = computed(() => ['profile', 'trace'].includes(status.value?.mode));
+
+/**
+ * The mode cannot be moved while the container is being rebuilt or recreated.
+ *
+ * Not tidiness: choosing a mode rewrites the compose overlay, and compose is
+ * reading that file right now. The two racing produce a container whose
+ * `XDEBUG_MODE` is neither of the things the screen said, and the only symptom
+ * is a debugger that does not attach.
+ *
+ * It clears itself — the operation's finished event drops the busy flag, and
+ * the watcher below re-reads — so this is a few seconds with a reason on
+ * screen rather than a control that has gone quiet.
+ */
+const locked = computed(() => !!busy.value || ops.isBusy(props.name));
 
 /**
  * A trace's own unit, which is not the profile's.
@@ -61,6 +86,25 @@ watch(
   () => [props.name, props.runtime],
   () => load(props.runtime),
   { immediate: true }
+);
+
+/**
+ * Re-read when the recreate this pane asked for finishes.
+ *
+ * `compose_up_project` returns an operation id as soon as the work starts, not
+ * when it ends — so the caller's `await` resolves while docker is still
+ * recreating the container. This pane never re-read at all, which is why the
+ * "the container is in debug, the setting is profile" warning survived pressing
+ * the button that fixed it: the work was done and nothing on screen knew.
+ *
+ * The falling edge of the busy flag, because that is set by the operation's own
+ * finished event rather than by the call returning.
+ */
+watch(
+  () => ops.isBusy(props.name),
+  (busyNow, wasBusy) => {
+    if (wasBusy && !busyNow) load(props.runtime);
+  }
 );
 </script>
 
@@ -91,32 +135,62 @@ watch(
           divided
           @update:model-value="setMode($event)"
         >
-          <v-btn value="debug" :disabled="!!busy" prepend-icon="mdi-bug-outline">
+          <v-btn value="debug" :disabled="locked" prepend-icon="mdi-bug-outline">
             {{ t('profiler.modeDebug') }}
           </v-btn>
-          <v-btn value="profile" :disabled="!!busy" prepend-icon="mdi-speedometer">
+          <v-btn value="profile" :disabled="locked" prepend-icon="mdi-speedometer">
             {{ t('profiler.modeProfile') }}
           </v-btn>
           <!-- F-3. A third mode rather than a checkbox on profiling: it writes
                a different file, read by a different parser, and it is the only
                one of the three that can produce a real flame graph. -->
-          <v-btn value="trace" :disabled="!!busy" prepend-icon="mdi-fire">
+          <v-btn value="trace" :disabled="locked" prepend-icon="mdi-fire">
             {{ t('profiler.modeTrace') }}
+          </v-btn>
+          <!-- The fourth mode, and the only one that records nothing of its
+               own: it switches on the API PHPUnit calls, and PHPUnit writes
+               the report. So there is no list below for it. -->
+          <v-btn value="coverage" :disabled="locked" prepend-icon="mdi-shield-check-outline">
+            {{ t('profiler.modeCoverage') }}
           </v-btn>
         </v-btn-toggle>
         <div class="text-caption text-medium-emphasis mt-2">
-          {{ t('profiler.modesExclusive') }}
+          {{ ops.isBusy(name) ? t('profiler.lockedWhileWorking') : t('profiler.modesExclusive') }}
+        </div>
+
+        <!-- Not a fifth button: `xdebug.mode` is a list and this is the second
+             item in it, so it rides alongside whichever mode is chosen. -->
+        <v-switch
+          :model-value="status.develop"
+          color="primary"
+          density="compact"
+          hide-details
+          class="mt-2"
+          :disabled="!!busy"
+          :label="t('profiler.develop')"
+          @update:model-value="setDevelop($event)"
+        />
+        <div class="text-caption text-medium-emphasis">
+          {{ t('profiler.developDetail') }}
+        </div>
+        <div v-if="status.develop" class="text-caption text-medium-emphasis mt-1">
+          <code>XDEBUG_MODE={{ status.modeValue }}</code>
         </div>
 
         <!-- The step people miss. Profiling waits for a trigger, so
              loading the page changes nothing until it carries one. -->
-        <v-alert v-if="status.mode !== 'debug'" type="info" variant="tonal" class="mt-4">
+        <v-alert v-if="records" type="info" variant="tonal" class="mt-4">
           <div class="text-caption">
             {{ t('profiler.howToRecord', { trigger: status.trigger }) }}
           </div>
           <div v-if="status.mode === 'trace'" class="text-caption mt-1">
             {{ t('profiler.traceCost') }}
           </div>
+        </v-alert>
+        <!-- Coverage has no trigger and produces no file here, so the note
+             above would be three wrong sentences. -->
+        <v-alert v-else-if="status.mode === 'coverage'" type="info" variant="tonal" class="mt-4">
+          <div class="text-caption">{{ t('profiler.coverageNote') }}</div>
         </v-alert>
         <!-- Fires for either mode, not just profiling: switching back
              to stepping leaves the container profiling, and that is the

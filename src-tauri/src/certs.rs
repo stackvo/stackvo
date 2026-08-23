@@ -335,7 +335,13 @@ pub fn ca_root() -> std::path::PathBuf {
 /// The environment is set for mkcert only. `security` and its equivalents read
 /// the system trust store and have no business being told about `CAROOT`.
 fn helper(program: &str) -> tokio::process::Command {
-    let mut command = tokio::process::Command::new(program);
+    // Resolved rather than named. `tooling::install` may have put a copy of
+    // mkcert in the directory this app owns, and that directory reaches the
+    // user's shell only after they open a new one — the app has no reason to
+    // wait for that to see a tool it installed itself. Everything not in that
+    // directory comes back as the bare name and `PATH` decides, exactly as
+    // before, which is what leaves `security` and `certutil` untouched.
+    let mut command = tokio::process::Command::new(crate::tooling::resolve(program));
 
     // Not the app's own directory. A helper that inherits a cwd it cannot read
     // starts by complaining about it, and that noise reached a user on top of

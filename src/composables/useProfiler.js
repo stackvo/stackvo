@@ -58,7 +58,11 @@ export function useProfiler(name) {
     const s = status.value;
     if (!s?.xdebug?.running) return false;
     if (s.xdebug.active === false) return true;
-    return !!s.xdebug.activeMode && s.xdebug.activeMode !== s.mode;
+    // Against `modeValue`, not `mode`: `xdebug.mode` is a list, so a project
+    // with `develop` on runs `debug,develop` while the picker still says
+    // `debug`. Comparing the two would report a mismatch that is not one, and
+    // the button it puts on screen recreates the container for nothing.
+    return !!s.xdebug.activeMode && s.xdebug.activeMode !== (s.modeValue ?? s.mode);
   });
 
   /**
@@ -81,6 +85,20 @@ export function useProfiler(name) {
     return ms >= 1 ? `${ms.toFixed(1)} ms` : `${(ms * 1000).toFixed(0)} µs`;
   }
 
+  /**
+   * Read the state, keeping the last one when a *refresh* fails.
+   *
+   * The `catch` used to blank it, and blanking is what the whole pane is
+   * mounted on: `v-if="status"` wraps the mode buttons, the warnings and the
+   * recorded list, so one failed read empties the screen. That is defensible
+   * for the first read — there is nothing to show — and wrong for every one
+   * after it, because the refreshes happen exactly when the engine is busiest:
+   * this now re-reads as a container is recreated, and a call that lost a race
+   * with docker took the pane down with it.
+   *
+   * So a failed refresh leaves what was on screen and reports the error beside
+   * it. Slightly stale and legible beats empty and silent.
+   */
   async function load(runtime) {
     if (runtime !== 'php') {
       status.value = null;
@@ -88,17 +106,27 @@ export function useProfiler(name) {
     }
     try {
       status.value = await api.profilerStatus(name.value);
-    } catch {
-      status.value = null;
+      error.value = null;
+    } catch (e) {
+      if (!status.value) return null;
+      error.value = e;
     }
     return status.value;
   }
 
-  async function setMode(mode) {
+  /**
+   * Move the mode, or the `develop` flag beside it, or both.
+   *
+   * `develop` left undefined means "leave it as it was", which is what the
+   * command does with an absent argument — the picker and the switch are two
+   * controls over one file, and either one clearing the other would be a
+   * setting nobody could keep.
+   */
+  async function setMode(mode, develop) {
     busy.value = 'mode';
     error.value = null;
     try {
-      status.value = await api.profilerSetMode(name.value, mode);
+      status.value = await api.profilerSetMode(name.value, mode, develop);
       return status.value;
     } catch (e) {
       error.value = e;
@@ -107,6 +135,9 @@ export function useProfiler(name) {
       busy.value = '';
     }
   }
+
+  /** The companion switch. Keeps whichever mode is already set. */
+  const setDevelop = (on) => setMode(status.value?.mode ?? 'debug', on);
 
   async function open(file) {
     busy.value = file.id;
@@ -228,6 +259,7 @@ export function useProfiler(name) {
     cost,
     load,
     setMode,
+    setDevelop,
     open,
     remove,
     clear,

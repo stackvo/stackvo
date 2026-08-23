@@ -102,6 +102,8 @@ indicator on what the keyboard reaches.
 
 Stated plainly, because a statement without them is a marketing page.
 
+Each of these is also **tracked as work** in `docs/durum.md` §2 (Y-1, Y-2, Y-3), which is this repository's single backlog. This document states what is true today; that one says what is going to be done about it.
+
 * **No screen-reader audit.** Nothing here has been driven with VoiceOver, NVDA
   or Orca by a person. Automated tooling decides roughly a third of WCAG's
   success criteria; the rest — whether a label *makes sense*, whether an error

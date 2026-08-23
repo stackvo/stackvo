@@ -309,6 +309,7 @@ describe('the performance layer', () => {
       exists: false,
       onHost: true,
       hostFiles: 8000,
+      gain: { workload: 'boot', times: 3.8 },
     },
     {
       path: 'storage/framework',
@@ -318,6 +319,7 @@ describe('the performance layer', () => {
       bytes: 1024 * 1024,
       onHost: true,
       hostFiles: 12,
+      gain: { workload: 'write', times: 2.8 },
     },
   ];
 
@@ -342,6 +344,60 @@ describe('the performance layer', () => {
     expect(rows[0].text()).toContain('vendor');
     expect(rows[0].text()).toContain('8000');
     expect(rows[1].text()).toContain('stackvo-cache-shop--storage-framework');
+  });
+
+  /**
+   * The measurement, on the row it was measured for.
+   *
+   * It used to be one averaged figure in the card's header sentence — and the
+   * average hid the fact the whole design rests on: `vendor` buys the framework
+   * boot and does **nothing** for writes, `storage/framework` buys the writes.
+   * Somebody reading the header had no way to tell which switch to flip.
+   */
+  it('shows what each directory measured, and which workload it bought', async () => {
+    const wrapper = await open();
+    const rows = wrapper.findAll('[data-test="perf-layer"]');
+
+    expect(rows[0].text()).toContain('3.8');
+    expect(rows[0].text()).toContain(i18n.global.t('perf.workload.boot'));
+    expect(rows[1].text()).toContain('2.8');
+    expect(rows[1].text()).toContain(i18n.global.t('perf.workload.write'));
+
+    // And the two do not swap: a row claiming the other one's workload is the
+    // same mistake as the average, one level down.
+    expect(rows[0].text()).not.toContain(i18n.global.t('perf.workload.write'));
+    expect(rows[1].text()).not.toContain(i18n.global.t('perf.workload.boot'));
+  });
+
+  /**
+   * `bootstrap/cache` and `node_modules` are offered and have never been
+   * through the bench. Saying so beats leaving a blank, and beats far more the
+   * thing that would otherwise happen: the row quietly borrowing a neighbour's
+   * number, which is the average all over again.
+   */
+  it('says so on a directory nobody has measured, rather than borrowing a figure', async () => {
+    const wrapper = await open([{ ...LAYERS[0], path: 'bootstrap/cache', gain: undefined }]);
+    const row = wrapper.find('[data-test="perf-layer"]');
+    expect(row.text()).toContain(i18n.global.t('perf.notMeasured'));
+    expect(row.text()).not.toContain('3.8');
+    expect(row.text()).not.toContain('2.8');
+  });
+
+  /**
+   * The header explains why the feature exists; it no longer states a number.
+   *
+   * A measurement in a translated string is a measurement a translator has to
+   * restate correctly with no way to know it is one — and `perf_claims.rs`
+   * fails the Rust build if one grows back. This is the same rule from the side
+   * that can see the rendered card.
+   */
+  it('keeps the measurement out of the card description', async () => {
+    for (const locale of ['en', 'tr']) {
+      const text = i18n.global.t('perf.explain', {}, { locale });
+      for (const figure of ['3.8', '2.8', '3,8', '2,8', '2–3']) {
+        expect(text, `${locale} states ${figure}`).not.toContain(figure);
+      }
+    }
   });
 
   /**

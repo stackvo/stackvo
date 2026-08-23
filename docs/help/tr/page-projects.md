@@ -65,7 +65,7 @@ Alan adı boş bırakılırsa proje adından üretilir.
 
 | Kaynak | Ne yapar |
 | --- | --- |
-| Proje klasöründeki klasörler | `stackvo.json` dosyası olmayan klasörleri listeler ve **Sahiplen** ile projeye dönüştürür. Ne olduğu, klasördeki dosyalardan algılanır. |
+| Proje klasöründeki klasörler | `stackvo.json` dosyası olmayan klasörleri listeler ve **Sahiplen** ile projeye dönüştürür. Ne olduğu, klasördeki dosyalardan algılanır. **Hepsini sahiplen** listedeki bütün klasörleri tek seferde alır. |
 | XAMPP ve Laragon siteleri | O araçların kurulum klasörünü okur ve sitelerini listeler. |
 | Compose dosyası olan projeler | Var olan bir `docker-compose.yml` dosyasından proje çıkarır. Yazılacak `stackvo.json` ve her değerin nereden okunduğu önceden gösterilir. |
 
@@ -73,5 +73,7 @@ Alan adı boş bırakılırsa proje adından üretilir.
 
 - İçe aktarma, diğer aracın klasörüne asla yazmaz. Site bu çalışma alanına kopyalanır. **Kopyalamak yerine taşı** seçilirse kopya tamamlandıktan sonra aslı silinir ve diğer araç o siteyi artık sunmaz.
 - Sahiplenme sırasında tanınan bir şey yoksa varsayılanlar kullanılır; panel bunu satır satır söyler.
+- Proje klasörünüz izleniyor. İçine bir depo klonlayın, üç nokta düğmesindeki sayı kendiliğinden artar — yeni klasörü bulmak için bu paneli yeniden açmanız gerekmez.
+- **Hepsini sahiplen** klasör başına bir işlem değil, tek bir işlemdir: üretici bir kez çalışır, `/etc/hosts` bir kez yazılır, yani kaç klasör olursa olsun parolanız en fazla bir kez sorulur. Zaten `stackvo.json` dosyası olan ve gizli dosyalardan başka bir şey içermeyen klasörler atlanır ve sonunda adlarıyla söylenir.
 - Compose'dan içe aktarırken StackVo karşılığı olmayan servisler ayrıca listelenir. Onları kendiniz ele almanız gerekir.
 - Bir projeyi silmek kodunuzu silmez. Yalnızca konteyner ve kayıt kaldırılır.

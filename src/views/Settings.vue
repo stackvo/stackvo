@@ -27,6 +27,7 @@ import PolicyNotice from '@/components/settings/PolicyNotice.vue';
 import SecretsPane from '@/components/settings/SecretsPane.vue';
 import AgentsPane from '@/components/settings/AgentsPane.vue';
 import LocalApiPane from '@/components/settings/LocalApiPane.vue';
+import ToolingPane from '@/components/settings/ToolingPane.vue';
 import PageLayout from '@/components/PageLayout.vue';
 import SettingsSection from '@/components/SettingsSection.vue';
 import SettingsGroup from '@/components/SettingsGroup.vue';
@@ -218,6 +219,18 @@ const SECTIONS = [
     icon: 'mdi-lan-connect',
     label: 'settings.localApi.title',
     desc: 'settings.localApi.sectionDesc',
+  },
+  // The third way *in*, and the one the other two depend on: `stackvo-mcp` is
+  // what the assistants pane registers and `stackvo` is what a terminal runs,
+  // and until this pane existed nothing put either where anything could find
+  // it. Host tools are on the same page because they are the same question
+  // asked of the machine rather than of this app.
+  {
+    key: 'tooling',
+    group: 'app',
+    icon: 'mdi-toolbox-outline',
+    label: 'settings.tooling.title',
+    desc: 'settings.tooling.sectionDesc',
   },
   {
     key: 'doctor',
@@ -538,6 +551,10 @@ onMounted(async () => {
 
           <template v-if="tab === 'localApi'">
             <LocalApiPane />
+          </template>
+
+          <template v-if="tab === 'tooling'">
+            <ToolingPane />
           </template>
 
           <template v-if="tab === 'certificates'">

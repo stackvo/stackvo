@@ -281,12 +281,13 @@
       "kind": "operation",
       "args": {
         "service": "string",
-        "path": "string"
+        "path": "string",
+        "snapshotFirst": "bool"
       },
       "returns": "OperationId",
       "emits": ["db:start", "db:progress", "db:done", "db:error"],
       "why": "A backup nobody has restored is a file, not a backup.",
-      "notes": "DESTRUCTIVE: this replaces the contents of the target database. The UI MUST name the database and require confirmation before calling it. Reads the file into the container's stdin, the mirror of how the dump was written."
+      "notes": "DESTRUCTIVE: this replaces the contents of the target database. The UI MUST name the database and require confirmation before calling it. Reads the file into the container's stdin, the mirror of how the dump was written. `snapshotFirst` takes a copy of what is about to be replaced, into `before-restore-<stamp>` — its own reserved prefix rather than the scheduler's `auto-`, because `last_automatic` matches that one and a restore would otherwise push the next scheduled backup out by a full interval, and because `expired` prunes automatic copies against one window that a run of restores would empty. The safety copies get their own window instead — the last 3 per service, pruned when one is taken rather than by the scheduler, because the schedule defaults to off and a net that only tidies up when a feature nobody switched on runs is a disk that fills. A FAILURE TO TAKE IT STOPS THE RESTORE: the caller asked for a net, so doing the irreversible thing without one would answer a different question. It is a flag rather than always-on for the one case that would otherwise be trapped — a database too broken to dump is exactly the one somebody is restoring over."
     },
     "db_snapshot_delete": {
       "new": true,
@@ -304,11 +305,12 @@
       "kind": "mutation",
       "args": {
         "service": "string",
-        "name": "string"
+        "name": "string",
+        "snapshotFirst": "bool"
       },
       "returns": "string",
       "why": "Puts a named snapshot back, replacing what is in the database.",
-      "notes": "The same restore db_restore performs, so it is audited as `db_restore` with the snapshot's path. NOT_FOUND when the file is gone — the listing is the filesystem, so a snapshot deleted outside the app is simply absent rather than a broken index entry."
+      "notes": "The same restore db_restore performs, so it is audited as `db_restore` with the snapshot's path. NOT_FOUND when the file is gone — the listing is the filesystem, so a snapshot deleted outside the app is simply absent rather than a broken index entry. `snapshotFirst` is the same net `db_restore` offers and for the same reason: this is the path people actually use, so leaving it off here would have put the safety on the rarer of the two. It is taken AFTER the named snapshot is known to exist — a copy taken and then a failure because the thing being restored was never there is a net for nothing."
     },
     "db_snapshot_take": {
       "new": true,
@@ -556,7 +558,7 @@
       },
       "returns": "string",
       "why": "Every card in the interface carries a help button; this is what the button reads. What a button does is prose somebody will want to correct the day after a release, so the current copy is pulled from the repository (raw.githubusercontent.com, docs/help/<locale>/<topic>.md on main) rather than being as old as the build. Documented in PRIVACY.md: the request names the topic and the locale, which is a fact about what the person was stuck on.",
-      "notes": "Three sources in order: the repository over HTTPS (once per topic per run, 5s timeout), the cache written under the app directory from the last successful pull, and the copy carried by bundle.resources \u2014 so the network decides how current the text is and never decides whether there is text at all, and a failed fetch is silent rather than an error. A 200 whose body does not open with `# ` is refused rather than cached: a captive portal answering with its login page would otherwise replace a good document on exactly the network where the real one cannot be reached. `topic` is matched against `[a-z0-9-]{1,64}` before it touches a path or a URL: it arrives over IPC, and `..` in a topic would read any file on the machine, or fetch any file in the repository, into a web view. An unknown locale reads the English document rather than erroring \u2014 a reader who set a language nobody has written for is better served by a page than by an error about their own settings \u2014 and a topic with no document anywhere is NOT_FOUND naming the topic. Looks in the bundle resource directory first, then the repository's own docs/help, so `tauri dev` and an installed application both find it. The registry of valid topics is src/lib/help.js; tests/help-topics.spec.js fails on a card whose topic it does not know and on a document written in one language and not the other. See src-tauri/src/help.rs."
+      "notes": "Three sources in order: the repository over HTTPS (once per topic per run, 5s timeout), the cache written under the app directory from the last successful pull, and the copy carried by bundle.resources — so the network decides how current the text is and never decides whether there is text at all, and a failed fetch is silent rather than an error. A 200 whose body does not open with `# ` is refused rather than cached: a captive portal answering with its login page would otherwise replace a good document on exactly the network where the real one cannot be reached. `topic` is matched against `[a-z0-9-]{1,64}` before it touches a path or a URL: it arrives over IPC, and `..` in a topic would read any file on the machine, or fetch any file in the repository, into a web view. An unknown locale reads the English document rather than erroring — a reader who set a language nobody has written for is better served by a page than by an error about their own settings — and a topic with no document anywhere is NOT_FOUND naming the topic. Looks in the bundle resource directory first, then the repository's own docs/help, so `tauri dev` and an installed application both find it. The registry of valid topics is src/lib/help.js; tests/help-topics.spec.js fails on a card whose topic it does not know and on a document written in one language and not the other. See src-tauri/src/help.rs."
     },
     "host_stats": {
       "replaces": "GET /api/docker/stats",
@@ -718,13 +720,45 @@
       "notes": "Rust-internal: projects_list uses it to fill `domainConfigured`. Deliberately not wrapped for JS — the list payload already carries the answer, and a second round trip is a way for the two to disagree.",
       "rustInternal": true
     },
+    "ide_debug_status": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "project": "string (project directory name)"
+      },
+      "returns": "{ project: string, port: number, ideKey: string, serverName: string, hostPath: string | null, containerPath: string, listener: { port: number, process: string | null, pid: number | null, unknown: boolean }, targets: Array<{ id: string, label: string, method: 'written' | 'shown', path: string, detected: boolean, exists: boolean, parseable: boolean, installed: boolean, current: boolean, snippet: string }> }",
+      "why": "Every competitor's step-debugging page is the same page — here is the port, here is the host, here is the path mapping, now type them into your IDE — and all five name the path mapping as the usual reason a breakpoint never hits. xdebug_status already computes both halves of that mapping and left them on screen as two strings to copy. This is the read half of filling them in.",
+      "notes": "Reads only. `listener` is the fact that is in no file: who holds the debug port right now, read from the OS's listening-socket table (the same one doctor uses), never by connecting — a connection to a DBGp port is a debug session the IDE would log as one that dropped. `unknown: true` means the table could not be read at all, which is distinct from nothing listening. `method: 'shown'` means this app will not write that IDE's file and offers `snippet` to paste instead; see ide_debug_apply. See src-tauri/src/ide.rs."
+    },
+    "ide_debug_apply": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "project": "string",
+        "target": "string (IDE id: vscode | phpstorm)"
+      },
+      "returns": "string (the file written)",
+      "why": "Writes the debug configuration into the project so the mapping is right the first time rather than after somebody has typed it twice.",
+      "notes": "IMPLEMENTORS: only the one configuration named `Listen for StackVo: <project>` may be written; every other configuration, and any key this code does not know, MUST come back unchanged, and a copy is kept beside the file as `.stackvo-backup` first. The entry is replaced WHERE IT STANDS — the list is the IDE's dropdown and its order is somebody's preference. `pathMappings` is written remote-to-local with `${workspaceFolder}` on the local side, never this machine's absolute path: launch.json is committed. A launch.json with comments in it (which is what VS Code itself creates) is REFUSED rather than rewritten. A target whose `method` is `shown` — PhpStorm, which keeps its configuration in memory and rewrites it on exit — is refused with UNSUPPORTED; there is no way to edit it safely underneath a running IDE. Audited."
+    },
+    "ide_debug_remove": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "project": "string",
+        "target": "string (IDE id)"
+      },
+      "returns": "string (the file written)",
+      "why": "The undo. A tool that writes into somebody's repository and cannot take it back out is one they do not press the first time.",
+      "notes": "Removes only the configuration this app added, by name. An empty `configurations` left behind is left behind — removing the key would be deciding something about a file this app does not own. Removing from a file that has none is not an error."
+    },
     "imports_scan": {
       "new": true,
       "kind": "query",
       "args": {},
       "returns": "Array<{ source: 'xampp' | 'laragon' | 'mamp' | 'valet' | 'sail', path: string, sites: Array<{ name: string, path: string, domain: string | null, bytes: number, partial: boolean, detected: Detected, taken: boolean, services?: string[] }> }>",
       "why": "Competitive review §L. XAMPP has been frozen on PHP 8.2 since 2023 and lost its add-on ecosystem in September 2025; Laragon went commercial in 2025 and was forked. Those are the two largest installed bases in the category and every rival is courting them — EnvKit imports Laragon in bulk, ForgeKit lists six sources. StackVo could read neither.",
-      "notes": "Reads only, and works with no workspace selected. `taken` says a directory of that name is already under projects/, so the list can say so before anything is clicked. `bytes` is measured because importing copies, and a size caps out at 20,000 entries with `partial: true` rather than walking a node_modules to the last byte on a page that lists eleven sites. XAMPP's own dashboard directories are excluded. Laragon's per-site vhost supplies `domain`; XAMPP serves by path and has no name to read, so it is null and adoption asks. See src-tauri/src/imports.rs. Five tools, in three shapes. XAMPP, Laragon and MAMP keep one directory of sites. Valet keeps none — it PARKS directories (every child is a site) and LINKS individual ones as symlinks — so it is read from its own config.json, tld included. Sail is not an installation at all: it is a composer package inside a project, identified by a docker-compose.yml that names laravel/sail, which is why it never appears in this scan and is reachable only through imports_scan_at. `services` is populated for Sail alone, from the compose file's own service list mapped onto this app's catalogue (pgsql→postgres, mongodb→mongo); a service with no counterpart is left out rather than substituted, and every other source leaves the field empty because their sites do not state what they need."
+      "notes": "Reads only, and works with no workspace selected. `taken` says a directory of that name is already under projects/, so the list can say so before anything is clicked. `bytes` is measured because importing copies, and a size caps out at 20,000 entries with `partial: true` rather than walking a node_modules to the last byte on a page that lists eleven sites. XAMPP's own dashboard directories are excluded. Laragon's per-site vhost supplies `domain`; XAMPP serves by path and has no name to read, so it is null and adoption asks. See src-tauri/src/imports.rs. Seven tools, in four shapes. XAMPP, Laragon and MAMP keep one directory of sites. Valet keeps none — it PARKS directories (every child is a site) and LINKS individual ones as symlinks — so it is read from its own config.json, tld included. Sail is not an installation at all: it is a composer package inside a project, identified by a docker-compose.yml that names laravel/sail, which is why it never appears in this scan and is reachable only through imports_scan_at. Herd is VALET'S SHAPE with another root (~/Library/Application Support/Herd/config/valet) and goes through Valet's reader rather than a second one; two things are Herd's own and both are read — ~/Herd is parked whether or not the config says so, and the site's PHP version is pinned in the socket its nginx config points fastcgi_pass at, which makes Herd the only source whose sites arrive with a version somebody CHOSE. DDEV is the fourth shape: a registry (~/.ddev, read by the leaf key `approot` so it survives the file being reorganised) plus a declarative .ddev/config.yaml per project. That file is why DDEV is worth the most of the seven — every other source makes this app infer the PHP version, the document root and the web server from the code, and DDEV's file DECLARES them along with the database engine. The declaration wins over detection and only where it speaks, gated on the detected runtime so a php_version cannot be laid over a project detection called Node (W-02); the config's own commented template (`# php_version: \"8.4\"`, no space after the hash) is skipped, because taking the first line that mentions a key would read the example instead of the answer on every DDEV project there is. `services` is populated for Sail alone, from the compose file's own service list mapped onto this app's catalogue (pgsql→postgres, mongodb→mongo); a service with no counterpart is left out rather than substituted, and every other source leaves the field empty because their sites do not state what they need."
     },
     "imports_scan_at": {
       "new": true,
@@ -735,7 +769,7 @@
       },
       "returns": "Install | null",
       "why": "The same, for an installation somewhere this app did not think to look — the well-known paths are installer defaults and people move things.",
-      "notes": "null when the directory holds no htdocs (XAMPP) or www (Laragon), which is the honest answer for 'that is not one of those'. INVALID_INPUT for a source name that is not xampp or laragon. MUST accept every source imports.rs can read. It accepted two of the five, so somebody whose MAMP was not in /Applications — or who wanted a Valet or Sail project, neither of which a scan can find — was told the tool was not one this app can read. For Sail the path may be the project OR a directory holding several: both are what somebody means by pointing at it."
+      "notes": "null when the directory holds no htdocs (XAMPP) or www (Laragon), which is the honest answer for 'that is not one of those'. INVALID_INPUT for a source name that is not one of the seven. MUST accept every source imports.rs can read — `Source::from_id` and the scan both walk one list (`imports::ALL`) rather than each keeping a copy, and `foreign_import.rs` holds the front end's own list against it in both directions. It accepted two of the five, so somebody whose MAMP was not in /Applications — or who wanted a Valet or Sail project, neither of which a scan can find — was told the tool was not one this app can read. For Sail the path may be the project OR a directory holding several: both are what somebody means by pointing at it."
     },
     "imports_take": {
       "new": true,
@@ -909,9 +943,9 @@
       "new": true,
       "kind": "query",
       "args": {},
-      "returns": "Array<{ tag: string, label: string, path: string, strings: number, broken: string | null }>",
-      "why": "The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why M-7 sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was.",
-      "notes": "A pack that does not parse is LISTED WITH ITS ERROR rather than skipped — a hand-edited file with a trailing comma that simply vanishes from the picker is the worst failure this could have. A pack names itself through `language.label`, because this app cannot hold a name for a language it has never heard of. The tag is validated as a BCP 47 language rather than accepted, because it becomes a file name in a directory this app writes into. M-7. Adding a language stops being a code change: a pack is one JSON file in the app's config directory with the same shape as the shipped catalogue. The front end merges it over English and registers it, so an untranslated screen is in English rather than showing raw keys, and vue-i18n's per-key fallback makes a partial pack a working pack — which is what makes starting one possible at all. NO machine translation and no seeding a new pack with English silently relabelled: a missing string that falls back to English is honest, a fabricated one is a sentence somebody has to find and disbelieve."
+      "returns": "Array<{ tag: string, label: string, path: string, strings: number, broken: string | null, direction?: 'rtl' | 'ltr' }>",
+      "why": "The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why M-7 sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was. The progress figure counted the strings a pack HELD, and the seed is the whole English catalogue — so an untouched pack read `2000 of 2000 (100%)` the moment it was created. It counts what differs from English now.",
+      "notes": "A pack that does not parse is LISTED WITH ITS ERROR rather than skipped — a hand-edited file with a trailing comma that simply vanishes from the picker is the worst failure this could have. A pack names itself through `language.label`, because this app cannot hold a name for a language it has never heard of. The tag is validated as a BCP 47 language rather than accepted, because it becomes a file name in a directory this app writes into. M-7. Adding a language stops being a code change: a pack is one JSON file in the app's config directory with the same shape as the shipped catalogue. The front end merges it over English and registers it, so an untranslated screen is in English rather than showing raw keys, and vue-i18n's per-key fallback makes a partial pack a working pack — which is what makes starting one possible at all. NO machine translation and no seeding a new pack with English silently relabelled: a missing string that falls back to English is honest, a fabricated one is a sentence somebody has to find and disbelieve. `direction` is how a pack states which way its language reads, and it is the one key whose absence was invisible: layout direction was a single appearance switch applied to every locale at once — right for the two languages shipped here, both left to right, and wrong the moment a pack is Arabic or Farsi. Two of the five languages the nearest competitor ships are right-to-left; before this, such a pack rendered left to right until its reader found a switch in Settings that then mirrored English as well. A pack that states it wins for its own locale, because direction is a FACT about a language and the switch is a PREFERENCE — the preference still decides for every locale that has not stated one. Anything other than the two words reads as absent rather than as an error: a pack is a hand-edited file, and one typo in one optional key should cost the direction, not the language. `locale_pack_write`'s seed carries `\"direction\": \"ltr\"` for the same reason a translator cannot ask for a key they have never seen."
     },
     "locale_pack_read": {
       "new": true,
@@ -1385,11 +1419,12 @@
       "kind": "mutation",
       "args": {
         "name": "string",
-        "mode": "'debug'|'profile'"
+        "mode": "'debug'|'profile'|'trace'|'coverage'",
+        "develop": "boolean? — omit to leave it as it was"
       },
       "returns": "ProfilerStatus",
       "emits": ["xdebug:changed"],
-      "notes": "Stored in `projects/<name>/.stackvo/xdebug.json`, beside php.ini and devserver.json, for the same two reasons: the manifest schema is additionalProperties:false, and a file under .stackvo/ travels with a clone. On/off stays in `php.extensions`, because that is what compiles the extension in. Switching to `profile` writes `generated/xdebug/<name>.ini` and mounts it read-only at /usr/local/etc/php/conf.d/zzz-stackvo-xdebug.ini. **Why an ini and not the environment**: measured against a running container, XDEBUG_CONFIG does carry `output_dir` and `start_with_request` — both took effect — but it silently ignores `use_compression`, and Xdebug 3.4 gzips by default. One compressed file is the difference between a profile view and a parse error. `zzz-` rather than `zz-` because zz-stackvo.ini is the USER's php.ini from php_ini_set; a name sorting before it would let a hand-written xdebug.output_dir send profiles somewhere this app cannot read, which presents as profiling that produced nothing. The mode itself stays in XDEBUG_MODE and is deliberately absent from the ini: the environment variable takes precedence over xdebug.mode, so setting both invites them to disagree."
+      "notes": "`coverage` is the fourth mode and the only one that records nothing of its own: it switches on the API PHPUnit calls, and the report is written by PHPUnit. So `profiles` and `traces` stay empty for it and a screen MUST NOT offer a recording list. `develop` is NOT a fifth mode — `xdebug.mode` is a list, and `develop` is what makes var_dump readable and puts a stack trace on a warning, so it rides alongside whichever mode is set and XDEBUG_MODE becomes e.g. `debug,develop`. Omitting the argument leaves it as it was, because the mode picker and the develop switch are two controls over one file and a picker that cleared the other every time would be a setting nobody could keep. Stored in `projects/<name>/.stackvo/xdebug.json`, beside php.ini and devserver.json, for the same two reasons: the manifest schema is additionalProperties:false, and a file under .stackvo/ travels with a clone. On/off stays in `php.extensions`, because that is what compiles the extension in. Switching to `profile` writes `generated/xdebug/<name>.ini` and mounts it read-only at /usr/local/etc/php/conf.d/zzz-stackvo-xdebug.ini. **Why an ini and not the environment**: measured against a running container, XDEBUG_CONFIG does carry `output_dir` and `start_with_request` — both took effect — but it silently ignores `use_compression`, and Xdebug 3.4 gzips by default. One compressed file is the difference between a profile view and a parse error. `zzz-` rather than `zz-` because zz-stackvo.ini is the USER's php.ini from php_ini_set; a name sorting before it would let a hand-written xdebug.output_dir send profiles somewhere this app cannot read, which presents as profiling that produced nothing. The mode itself stays in XDEBUG_MODE and is deliberately absent from the ini: the environment variable takes precedence over xdebug.mode, so setting both invites them to disagree."
     },
     "profiler_status": {
       "new": true,
@@ -1413,6 +1448,25 @@
       "emits": ["project:creating", "project:created", "project:error"],
       "why": "Writes stackvo.json for a directory that is already there, then regenerates. The counterpart of project_create, which requires the directory to be absent.",
       "notes": "Refuses when a manifest already exists — adopting a managed project would silently overwrite settings the user chose. The spec is validated against project.schema.json exactly as project_create's is; detection fills the form, it does not bypass the check. `overrides` sit on top of detection rather than replacing it, one value at a time: detection reads the code and can say \"this is Laravel, its document root is public\", but it has no way to know the user wanted `shop.loc`, and the three PHP fields are the scaffolding gap — a composer.json states the version the framework NEEDS (`\"php\": \"^8.3\"`), which read as an answer pins a new Laravel to the floor of its own range, nothing in a checkout names a web server, and detection has no opinion about extensions at all, so an adopted project took the generator's seven-entry fallback. The PHP three apply only when the detected spec has a `php` block, so a Node template cannot pick up a second runtime block (W-02). Passing a full spec still bypasses detection entirely; passing overrides does not. Also writes the project's hosts entry and extends the certificate — see project_create."
+    },
+    "project_adopt_many": {
+      "new": true,
+      "kind": "operation",
+      "args": {
+        "names": "string[] — folder names under the project directory"
+      },
+      "returns": "AdoptBatch",
+      "emits": [
+        "project:creating",
+        "project:created",
+        "project:error",
+        "generate:start",
+        "generate:progress",
+        "generate:done",
+        "hosts:changed"
+      ],
+      "why": "The project directory IS what Herd and Valet call a park, and `project_adoptable` already reads every child of it and says what each one is — but the list offered one button per row, so a machine with eleven unmanaged checkouts needed eleven clicks. On the checkout project_adoptable was written against, 11 of 21 directories were in that state.",
+      "notes": "Not a loop over project_adopt, and the difference is measurable in three places. `generate` rewrites the WHOLE `projects` scope under one global lock, so n adoptions as n calls cost n full passes over n projects, serialised — here every manifest is written first and the generator runs once. `sync_project_host` raises the system authentication dialog when a name is missing from /etc/hosts; its own comment argues that three subdomains must not ask three times, and eleven projects asking eleven times is that argument one level up, so the hosts write moved into a helper that takes every name at once. And a loop that stops on the first error leaves \"some of them worked\": every folder gets an outcome here. `skipped` is not `failed` — a folder that already carries a stackvo.json (the list can be a minute old) and a folder holding nothing but dotfiles are both ordinary. An unsafe name, a spec that does not validate or a manifest that cannot be written fails that folder alone. If the GENERATOR fails, every manifest this call wrote is removed and the call returns the error: the state it would otherwise leave — n projects listed and none generated — is exactly what project_register had to be invented to repair, and somebody who pressed one button should not have to know that. Names are deduplicated first, or the same name twice would take the same in-flight guard twice and the batch would report itself busy. Errors: INVALID_INPUT when the list is empty."
     },
     "project_adoptable": {
       "new": true,
@@ -1583,6 +1637,16 @@
       "returns": "HookPlan[] — one per event, in lifecycle order",
       "why": "B-3. A hook is a command from a repository somebody cloned, so what would run has to be readable before it does."
     },
+    "project_sidecars": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string"
+      },
+      "returns": "DeclaredSidecar[] — one per declared container, in the order the manifest lists them",
+      "why": "ADR 0023 let a repository declare a container of its own, and ADR 0027 answers 'can I have Ollama or Qdrant' with 'write a sidecars block'. Both were true and neither was reachable: the block was parsed, validated and rendered into the project's compose file, and NOTHING showed it. `hooks` — the sibling block, from the same manifest — has had a pane since it was written. So the answer an ADR points at was a feature nobody could find, which is the same as not having it.",
+      "notes": "Reads the manifest and nothing else; a project with no `sidecars` key answers with an empty list rather than an error, because declaring none is the ordinary case. The two derived names are the whole reason this is a command rather than a field the view reads off the manifest it already has: `container` is what the application connects to (`stackvo-<project>-<id>`) and `volume` is what `docker volume` calls the state, and both are derived by `sidecar::container_name` / `sidecar::volume_name`. Deriving them in JavaScript would be a second copy of a naming rule whose whole purpose is that two clones of one repository cannot collide. Nothing here reaches the host: a sidecar has no host port and no host path by construction (project.schema.json), so there is no address to report and the reply says so by not carrying one."
+    },
     "project_hooks_approve": {
       "new": true,
       "kind": "mutation",
@@ -1747,6 +1811,77 @@
       "returns": "OperationId",
       "why": "project_adopt refuses a directory that already has a stackvo.json, and refuses correctly — it must not overwrite settings somebody chose. But that was only half an answer: the compose files, the hosts entry and the certificate had not happened either, and nothing else did them. The manifest watcher reports a change and regenerates nothing, on purpose.",
       "notes": "The other half. Reads and schema-checks the manifest that is already there, generates, syncs the hosts entry and the certificate, and writes nothing back — a committed manifest is the team's answer, and the Manifest tab is where it changes. Refuses when there is no stackvo.json, because that is adoption's job. Fixes the manual case too: a repository cloned into projects/ by hand with its manifest committed was skipped by project_adoptable and rejected by project_adopt, so it never came online at all."
+    },
+    "project_providers": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string"
+      },
+      "returns": "ProviderSet",
+      "why": "A-1, and the largest gap the competitor review found: DDEV ships `ddev pull`/`ddev push` with recipes for Upsun, Acquia, Lagoon and Pantheon, Lando and Herd have their own, and the concept did not exist here at all — `grep -rn 'fn pull|pull_db|remote_db|rsync' src-tauri/src` returned nothing.",
+      "notes": "Both directions of every recipe, PLANNED, before anything is spawned — the review-then-apply shape this app uses for every act it cannot take back, and it matters more here than in most: the reader is about to hand somebody else's command their production credentials, and \"it ran and something happened\" is not reviewable afterwards. A direction a provider does not offer is returned NAMED rather than omitted, so a card showing one button for one recipe and two for another does not leave its reader guessing whether the recipe is short or the app is broken. Secrets appear BY NAME and never as values — the plan travels to a web view. Problems travel beside the plans rather than replacing them: three good recipes and one typo is three buttons and one sentence, not an error page."
+    },
+    "provider_consent": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "provider": "string",
+        "direction": "'pull' | 'push'",
+        "granted": "bool"
+      },
+      "returns": "void",
+      "why": "A provider command is declared by a repository and reaches the network with the developer's credentials. That is hooks.rs's threat model word for word, so this borrows its answer: consent is per project, keyed on a digest of what would run.",
+      "notes": "PER DIRECTION, and its own file rather than hooks': agreeing to run `composer install` in a container is not agreeing to send a database to production, and a single record would have made the second free once the first was given. The digest is RE-DERIVED here rather than taken from the caller — a digest that travelled to JavaScript and back is one the front end could have sent for a different command than the one on screen, and this is the exact approval standing between a cloned repository and somebody's credentials. It covers the image, every word of the command, the plain environment, the secret names and the direction, so editing any of them asks again; `about` is prose and is deliberately outside it, because rewording a description should not withdraw an approval. Audited as `provider_consent`."
+    },
+    "provider_secret_set": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "provider": "string",
+        "key": "string",
+        "value": "string — empty clears it"
+      },
+      "returns": "void",
+      "why": "A recipe names what it needs and never carries it. The manifest is committed.",
+      "notes": "Into the OS keystore (ADR 0010), scoped per project AND per provider: two projects both wanting `SSH_KEY` are two different credentials, and a shared entry would hand one team's key to another project's recipe. Audited by NAME — there is nowhere in the record to put a value. DDEV mounts the developer's ssh agent into the container that runs the pull; that is coherent for a tool with curated recipes and wrong here, because a repository-declared container gets no host path (ADR 0023) and an ssh agent is a host path that signs things."
+    },
+    "provider_run": {
+      "new": true,
+      "kind": "operation",
+      "args": {
+        "name": "string",
+        "provider": "string",
+        "direction": "'pull' | 'push'",
+        "service": "string — the database instance",
+        "snapshotFirst": "bool — pull only"
+      },
+      "returns": "OperationId",
+      "emits": ["db:start", "db:progress", "db:done", "db:error"],
+      "why": "The verb. Everything else in this group decides whether it may happen.",
+      "notes": "A pull does NOT import anything itself: it produces a file and hands it to db_restore, which takes a copy of what it is about to replace — so pulling staging over the wrong database is recoverable for the same reason restoring the wrong file is, and reusing that path rather than writing a second importer is what makes that true rather than claimed. A push does not dump anything itself either; db::dump writes the file the recipe sends. The plan is MADE AGAIN here rather than taken from the caller: the screen that offered the button may be minutes old, and an approval revoked in between must not still be spendable. Secrets are read out of the keystore once and arrive as `-e NAME` with no value, which tells Docker to copy each one from this process — so no secret is ever an argument, and none of it is in `ps`, a shell history or a crash report. The scratch directory is this application's own, mounted at /stackvo, and is removed whatever happens; what comes back is checked with symlink_metadata and refused unless it is a regular non-empty file, because a container that can write into a mounted directory can write `dump.sql -> /etc/passwd` and turn a data import into an arbitrary host read. An empty dump is refused too: restoring one over a database is the same act as dropping it, and it is the shape a failed remote command leaves behind. ONLY a push is audited — a pull changes this machine and the app is full of things that do. There is deliberately no scheduler: nothing here may push on a timer. Errors: FORBIDDEN when an administrator switched it off, PERMISSION_DENIED for missing consent or a missing secret (naming which), INVALID_INPUT for a direction the recipe does not offer."
+    },
+    "project_devcontainer_plan": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string"
+      },
+      "returns": "DevcontainerPlan",
+      "why": "A-7. The competitor row read \"the generator already renders compose, and .devcontainer/devcontainer.json is a small sibling of it\" — and that was written without reading render_compose_service. What the generator writes is bound to THIS machine in five ways, every one load-bearing: absolute paths under the user's home, a `context:` relative to `generated/`, the shared `stackvo-net`, Traefik labels in a file with no Traefik in it, and the backing services in a different compose file rendered with values pulled from the OS keystore. Copied into a repository it cannot start anywhere. So this is a second rendering of the same manifest, not the first one relabelled.",
+      "notes": "A plan and not a write, because the destination is somebody's repository: `.devcontainer/` exists TO be committed, which is exactly why it should be readable before it is there. Nothing runs from generation either — agentctx writes into the project on every generate and says in the file that `.stackvo/` is not meant to be committed; this is the opposite, and a file that appears in `git status` because somebody pressed Start is a file they learn to `git checkout`. The Dockerfile is the GENERATOR'S own for PHP, not a second renderer — the whole value is that the container is the one StackVo builds, and it needs no adjustment because the PHP image never copies the source. The runtimes are the exception and it is release.rs's asymmetry from the other side: their Dockerfile does `COPY . .`, installs, builds and ends in a CMD, which is a snapshot of the application and the wrong thing to open a terminal in, so they get the toolchain, `sleep infinity`, and the install moved to postCreateCommand where it runs against the mount. Services are rendered from THEIR OWN packages' fragments through the same strict substituter the workspace uses — not a table of image names written here, because ADR 0011 is that this application carries no service definitions, and because the mapping from `settings.ROOT_PASSWORD` to MYSQL_ROOT_PASSWORD exists only in that package's template (a compose file that starts mysql with no root password does not start). Six variables are answered differently and they are exactly the ones that name this machine: `file.*` becomes a relative path, `instance.logs` a named volume, secret settings a `${DEV_…}` placeholder, `network` the implicit `default`, `instance.domain` localhost, and `port.*` keeps the host number this workspace allocated — deliberately, because it is the one already in the author's database client. Container names are kept exactly (`stackvo-mysql-8-4`): the project's own .env names those hosts. Traefik labels are stripped, because they name a host that resolves nowhere and would quietly start binding on a team that does run Traefik. A rendered config file holding a placeholder is refused rather than written wrong — `${…}` is expanded by Compose in a compose file and is five literal characters in a my.cnf."
+    },
+    "project_devcontainer_write": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string"
+      },
+      "returns": "string[] — the paths written, relative to the project",
+      "why": "The other half. The plan is what the user reads; this is what puts it in the repository.",
+      "notes": "Re-plans rather than taking the plan back from the caller: a plan that travelled to JavaScript and back is a plan the front end could have edited, and what it names is a path inside a directory this app writes to. Every file every time — these are rendered outputs (ADR 0002), and a hand-edit that survived a regeneration would be a difference between the file and the manifest that nothing reports. A `.gitignore` holding `.env` is written whenever there are placeholders: the whole point of the placeholder is that the value does not travel, and the file the reader is about to create is the file that would undo it. Audited as `project_devcontainer_write`. Errors: NOT_FOUND when the project directory is gone."
     },
     "project_requirements": {
       "new": true,
@@ -2006,6 +2141,88 @@
       },
       "returns": "number (bytes written)",
       "notes": "`docker save` to a tarball — the artefact you hand to something that is not this machine."
+    },
+    "rules_status": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "project": "string? (project directory name; omit for the workspace root)"
+      },
+      "returns": "Array<{ id: string, label: string, scope: 'workspace' | 'global', path: string, exists: boolean, installed: boolean, current: boolean }>",
+      "why": "agents_install makes the MCP tools reachable; it does not make them used. An assistant that has never seen this stack reads the source, guesses at nginx and edits a generated file, because nothing told it stackvo_doctor answers that question in one call. Every rival ships this half — ServBay files 'AI Rule' beside its MCP documentation, EnvKit installs a skill, Lerd writes context files — and this repository had no answer to it. This is the read half: which rules files exist, which carry a StackVo block and which carry an older one.",
+      "notes": "Reads only, and works with no workspace selected — the global rows are about the machine. Six rows, one per FILE rather than per client, because Codex and Zed both read AGENTS.md and two rows writing one path would disagree about whether the rules are installed. `installed` means the file carries the marked block; `current` means that block is this version's wording, which is what distinguishes an update from a fresh install. See src-tauri/src/rules.rs."
+    },
+    "rules_apply": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "target": "string (rules target id: claude | agents | cursor | copilot | windsurf | gemini)",
+        "scope": "'workspace' | 'global'",
+        "project": "string? (project directory name; omit for the workspace root)"
+      },
+      "returns": "string (the file written)",
+      "why": "The write half of rules_status. Puts the guidance an assistant needs — which tool answers which question, that generated files are overwritten, that a writing tool can stop the whole stack — into the file that assistant already reads.",
+      "notes": "IMPLEMENTORS: only the region between `<!-- stackvo:rules:begin -->` and `<!-- stackvo:rules:end -->` may be written. Everything else in the file MUST come back byte for byte — this is the user's own CLAUDE.md — and a file with no markers is APPENDED to, never replaced. A copy is kept beside it as `.stackvo-backup` first. Front matter (Cursor's `alwaysApply`, VS Code's `applyTo`) is written only when the file is created, because a user who narrowed it meant that. Audited: this writes instructions into a file the user owns and usually commits. A `project` that is not a directory under the projects root is refused rather than joined."
+    },
+    "rules_remove": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "target": "string (rules target id)",
+        "scope": "'workspace' | 'global'",
+        "project": "string? (project directory name; omit for the workspace root)"
+      },
+      "returns": "string (the file written)",
+      "why": "The undo. A feature that writes into somebody's repository and cannot take it back out again is one they do not press the first time.",
+      "notes": "Removes the marked region and nothing else; the file itself stays, even when the block was all it held — it is the user's file and may hold nothing else only by coincidence. Removing from a file that has no block is not an error."
+    },
+    "tooling_status": {
+      "new": true,
+      "kind": "query",
+      "args": {},
+      "returns": "{ binDir: string?, onPath: boolean, currentShell: string?, own: Array<{ id: string, about: string, built: string?, linked: string? }>, shells: Array<{ id: string, label: string, path: string?, exists: boolean, installed: boolean, current: boolean, line: string? }>, tools: Array<{ id: string, label: string, program: string, why: string, source: 'managed' | 'system' | 'missing', version: string?, path: string?, offers: string?, publisher: string?, availableHere: boolean }> }",
+      "why": "Every rival ships a Tooling page — Yerd's installs composer, node, bun, the Laravel installer and wp-cli onto the host and shims them onto PATH. Half of that page has no place here and half of it was missing entirely. The half with no place: those five run in the project's container at the version the project declared, and a host copy would be a second answer to \"which composer runs\" whose answer is wrong. The half that was missing: `stackvo` and `stackvo-mcp` are programs this repository builds, the README documents them, agents_install registers one of them with six assistants — and nothing put either where a shell would find it. This reads that state: the directory, the links in it, the four shells' startup files, and the four HOST tools this app itself shells out to.",
+      "notes": "Reads only, and answers with NO WORKSPACE selected — putting a command on PATH is something done before a folder is chosen, so a pane that needed one would be unreachable from the state it fixes. `source` distinguishes a copy this app installed (`managed`, in binDir) from the user's own (`system`, elsewhere on PATH); a program that is on PATH but will not run is reported `missing`, because a dangling symlink and a half-deleted install both leave a file behind. `current` on a shell row means the block in that file names *this* build's directory — which is what separates \"already done\" from \"done when the data directory was somewhere else\". `built` is null when the CLI has not been compiled: neither binary is bundled with the app (see Cargo.toml), so the pane offers the build command instead of a button that would link nothing. See src-tauri/src/tooling.rs."
+    },
+    "tooling_path_apply": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "shell": "'zsh' | 'bash' | 'fish' | 'powershell'"
+      },
+      "returns": "string (the startup file written)",
+      "why": "The `yerd path install` half, which this app had no equivalent of. Links `stackvo` and `stackvo-mcp` into the directory the app owns and writes one line into one shell's startup file.",
+      "notes": "IMPLEMENTORS: only the region between `# stackvo:path:begin` and `# stackvo:path:end` may be written; everything else in the file MUST come back byte for byte, and a file with no markers is APPENDED to, never prepended — the lines above ours are the ones the user put there deliberately. A copy is kept beside it as `.stackvo-backup` first. The directory goes FIRST on PATH, so a managed tool wins over a half-removed system one. Both halves run together: a PATH entry pointing at an empty directory is the version where `stackvo` still says \"command not found\". The linking half is best-effort — a checkout with no build of the CLI still gets its PATH entry. A startup file larger than 1 MiB is refused rather than rewritten (FORBIDDEN), with the line to paste in the hint. Audited as `tooling_path_apply`. macOS bash reads `.bash_profile` and Linux bash reads `.bashrc`; one file per shell, never both."
+    },
+    "tooling_path_remove": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "shell": "'zsh' | 'bash' | 'fish' | 'powershell'"
+      },
+      "returns": "string (the startup file written)",
+      "why": "The undo. A feature that edits somebody's .zshrc and cannot take it back out is one they do not press the first time.",
+      "notes": "Removes the marked region and nothing else. The links in binDir STAY: somebody who removes the PATH entry has said where they want `stackvo` looked up from, not that they want it deleted — and agents_install may by then have written that path into six assistants' configuration files. Removing from a file that has no block, or no file at all, is not an error."
+    },
+    "tooling_install": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "tool": "string (host tool id — only `mkcert` has a download today)"
+      },
+      "returns": "string (the installed file)",
+      "why": "mkcert is a host requirement this app could report and never obtain: without it the stack runs and every browser warns. It is one static binary its author publishes, which makes it the one tool in the catalogue where fetching is the right answer rather than a second copy of `docker pull`.",
+      "notes": "IMPLEMENTORS: the SHA-256 is compiled into the build, one per platform, and is NOT fetched. A checksum served beside the file it describes is not a check — whoever can replace one can replace the other. Nothing is written until the digest matches; a mismatch is FORBIDDEN and MUST NOT be offered as a retry. The file is written beside its target and renamed, because a half-written executable on PATH is worse than none. 0755 on unix. Over 64 MiB is abandoned mid-download. There is deliberately no update verb: an idempotent install that follows upstream is how a pinned digest stops being a pin. UNSUPPORTED for a tool with no download, or a platform the publisher has no build for. Audited as `tooling_install`."
+    },
+    "tooling_remove": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "tool": "string (host tool id)"
+      },
+      "returns": "string (the removed file)",
+      "why": "The undo for tooling_install.",
+      "notes": "Removes only the copy in binDir. A system copy — Homebrew's, the distribution's — is never touched, which is the whole distinction `source` reports. NOT_FOUND when this app did not install one."
     },
     "secret_move": {
       "new": true,
@@ -2388,6 +2605,107 @@
       "why": "M-11. Testing a payment flow means Stripe reaching the application, and shop.loc does not exist on the internet.",
       "notes": "`signingSecret` and `failure` are read from the container's log on every call rather than cached, so an app restart or a crashed listener stays truthful. `hasKey` is a boolean and there is no command that reads a key back — the pane can replace it or clear it and never display it. MEASURED with examples/stripe_probe.rs against the real image and a deliberately invalid key: the image runs, the arguments are accepted, and the CLI's 401 comes back through the log reader. NOT measured, and stated rather than implied: that a real event reaches the application, which needs an account. `stripe listen` opens an OUTBOUND connection, so nothing has to be reachable from the internet — which is why this is not the tunnel with a different label: a quick tunnel's URL changes on every start, so the endpoint has to be re-registered in the dashboard each time and the signing secret changes with it. The API key is kept in the OS keystore by secrets.rs, one entry per project (two accounts must not share one, or one account's events are forwarded into the other's application, which looks like it is working). It reaches the container through `-e STRIPE_API_KEY` and never as an argument: argv is visible in `docker inspect`, in the host process list and in this app's own operation console, which streams the command it ran. The sidecar deliberately does NOT use `--rm`, unlike the tunnel's: an invalid key makes the CLI print its complaint and exit, and a removed container takes the log with it — so the pane showed no listener, no error and no reason for the single most likely failure this feature has. Found by examples/stripe_probe.rs, which also caught itself reporting success on Docker's own \"No such container\" message."
     },
+    "spx_status": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string (project)"
+      },
+      "returns": "{ supported: boolean, enabled: boolean, built: boolean, phpVersion?: string, image?: string, active: boolean | null, running: boolean, controlUrl?: string, xdebugConflict: boolean, reports: Array<{ key: string, recordedAt: number, cli: boolean, request?: string, command?: string, wallTimeUs: number, peakMemory: number, callCount: number, bytes: number }>, bytes: number, directory: string }",
+      "why": "php-spx samples, so it can be left on during a real page load where Xdebug's profiler costs several times the request \\u2014 the case Xdebug's profiler cannot cover, and the one Herd and Lerd both ship. The extension is NOT in contracts/php-extensions.json and cannot be: SPX is not on PECL, and the contract's `special` install method is documented as v1-MUST-REJECT. So it never enters the manifest, the Dockerfile or that contract; it is built into a directory this app owns and mounted, the way the debug bridge is.",
+      "notes": "Reads only. `built` is per PHP VERSION, not per project \\u2014 the artefact is a function of the interpreter, so two projects on 8.4 share one build. `active` asks the running container whether the mount is there, which is a different question from `enabled`: mounts are fixed when a container is created. `wallTimeUs` is MICROSECONDS: php-spx's metadata calls the field `wall_time_ms` and it is not milliseconds — measured, see spx_report. `xdebugConflict` is true when Xdebug is also recording; two profilers hooking one engine is unsupported in both projects and the symptom is wrong numbers rather than an error, so it is reported rather than prevented. See src-tauri/src/spx.rs."
+    },
+    "spx_set": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string (project)",
+        "enabled": "boolean"
+      },
+      "returns": "spx_status",
+      "emits": ["spx:changed"],
+      "why": "The switch. Writes `projects/<name>/.stackvo/spx.json` and re-renders the compose overlay so the reply describes something that is already true.",
+      "notes": "IMPLEMENTORS: switching on without a build MUST be refused rather than stored. An overlay that mounted an empty directory over the extension path stops PHP starting at all, which is a far worse failure than a button that says no. The mount reaches an already-running container only when it is recreated, which `active` reports."
+    },
+    "spx_build": {
+      "new": true,
+      "kind": "operation",
+      "args": {
+        "name": "string (project)"
+      },
+      "returns": "OperationId",
+      "emits": ["spx:progress", "spx:done"],
+      "why": "An extension has to match the exact PHP version, ABI and thread-safety of the binary that loads it, and SPX is built from source.",
+      "notes": "IMPLEMENTORS: the build runs in a THROWAWAY container of the project's own image (`docker run --rm`), never against the running container \\u2014 that would mean apt-get inside somebody's live php-fpm, which lasts until the next recreate. Output is keyed by PHP version. A failed build MUST clear the copied extension: `built` treats its presence as proof of a usable build, so leaving a half-copied one turns 'try again' into a mount that stops PHP starting. Needs network and a few minutes; it belongs in the operation console."
+    },
+    "spx_delete": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string (project)",
+        "key": "string (report key)"
+      },
+      "returns": "void",
+      "why": "One report is a pair of files and deleting one of them leaves the other unreadable.",
+      "notes": "The key comes back from a screen and ends up in a path. SPX's own keys are alphanumerics, dashes and underscores; anything else MUST be refused rather than resolved."
+    },
+    "spx_options": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string (project)",
+        "samplingPeriod": "number | null (microseconds; 0 records every call)",
+        "builtins": "boolean | null"
+      },
+      "returns": "spx_status",
+      "emits": ["spx:changed"],
+      "why": "php-spx's OWN default sampling period is 0, which means it records every call — a tracing profiler with the cost this feature exists to avoid. StackVo defaults to 100 microseconds so the claim on the pane, the profiler you can leave on, is true; 0 is still the right answer for counting a fast function exactly, so it stays reachable.",
+      "notes": "Separate from spx_set because it is a different decision: the switch says whether the extension is mounted, this says what it does when asked to record. IMPLEMENTORS: these reach a recording THIS APP starts — the cookie on a recorded request, the environment of a recorded command — and they MUST NOT be written into the extension's ini instead. MEASURED in php-spx's PHP_RINIT: the ini source is read only when access was NOT granted, meaning a request carrying no key and therefore not being profiled. A recording always carries one, so `spx.http_profiling_sampling_period` and its siblings are never consulted for it, and a pane wired to them would have had controls that appeared to work and did nothing. A recording started in SPX's own control panel uses that panel's own controls. MUST refuse a period above 1000000: a sampling period longer than a second samples a page load once."
+    },
+    "spx_record_request": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string (project)",
+        "path": "string | null (a path on the site, default \"/\")"
+      },
+      "returns": "one element of spx_status.reports",
+      "why": "Recording used to need a browser: SPX's control panel is the documented way in and its switch is a cookie only a person can set. The same trigger is a plain request header — php-spx's README profiles a page with `curl --cookie \"SPX_ENABLED=1; SPX_KEY=…\"` — so the app can send the request itself. That is what makes profiling reachable from a terminal, and from an assistant that cannot open a browser.",
+      "notes": "IMPLEMENTORS: the HOST is the project's own domain from its manifest and MUST NOT come from the caller. The path MUST be refused unless it starts with a single `/`: a value opening with `//` is a protocol-relative URL and would send the request, with the profiler key on it, to somebody else's host. Redirects MUST NOT be followed — a framework answering `/` with `/login` would otherwise write two reports for one button. The workspace CA is added as a trusted root rather than turning certificate verification off, and the client MUST opt out of the system proxy for the reason mail.rs documents. SPX writes the report during the request's own shutdown and says nothing about it in the response, so the new report is found by diffing the directory — which means one recording of a project at a time, or two races each claim the other's. The HTTP status belongs in the failure message: a 404 is a path that reaches no PHP at all, and 'recorded nothing' on its own sends people looking at the profiler for it."
+    },
+    "spx_record_command": {
+      "new": true,
+      "kind": "operation",
+      "args": {
+        "name": "string (project)",
+        "id": "string (a quick-command id)"
+      },
+      "returns": "OperationId",
+      "emits": ["build:start", "build:progress", "build:success"],
+      "why": "The slow thing is often not a page. A queue worker, a migration or a test suite is where minutes go, and none of them can be profiled from a browser.",
+      "notes": "IMPLEMENTORS: the id is resolved through quickcmd, so the frontend still names an id and never a program — that rule is this feature's whole security model. `SPX_REPORT=full` is NOT optional: php-spx defaults to `full` for a request and to `fp`, a flat profile on stderr, for the command line, so a CLI run without it profiles perfectly and writes no file. Interactive commands MUST be refused: a recording has to finish, and `artisan tinker` ends when a person types exit."
+    },
+    "spx_report": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string (project)",
+        "key": "string (report key)"
+      },
+      "returns": "{ key: string, wallTimeUs: number, callCount: number, functions: number, events: number, truncated: boolean, hotspots: Array<{ function: string, calls: number, exclusiveUs: number, exclusivePercent: number, inclusiveUs: number, inclusivePercent: number }> }",
+      "why": "A report row could say a request took 900ms and nothing about which function held it. That answer is in the trace half of the pair and was readable only in SPX's own web UI — which needs a browser, a key and a person.",
+      "notes": "Reads only. The trace format was established by recording against a real image: `[events]`, one line per call entry and exit carrying CUMULATIVE metric totals, then `[functions]` naming them by index LAST — so time is attributed by the gap between consecutive events to whatever is on top of the stack, and names are applied after the replay. Absolute times are DERIVED from the metadata's own total by share, so they cannot drift from the figure shown beside them in the list — and that total is in MICROSECONDS even though php-spx calls the field `wall_time_ms`. MEASURED against a script written to burn a known 180ms: the metadata said 182837 and the trace's own cumulative total for the same run said 182837191, which is nanoseconds. Rendering the field as milliseconds is wrong by a factor of a thousand and still looks plausible. IMPLEMENTORS: cap the events replayed and the bytes decompressed, and report `truncated` rather than presenting a prefix as the whole run. Inclusive time MUST be added only when the outermost frame of a recursive call leaves, or a function that calls itself counts its inner calls twice."
+    },
+    "spx_clear": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string (project)"
+      },
+      "returns": "{ removed: number, bytes: number }",
+      "why": "Sampling is cheap enough to leave on, which is exactly why the directory fills.",
+      "notes": "Reports only. The built extension is not touched \\u2014 it is per PHP version and shared."
+    },
     "stripe_key_set": {
       "new": true,
       "kind": "mutation",
@@ -2741,6 +3059,14 @@
       "emittedBy": "the fs-watcher on projects/*/stackvo.json",
       "notes": "Debounced 400ms — editors write a file several times per save. The app does NOT regenerate on its own; it offers the action, because rebuilding a container under someone who is mid-edit is worse than the staleness it fixes."
     },
+    "folder:appeared": {
+      "new": true,
+      "payload": {
+        "folder": "string",
+        "path": "string"
+      },
+      "notes": "A directory that was not there when the watch started now is. The project directory is a park, and cloning a repository into it used to be silent — the answer to \"why is my new site not listed\" was \"reopen this dialog\", which is the part a park exists to remove. The watcher was already receiving those events and dropping them: its manifest reader accepts `<projects>/<name>/stackvo.json` and nothing else, which is right for its own question and misses every git clone. Announced on the folder becoming NEW TO THE WATCHER rather than on a timer: a clone writes for as long as the repository takes and every second of it is a create event, so a time window would either repeat the same folder a dozen times or be long enough to miss the next one. A folder that is removed is forgotten, so cloning over the same name announces it again. Decides nothing — the UI refetches, which is the only thing that can tell an adoptable folder from one that arrived with its manifest committed."
+    },
     "hosts:changed": {
       "new": true,
       "payload": {
@@ -2936,6 +3262,18 @@
       "hasFiles": "bool",
       "composeFile": "string?",
       "note": "`has_files` ignores dotfiles: a directory holding nothing but a `.DS_Store` is empty for this purpose, and offering it for adoption as if it had code in it is how a real checkout looked before this was handled. `compose_file` is reported but NOT resolved — resolving costs a `docker compose config` per project, which is not something to spend on a list that loads on every visit; migrate_scan does that for the one the user picks."
+    },
+    "AdoptBatch": {
+      "operationId": "string? — the single generate this batch ran; absent when it had nothing to generate",
+      "adopted": "number",
+      "results": "AdoptOutcome[]"
+    },
+    "AdoptOutcome": {
+      "name": "string",
+      "outcome": "string — `adopted`, `skipped` or `failed`",
+      "code": "string? — `already_managed`, `empty` or `error`",
+      "reason": "string? — why, whenever it is not `adopted`",
+      "note": "`skipped` covers the two ordinary conditions a batch meets and a single adoption does not: a folder that is already managed, and a folder with nothing in it but dotfiles. Colouring either of those red would teach people to ignore the colour. `code` sits beside `reason` rather than instead of it: the two skips are conditions this command decides and the UI has to render in the reader's own language, so they need something stable to switch on, while a failure's reason is an error message from somewhere else with nothing to switch on. Matching the English prose in JavaScript would have turned a sentence somebody could improve into a wire format nobody could see was one."
     },
     "App": {
       "id": "string",
@@ -3152,6 +3490,18 @@
       "evidence": "string[]",
       "note": "`evidence` names the files the answer was read from, and `confidence` says how much to trust it. `guess` means nothing recognisable was there and the fields are defaults the user is expected to correct — presenting that as an answer is the failure this distinction exists to avoid."
     },
+    "DevcontainerFile": {
+      "path": "string — relative to `.devcontainer/`",
+      "contents": "string"
+    },
+    "DevcontainerPlan": {
+      "project": "string",
+      "files": "DevcontainerFile[]",
+      "secrets": "string[] — the `${DEV_…}` names the reader has to fill in",
+      "skipped": "string[] — services or config files that could not be carried, with why",
+      "notes": "string[] — true things a reader would otherwise discover by failing",
+      "note": "`DEV_` is the placeholder prefix and it is chosen, not arbitrary: template.rs lists the eight prefixes the workspace renderer substitutes, and a placeholder starting with STACKVO_ would have been replaced on the way out — silently, with an empty string, leaving a compose file in a repository with no password in it and no error anywhere. A test asserts the prefix is one that renderer leaves alone."
+    },
     "DevServerStatus": {
       "supported": "bool",
       "enabled": "bool",
@@ -3349,6 +3699,21 @@
       "command": "string — display only; nothing parses it back",
       "blocked": "string? — policy-off | policy-host | needs-consent; absent means it runs"
     },
+    "DeclaredSidecar": {
+      "id": "string — the key the manifest gave it",
+      "image": "string — with a tag, always",
+      "about": "string — one line the repository wrote, so a reader knows what the extra container is for",
+      "command": "string[] — argv, empty when the image's own command stands",
+      "env": "Record<string, string>",
+      "volumes": "SidecarVolume[]",
+      "container": "string — `stackvo-<project>-<id>`, the hostname the application connects to",
+      "note": "ADR 0023. A sidecar, NOT a service: it is rendered into this project's own compose block, comes up and goes down with the project's profile, and never enters instances.json. There is no host address beside `container` and that is by construction rather than by omission — project.schema.json refuses a host port and a host path — so the only way in is from inside the project's own network. The two derived names are why this is a command rather than a field read off the manifest the view already has: deriving them in JavaScript would be a second copy of a naming rule whose whole purpose is that two clones of one repository cannot collide."
+    },
+    "SidecarVolume": {
+      "name": "string — the handle the manifest gave it",
+      "path": "string — where it is mounted inside the container",
+      "volume": "string — what `docker volume ls` calls it"
+    },
     "HostStats": {
       "cpu": "CpuStats",
       "memory": "MemoryStats",
@@ -3404,7 +3769,7 @@
       "source": "'xampp' | 'laragon' | 'mamp' | 'valet' | 'sail'",
       "path": "string — the installation root, or for Valet/Sail the directory that was pointed at",
       "sites": "Array<{ name: string, path: string, domain: string | null, bytes: number, partial: boolean, detected: Detected, taken: boolean, services?: string[] }>",
-      "note": "L. `domain` is what the OTHER tool serves the site at, when the other tool says so: Laragon writes a vhost with a ServerName, Valet derives one from its own tld, and a Sail project's .env may carry an APP_URL. XAMPP and MAMP have nothing to read, so it is null and adoption asks. Sail's localhost defaults are treated as no domain rather than imported as one."
+      "note": "L. `domain` is what the OTHER tool serves the site at, when the other tool says so: Laragon writes a vhost with a ServerName, Valet and Herd derive one from their own tld, a DDEV project's config.yaml names it and the machine's project_tld supplies the suffix, and a Sail project's .env may carry an APP_URL. XAMPP and MAMP have nothing to read, so it is null and adoption asks. Sail's localhost defaults are treated as no domain rather than imported as one."
     },
     "InstancePlan": {
       "id": "string — the id this would take",
@@ -3655,7 +4020,8 @@
       "bytes": "number? — what it holds, when the engine can say",
       "onHost": "bool — whether the host still has a copy, which is what an editor indexes",
       "hostFiles": "number? — files in the host copy, counted up to a cap",
-      "note": "I-1. Measured with examples/perf_layer_bench.rs on the machine this shipped from: vendor in a volume is 3.8x on a framework boot and does NOTHING for writes; storage/framework is what buys the writes, at 2.8x. That is why this is a list of directories rather than one 'make it fast' switch — the win depends on which directory moves, and a single switch would be a guess about somebody's project. NOT a synchronising layer: nothing on the host writes these directories, so nothing needs reconciling. A bidirectional sync (Mutagen's job) is deliberately not built here — see src-tauri/src/perf.rs for why a worse copy of it would be a liability rather than a feature."
+      "gain": "{ workload: 'boot'|'write', times: number }? — what moving THIS directory measured; absent when nobody has measured it",
+      "note": "I-1. Measured with examples/perf_layer_bench.rs on the machine this shipped from: vendor in a volume is 3.8x on a framework boot and does NOTHING for writes; storage/framework is what buys the writes, at 2.8x. That is why this is a list of directories rather than one 'make it fast' switch — the win depends on which directory moves, and a single switch would be a guess about somebody's project. `gain` carries that per row and is the only place the figure is stated to a user: it used to be an AVERAGE of the two, in prose, in `perf.explain` in both locale files — which hid the very fact the design rests on, and put a measurement somewhere a translator had to restate it correctly without any way to know it was one. It is absent for bootstrap/cache and node_modules, which are offered and have never been through the bench; a row with no number is a row nobody measured, and lending it a neighbour's figure would be the average all over again. src-tauri/tests/perf_claims.rs holds perf::GAINS against the bench's own recorded output and fails if a locale grows the number back. NOT a synchronising layer: nothing on the host writes these directories, so nothing needs reconciling. A bidirectional sync (Mutagen's job) is deliberately not built here — see src-tauri/src/perf.rs for why a worse copy of it would be a liability rather than a feature."
     },
     "PhpIniStatus": {
       "supported": "bool",
@@ -3816,6 +4182,15 @@
     "ProjectSpec": {
       "$ref": "project.schema.json",
       "note": "The create form's payload IS a project manifest. The old POST body used a flat shape (runtime, version, extensions at top level) that ProjectService then reassembled — and reassembled wrongly for node. v1 sends the manifest itself, so there is nothing to reassemble."
+    },
+    "Provider": {
+      "name": "string",
+      "about": "string?",
+      "image": "string",
+      "pull": "string[] — empty when this direction is not offered",
+      "push": "string[] — empty when this direction is not offered",
+      "env": "Record<string, string>",
+      "secrets": "string[] — names only"
     },
     "PruneReport": {
       "imagesDeleted": "u64",
@@ -4154,6 +4529,22 @@
       "peclVersion": "string?",
       "overlayPath": "string",
       "note": "Three layers, deliberately not collapsed into one boolean. `enabled` is what the manifest asks for; `needsRebuild` is true while the image predates that ask, because extensions are compiled in and a toggle that looked done but changed nothing would be worse than no toggle; `active` is what the running container actually carries, and is null when there is no container to read. `hostPath` and `containerPath` are the two halves of the IDE's path mapping — the mapping is the step people get wrong, and both sides are already known here."
+    },
+    "ProviderSet": {
+      "recipes": "Provider[]",
+      "plans": "ProviderPlan[] — both directions of every recipe",
+      "problems": "{ provider: string, message: string }[] — recipes that could not be read, named"
+    },
+    "ProviderPlan": {
+      "provider": "string",
+      "direction": "'pull' | 'push'",
+      "image": "string",
+      "command": "string[]",
+      "env": "Record<string, string>",
+      "secrets": "string[] — names, never values",
+      "digest": "string — what a consent screen would grant",
+      "blocked": "'policy-off' | 'not-offered' | 'needs-consent' | { missingSecrets: { names: string[] } } | null",
+      "note": "`blocked` is ordered cheapest-refusal-first, and the order is what the reader sees: being told to fill in three secrets for a direction an administrator switched off is three pieces of work for nothing."
     }
   },
   "coverage": {

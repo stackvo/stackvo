@@ -154,6 +154,18 @@ jobs:
 
       - run: npm ci
 
+      # `stackvo` and `stackvo-mcp` ship inside the bundle as `externalBin`, and
+      # `tauri-build` checks the files exist on every cargo build of this
+      # package — `cargo test` below included. Two calls, and the split is not
+      # cosmetic: the check reads the **host** triple, while the bundle needs
+      # the **matrix** one, and on the `x86_64-apple-darwin` row those differ
+      # because that build is a cross-compile from an arm64 runner.
+      - name: Placeholder sidecars for the host, so `cargo test` can build
+        run: node tools/sidecars.mjs --stubs
+
+      - name: Build the sidecars that ship
+        run: node tools/sidecars.mjs --release --target ${{ matrix.target }}
+
       # The contract is compiled into the binary, so a release must not ship
       # one that disagrees with the code.
       - name: Verify the contract surface

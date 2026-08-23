@@ -97,6 +97,13 @@ export async function loadLocalePacks() {
     try {
       const messages = await api.localePackRead(pack.tag);
       i18n.global.setLocaleMessage(pack.tag, deepMerge(base, messages));
+      // `localePackRead` returns an untyped object — the contract cannot say
+      // more about a file somebody hand-edited — so the two words are checked
+      // rather than trusted, here as well as in `locale.rs`. Either side alone
+      // would leave the other free to pass through whatever the file said.
+      const declared = /** @type {Record<string, any>} */ (messages)?.language?.direction;
+      if (declared === 'rtl' || declared === 'ltr') packDirections[pack.tag] = declared;
+      else delete packDirections[pack.tag];
       loaded.push(pack.tag);
     } catch {
       // Listed as broken by the pane that lists it; nothing to add here.
@@ -104,6 +111,34 @@ export async function loadLocalePacks() {
   }
   return loaded;
 }
+
+/**
+ * Which packs declared a writing direction, by tag.
+ *
+ * ## Why a language may overrule the switch
+ *
+ * Layout direction was one global appearance flag applied to every locale at
+ * once. That is right for the two languages this app ships — both left to
+ * right — and the switch beside it exists so somebody can see the mirrored
+ * layout. It is wrong the moment a pack is Arabic or Farsi, which is not a
+ * hypothetical: of the five languages the nearest competitor ships, two are
+ * right-to-left. A translator had no way to say so, so an Arabic pack rendered
+ * left to right until the reader found a switch in Settings — and that switch
+ * then mirrored English too, because it was one flag for everything.
+ *
+ * So the two have different standing rather than fighting. Direction is a
+ * **fact about a language**: Arabic reads right to left whether or not anybody
+ * prefers it. The switch is a **preference**, and it still decides for every
+ * locale that has not stated a fact — the two built-in ones, and any pack whose
+ * author said nothing.
+ *
+ * A plain object rather than a reactive one on purpose: `applyAppearance` reads
+ * it while it is already re-running for another reason, and `setLocale` calls
+ * that function. Nothing here needs to trigger a render of its own, and a
+ * reactive source read inside a non-reactive apply pass is a subscription
+ * nobody asked for.
+ */
+export const packDirections = {};
 
 /** Plain objects merged deeply; anything else in the pack wins outright. */
 function deepMerge(base, over) {

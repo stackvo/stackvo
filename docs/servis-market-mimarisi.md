@@ -1311,7 +1311,9 @@ binary boyutu ölçülüp raporlanıyor (ADR 0011'in ölçülebilir tek getirisi
 temiz kurulum uçtan uca çalışıyor; ağsız temiz kurulum kapıyı gösteriyor ve
 çökmüyor.
 
-### Faz 7 — Uzatma noktaları
+### Faz 7 — Uzatma noktaları · *tek açık faz*
+
+Bu dosyanın kalan işi budur ve `docs/durum.md` §2'de **P** satırı olarak izleniyor — yapılacak işler tek bir dosyada duruyor, ve orası burası değil. Faz 0–6 kapandı.
 
 Kullanıcının kendi paketi (yerel dizin), workspace override (`skeleton.rs`'in
 `materialize`/`revert` deseninin paketlere uygulanması), üçüncü taraf kaynak

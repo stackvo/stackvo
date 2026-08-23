@@ -1877,6 +1877,78 @@ pub fn project_hooks_plan(
         .collect())
 }
 
+/// One container a repository brought with it, with the two names it derives.
+///
+/// The manifest already reaches the front end and this could have been a field
+/// read off it. The derived names are why it is not: `container` is the
+/// hostname the application connects to and `volume` is what `docker volume`
+/// calls the state, and both come from `sidecar::container_name` /
+/// `sidecar::volume_name`. Deriving them in JavaScript would be a second copy
+/// of a naming rule whose whole purpose is that two clones of one repository
+/// cannot collide.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeclaredSidecar {
+    pub id: String,
+    pub image: String,
+    pub about: String,
+    pub command: Vec<String>,
+    pub env: std::collections::BTreeMap<String, String>,
+    pub volumes: Vec<SidecarVolume>,
+    /// `stackvo-<project>-<id>` — what the application connects to.
+    ///
+    /// There is no host address to report beside it, and that is by
+    /// construction rather than by omission: a sidecar has no host port and no
+    /// host path (project.schema.json), so the only way in is from inside the
+    /// project's own network.
+    pub container: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarVolume {
+    /// The handle the manifest gave it.
+    pub name: String,
+    /// Where it is mounted inside the container.
+    pub path: String,
+    /// What `docker volume ls` calls it.
+    pub volume: String,
+}
+
+/// The containers this project's own repository declares (ADR 0023).
+///
+/// A project with no `sidecars` key answers with an empty list rather than an
+/// error: declaring none is the ordinary case, and every project in this
+/// workspace does it.
+#[tauri::command]
+pub fn project_sidecars(state: State<'_, AppState>, name: String) -> Result<Vec<DeclaredSidecar>> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let manifest = manifest::read(&dir.join("stackvo.json"), &name)?;
+
+    Ok(manifest
+        .sidecars
+        .iter()
+        .map(|(id, sidecar)| DeclaredSidecar {
+            container: crate::sidecar::container_name(&name, id),
+            volumes: sidecar
+                .volumes
+                .iter()
+                .map(|volume| SidecarVolume {
+                    volume: crate::sidecar::volume_name(&name, id, &volume.name),
+                    name: volume.name.clone(),
+                    path: volume.path.clone(),
+                })
+                .collect(),
+            id: id.clone(),
+            image: sidecar.image.clone(),
+            about: sidecar.about.clone(),
+            command: sidecar.command.clone(),
+            env: sidecar.env.clone(),
+        })
+        .collect())
+}
+
 /// Agree to this project's host commands, exactly as they are now.
 ///
 /// The digest is sent back by the caller rather than recomputed here, and that
@@ -2901,7 +2973,7 @@ fn core_domains(root: &std::path::Path) -> Vec<String> {
 /// disagreed in the way two definitions of the same thing always do: the
 /// dashboard stopped naming phpMyAdmin and the settings pane went on listing
 /// it, on a machine where it had never run.
-async fn wanted_domains(root: &std::path::Path) -> Vec<String> {
+pub(crate) async fn wanted_domains(root: &std::path::Path) -> Vec<String> {
     let mut wanted: Vec<String> = list_projects(root)
         .await
         .unwrap_or_default()
@@ -3370,14 +3442,71 @@ pub async fn db_dump(
 }
 
 /// Put a file back into a database, replacing what is there.
+///
+/// `snapshot_first` takes a copy of what is about to be replaced. It is the
+/// caller's choice rather than this function's, and it is a choice rather than
+/// a default here for one case: a database too broken to dump is exactly the
+/// one somebody is restoring over, and a net that cannot be lifted would trap
+/// them. The UI offers it checked.
 #[tauri::command]
 pub async fn db_restore(
     app: AppHandle,
     state: State<'_, AppState>,
     service: String,
     path: String,
+    snapshot_first: bool,
 ) -> Result<String> {
+    if snapshot_first {
+        safety_snapshot(&state, &service).await?;
+    }
     db_operation(app, state, service, path, "restore").await
+}
+
+/// Copy what a restore is about to replace, and keep the last few.
+///
+/// **A failure here stops the restore**, and that is the whole of it: the
+/// caller asked for a net, so doing the irreversible thing without one would be
+/// answering a different question than the one they answered. The error names
+/// what failed, and unticking the box is the way past it.
+///
+/// The lock is taken and released here rather than held across the restore.
+/// `db_operation` acquires the same key, so holding it would deadlock against
+/// the operation this exists to protect — and the gap between the two is not a
+/// race worth guarding: the only thing that could slip in is another operation
+/// on the same database, which is the user doing two things at once.
+async fn safety_snapshot(state: &State<'_, AppState>, service: &str) -> Result<()> {
+    let root = state.root()?;
+    let name = crate::snapshot::safety_name(&crate::snapshot::stamp(std::time::SystemTime::now()));
+    let path = crate::snapshot::path_for(&root, service, &name)?;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
+    }
+
+    {
+        let _busy = state.inflight.acquire(format!("db:{service}"))?;
+        crate::db::dump(&root, service, &path, |_| {}).await?;
+    }
+
+    // Pruned here rather than by the scheduler, because the schedule defaults
+    // to Off and a net that only tidies up when a feature nobody switched on
+    // runs is a disk that fills.
+    for stale in crate::snapshot::expired_safety(
+        &crate::snapshot::list(&root),
+        service,
+        crate::snapshot::SAFETY_KEEP,
+    ) {
+        let _ = crate::snapshot::remove(&root, service, &stale);
+    }
+
+    crate::audit::record_with(
+        "db_safety_snapshot",
+        service,
+        crate::audit::Outcome::Ok,
+        Some(name),
+    );
+    Ok(())
 }
 
 // ----------------------------------------------------- snapshots (G-1, G-2)
@@ -3420,18 +3549,28 @@ pub async fn db_snapshot_take(
 }
 
 /// Put one back, replacing what is in the database.
+///
+/// `snapshot_first` is the same net `db_restore` offers and for the same
+/// reason: this is the path people actually use, so leaving it off here would
+/// have put the safety on the rarer of the two.
 #[tauri::command]
 pub async fn db_snapshot_restore(
     app: AppHandle,
     state: State<'_, AppState>,
     service: String,
     name: String,
+    snapshot_first: bool,
 ) -> Result<String> {
     let root = state.root()?;
     let path = checked_snapshot(&root, &service, &name)?;
 
     if !path.is_file() {
         return Err(Error::not_found(format!("snapshot {name}")));
+    }
+    // After the file is known to exist: taking a copy and then failing because
+    // the thing being restored was never there would leave a net for nothing.
+    if snapshot_first {
+        safety_snapshot(&state, &service).await?;
     }
     db_operation(app, state, service, path.display().to_string(), "restore").await
 }
@@ -3449,28 +3588,13 @@ fn checked_snapshot(
     service: &str,
     name: &str,
 ) -> Result<std::path::PathBuf> {
-    // A scheduled snapshot carries the reserved prefix, so it cannot go through
-    // `safe_name` — which refuses that prefix precisely so nobody can create
-    // one. Both spellings are checked for the characters that matter.
-    let checked = if name.starts_with(crate::snapshot::AUTO_PREFIX) {
-        name.strip_prefix(crate::snapshot::AUTO_PREFIX)
-            .filter(|rest| {
-                !rest.is_empty()
-                    && !rest.starts_with('.')
-                    && rest
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-            })
-            .map(|_| name.to_string())
-            .ok_or_else(|| {
-                Error::new(
-                    Code::InvalidInput,
-                    "not a scheduled snapshot name".to_string(),
-                )
-                .with_hint(crate::hints::SNAPSHOT_NAME_CHARSET)
-            })?
-    } else {
-        crate::snapshot::safe_name(name)?
+    // The reserved prefixes cannot go through `safe_name` — it refuses them,
+    // precisely so nobody can create one. This used to check `auto-` here with
+    // its own copy of the character rule, which is how a second reserved prefix
+    // arrives and only one of the two places learns about it.
+    let checked = match crate::snapshot::reserved_checked(name) {
+        Some(checked) => checked?,
+        None => crate::snapshot::safe_name(name)?,
     };
 
     crate::snapshot::path_for(root, service, &checked)
@@ -3655,6 +3779,407 @@ async fn db_operation(
 }
 
 // ------------------------------------------------------------------ xdebug
+
+// --------------------------------------------------------- the IDE half (Xdebug)
+
+/// The three values an IDE needs, who is listening, and each IDE's state.
+///
+/// Read-only, and it is the read half of a pair the way `agents_status` is:
+/// what is on disk in the project, plus the one fact that is not in any file —
+/// whether anything is actually listening on the debug port.
+#[tauri::command]
+pub async fn ide_debug_status(
+    state: State<'_, AppState>,
+    project: String,
+) -> Result<crate::ide::Status> {
+    let root = state.root()?;
+    crate::ide::status(&root, &project).await
+}
+
+/// Write the debug configuration into one IDE's file in the project.
+///
+/// Audited for the same reason `agents_install` is: it writes into a file the
+/// user owns and almost certainly commits.
+#[tauri::command]
+pub fn ide_debug_apply(
+    state: State<'_, AppState>,
+    project: String,
+    target: String,
+) -> Result<String> {
+    let root = state.root()?;
+    let outcome = crate::ide::apply(&root, &project, &target);
+
+    crate::audit::record_with(
+        "ide_debug_apply",
+        &project,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        outcome.as_ref().ok().cloned(),
+    );
+    outcome
+}
+
+/// Take it back out again. The rest of the file stays.
+#[tauri::command]
+pub fn ide_debug_remove(
+    state: State<'_, AppState>,
+    project: String,
+    target: String,
+) -> Result<String> {
+    let root = state.root()?;
+    crate::ide::remove(&root, &project, &target)
+}
+
+// ------------------------------------------------------------------- php-spx
+
+/// Whether SPX is switched on, built, mounted, and what it has recorded.
+#[tauri::command]
+pub async fn spx_status(state: State<'_, AppState>, name: String) -> Result<crate::spx::Status> {
+    let root = state.root()?;
+    crate::spx::status(&root, &name).await
+}
+
+/// Switch it on or off for one project.
+///
+/// Writes the flag and re-renders the overlay, so the reply describes something
+/// that is true rather than something the next compose command will make true.
+/// Switching on without a build is refused rather than stored: an overlay that
+/// mounted an empty directory over the extension path would stop PHP starting
+/// at all, which is a much worse failure than a button that says no.
+#[tauri::command]
+pub async fn spx_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    enabled: bool,
+) -> Result<crate::spx::Status> {
+    let root = state.root()?;
+    let _busy = state.inflight.acquire("spx")?;
+
+    let status = crate::spx::status(&root, &name).await?;
+    if enabled && !status.supported {
+        return Err(Error::new(
+            Code::Unsupported,
+            format!("{name} is not a PHP project"),
+        ));
+    }
+    if enabled && !status.built {
+        return Err(Error::new(
+            Code::NotFound,
+            format!(
+                "php-spx has not been built for PHP {}",
+                status.php_version.as_deref().unwrap_or("?")
+            ),
+        )
+        .with_hint(crate::hints::SPX_NEEDS_BUILDING));
+    }
+
+    // Read-modify-write rather than a fresh document: the same file carries the
+    // sampling period and the built-ins flag, and a switch that reset them
+    // would quietly turn a sampled profiler back into a tracing one.
+    let mut config = crate::spx::read_config(&root, &name);
+    config.enabled = enabled;
+    crate::spx::write_config(&root, &name, &config)?;
+    crate::spx::sync(&root);
+
+    events::emit(
+        &app,
+        "spx:changed",
+        serde_json::json!({ "project": name, "enabled": enabled }),
+    );
+    crate::spx::status(&root, &name).await
+}
+
+/// How much detail a recording carries.
+///
+/// Separate from `spx_set` because it is a different decision: the switch says
+/// whether the extension is mounted at all, and this says what it does when
+/// asked to record. Folding the two together would mean a pane that cannot
+/// change the sampling period without also restating whether the profiler is
+/// on.
+///
+/// These reach a recording **this app** starts — through the cookie on a
+/// recorded request, and through the environment of a recorded command. They do
+/// not reach one started in SPX's own control panel, which has its own controls
+/// for the same two settings; `spx::ini` documents why the extension's ini
+/// cannot carry them.
+#[tauri::command]
+pub async fn spx_options(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    sampling_period: Option<u32>,
+    builtins: Option<bool>,
+) -> Result<crate::spx::Status> {
+    let root = state.root()?;
+    let _busy = state.inflight.acquire("spx")?;
+    workspace::project_dir(&root, &name)?;
+
+    let mut config = crate::spx::read_config(&root, &name);
+    if let Some(period) = sampling_period {
+        // A period longer than a second samples a page load once, which is not
+        // a profile of anything. The ceiling is a guard on a number that comes
+        // from a screen, not a considered maximum.
+        if period > 1_000_000 {
+            return Err(Error::new(
+                Code::InvalidInput,
+                "a sampling period is in microseconds and cannot exceed a second",
+            ));
+        }
+        config.sampling_period = period;
+    }
+    if let Some(wanted) = builtins {
+        config.builtins = wanted;
+    }
+
+    crate::spx::write_config(&root, &name, &config)?;
+    crate::spx::sync(&root);
+
+    events::emit(
+        &app,
+        "spx:changed",
+        serde_json::json!({ "project": name, "enabled": config.enabled }),
+    );
+    crate::spx::status(&root, &name).await
+}
+
+/// Record one request, without a browser.
+///
+/// This is the piece the pane could not do before: SPX's own control panel is
+/// the documented way in, and it needs a person, a browser and a cookie. The
+/// trigger is also a plain request header — php-spx's README profiles a page
+/// with `curl --cookie "SPX_ENABLED=1; SPX_KEY=…"` — so the app can send the
+/// request itself and have the recording appear in the list beside the rest.
+///
+/// The reply is the report that was produced, found by diffing the directory
+/// rather than read out of the response: SPX writes the pair as the request
+/// shuts down and says nothing about it in the response.
+#[tauri::command]
+pub async fn spx_record_request(
+    state: State<'_, AppState>,
+    name: String,
+    path: Option<String>,
+) -> Result<crate::spx::Report> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    // One recording of a project at a time. The new report is found by diffing
+    // the directory, and two recordings racing would each be able to claim the
+    // other's.
+    let _busy = state.inflight.acquire(format!("spx:record:{name}"))?;
+
+    let status = crate::spx::status(&root, &name).await?;
+    if !status.enabled || status.active != Some(true) {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("the profiler is not in {name}'s running container"),
+        )
+        .with_hint(crate::hints::SPX_RECORD_NEEDS_THE_MOUNT));
+    }
+    let domain = status.domain.as_deref().ok_or_else(|| {
+        Error::new(
+            Code::Unsupported,
+            format!("{name} has no address to send a request to"),
+        )
+    })?;
+
+    let url = crate::spx::request_url(domain, path.as_deref().unwrap_or("/"))?;
+    let config = crate::spx::read_config(&root, &name);
+    let profiler_key = crate::spx::key(&root)?;
+
+    // Every key already on disk, so the one this request writes can be told
+    // apart from the twenty a person recorded in the browser this morning.
+    let before: std::collections::HashSet<String> = crate::spx::list(&root, &name)
+        .into_iter()
+        .map(|report| report.key)
+        .collect();
+
+    let code = crate::spx::send(&url, &crate::spx::trigger_cookie(&profiler_key, &config)).await?;
+
+    // The report lands during the request's own shutdown, which can finish
+    // after the response has been flushed. A few tries beats a sleep long
+    // enough to always be right.
+    for attempt in 0..20 {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+        if let Some(fresh) = crate::spx::list(&root, &name)
+            .into_iter()
+            .find(|report| !before.contains(&report.key))
+        {
+            return Ok(fresh);
+        }
+    }
+
+    // The status is in the message because it usually is the explanation: a 404
+    // is a path that reaches no PHP at all, and "recorded nothing" on its own
+    // would send somebody looking at the profiler for it.
+    Err(Error::new(
+        Code::NotFound,
+        format!("{name} answered {code}, and the profiler recorded nothing"),
+    )
+    .with_hint(crate::hints::SPX_RECORDED_NOTHING))
+}
+
+/// Record one of the project's own commands.
+///
+/// The same catalogue the quick-command buttons use, so the frontend still
+/// names an **id** and never a program — see `quickcmd.rs` for why that rule is
+/// the whole security model here. What this adds is the environment: a CLI run
+/// defaults to a flat profile on standard error and writes no file, so
+/// `SPX_REPORT=full` is what makes it a recording.
+#[tauri::command]
+pub async fn spx_record_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    id: String,
+) -> Result<String> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let status = crate::spx::status(&root, &name).await?;
+    if !status.enabled || status.active != Some(true) {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("the profiler is not in {name}'s running container"),
+        )
+        .with_hint(crate::hints::SPX_RECORD_NEEDS_THE_MOUNT));
+    }
+
+    let spec = crate::quickcmd::resolve(&root, &name, &id)?;
+    if spec.interactive {
+        // `artisan tinker` under a profiler is a terminal this app does not own
+        // and a report that is written when the person types `exit`. The other
+        // ten commands in the catalogue are the ones worth profiling.
+        return Err(Error::new(
+            Code::Unsupported,
+            format!("{} is interactive; a recording has to finish", spec.display),
+        ));
+    }
+
+    let container = crate::engine::container_name(&name);
+    let config = crate::spx::read_config(&root, &name);
+    let args = crate::spx::record_argv(&container, &spec.argv, &crate::spx::trigger_env(&config));
+    let operation_id = events::next_operation_id("spx");
+
+    events::emit(
+        &app,
+        "build:start",
+        serde_json::json!({
+            "project": name, "operationId": operation_id, "command": spec.display.clone()
+        }),
+    );
+
+    let handle = app.clone();
+    let subject = name.clone();
+    let op_id = operation_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = runner::run_operation(
+            &events::sink(&handle),
+            runner::Operation {
+                operation_id: &op_id,
+                subject: &subject,
+                progress_event: "build:progress",
+                finished_event: "build:success",
+                program: "docker",
+                args: &args,
+                cwd: &root,
+                env: &[],
+            },
+        )
+        .await;
+    });
+
+    Ok(operation_id)
+}
+
+/// Where one recording spent its time.
+///
+/// Reads the trace half of the pair, which until now only SPX's own web UI
+/// could. The list could say a request took 900 ms and nothing about which
+/// function held it.
+#[tauri::command]
+pub fn spx_report(
+    state: State<'_, AppState>,
+    name: String,
+    key: String,
+) -> Result<crate::spx::Analysis> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    crate::spx::analyse(&root, &name, &key, crate::spx::HOTSPOTS)
+}
+
+/// Build the extension for this project's PHP version.
+///
+/// A throwaway container of the project's own image, so the ABI cannot
+/// disagree with the php-fpm that will load the result — see `spx.rs`. Long
+/// enough to belong in the operation console: it installs a compiler, clones a
+/// repository and runs `make`.
+#[tauri::command]
+pub async fn spx_build(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<String> {
+    let root = state.root()?;
+    let _busy = state.inflight.acquire(format!("project:{name}"))?;
+
+    let file = workspace::project_dir(&root, &name)?.join("stackvo.json");
+    let manifest = crate::manifest::read(&file, &name)?;
+    let php = manifest.php.as_ref().ok_or_else(|| {
+        Error::new(
+            Code::Unsupported,
+            format!(
+                "{name} is a {} project; php-spx is PHP-only",
+                manifest.runtime
+            ),
+        )
+    })?;
+
+    let out = crate::spx::build_dir(&root, &php.version);
+    std::fs::create_dir_all(&out)
+        .map_err(|e| Error::io(format!("creating {}", out.display()), e))?;
+
+    let script = crate::spx::build_script(crate::spx::SOURCE_REF, crate::spx::SOURCE_URL);
+    let args = crate::spx::build_args(&crate::spx::image_name(&name), &out, &script);
+    let operation_id = events::next_operation_id("spx");
+
+    let outcome = runner::run_operation(
+        &events::sink(&app),
+        runner::Operation {
+            operation_id: &operation_id,
+            subject: &name,
+            progress_event: "spx:progress",
+            finished_event: "spx:done",
+            program: "docker",
+            args: &args,
+            cwd: &root,
+            env: &[],
+        },
+    )
+    .await;
+
+    // A build that failed leaves whatever it managed to copy, and `built`
+    // treats an extension's presence as proof of a usable build. Clearing it is
+    // the difference between "try again" and a mount that stops PHP starting.
+    if outcome.is_err() {
+        let _ = std::fs::remove_file(crate::spx::extension_path(&root, &php.version));
+    }
+    outcome.map(|()| operation_id)
+}
+
+/// Delete one recorded profile — both halves of it.
+#[tauri::command]
+pub fn spx_delete(state: State<'_, AppState>, name: String, key: String) -> Result<()> {
+    crate::spx::remove(&state.root()?, &name, &key)
+}
+
+/// Delete every recorded profile for one project.
+#[tauri::command]
+pub fn spx_clear(state: State<'_, AppState>, name: String) -> Result<serde_json::Value> {
+    let (count, bytes) = crate::spx::clear(&state.root()?, &name)?;
+    Ok(serde_json::json!({ "removed": count, "bytes": bytes }))
+}
 
 /// Whether Xdebug is asked for, compiled in, and live — three separate answers.
 #[tauri::command]
@@ -4064,6 +4589,18 @@ pub struct ProfilerStatus {
     /// explain instead of one.
     pub xdebug: xdebug::XdebugStatus,
     pub mode: xdebug::Mode,
+    /// Whether Xdebug's `develop` rides along with that mode.
+    ///
+    /// Beside the mode rather than inside it because `xdebug.mode` is a list
+    /// and `develop` is not an alternative to stepping — it is what makes
+    /// `var_dump` readable and puts a stack trace on a warning, and Herd's own
+    /// documented configuration pairs the two.
+    pub develop: bool,
+    /// What `XDEBUG_MODE` is actually set to — `debug`, or `debug,develop`.
+    ///
+    /// Rendered here rather than in the front end so that the screen and the
+    /// overlay cannot disagree about what was applied.
+    pub mode_value: String,
     /// The header a request needs when profiling is on: Xdebug is left on
     /// `start_with_request=trigger` so an idle stack does not write a
     /// multi-megabyte file per page load.
@@ -4088,10 +4625,14 @@ pub async fn profiler_status(state: State<'_, AppState>, name: String) -> Result
     let profiles = crate::profile::list(&root, &name)?;
     let traces = crate::trace::list(&root, &name)?;
 
+    let config = xdebug::read_config(&root, &name);
+
     Ok(ProfilerStatus {
         bytes: profiles.iter().chain(traces.iter()).map(|p| p.bytes).sum(),
         directory: crate::profile::host_dir(&root, &name).display().to_string(),
-        mode: xdebug::read_mode(&root, &name),
+        mode: config.mode,
+        develop: config.develop,
+        mode_value: xdebug::mode_value(config.mode, config.develop),
         trigger: TRIGGER.to_string(),
         xdebug: xdebug::status(&root, &name).await?,
         profiles,
@@ -4110,6 +4651,7 @@ pub async fn profiler_set_mode(
     state: State<'_, AppState>,
     name: String,
     mode: xdebug::Mode,
+    develop: Option<bool>,
 ) -> Result<ProfilerStatus> {
     let root = state.root()?;
     let dir = workspace::project_dir(&root, &name)?;
@@ -4124,7 +4666,12 @@ pub async fn profiler_set_mode(
         std::fs::create_dir_all(parent)
             .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
     }
-    let text = serde_json::to_string_pretty(&xdebug::ModeConfig { mode })
+    // Absent means "leave it as it was", not "off": the mode picker and the
+    // develop switch are two controls over one file, and a picker that silently
+    // cleared the other one every time it was used would be a setting nobody
+    // could keep.
+    let develop = develop.unwrap_or_else(|| xdebug::read_config(&root, &name).develop);
+    let text = serde_json::to_string_pretty(&xdebug::ModeConfig { mode, develop })
         .map_err(|e| Error::new(Code::IoError, format!("serialising the mode: {e}")))?;
     crate::atomic::write(&path, &format!("{text}\n"))?;
 
@@ -5505,11 +6052,12 @@ pub async fn project_create(
 /// work over a file the user can also fix from the Domains pane, and refusing
 /// the password prompt is a choice, not a failure.
 async fn sync_project_host(app: &AppHandle, manifest: &Manifest) {
-    // Every name this project answers on that a hosts file can carry. One
-    // elevation prompt for all of them rather than one per name: a project with
-    // three tenant subdomains asking three times for the same password is a
-    // project people stop adding subdomains to.
-    let wanted: Vec<String> = manifest
+    sync_hosts_for(app, wanted_hosts(manifest)).await;
+}
+
+/// Every name one project answers on that a hosts file can carry.
+fn wanted_hosts(manifest: &Manifest) -> Vec<String> {
+    manifest
         .domain
         .iter()
         .cloned()
@@ -5521,6 +6069,28 @@ async fn sync_project_host(app: &AppHandle, manifest: &Manifest) {
                 .cloned(),
         )
         .filter(|d| hosts::is_valid_domain(d))
+        .collect()
+}
+
+/// Write whichever of `wanted` the hosts file does not have yet — in one write.
+///
+/// One elevation prompt for all of them rather than one per name: a project
+/// with three tenant subdomains asking three times for the same password is a
+/// project people stop adding subdomains to.
+///
+/// Split out of [`sync_project_host`] for `project_adopt_many`. That comment
+/// was right and its scope was one project too small: adopting twelve folders
+/// as twelve calls asked for the password twelve times, which is the same
+/// mistake one level up. The batch collects every name first and arrives here
+/// once.
+async fn sync_hosts_for(app: &AppHandle, wanted: Vec<String>) {
+    // Deduplicated, because the batch concatenates several projects' names and
+    // two of them may declare the same alias. `hosts::apply` writes what it is
+    // given, so a repeat here is a repeated line in `/etc/hosts`.
+    let mut seen = std::collections::BTreeSet::new();
+    let wanted: Vec<String> = wanted
+        .into_iter()
+        .filter(|d| seen.insert(d.clone()))
         .collect();
 
     let configured = hosts::status_for(&wanted);
@@ -5726,6 +6296,397 @@ pub async fn imports_take(
     Ok(target.display().to_string())
 }
 
+// ------------------------------------------------- fetching and sending data
+
+/// What this project can fetch its data from, and what each would do (A-1).
+///
+/// Both directions of every recipe, planned. A direction a provider does not
+/// offer is returned **named** rather than omitted: a card that silently lists
+/// one button for one provider and two for another is a card whose reader has
+/// to guess whether the recipe is short or the app is broken.
+#[tauri::command]
+pub fn project_providers(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::provider::Providers> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let raw: serde_json::Value = std::fs::read_to_string(dir.join("stackvo.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(serde_json::Value::Null);
+
+    let (recipes, problems) = crate::provider::parse(&raw);
+    let policy = crate::policy::current();
+    let consent = crate::provider::consent_path()
+        .map(|path| crate::provider::read_consent(&path))
+        .unwrap_or_default();
+
+    // The keystore, asked once per name rather than once per plan.
+    let have = |secret: &str| {
+        recipes.iter().any(|recipe| {
+            recipe.secrets.iter().any(|s| s == secret)
+                && crate::secrets::read(&crate::provider::secret_entry(&name, &recipe.name, secret))
+                    .ok()
+                    .flatten()
+                    .is_some()
+        })
+    };
+
+    let mut plans = Vec::new();
+    for recipe in &recipes {
+        for direction in [
+            crate::provider::Direction::Pull,
+            crate::provider::Direction::Push,
+        ] {
+            let allowed = policy.providers().enabled
+                && (direction == crate::provider::Direction::Pull || policy.providers().allow_push);
+            plans.push(crate::provider::plan(
+                &name, recipe, direction, allowed, &consent, &have,
+            ));
+        }
+    }
+
+    Ok(crate::provider::Providers {
+        recipes,
+        plans,
+        problems,
+    })
+}
+
+/// Agree to one recipe, in one direction, on this machine.
+///
+/// The digest is re-derived here rather than taken from the caller. A digest
+/// that travelled to JavaScript and back is a digest the front end could have
+/// sent for a different command than the one on screen, and this is the exact
+/// approval that stands between a cloned repository and somebody's production
+/// credentials.
+#[tauri::command]
+pub fn provider_consent(
+    state: State<'_, AppState>,
+    name: String,
+    provider: String,
+    direction: crate::provider::Direction,
+    granted: bool,
+) -> Result<()> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let raw: serde_json::Value = std::fs::read_to_string(dir.join("stackvo.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(serde_json::Value::Null);
+
+    let (recipes, _) = crate::provider::parse(&raw);
+    let recipe = recipes
+        .iter()
+        .find(|r| r.name == provider)
+        .ok_or_else(|| Error::not_found(format!("provider {provider}")))?;
+
+    let path = crate::provider::consent_path()
+        .ok_or_else(|| Error::new(Code::IoError, "no config directory"))?;
+    let mut consent = crate::provider::read_consent(&path);
+    if granted {
+        consent.grant(
+            &name,
+            &provider,
+            direction,
+            &crate::provider::digest(recipe, direction),
+        );
+    } else {
+        consent.revoke(&name, &provider, direction);
+    }
+    crate::provider::write_consent(&path, &consent)?;
+
+    crate::audit::record_with(
+        "provider_consent",
+        format!("{name}/{provider}/{}", direction.as_str()),
+        crate::audit::Outcome::Ok,
+        Some(if granted { "granted" } else { "revoked" }.into()),
+    );
+    Ok(())
+}
+
+/// Put one of a recipe's secrets in the OS keystore.
+///
+/// Never into the manifest, and never into `.env`: this is a credential for
+/// somewhere that is not this machine, and the file the recipe lives in is
+/// committed. ADR 0010's rule, applied to the one feature that would most like
+/// to break it.
+#[tauri::command]
+pub fn provider_secret_set(
+    state: State<'_, AppState>,
+    name: String,
+    provider: String,
+    key: String,
+    value: String,
+) -> Result<()> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    let entry = crate::provider::secret_entry(&name, &provider, &key);
+    if value.is_empty() {
+        crate::secrets::delete(&entry)?;
+    } else {
+        crate::secrets::write(&entry, &value)?;
+    }
+    crate::audit::record_with(
+        "provider_secret_set",
+        format!("{name}/{provider}/{key}"),
+        crate::audit::Outcome::Ok,
+        // The name. Never the value, and there is nowhere here to put one.
+        Some(if value.is_empty() { "cleared" } else { "set" }.into()),
+    );
+    Ok(())
+}
+
+/// Fetch this project's data from somewhere else, or send it there.
+///
+/// ## What this does not do itself
+///
+/// A pull does not import anything. It produces a file and hands it to
+/// `db_restore`, which takes a copy of what it is about to replace — so pulling
+/// staging over the wrong database is recoverable for the same reason restoring
+/// the wrong file is. Reusing that path rather than writing a second importer
+/// is what makes that true rather than claimed.
+///
+/// A push does not dump anything itself either: `db::dump` writes the file the
+/// recipe then sends.
+///
+/// ## The plan is made again here
+///
+/// Not taken from the caller. Everything that decides whether this may run —
+/// the policy, the consent, the secrets — is re-read at the moment of running,
+/// because the screen that offered the button may be minutes old and an
+/// approval that was revoked in between must not still be spendable.
+#[tauri::command]
+pub async fn provider_run(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    provider: String,
+    direction: crate::provider::Direction,
+    service: String,
+    snapshot_first: bool,
+) -> Result<String> {
+    use crate::provider::Direction;
+
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let raw: serde_json::Value = std::fs::read_to_string(dir.join("stackvo.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(serde_json::Value::Null);
+
+    let (recipes, _) = crate::provider::parse(&raw);
+    let recipe = recipes
+        .iter()
+        .find(|r| r.name == provider)
+        .ok_or_else(|| Error::not_found(format!("provider {provider}")))?;
+
+    let policy = crate::policy::current();
+    let allowed = policy.providers().enabled
+        && (direction == Direction::Pull || policy.providers().allow_push);
+    let consent = crate::provider::consent_path()
+        .map(|path| crate::provider::read_consent(&path))
+        .unwrap_or_default();
+
+    let secret_of = |key: &str| {
+        crate::secrets::read(&crate::provider::secret_entry(&name, &provider, key))
+            .ok()
+            .flatten()
+    };
+    let plan = crate::provider::plan(&name, recipe, direction, allowed, &consent, &|key| {
+        secret_of(key).is_some()
+    });
+
+    if let Some(blocked) = &plan.blocked {
+        return Err(refusal(blocked));
+    }
+
+    // Read out of the keystore once, here, so the half that spawns the
+    // container never touches it. It is also what makes that half's future
+    // `Send`: a `&dyn Fn` held across an await is not, and the fix and the
+    // better shape were the same change.
+    let values: std::collections::BTreeMap<String, String> = recipe
+        .secrets
+        .iter()
+        .filter_map(|key| secret_of(key).map(|value| (key.clone(), value)))
+        .collect();
+
+    let _busy = state
+        .inflight
+        .acquire(format!("provider:{name}:{provider}"))?;
+    let operation_id = events::next_operation_id(direction.as_str());
+
+    // This application's own directory, not the project's. The container writes
+    // into it, and what it writes must not land in somebody's git status.
+    let scratch = root
+        .join("generated")
+        .join("providers")
+        .join(format!("{name}-{provider}-{operation_id}"));
+    std::fs::create_dir_all(&scratch)
+        .map_err(|e| Error::io(format!("creating {}", scratch.display()), e))?;
+
+    let outcome = provider_transfer(
+        &app,
+        &state,
+        &root,
+        recipe,
+        direction,
+        &service,
+        &scratch,
+        &operation_id,
+        snapshot_first,
+        &values,
+    )
+    .await;
+
+    // Whatever happened. The file is a copy of a database and there is no
+    // reason for it to outlive the operation that made it.
+    let _ = std::fs::remove_dir_all(&scratch);
+
+    // Only the direction that writes somewhere else. A pull changes this
+    // machine and the application is full of things that do; a push changes
+    // somewhere that is not this machine, which is the act worth a trail.
+    if direction == Direction::Push {
+        crate::audit::record_with(
+            "provider_push",
+            format!("{name}/{provider}"),
+            match &outcome {
+                Ok(_) => crate::audit::Outcome::Ok,
+                Err(_) => crate::audit::Outcome::Failed,
+            },
+            Some(format!("from {service}")),
+        );
+    }
+
+    outcome.map(|()| operation_id)
+}
+
+/// Why a run was refused, in the reader's terms.
+fn refusal(blocked: &crate::provider::Blocked) -> Error {
+    use crate::provider::Blocked;
+    match blocked {
+        Blocked::PolicyOff => Error::new(
+            Code::Forbidden,
+            "an administrator has switched this off on this machine",
+        ),
+        Blocked::NotOffered => Error::new(
+            Code::InvalidInput,
+            "this provider does not offer that direction",
+        ),
+        Blocked::NeedsConsent => Error::new(
+            Code::PermissionDenied,
+            "this command has not been approved on this machine",
+        )
+        .with_hint(crate::hints::PROVIDER_NEEDS_CONSENT),
+        Blocked::MissingSecrets { names } => Error::new(
+            Code::PermissionDenied,
+            format!("no value for {}", names.join(", ")),
+        )
+        .with_hint(crate::hints::PROVIDER_SECRET_MISSING)
+        .with_details(serde_json::json!({ "keys": names })),
+    }
+}
+
+/// The half that moves the file, once everything has said yes.
+#[allow(clippy::too_many_arguments)]
+async fn provider_transfer(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    root: &std::path::Path,
+    recipe: &crate::provider::Provider,
+    direction: crate::provider::Direction,
+    service: &str,
+    scratch: &std::path::Path,
+    operation_id: &str,
+    snapshot_first: bool,
+    secrets: &std::collections::BTreeMap<String, String>,
+) -> Result<()> {
+    use crate::provider::Direction;
+
+    // Cloned per use rather than shared: `db::dump` and `db::restore` each take
+    // the sink by value, and this function may call both.
+    let progress = || {
+        let app = app.clone();
+        let id = operation_id.to_string();
+        move |line: String| {
+            events::emit(
+                &app,
+                "db:progress",
+                serde_json::json!({ "operationId": id, "line": line }),
+            );
+        }
+    };
+    events::emit(
+        app,
+        "db:start",
+        serde_json::json!({
+            "operationId": operation_id,
+            "service": service,
+            "action": direction.as_str(),
+            "path": recipe.name,
+        }),
+    );
+
+    let dump = scratch.join(crate::provider::DUMP);
+
+    // A push sends what this machine has, so the file has to exist before the
+    // recipe runs.
+    if direction == Direction::Push {
+        crate::db::dump(root, service, &dump, progress()).await?;
+    }
+
+    let args = crate::provider::run_args(recipe, direction, scratch);
+    let mut command = tokio::process::Command::new("docker");
+    command.args(&args);
+    // The values, into the child's environment and nowhere else. `run_args`
+    // wrote `-e NAME` with no value, so Docker copies each one from here.
+    for (key, value) in secrets {
+        command.env(key, value);
+    }
+
+    let out = command
+        .output()
+        .await
+        .map_err(|e| Error::io("running docker", e))?;
+    let say = progress();
+    for line in String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .chain(String::from_utf8_lossy(&out.stderr).lines())
+    {
+        say(line.to_string());
+    }
+    if !out.status.success() {
+        let error = Error::new(
+            Code::IoError,
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        );
+        events::emit(
+            app,
+            "db:error",
+            serde_json::json!({ "operationId": operation_id, "error": error.message }),
+        );
+        return Err(error);
+    }
+
+    if direction == Direction::Pull {
+        // Checked before it is believed: a container that can write into a
+        // mounted directory can write a symlink there.
+        let file = crate::provider::produced(scratch)?;
+        if snapshot_first {
+            safety_snapshot(state, service).await?;
+        }
+        crate::db::restore(root, service, &file, progress()).await?;
+    }
+
+    events::emit(
+        app,
+        "db:done",
+        serde_json::json!({ "operationId": operation_id, "service": service }),
+    );
+    Ok(())
+}
+
 // ------------------------------------------------------- adopting a folder
 
 /// Directories under `projects/` that StackVo is not managing yet.
@@ -5851,6 +6812,240 @@ pub async fn project_adopt(
     outcome.map(|_| operation_id)
 }
 
+/// Adopt every folder named, in one pass (A-5).
+///
+/// ## Why this is a command and not a loop in the UI
+///
+/// The parked folder is already there: `projects_root` **is** the directory
+/// Herd calls a park, `detect::adoptable` already lists every child of it and
+/// says what each one is. What was missing is the verb — the list offered one
+/// button per row, and a machine with eleven unmanaged checkouts needed eleven
+/// clicks. A `for` loop over `project_adopt` in JavaScript would have produced
+/// the same eleven clicks with one press, and three things wrong with it:
+///
+/// * **eleven generates.** `generate` rewrites the *whole* `projects` scope
+///   under one global lock, so n adoptions cost n full passes over n projects,
+///   serialised. Here the manifests are written first and the generator runs
+///   once;
+/// * **eleven password prompts.** `sync_project_host` raises the system
+///   authentication dialog when a name is missing from the hosts file. Its own
+///   comment argues that three subdomains must not ask three times; eleven
+///   projects asking eleven times is that same argument one level up, which is
+///   why the hosts write moved into [`sync_hosts_for`] and happens once;
+/// * **no answer at the end.** A loop that stops on the first error leaves the
+///   user with "some of them worked". Every folder gets an outcome here,
+///   including the ones deliberately passed over.
+///
+/// ## Skipped is not failed
+///
+/// Two conditions are ordinary rather than wrong, and a batch has to say so
+/// without colouring the result red:
+///
+/// * a folder that already carries a `stackvo.json`. "Adopt everything here"
+///   over a directory where half the projects are already managed is the
+///   normal case, and the list the user pressed the button on can be a minute
+///   old;
+/// * a folder with nothing in it but dotfiles. The single adoption is a folder
+///   somebody picked out by name; this one is everything under the park, and
+///   an empty directory in it is not a choice anybody made.
+///
+/// Everything else — an unsafe name, a spec that does not validate, a manifest
+/// that cannot be written — fails that folder and only that folder.
+///
+/// ## All or nothing at the last step
+///
+/// If the generator fails, every manifest this call wrote is removed and the
+/// call returns the error. Not because the manifests are wrong, but because
+/// the state it would otherwise leave — n projects listed and none of them
+/// generated — is exactly the state `project_register` had to be invented to
+/// repair, and a user who pressed one button should not have to know that.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdoptOutcome {
+    pub name: String,
+    /// `adopted`, `skipped` or `failed`.
+    pub outcome: &'static str,
+    /// Which of the closed set of reasons, when there is one: `already_managed`,
+    /// `empty`, or `error`.
+    ///
+    /// Beside `reason` rather than instead of it. The two skips are conditions
+    /// this code decides and the UI has to render in the reader's own language,
+    /// so they need something stable to switch on; a failure's reason is an
+    /// error message from somewhere else and there is nothing to switch on.
+    /// Matching the English prose in JavaScript would have made a sentence
+    /// somebody could improve into a wire format nobody could see was one.
+    pub code: Option<&'static str>,
+    /// Why, whenever it is not `adopted`. Absent otherwise.
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdoptBatch {
+    /// The single generate this batch ran, or absent when it had nothing to
+    /// generate — an operation id nobody can look anything up by is noise.
+    pub operation_id: Option<String>,
+    pub adopted: usize,
+    pub results: Vec<AdoptOutcome>,
+}
+
+impl AdoptOutcome {
+    fn adopted(name: String) -> Self {
+        Self {
+            name,
+            outcome: "adopted",
+            code: None,
+            reason: None,
+        }
+    }
+
+    fn skipped(name: String, code: &'static str, reason: impl Into<String>) -> Self {
+        Self {
+            name,
+            outcome: "skipped",
+            code: Some(code),
+            reason: Some(reason.into()),
+        }
+    }
+
+    fn failed(name: String, reason: impl Into<String>) -> Self {
+        Self {
+            name,
+            outcome: "failed",
+            code: Some("error"),
+            reason: Some(reason.into()),
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn project_adopt_many(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    names: Vec<String>,
+) -> Result<AdoptBatch> {
+    let root = state.root()?;
+
+    // Deduplicated before anything else. The same name twice would take the
+    // same in-flight guard twice and the batch would report itself as busy —
+    // a conflict with nobody but itself, which reads as a bug in the app.
+    let mut seen = std::collections::BTreeSet::new();
+    let names: Vec<String> = names
+        .into_iter()
+        .filter(|n| seen.insert(n.clone()))
+        .collect();
+
+    if names.is_empty() {
+        return Err(Error::new(
+            Code::InvalidInput,
+            "no folders were named to adopt",
+        ));
+    }
+
+    let mut results: Vec<AdoptOutcome> = Vec::with_capacity(names.len());
+    let mut written: Vec<(String, std::path::PathBuf, Manifest)> = Vec::new();
+    // Held for the whole batch, so a single adoption of one of these folders
+    // cannot start halfway through and write the manifest twice.
+    let mut _guards: Vec<crate::inflight::Guard> = Vec::new();
+
+    for name in names {
+        let dir = match workspace::project_dir(&root, &name) {
+            Ok(dir) => dir,
+            Err(e) => {
+                results.push(AdoptOutcome::failed(name, e.message));
+                continue;
+            }
+        };
+
+        if !dir.is_dir() {
+            results.push(AdoptOutcome::failed(name, "not a directory"));
+            continue;
+        }
+        if dir.join("stackvo.json").is_file() {
+            results.push(AdoptOutcome::skipped(
+                name,
+                "already_managed",
+                "already managed",
+            ));
+            continue;
+        }
+        if !detect::has_files(&dir) {
+            results.push(AdoptOutcome::skipped(name, "empty", "nothing in it"));
+            continue;
+        }
+
+        let guard = match state.inflight.acquire(format!("project:{name}")) {
+            Ok(guard) => guard,
+            Err(e) => {
+                results.push(AdoptOutcome::failed(name, e.message));
+                continue;
+            }
+        };
+
+        let spec = detected_spec(&name, &detect::detect(&dir));
+        let m = match parse_spec(&spec, &name) {
+            Ok(m) => m,
+            Err(e) => {
+                results.push(AdoptOutcome::failed(name, e.message));
+                continue;
+            }
+        };
+
+        let manifest_path = dir.join("stackvo.json");
+        if let Err(e) = manifest::write(&manifest_path, &m) {
+            results.push(AdoptOutcome::failed(name, e.message));
+            continue;
+        }
+
+        _guards.push(guard);
+        events::emit(&app, "project:creating", SubjectEvent::project(&name));
+        results.push(AdoptOutcome::adopted(name.clone()));
+        written.push((name, manifest_path, m));
+    }
+
+    if written.is_empty() {
+        return Ok(AdoptBatch {
+            operation_id: None,
+            adopted: 0,
+            results,
+        });
+    }
+
+    let operation_id = events::next_operation_id("adopt");
+    if let Err(e) = generate(&app, &root, &operation_id, "projects").await {
+        // Only the manifests this call wrote. Nothing else here is ours: the
+        // code in those directories was the user's before this ran.
+        for (name, path, _) in &written {
+            let _ = std::fs::remove_file(path);
+            events::emit(
+                &app,
+                "project:error",
+                SubjectEvent::project(name).error(e.message.clone()),
+            );
+        }
+        return Err(e);
+    }
+
+    for (name, _, _) in &written {
+        events::emit(&app, "project:created", SubjectEvent::project(name));
+    }
+
+    // One hosts write and one certificate pass for the whole batch, for the
+    // reason each of their own comments gives about doing it per name.
+    let wanted: Vec<String> = written
+        .iter()
+        .flat_map(|(_, _, m)| wanted_hosts(m))
+        .collect();
+    sync_hosts_for(&app, wanted).await;
+    sync_certificate(&app, &state, &root).await;
+
+    Ok(AdoptBatch {
+        operation_id: Some(operation_id),
+        adopted: written.len(),
+        results,
+    })
+}
+
 /// Bring a project that already carries its own `stackvo.json` online.
 ///
 /// The case `project_adopt` deliberately refuses, and refuses correctly: a
@@ -5929,6 +7124,62 @@ pub async fn project_register(
     }
 
     outcome.map(|_| operation_id)
+}
+
+// --------------------------------------------- exporting as a devcontainer
+
+/// What a devcontainer export would write into this project (A-7).
+///
+/// A plan and not a write, because the destination is somebody's repository:
+/// `.devcontainer/` is meant to be committed, which is exactly why it should be
+/// read before it is there.
+#[tauri::command]
+pub fn project_devcontainer_plan(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::devcontainer::Plan> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let m = manifest::read(&dir.join("stackvo.json"), &name)?;
+
+    let table = service_source(&root)?;
+    let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+    let env = Env::load(&root)?;
+    let opts = crate::generator::ToolchainOptions {
+        tools: env.list("PHP_DEFAULT_TOOLS"),
+        apt_packages: env.list("PHP_DEFAULT_APT_PACKAGES"),
+        composer_version: env
+            .get("PHP_TOOL_COMPOSER_VERSION")
+            .unwrap_or("latest")
+            .to_string(),
+        nodejs_version: env
+            .get("PHP_TOOL_NODEJS_VERSION")
+            .unwrap_or("20")
+            .to_string(),
+    };
+
+    crate::devcontainer::plan(&m, &table, &tree, &opts)
+}
+
+/// Write it.
+///
+/// Re-planned here rather than taking the plan back from the caller. A plan
+/// that travelled to JavaScript and back is a plan the front end could have
+/// edited, and what it names is a path inside a directory this app writes to.
+#[tauri::command]
+pub fn project_devcontainer_write(state: State<'_, AppState>, name: String) -> Result<Vec<String>> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let plan = project_devcontainer_plan(state, name)?;
+    let written = crate::devcontainer::write(&dir, &plan)?;
+
+    crate::audit::record_with(
+        "project_devcontainer_write",
+        &plan.project,
+        crate::audit::Outcome::Ok,
+        Some(format!("{} files", written.len())),
+    );
+    Ok(written)
 }
 
 /// Turn a detection into a manifest the schema accepts.
@@ -6659,9 +7910,27 @@ pub async fn preflight() -> crate::preflight::Preflight {
 }
 
 /// Do the one thing a fixable requirement needs.
+///
+/// Audited for `mkcert` and only for `mkcert`: that arm fetches an executable
+/// over the network and leaves it where a shell will run it, which is the act
+/// `tooling_install` is audited for — and a trail whose answer to "did this
+/// machine download a binary" depends on which screen the button was on is a
+/// trail that answers nothing. Creating a Docker network is not that.
 #[tauri::command]
 pub async fn preflight_fix(id: String) -> Result<()> {
-    crate::preflight::fix(&id).await
+    let outcome = crate::preflight::fix(&id).await;
+    if id == "mkcert" {
+        crate::audit::record(
+            "tooling_install",
+            &id,
+            if outcome.is_ok() {
+                crate::audit::Outcome::Ok
+            } else {
+                crate::audit::Outcome::Failed
+            },
+        );
+    }
+    outcome
 }
 
 // ------------------------------------------------------------------ doctor
@@ -8100,7 +9369,38 @@ pub async fn worker_start(state: State<'_, AppState>, name: String, kind: String
         .and_then(|env| env.get("DOCKER_DEFAULT_NETWORK").map(str::to_string))
         .unwrap_or_else(|| "stackvo-net".to_string());
 
-    let args = crate::worker::run_args(&name, kind, &image, &root.display().to_string(), &network);
+    // The project's own domain, for the one worker that has to be reachable
+    // from a browser. Read from the manifest rather than assembled from the
+    // name and the TLD: a project may carry a domain that is neither.
+    let domain = crate::manifest::read(
+        &workspace::project_dir(&root, &name)?.join("stackvo.json"),
+        &name,
+    )
+    .ok()
+    .and_then(|m| m.domain)
+    .unwrap_or_default();
+
+    // A routed worker with no domain would get a Traefik rule matching
+    // `Host(``)` — a router that loads and matches nothing, which is the
+    // failure that looks like a bug in Reverb rather than in the manifest.
+    if kind.routed() && domain.is_empty() {
+        return Err(Error::new(
+            Code::Conflict,
+            format!(
+                "{name} declares no domain, so its {} worker cannot be routed",
+                kind.as_str()
+            ),
+        ));
+    }
+
+    let args = crate::worker::run_args(
+        &name,
+        kind,
+        &image,
+        &root.display().to_string(),
+        &network,
+        &domain,
+    );
 
     let output = tokio::process::Command::new("docker")
         .args(&args)
@@ -9114,6 +10414,165 @@ pub fn agents_install(
         ),
     );
     outcome
+}
+
+// ------------------------------------------------------------------ AI rules
+
+/// Which directory workspace rules are written into.
+///
+/// A project when one is named, the workspace root otherwise. The project is
+/// looked up rather than joined, so a `name` of `../..` is a "no such project"
+/// instead of a path outside the workspace — the rules writer creates
+/// directories, which makes an unchecked name a way to write a file anywhere.
+fn rules_dir(
+    state: &State<'_, AppState>,
+    project: Option<&str>,
+) -> Result<Option<std::path::PathBuf>> {
+    let Ok(root) = state.root() else {
+        return Ok(None);
+    };
+    let Some(name) = project else {
+        return Ok(Some(root));
+    };
+
+    if !workspace::is_safe_name(name) {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("\"{name}\" is not a valid project name"),
+        ));
+    }
+    let dir = workspace::require_projects_root(&root)?.join(name);
+    if !dir.is_dir() {
+        return Err(Error::not_found(format!("project {name}")));
+    }
+    Ok(Some(dir))
+}
+
+/// Which rules files exist, which carry our block and which carry an old one.
+///
+/// Tolerant of having no workspace for the same reason [`agents_status`] is:
+/// the global half of the answer is about the machine, and the pane has to be
+/// readable before a folder is chosen.
+#[tauri::command]
+pub fn rules_status(
+    state: State<'_, AppState>,
+    project: Option<String>,
+) -> Result<Vec<crate::rules::TargetStatus>> {
+    let dir = rules_dir(&state, project.as_deref())?;
+    Ok(crate::rules::status(dir.as_deref()))
+}
+
+/// Write the rules into one file, keeping everything already in it.
+///
+/// Audited. This puts instructions into a file the user owns — one that is
+/// usually committed and that every future session of that assistant reads —
+/// which is the same bar `agent_install` clears.
+#[tauri::command]
+pub fn rules_apply(
+    state: State<'_, AppState>,
+    target: String,
+    scope: String,
+    project: Option<String>,
+) -> Result<String> {
+    let scope = crate::rules::Scope::parse(&scope)?;
+    let dir = rules_dir(&state, project.as_deref())?;
+    let outcome = crate::rules::apply(&target, scope, dir.as_deref());
+
+    crate::audit::record_with(
+        "rules_apply",
+        &target,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        // The path, because "which file gained instructions" is the question
+        // somebody asks later and the target id alone does not answer it.
+        outcome.as_ref().ok().cloned(),
+    );
+    outcome
+}
+
+/// Take the block back out. The rest of the file stays.
+#[tauri::command]
+pub fn rules_remove(
+    state: State<'_, AppState>,
+    target: String,
+    scope: String,
+    project: Option<String>,
+) -> Result<String> {
+    let scope = crate::rules::Scope::parse(&scope)?;
+    let dir = rules_dir(&state, project.as_deref())?;
+    crate::rules::remove(&target, scope, dir.as_deref())
+}
+
+// ------------------------------------------------------------------- tooling
+
+/// The `PATH` directory, the links in it, the shell startup files, the tools.
+///
+/// Answers with no workspace, and that is the point rather than a tolerance:
+/// putting `stackvo` on `PATH` is a thing somebody does *before* choosing a
+/// folder, and a pane that needed one would be unreachable from the state it
+/// exists to fix.
+#[tauri::command]
+pub async fn tooling_status() -> Result<crate::tooling::Status> {
+    Ok(crate::tooling::status().await)
+}
+
+/// Link the two commands and write the `PATH` line into one shell's file.
+///
+/// Audited. This edits a startup file the user owns and puts a directory first
+/// on their `PATH` — the same bar `rules_apply` clears, for a file that is read
+/// by every shell they open rather than by one assistant.
+#[tauri::command]
+pub fn tooling_path_apply(shell: String) -> Result<String> {
+    let outcome = crate::tooling::path_apply(&shell);
+    crate::audit::record_with(
+        "tooling_path_apply",
+        &shell,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        // The path, because "which file was edited" is the question somebody
+        // asks later and a shell id does not answer it.
+        outcome.as_ref().ok().cloned(),
+    );
+    outcome
+}
+
+/// Take the line back out. The links stay — see `tooling::path_remove`.
+#[tauri::command]
+pub fn tooling_path_remove(shell: String) -> Result<String> {
+    crate::tooling::path_remove(&shell)
+}
+
+/// Fetch one host tool, verify it against the digest compiled into this build,
+/// and install it.
+///
+/// Audited. It is the only command in this file that puts an executable on the
+/// user's `PATH` from the network, which is exactly the event a trail is for.
+#[tauri::command]
+pub async fn tooling_install(tool: String) -> Result<String> {
+    let outcome = crate::tooling::install(&tool).await;
+    crate::audit::record_with(
+        "tooling_install",
+        &tool,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        outcome.as_ref().ok().cloned(),
+    );
+    outcome
+}
+
+/// Remove the managed copy of one tool. A system copy is never touched.
+#[tauri::command]
+pub fn tooling_remove(tool: String) -> Result<String> {
+    crate::tooling::remove(&tool)
 }
 
 /// Take the server back out of one client's configuration file.

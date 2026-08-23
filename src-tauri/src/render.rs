@@ -181,7 +181,11 @@ fn context(
 /// and wrong for one it downloaded — `${SOME_HOST_VAR}` surviving into the
 /// output is a package reading the process environment. Here an unknown name is
 /// a refusal.
-fn substitute(fragment: &str, vars: &BTreeMap<String, String>, who: &str) -> Result<String> {
+pub(crate) fn substitute(
+    fragment: &str,
+    vars: &BTreeMap<String, String>,
+    who: &str,
+) -> Result<String> {
     let mut out = String::with_capacity(fragment.len());
     let mut rest = fragment;
 
@@ -220,7 +224,10 @@ fn substitute(fragment: &str, vars: &BTreeMap<String, String>, who: &str) -> Res
 /// Derived from the context rather than rebuilt, so the policy is comparing
 /// against exactly what was substituted. Anything in a `volumes:` line that is
 /// not in this set is a path the package wrote itself.
-fn permitted(vars: &BTreeMap<String, String>, image: &str) -> crate::compose_policy::Allowed {
+pub(crate) fn permitted(
+    vars: &BTreeMap<String, String>,
+    image: &str,
+) -> crate::compose_policy::Allowed {
     crate::compose_policy::Allowed {
         image: image.to_string(),
         mounts: vars
@@ -272,7 +279,7 @@ fn quoted(value: &str) -> String {
 /// The list form is not a style choice. Compose runs the string form through a
 /// shell, so `test: "pg_isready; curl evil"` would be two commands; the schema
 /// requires an array and this writes one.
-fn healthcheck(health: &crate::pkg::Health) -> String {
+pub(crate) fn healthcheck(health: &crate::pkg::Health) -> String {
     let mut out = String::from("healthcheck:\n");
     let _ = writeln!(
         out,
@@ -478,7 +485,7 @@ pub fn dynamic_compose(
 /// The catalogue is asked rather than a path being joined here, so a package
 /// whose bytes live somewhere other than a directory still renders — and so the
 /// path check that guards the read stays in one place.
-fn shipped(
+pub(crate) fn shipped(
     catalogue: &dyn Catalogue,
     instance: &Instance,
     file: &str,

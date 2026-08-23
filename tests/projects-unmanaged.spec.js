@@ -115,6 +115,9 @@ const overlays = () => document.body.textContent;
 
 beforeEach(() => {
   setActivePinia(createPinia());
+  // `calls` accumulates across mounts, so a test asserting what was sent would
+  // otherwise read the previous test's call.
+  calls.length = 0;
   for (const key of Object.keys(replies)) delete replies[key];
   replies.projectsList = [];
   replies.projectAdoptable = [];
@@ -224,6 +227,120 @@ describe('unmanaged code, behind the overflow button', () => {
     expect(rule, '.more-menu subtitles have no rule of their own').not.toBeNull();
     expect(rule[1]).toMatch(/-webkit-line-clamp:\s*(unset|none|initial)/);
     expect(rule[1]).toMatch(/display:\s*block/);
+  });
+
+  /**
+   * Adopting the whole park in one press (A-5).
+   *
+   * The three things worth holding, and every one of them is a thing a `for`
+   * loop in JavaScript would have got wrong:
+   *
+   * 1. **One call.** Each adoption regenerates the whole projects scope under a
+   *    global lock and can raise the system password prompt for its hosts
+   *    entry, so eleven adoptions as eleven calls are eleven full generates and
+   *    up to eleven prompts. A loop would look identical from here and cost
+   *    that.
+   * 2. **The empty ones are not sent.** The backend skips them anyway — it has
+   *    to, the CLI and the MCP server reach the same command — but sending one
+   *    would report a skip the user could not have avoided.
+   * 3. **A skip is said in the reader's language.** The outcome carries a
+   *    stable `code`; the English `reason` beside it is for a log.
+   */
+  async function openPark(folders, locale = 'en') {
+    replies.projectAdoptable = folders;
+    const wrapper = await render(locale);
+    const words = locale === 'tr' ? tr : en;
+    const more = wrapper.get(`[aria-label="${words.unmanaged.title}"]`);
+    await more.trigger('click');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const review = [...document.querySelectorAll('.v-list-item')].find((el) =>
+      el.textContent.includes(words.unmanaged.review)
+    );
+    review.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+    return wrapper;
+  }
+
+  const pressAdoptAll = async (wrapper, label) => {
+    const button = [...document.querySelectorAll('.v-btn')].find((el) =>
+      el.textContent.includes(label)
+    );
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+  };
+
+  it('adopts every folder in one call, not one call per folder', async () => {
+    replies.projectAdoptMany = (names) =>
+      Promise.resolve({
+        operationId: 'adopt-1',
+        adopted: names.length,
+        results: names.map((name) => ({ name, outcome: 'adopted', code: null, reason: null })),
+      });
+
+    const wrapper = await openPark([folder('old-crm'), folder('scratch'), folder('shop')]);
+    await pressAdoptAll(wrapper, 'Adopt all 3');
+
+    const batched = calls.filter(([name]) => name === 'projectAdoptMany');
+    expect(batched).toHaveLength(1);
+    expect(batched[0][1]).toEqual(['old-crm', 'scratch', 'shop']);
+    // The single-folder command is what a loop would have used.
+    expect(calls.filter(([name]) => name === 'projectAdopt')).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it('leaves out the folders it already knows will be passed over', async () => {
+    replies.projectAdoptMany = (names) =>
+      Promise.resolve({ operationId: 'adopt-1', adopted: names.length, results: [] });
+
+    const wrapper = await openPark([
+      folder('old-crm'),
+      { ...folder('husk'), hasFiles: false },
+      folder('shop'),
+    ]);
+    // Two, not three: the count on the button is what will actually be sent.
+    await pressAdoptAll(wrapper, 'Adopt all 2');
+
+    const [, names] = calls.find(([name]) => name === 'projectAdoptMany');
+    expect(names).toEqual(['old-crm', 'shop']);
+    wrapper.unmount();
+  });
+
+  it('names what it passed over, in the reader’s language', async () => {
+    replies.projectAdoptMany = () =>
+      Promise.resolve({
+        operationId: 'adopt-1',
+        adopted: 1,
+        results: [
+          { name: 'shop', outcome: 'adopted', code: null, reason: null },
+          {
+            name: 'old-crm',
+            outcome: 'skipped',
+            code: 'already_managed',
+            reason: 'already managed',
+          },
+        ],
+      });
+
+    const wrapper = await openPark([folder('old-crm'), folder('shop')], 'tr');
+    await pressAdoptAll(wrapper, tr.adopt.all.replace('{n}', '2'));
+
+    // The folder and why — in Turkish. The English `reason` travelled in the
+    // same row and is NOT what was rendered, which is the whole point of the
+    // code sitting beside it.
+    expect(overlays()).toContain('old-crm');
+    expect(overlays()).toContain(tr.adopt.reason.alreadyManaged);
+    expect(overlays()).not.toContain('already managed');
+    wrapper.unmount();
+  });
+
+  it('offers nothing to batch when there is only one folder', async () => {
+    // A button reading "Adopt all 1" beside a single row with its own Adopt
+    // button is two ways to do the same thing.
+    const wrapper = await openPark([folder('old-crm')]);
+    expect(overlays()).not.toContain('Adopt all');
+    wrapper.unmount();
   });
 
   it('says so when the scans found nothing, rather than opening blank', async () => {

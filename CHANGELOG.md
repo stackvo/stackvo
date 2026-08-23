@@ -7,6 +7,1108 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A project can fetch its data from where it really runs, and send it back.**
+  A-1, the largest gap the competitor review found and the only one that is a
+  whole category rather than a feature: DDEV ships `ddev pull`/`ddev push` with
+  recipes for Upsun, Acquia, Lagoon and Pantheon, Lando and Herd have their own,
+  and the concept did not exist here at all.
+
+  **Everything dangerous about it was already answered next door.** A provider is
+  a command a *repository* declares that reaches the network with the
+  *developer's* credentials — which is `hooks.rs`'s threat model word for word,
+  so this borrows its answers rather than inventing worse ones. A step is an
+  argv array and there is no shell. It runs in a container, never on the machine,
+  and unlike a hook there is no host variant and there will not be one. Consent
+  is per project, keyed on a digest, so editing the recipe asks again. An
+  administrator can forbid it and cannot approve it.
+
+  **The credentials are the asset, and they are not in the repository.** DDEV
+  mounts the developer's ssh agent into the container that runs the pull —
+  coherent for a tool with curated recipes, and wrong here, because this
+  application's rule is that a repository-declared container gets no host path
+  (ADR 0023) and an ssh agent is a host path that signs things. So a recipe
+  **names** what it needs and never carries it: the values come out of the
+  keystore (ADR 0010), scoped per project *and* per provider — two projects
+  wanting `SSH_KEY` are two credentials — and arrive as `-e NAME` with no value,
+  which tells Docker to copy each from this process. No secret is ever an
+  argument, so none of it is in `ps`, a shell history or a crash report.
+
+  **With no shell there is no pipe**, so the contract is a path instead: a pull
+  writes `/stackvo/dump.sql`, a push reads it, and the path is fixed rather than
+  configurable. What comes back is checked with `symlink_metadata` and refused
+  unless it is a regular, non-empty file — a container that can write into a
+  mounted directory can write `dump.sql -> /etc/passwd`, which would turn a data
+  import into an arbitrary read of the host; and an empty dump restored over a
+  database is the same act as dropping it, which is exactly the shape a failed
+  remote command leaves behind.
+
+  **A pull imports nothing itself.** It produces a file and hands it to
+  `db_restore`, which takes a copy of what it is about to replace — so pulling
+  staging over the wrong database is recoverable for the same reason restoring
+  the wrong file is. Reusing that path rather than writing a second importer is
+  what makes that true rather than claimed.
+
+  **Push is the same shape and not the same act.** DDEV's own documentation
+  warns about it in the loudest terms it uses anywhere. Everything asymmetric
+  here is deliberate: a recipe has to declare `push` explicitly, consent is
+  granted per direction so a pull agreement cannot be spent on a send, it is
+  audited where a pull is not, and there is **no scheduler** — nothing in this
+  application may push on a timer.
+
+  Two gates caught real things on the way in. `websurface_claims.rs` refused
+  `project_providers` until it was declared as reaching the keystore: it hands
+  back no value, and *presence is information* — "this machine holds a
+  production key for this project" is not a sentence the loopback surface should
+  answer either. `hint_translations.rs` refused three untranslated hints.
+
+### Changed
+
+- **`docs/` is one backlog and two records.** Work to be done lives in
+  `docs/durum.md` and nowhere else: §2 the product side, §3 the engineering
+  side, §4 the two in one order. `docs/rakip-analizi-2026-08.md` is gone — its
+  findings were delivered or refused one by one and are in this file, its open
+  rows moved into §2, and the two things in it that existed nowhere else (the
+  defensible-territory list, and the one item the round *removed* from "fights
+  not to reopen") moved with them.
+
+  The other two stay, and could not have gone: `docs/accessibility.md` is a
+  published EN 301 549 statement that `tests/accessibility-claims.spec.js`
+  reads, and `docs/servis-market-mimarisi.md` is cited **by section number**
+  from thirteen Rust modules, its tests and the contract (`§4.4`, `§9`,
+  `Faz 2`). Deleting either would have left those citations pointing at nothing.
+  Both now hand their open items to §2 and say so, so nobody goes looking for a
+  backlog in a record.
+
+  Closed items are out of §2 and §3 as well. What was done and why is in this
+  file; the choices that cannot be taken back are in §6, where the code's
+  `ADR 0005`-style references still find them.
+
+### Fixed
+
+- **`docs/durum.md` contradicted itself about Windows, and the wrong half was
+  the one somebody planning the work would read.** §4 is the suggested order —
+  a sentence per remaining item — and its bullet for #35 said the Windows branch
+  "does not even compile here (`aws-lc-sys`'s Windows SDK)". §3's row for the
+  same item, marked 🟢, records that `cargo-xwin` downloads Microsoft's SDK,
+  points clang at it and removes exactly that obstacle, and that
+  `tools/linux/run.sh --windows` is how it is run. Anyone starting from §4 would
+  have begun at a blocker that had already been taken away — worse than an
+  absent note, because it reads as a measurement.
+
+  `tools/linux/Dockerfile` names this shape in its own opening comment: *when
+  two places state one fact, the second one is the one that goes stale.* It is
+  the second one that did.
+
+  `durum_sections_agree.rs` holds them together now: every `#N` in §4 is a row
+  in §3, nothing §3 marks ✅ is still being asked for in §4, and the specific
+  claim that went stale is held **against the tree** — while the image installs
+  `cargo-xwin` and the script wires the mode, no bullet may say the branch
+  cannot be built here. Whether two paragraphs of Turkish prose agree is not
+  checkable and the file says so rather than pretending, which is the line
+  `platform_matrix_claims.rs` already draws around the counts it refuses to
+  judge.
+
+  §4 now says what is actually left of #35: the tests **running** on Windows.
+  Type-checking is not running, and a test keeps the document distinguishing the
+  two.
+
+### Added
+
+- **A language pack can say which way it reads.** Layout direction was one
+  appearance switch applied to every locale at once. That is right for the two
+  languages this app ships — both left to right — and wrong the moment a pack is
+  Arabic or Farsi, which is not hypothetical: of the five languages the nearest
+  competitor ships, **two are right-to-left**. A translator had no way to state
+  it, so their window laid out left to right until they found a switch in
+  Settings, and that switch then mirrored English as well.
+
+  `"language": { "label": "العربية", "direction": "rtl" }`, and the pack wins for
+  its own locale. Direction is a **fact about a language** — Arabic reads right
+  to left whether or not anybody prefers it — while the switch is a
+  **preference**, and it still decides for every locale that has not stated a
+  fact. The `dir` attribute on the document now follows the active locale rather
+  than the switch: they were the same value while one flag decided everything,
+  and an Arabic window whose dialogs and menus laid out left to right would be
+  exactly the failure that attribute was added to fix.
+
+  The key is **seeded** into a new pack as `"direction": "ltr"`, which is what
+  the app does for it anyway. It is the one key whose absence was invisible: a
+  translator cannot ask for a key they have never seen, and the symptom reads as
+  the app being broken rather than as a line missing from their file. Anything
+  other than the two words reads as absent rather than as an error — a pack is a
+  hand-edited file, and one typo in one optional key should cost the direction,
+  not the language.
+
+  The card also shows **where the pack lives**. "Adding a language is a JSON file
+  you drop in the config directory" is only a mechanism somebody can use if they
+  can find the file the button just made, and the path was in the data the pane
+  already had and on screen nowhere.
+
+### Fixed
+
+- **A new language pack said it was 100% translated before a word of it was.**
+  "Start a translation" seeds the file with **every English string** — which is
+  what a translation file is, and is the right thing to hand a translator. The
+  progress figure then counted the strings the file *held*, so an untouched pack
+  reported `2000 of 2000 (100%)` the moment it was created: a progress bar full
+  before the work starts, on a language that is entirely English.
+
+  `locale.rs` states the rule this broke, in its own doc comment — *a missing
+  string that falls back to English is honest; a fabricated one is a sentence
+  somebody has to find and disbelieve.* Two thousand of them, with a number
+  saying the job was done.
+
+  A string counts when it **stops being the English one**, which is how every
+  translation tool decides the same question and which handles both shapes of
+  pack at once: a seeded file full of English and a sparse file missing keys
+  both fall back to English at runtime and both read as untranslated. It
+  understates — `Docker`, `PHP` and `OK` are the same word in most languages —
+  and that is the safe direction: a translator who sees 98% on a finished pack
+  goes looking for the last few, one who sees 100% on an untouched file learns
+  that the number is a lie.
+
+  The denominator was wrong too, in the other direction: it counted Vuetify's own
+  `$vuetify` strings, which "Start a translation" deliberately leaves out of the
+  file, so 89 strings sat in the total that no pack could ever fill and every
+  finished translation would have stopped short of 100%.
+
+### Changed
+
+- **The performance number is on the row it was measured for, not averaged
+  across the card.** The competitor row said the measurement never reached the
+  screen. It did — in four places. What was wrong is *which* number reached it:
+  the card's header sentence read "2–3× … 3.8× on a framework boot and 2.8× on
+  the writes", as though both applied to everything, while the contract, the
+  module and the pane's own code comment all say the opposite. `vendor` in a
+  volume buys the **boot** and does nothing at all for writes;
+  `storage/framework` is the one that buys the **writes**. Averaging them hides
+  the exact fact the feature is shaped around — it is a list of directories
+  rather than one "make it fast" switch *because* they disagree — and the row
+  somebody actually toggles carried no figure at all.
+
+  It is `perf::GAINS` now: data, per directory, with the workload named, on the
+  `PerfLayer` the backend already returns. The chip on the row says "3.8×
+  faster on a framework boot"; `bootstrap/cache` and `node_modules` say **not
+  measured**, because they have never been through the bench and lending them a
+  neighbour's number would be the average all over again.
+
+  **The number left the translated strings, and that is the part worth keeping.**
+  A measurement in `perf.explain` is a measurement a translator has to restate
+  correctly with no way to know it is one — and one locale could drift from the
+  benchmark without anything anywhere disagreeing. `perf_claims.rs` now fails
+  the build if a figure grows back into either locale.
+
+  The benchmark also **records what it printed**. `examples/perf_layer_bench.rs`
+  produced these multiples and kept no record of them: the only written copy was
+  a table in `PerfPane.vue`'s doc comment, unreachable from the program that
+  made it. Its doc comment carries a `MEASURED` block now, and `perf_claims.rs`
+  holds `perf::GAINS`, that block and both help documents against each other. It
+  reads the sources rather than re-running anything — the bench measures the
+  machine it runs on, so a test that re-measured would fail on a faster laptop,
+  which is the opposite of what it is for.
+
+  Both help documents now say **which machine** produced the table, and that on
+  Linux there is no filesystem boundary to cross at all.
+
+### Added
+
+- **A project can be exported as a devcontainer.** The competitor row read "the
+  generator already renders compose, and `.devcontainer/devcontainer.json` is a
+  small sibling of it". It was written without reading
+  `render_compose_service`, and what that function produces is bound to *this
+  machine* in five separate ways, each load-bearing: absolute paths under the
+  user's home; a `context:` relative to `generated/`, a directory no repository
+  contains; the shared `stackvo-net`, created by a different compose file;
+  Traefik labels in a file with no Traefik in it, routed by a certificate
+  authority installed in this machine's trust stores; and the backing services
+  in *another compose file entirely*, rendered with values pulled from the OS
+  keystore. Copied into a repository it cannot start anywhere. So this is a
+  **second rendering of the same manifest**, and the whole design was deciding
+  which facts survive the trip.
+
+  **The Dockerfile is the generator's own** for PHP, not a second renderer —
+  the value of the export is that the container is the one StackVo builds, and
+  a copy would drift from it in the week nobody is looking. It needs no
+  adjustment either: the PHP image never copies the source, because here it
+  arrives through a bind mount and there through the workspace mount. The
+  runtimes are the exception, and it is `release.rs`'s asymmetry from the other
+  side — a node or Python Dockerfile does `COPY . .`, installs, builds and ends
+  in a `CMD`. That is a snapshot of the application, which is right for what
+  StackVo runs and wrong for a container you open a terminal in: the source
+  would be a stale copy of the one on screen, and the container would exit
+  whenever the application did. Those get the toolchain, `sleep infinity`, and
+  the install moved to `postCreateCommand` where it runs against the mount.
+
+  **The services are their own packages' fragments**, through the same strict
+  substituter the workspace uses. Not a table of image names written here: ADR
+  0011 is that this application carries no service definitions, and "except in
+  the exporter" is how that decision gets lost. It also could not have been
+  done by hand and be right — the mapping from StackVo's `settings.ROOT_PASSWORD`
+  to MySQL's `MYSQL_ROOT_PASSWORD` exists only in that package's template, and
+  a compose file that starts `mysql` with no root password set does not start
+  at all.
+
+  Six variables are answered differently and they are exactly the ones that
+  name this laptop: `file.*` becomes a relative path, `instance.logs` a named
+  volume, a secret setting a `${DEV_…}` placeholder, `network` the implicit
+  `default`, `instance.domain` localhost — and `port.*` keeps **the host number
+  this workspace allocated**, deliberately, because it is the one already in the
+  author's database client. Container names are kept exactly:
+  `stackvo-mysql-8-4` looks absurd in a repository that has nothing to do with
+  StackVo and is the only answer that works, because the project's own `.env`
+  names that host.
+
+  **Passwords leave as names.** `DEV_` is chosen rather than anything shorter:
+  `template.rs` lists the eight prefixes the workspace renderer substitutes, and
+  a placeholder starting with `STACKVO_` would have been eaten on the way out —
+  silently, leaving a compose file in a repository with an empty password and no
+  error anywhere. A test asserts the prefix is one that renderer leaves alone. A
+  `.gitignore` holding `.env` is written beside them, because the file the
+  reader is about to create is the file that would undo the whole arrangement.
+  A rendered *config* file holding a placeholder is refused rather than written
+  wrong: `${…}` is expanded by Compose in a compose file and is five literal
+  characters in a `my.cnf`.
+
+  Read before written, and never on generate. `agentctx` writes into the project
+  on every generation and says in the file that `.stackvo/` is not meant to be
+  committed; this is the opposite — `.devcontainer/` exists *to* be committed,
+  and a file that turns up in somebody's `git status` because they pressed Start
+  is a file they learn to `git checkout`.
+
+  **Two of these were wrong until a probe was pointed at them.** The first:
+  `command:` in column zero in every export for a non-PHP project. A `\`
+  continuation in a Rust string literal eats the *leading whitespace* of the
+  next line as well as the newline, so a four-space-indented constant came out
+  with three of its four lines flush left — making `command:` a top-level
+  compose key and the file one Docker refuses outright.
+
+  Found by `examples/devcontainer_probe.rs` on its first run, against a document
+  fourteen unit tests had just called correct. Those tests ask "is this string
+  in that string", which cannot answer the question the export exists for:
+  whether Docker accepts the file. The probe renders this machine's real
+  projects against its real packages and hands each result to
+  `docker compose config` — the parser that will actually read it.
+
+  It found a second one in the same run: **Traefik labels were surviving into
+  the export**, naming a host that resolves nowhere and, on a team that does run
+  Traefik, quietly binding a route nobody asked for. The unit test that should
+  have caught it asserted the absence of `traefik` from a fragment written *for
+  that test*; the shipped packages have labels and the fixture did not. The
+  fixture now carries them, copied from the phpmyadmin package — `import_probe`
+  states the same trap from the other side: a parser that reads a fixture its
+  own author wrote agrees with its author.
+
+- **The projects directory is a park, and now it behaves like one.** Herd, Valet,
+  Yerd and Laragon all sell the same thing: point at a folder and every child of
+  it becomes a site. StackVo already had the folder — `projects_root` *is* that
+  directory, and `project_adoptable` already read every child of it and said what
+  each one was. Two halves of the verb were missing.
+
+  **`project_adopt_many` adopts the whole list in one press.** Not a `for` loop
+  in the UI, and the difference is measurable in three places. `generate`
+  rewrites the *whole* projects scope under one global lock, so eleven adoptions
+  as eleven calls are eleven full passes over eleven projects, serialised — the
+  batch writes every manifest first and generates once. `sync_project_host`
+  raises the system password prompt when a name is missing from `/etc/hosts`;
+  its own comment argues that three subdomains must not ask three times, and
+  eleven projects asking eleven times is that same argument one level up, so the
+  hosts write moved into a helper that takes every name at once and the batch
+  asks at most once. And a loop that stops on the first error leaves "some of
+  them worked": every folder gets an outcome here.
+
+  **Skipped is not failed.** A folder that already carries a `stackvo.json` —
+  the list can be a minute old — and a folder holding nothing but dotfiles are
+  ordinary outcomes, not red ones. They carry a stable `code` beside the English
+  `reason`, because the UI has to say them in the reader's language and matching
+  the prose in JavaScript would have turned a sentence somebody could improve
+  into a wire format nobody could see was one. Everything else fails that folder
+  alone. If the *generator* fails, every manifest the call wrote is removed: the
+  state it would otherwise leave — projects listed and none of them generated —
+  is exactly what `project_register` had to be invented to repair, and somebody
+  who pressed one button should not have to know that.
+
+  **`folder:appeared` makes the count live.** Clone a repository into the parked
+  folder and the badge goes up on its own; the answer to "why is my new site not
+  listed" used to be "reopen this dialog", which is the part a park exists to
+  remove. The watcher was already receiving those events and dropping them — its
+  manifest reader accepts `<projects>/<name>/stackvo.json` and nothing else,
+  which is right for its own question and misses every `git clone`. A folder is
+  announced on becoming *new to the watcher* rather than on a timer: a clone
+  writes for as long as the repository takes and every second of it is a create
+  event, so a window would either repeat the same folder a dozen times or be
+  long enough to miss the next one. A removed folder is forgotten, so cloning
+  over the same name announces it again.
+
+  The assumption under all of it is driven against the real thing: a test starts
+  a platform watcher, creates a directory it has never seen and asserts that a
+  path *inside* that directory arrives. On macOS that is FSEvents, and a
+  coalescing backend reporting only the parent would have made the whole feature
+  silent on the platform it was written on — with every other test still
+  passing.
+
+- **A restore takes a copy of what it is about to replace.** DevTent sells
+  "backup before shutdown"; copying that literally would have been theatre here,
+  because `compose_down` leaves the volumes alone and `instance_remove` is
+  documented as leaving them alone (ADR 0012) — nothing is lost when this stack
+  goes down. Measured against the paths that actually can lose data, the answer
+  was a different one: **restore** is the single operation here with nothing
+  behind it. The rows that were there are gone the moment it succeeds.
+
+  Both restore paths take one first — `db_restore` from a file the user picked,
+  and `db_snapshot_restore`, which is the one people actually use. Leaving it
+  off the second would have put the safety on the rarer of the two. The snapshot
+  path takes it _after_ the named file is known to exist: a copy taken and then
+  a failure because the thing being restored was never there is a net for
+  nothing.
+
+  **It gets its own reserved prefix, `before-restore-`, not the scheduler's
+  `auto-`,** and two things would have broken otherwise. `last_automatic`
+  matches on `auto-`, so a restore would have pushed the next scheduled backup
+  out by a full interval — hours or a day of no backups, with nothing on screen
+  connecting the two. And `expired` prunes automatic copies against one
+  retention window, so a run of restores would have evicted the scheduled ones
+  that window exists to keep. Both are held by tests, one of them against a real
+  directory because `last_automatic` reads one.
+
+  Its window is **the last 3 per service, pruned when one is taken** rather than
+  by the scheduler. Not a style choice: the schedule defaults to `off`, so a net
+  that only tidied up when a feature nobody switched on runs is a disk that
+  fills. Three, because "I restored the wrong file" is realised in minutes.
+
+  **A failure to take it stops the restore** — the caller asked for a net, so
+  doing the irreversible thing without one would answer a different question.
+  That would trap one person, though: a database too broken to dump is exactly
+  the one somebody is restoring over. So it is a flag, and the UI asks the
+  second question **only when the copy actually fails**, which is where it
+  belongs — nobody should have to answer it on the way past a working one.
+
+  One duplication went with it. The reserved-prefix character check existed
+  twice, in `snapshot.rs` and in `commands.rs`, and only one of the two would
+  have learned about a second prefix. There is one `reserved_checked` now, and
+  adding the prefix is what found the copy.
+
+### Fixed
+
+- **A test could hang the whole suite on a password dialog.**
+  `hosts::apply` falls back to an elevated copy when it cannot write the file,
+  and on macOS that is `osascript`'s administrator prompt — a window behind
+  every other window with nobody to answer it. `cargo test` sat at 0% CPU until
+  it was killed. It is §3 #37's failure one seam over: a hanging suite looks
+  like a slow one.
+
+  The comment above `write_in_place` already claimed the unelevated branch "is
+  the one that runs, on every platform, without a prompt nobody could answer in
+  CI". It was a claim and nothing held it. Elevation is now **refused outright
+  while `STACKVO_HOSTS_PATH` is set**, with an error naming the file — which is
+  the honest answer as well as the safe one, because the seam exists precisely
+  to point this at a file we may write, and being unable to write it is a broken
+  test rather than a reason to ask a human for a password.
+
+  `tests/hosts_no_prompt.rs` holds it, on a real read-only file rather than a
+  stub, and in a binary of its own: the seam is an environment variable, so a
+  test that sets it needs the process to itself. Putting it beside
+  `hosts_roundtrip` made both fail, which is the cheapest possible demonstration
+  of the rule that file already states at the top.
+
+- **Declared containers have a screen.** `sidecars` — a repository declaring a
+  container of its own (ADR 0023) — was parsed, validated, refused when it asked
+  for the host, and rendered into the project's compose file. Nothing showed it.
+  `hooks`, the sibling block in the same manifest, has had a pane since it was
+  written.
+
+  That gap is what made ADR 0027's answer hollow. It rejects Ollama and Qdrant
+  as catalogue services and says "somebody who wants either writes a `sidecars`
+  block" — a true sentence about a feature nobody reading the app could find out
+  existed, which is the same as not having it. The decision is unchanged; what
+  changed is that the alternative it names is now reachable.
+
+  `project_sidecars` is a command rather than a field read off the manifest the
+  view already has, and the two derived names are why: `container` is the
+  hostname the application connects to and `volume` is what `docker volume ls`
+  calls the state. Deriving them in JavaScript would be a second copy of a
+  naming rule whose entire purpose is that two clones of one repository cannot
+  collide.
+
+  The pane leads with the hostname, because it is the only thing a reader cannot
+  work out and the only thing they have to put in their own config. It says once,
+  at the bottom, that a declared container has no host port and no host path —
+  as a reason rather than a limitation to work around. A project that declares
+  none gets no card at all.
+
+  One gate was missing under all of it and is not tautological: **the sidecar
+  and the project must be on the same network**, which is what makes the
+  container name a hostname the application can resolve. The pane's headline
+  sentence is true only while that holds, and nothing in the generator's tests
+  would have noticed it stopping. Confirmed by changing the network and watching
+  it fall over.
+
+  Help in both languages, and a worked example: what to declare, why `image`
+  needs a tag, why `env` is not for secrets, and when to write one instead of
+  asking for a package.
+
+- **Laravel Reverb runs as a worker, and is the first one a browser can
+  reach.** Herd Pro sells Reverb as a service and EnvKit advertises "proxies
+  WebSocket while keeping trusted HTTPS routing"; this had neither.
+
+  **It is not a service, and the competitive review's estimate was wrong about
+  that.** Reverb has never been an image — it is `php artisan reverb:start`
+  inside the application — so the service catalogue was the wrong place and
+  `worker.rs` was the right one. It joins queue, scheduler and Horizon as a
+  fourth kind, detected the same way Horizon is: `laravel/reverb` in
+  `composer.json`'s `require`. That read now excludes `require-dev` for both,
+  because a package there is a tool for the test suite rather than a process to
+  run beside the site — and Horizon under `require-dev` while somebody is
+  evaluating it is a real thing people do.
+
+  **What makes it different is that a browser has to open a socket to it, and a
+  published host port cannot do that.** This app serves projects over HTTPS, and
+  no browser will open `ws://localhost:8080` from an `https://` page — it is
+  blocked as mixed content. So it is routed, and routed on the project's **own
+  domain under Reverb's own path prefixes** rather than at a hostname of its
+  own. That choice costs nothing and buys everything: no certificate to extend,
+  no hosts entry to write, no `*.` alias to require, and
+  `wss://shop.loc/app/<key>` is same-origin with a certificate the browser
+  already trusts. `/app` and `/apps` are fixed by the Pusher protocol, not
+  chosen — they are what Laravel's own deployment notes put in front of an
+  nginx.
+
+  Two numbers are held together by tests because they are written twice and
+  their coming apart is silent: the `--port=8080` Reverb is started with and the
+  Traefik service port it is routed to. A mismatch is a socket that connects to
+  Traefik and closes, which reads as a Reverb bug. `--host=0.0.0.0` is likewise
+  asserted — Reverb's own default binds loopback, and inside a container that
+  means Traefik one hop away cannot reach it.
+
+  The router priority is **set rather than inherited**. Traefik orders routers
+  by rule length by default and this rule is longer than the project's bare
+  `Host()`, so it would usually win; usually is what the number replaces. And a
+  project with no domain is refused rather than routed, because the alternative
+  is a `Host(``)` rule that loads and matches nothing.
+
+### Changed
+
+- **Ollama and Qdrant stay out, and the softest half of the reason is now the
+  hardest.** ADR 0027 rejected both with "wants a GPU it may not find", written
+  as a risk. On the platform most of these users are on it is a certainty:
+  Docker Desktop on macOS cannot pass the Apple GPU into a container at all —
+  Apple's virtualisation framework exposes no GPU API for it — so a
+  containerised Ollama on Apple Silicon is CPU-only and runs **3–5× slower**
+  than the native application it would replace. That held from M1 through the M5
+  line, and Ollama's own answer for macOS is "run it natively". The package
+  people ask for would be measurably worse than doing nothing, with no way to
+  fix it from here. Recorded in `vector_capability.rs`, where the decision
+  already lives.
+
+- **Twelve more programs can be run in the project's container.** DDEV has
+  fifteen of these rows; this had four, which made "run it in the container"
+  read as a PHP feature. The new ones are `wp`, `console`, `rails`, `bundle`,
+  `yarn`, `pnpm`, `python`, `ruby`, `go`, `cargo`, `bun` and `deno`.
+
+  **The rule for every row is that this app already declares the program**, and
+  that is what keeps this from being breadth for its own sake. Three sources and
+  nothing outside them: `quickcmd::CATALOGUE`, which records what each
+  framework's container actually runs and was verified against real images when
+  those rows were written; `manifest::LANG_RUNTIMES`, the runtimes this app
+  generates a container for; and `manifest::NODE_PACKAGE_MANAGERS`, the three
+  Corepack can pin.
+
+  The runtimes were the real gap. `php` and `node` had a row and the six others
+  did not, so a project this app can build had no way to open a `python -V` in
+  it. Checked before it was written rather than assumed: `generator.rs` builds
+  each of them in **one** stage — `FROM golang:1.23`, `FROM rust:1` — so the
+  toolchain is still in the running container and `stackvo cargo test` reaches a
+  cargo that exists.
+
+  **The rule is a test, not a comment.** `cli_surface.rs` now fails the build if
+  a runtime in `LANG_RUNTIMES` or a manager in `NODE_PACKAGE_MANAGERS` has no
+  way to be run, and if two rows run the same program. Confirmed by deleting the
+  `deno` row and watching it fall over, rather than by reading it.
+
+  `wp` carries `--allow-root` in its prefix for the same reason `quickcmd`'s two
+  wp rows do: the container runs as root and wp-cli refuses outright without it,
+  so every call would fail. wp-cli takes a global flag anywhere on the line,
+  which is what makes putting it in the prefix safe.
+
+  **`drush` is deliberately absent.** `detect.rs` recognises `drupal/core`, but
+  nothing in this app says how Drupal is driven — no catalogue row, no generator
+  step — so a `drush` row would be inventing a path and finding out from a bug
+  report. It is one `stackvo exec drush` away.
+
+  All twelve are tab-completable with no further work, which is the payoff of
+  generating the completion from the same table.
+
+- **A program that is not in the container says which project it is not in.**
+  Twelve new rows make `stackvo python -V` in a PHP project a mistake somebody
+  will make. Docker's own message is accurate — `"python": executable file not
+found in $PATH` — and is left exactly as it arrived; one line is added after
+  it with the fact Docker cannot know. Only on exit 127, only for a command that
+  names a fixed program, and never under `--quiet`, because that is narration.
+  The exit code is still passed straight through.
+
+### Fixed
+
+- **A test asserted a property of the author's machine.**
+  `tooling::resolve_falls_back_to_the_bare_name` read the real
+  application-support directory and asserted the fallback branch on the
+  reasoning that "nothing is installed in a test run" — which stopped being true
+  the moment somebody installed mkcert with the app they were building, and then
+  a full suite failed on one machine and passed on every other. It is the same
+  flaw as a test waiting on the real keychain (§3 #37), one turn quieter: it
+  does not hang, it accuses the wrong change. `resolve` now has a pure
+  `resolve_in(dir, program)` under it and the test owns its directory, so
+  **both** branches are covered where only one was.
+
+- **Tab completion, in all four shells, generated from the command table.**
+  DDEV ships completions and `dde` installs them as part of `system:install`;
+  this had none. The reason it needed a module rather than four files is that a
+  hand-written completion script is a **second copy of the command list**, in a
+  language no test reads, that silently stops matching the first. `cli.rs`
+  already refuses to let the CLI drift from `contracts/ipc.json`; letting it
+  drift from a `.bash` file instead would be the same mistake with the gate
+  removed.
+
+  **The shell side is four lines and knows nothing.** It collects what has been
+  typed and asks `stackvo complete --word <partial> -- <the words before it>`,
+  then prints what comes back. `completions::candidates` is the whole of the
+  logic, it is pure, and it is tested. Adding a shell is a stub; adding a
+  command is nothing at all. The current word is passed **separately** because
+  every shell disagrees about whether the word under the cursor is in the word
+  list — bash puts an empty string there, fish does not — so inferring it from
+  the last element would behave differently in each.
+
+  It completes commands, flags — global and the command's own — and the
+  positionals whose placeholder already names a list this app keeps:
+  `<project>` from the workspace, `<client>`, `<target>`, `<tool>`, `[shell]`,
+  and a literal `on|off`. Everything else yields nothing, which is not a
+  failure: the stubs leave the shell's own file completion on, so a `<path>`
+  falls through to filenames. Service containers are **not** offered for
+  `logs <container>`, and that cap is named rather than silent — listing them
+  needs the engine, and a completion that waits on Docker is a shell that hangs
+  when Docker is down, which is exactly when somebody types `stackvo logs`.
+
+  **`stackvo path-install` writes it into the same marked block as the `PATH`
+  line**, after it rather than before — a completion registered for a command
+  that is not yet on `PATH` does not fail, it simply never fires. One region,
+  so one `path-remove` takes both back out. `stackvo completions <shell>`
+  prints a stub on its own for a package manager.
+
+  Two things had to be right that no unit test could see.
+
+  **The zsh stub is guarded on `compdef` existing.** `compdef` comes from
+  `compinit`, which many people never run and oh-my-zsh runs from the middle of
+  their file — and `merge` appends our block. Unguarded, it prints
+  `command not found` into every new terminal: the exact failure this module
+  exists to prevent, delivered by the fix for it.
+
+  **The bash stub builds the word list before it narrows `IFS`.** The obvious
+  spelling puts `local IFS=$'\n'` at the top and expands
+  `"${COMP_WORDS[@]:1:COMP_CWORD-1}"` inside the command substitution — and on
+  **bash 3.2, the bash macOS ships**, that collapses the slice into a single
+  argument. `artisan migrate` arrived as one word, no command was recognised in
+  it, and `stackvo artisan migrate --<TAB>` offered this binary's own global
+  flags. Every Rust test passed the whole time, because they call `candidates`
+  directly and it was right. `examples/completion_probe.rs` is what found it and
+  is what keeps it found: it writes each stub, sources it in a real bash and a
+  real zsh, sets the variables the line editor would have set, and reads back
+  what the function put in the reply array. Reintroducing the bug fails 2 of its
+  14 checks — including one symptom nobody had noticed by hand, `xdebug shop
+<TAB>` answering with the entire command list.
+
+  The probe prints **which binary it read and whether it is older than
+  `completions.rs`**, because the first run of it reported every check green
+  against the very bug it was written for: `cargo run --example` builds the
+  example and not the `stackvo` bin.
+
+  `Backing::Local` is new and is the second exception to "every CLI command
+  names a contract command". These two answer from the table in `cli.rs` rather
+  than from the stack, so naming one would be an invention, and `Surface` means
+  "a screen over several", which they are not. It is held to a boundary by
+  `cli_surface.rs` exactly as the container commands are: a `Local` command
+  reaches no contract command and never writes. They also get their own
+  `--help` heading — listing `complete`, which no person ever types, between
+  `doctor` and `logs` would put noise in the one list people read before typing.
+
+- **Herd and DDEV can be imported.** The importer read five rivals and neither
+  of the two that matter most: Herd is the paid leader of this category, and
+  DDEV's project file is the most machine-readable thing any of them writes.
+  Both were added, and neither needed a reader of its own.
+
+  **Herd is Valet's shape with another root.** That is the finding rather than
+  an assumption — Herd is built on Valet and keeps the same `config.json` with
+  the same `paths` and `tld`, the same `Sites/` directory of symlinks and a
+  `Nginx/` directory of per-site configs, all under `~/Library/Application
+Support/Herd/config/valet`. So the reader that already existed was pointed at
+  another directory instead of a second one being written, and `scan_valet`
+  became `scan_parked`.
+
+  Two things are Herd's and not Valet's, and both are read. **`~/Herd` is parked
+  whether or not the config says so** — Herd parks it on install and does not
+  write it into `paths`, so a reader that trusted the config alone would miss
+  the directory most Herd users keep everything in. And **the PHP version is
+  written down**: Herd runs a pool per version and points each site's
+  `fastcgi_pass` at that pool's socket, which makes Herd the only source of the
+  seven whose sites arrive with a version somebody _chose_ rather than one
+  inferred from a `composer.json` constraint. `^8.1` is what a framework needs;
+  `8.3` is what the site was being served with.
+
+  Reading digits out of a socket name needed two guards and both are earned.
+  The line has to name a **`.sock`**, because `fastcgi_pass 127.0.0.1:9000` also
+  has digits in it and reading those gives `1.270`. And the run has to be
+  **exactly two digits**, which is every PHP version there has ever been a build
+  of. Failing to match costs an override that does not happen, not a version
+  that is wrong.
+
+  **DDEV is a fourth shape: a registry plus a declaration.** `~/.ddev` lists
+  every project's `approot`, and each of those holds a `.ddev/config.yaml` that
+  states the PHP version, the document root, the web server, the database engine
+  and the extra hostnames. Every other source here makes this app _infer_ those
+  from the code; DDEV's file declares them, so an imported DDEV project is the
+  one case where nothing is guessed. The declaration wins over detection and
+  only where it speaks — gated on the detected runtime, so a `php_version`
+  cannot be laid over a project detection called Node (W-02) — and detection
+  keeps what it reads from the code, which is the framework.
+
+  The registry is read **by its leaf key**, `approot`, from wherever it appears.
+  That is what makes it survive being reorganised: the list lives in
+  `global_config.yaml` under `project_info`, DDEV has an open proposal to move it
+  to its own `project_list.yaml`, and both files nest the same key under the
+  project name. Both are read, because a machine mid-upgrade has both.
+
+  The trap in the config file is not a detail. **DDEV writes its whole annotated
+  template into every project**, so the file carries `#php_version: "8.4"` — no
+  space after the hash — as an example. A scanner that took the first line
+  mentioning the key would read the example instead of the answer, on every DDEV
+  project in existence. There is no YAML crate in this tree to reach for
+  (`serde_yaml` is archived and `deny.toml` fails the build on an unmaintained
+  direct dependency), so this is a line scan for the third time in the module,
+  with the same reasoning `sail_services` wrote down.
+
+  **Two gaps closed while they were visible.** `Source::from_id` kept its own
+  copy of the source list, which is how a source can be readable by `scan_at`
+  and refused by the command that calls it — the state three of the five were in
+  once. There is now one list, `imports::ALL`, and everything walks it. And
+  nothing held the front end's `IMPORT_SOURCES` against the backend's:
+  `foreign_import.rs` now checks both directions, because an id the backend
+  refuses is a button that errors and a source with no id is a tool nobody can
+  point at.
+
+  One existing test asserted `from_id("herd") == None`. That is the wrong shape
+  for a claim — it froze one absence rather than checking the list, so it would
+  have kept passing while the list grew. It iterates `ALL` now, which is the
+  check its name always described.
+
+- **`stackvo` can be put on your PATH, from the app.** Every rival ships a
+  Tooling page; the measured one here is Yerd's, which fetches `composer`,
+  `node`, `bun`, the Laravel installer and `wp-cli` onto the host and shims them
+  onto `PATH`. Half of that page has no place here and half of it was missing
+  entirely — and the missing half was the load-bearing one.
+
+  **Not copied:** the tool downloads. Those five run in the project's container
+  at the version the project declared; `stackvo composer install` and the quick
+  commands already reach them. A host copy would be a second answer to "which
+  composer runs" and it would be the wrong one — it knows nothing about the
+  project's PHP. `cli.rs` had already written that argument down about `php`.
+
+  **What was missing:** `stackvo` and `stackvo-mcp` are programs this repository
+  builds, the README documents them, `agents_install` registers one of them with
+  six assistants — and nothing anywhere put either where a shell would find it.
+  The instruction was "build it and remember the path", which is not something
+  you can tell the person who downloaded a `.dmg`. **Both ship inside the app
+  now** — `externalBin`, built by `tools/sidecars.mjs` under the target-triple
+  name the bundler looks for, landing beside the main binary in
+  `Contents/MacOS/` (measured on a real bundle, not assumed: that is exactly
+  where `agents::binary` and `tooling::shipped` already looked, so neither
+  needed a line changed). The app is 27 MB instead of 16, and the `.dmg` 12 MB.
+
+  Declaring `externalBin` has a cost that only shows up when you run it:
+  `tauri-build` checks the files exist on **every** cargo build of the package,
+  including the one that produces the sidecars, because they are `[[bin]]`
+  targets of the crate that carries the build script. Building them requires
+  them. `tools/sidecars.mjs` writes a text placeholder first and copies the real
+  binary over it, and `beforeBuildCommand` runs `--verify`, so no `tauri build`
+  on any path can bundle one. The placeholder is a script that exits 1 rather
+  than an empty file: if one ever escaped it fails loudly instead of looking
+  like a truncated download.
+
+  Settings → Tooling links
+  both into a directory the app owns and writes one line into one shell's
+  startup file: zsh, bash (`.bash_profile` on macOS, `.bashrc` elsewhere), fish
+  or PowerShell. Between markers, after a backup, leaving every other byte alone
+  — `rules.rs`'s rules, for the same reason. `stackvo path-install [shell]`,
+  `path-remove` and `tools` are the same thing from a terminal.
+
+  The line quotes the directory and puts `$PATH` **inside** the quotes: the
+  default on macOS is `~/Library/Application Support/StackVo/bin`, and
+  `export PATH="/a b":$PATH` is valid and wrong — the unquoted expansion is
+  word-split, so a `PATH` that already holds a space reaches `export` as several
+  arguments.
+
+- **mkcert can be installed by the app, against a digest it was built with.**
+  It was the one host requirement this app could report and never obtain:
+  without it the stack runs and every browser warns. It is also the only tool in
+  the catalogue where fetching is the right answer rather than a second copy of
+  `docker pull` — one static binary its author publishes.
+
+  The SHA-256 is **compiled into the build**, one per platform, and is not
+  fetched: a checksum served beside the file it describes is not a check,
+  because whoever can replace one can replace the other. Nothing is written
+  until the bytes match. There is deliberately no update verb — an idempotent
+  install that follows upstream is how a pin stops being a pin.
+
+  The requirements gate offers it too, and that is where it matters most: the
+  gate's own comment says a row that reports a problem and offers nothing to do
+  about it is worse than absent, and named the mkcert row as the one that had
+  been like that since it was added.
+
+- **Recording a profile no longer needs a browser.** php-spx's control panel is
+  the documented way in and it needs a person: a page opened at the site's own
+  address, a checkbox, a cookie. Everything this app could offer stopped at
+  opening that page. Two doors are open now and neither goes through a browser.
+
+  **A request** is recorded by sending it with the profiler's cookie on it,
+  which is php-spx's own documented trigger — its README profiles a page with
+  `curl --cookie "SPX_ENABLED=1; SPX_KEY=…"`. Type a path, get a profile.
+  **A command** is recorded by running it with `SPX_REPORT=full` in its
+  environment, through the same fixed catalogue the quick-command buttons use,
+  so the frontend still names an _id_ and never a program. Both land in the same
+  list. `stackvo spx-record <project> [path]` is the same thing from a terminal.
+
+  The host is always the project's own domain, from its manifest. What crosses
+  is the **path**, and one opening `//` is refused: that is a protocol-relative
+  URL, and accepting it would have made a text field on a pane a way of sending
+  this app, with a credential attached, to somebody else's host. Redirects are
+  not followed either — a framework answering `/` with `/login` would otherwise
+  write two recordings for one button and show the wrong one.
+
+  Lerd reaches the browser case from its own window by injecting the cookie in
+  the web server's configuration. That is deliberately not done here: the server
+  config is generated under a byte-for-byte contract with the Bash CLI, and
+  reaching into it to hold a piece of UI state would put this app inside a file
+  another program owns.
+
+- **Where the time went, without leaving the app.** A report row could say a
+  request took 900 ms and nothing about which function held it; that answer was
+  in the trace half of the pair, readable only in SPX's own web UI. It is read
+  here now — `spx_report`, the `stackvo_hotspots` tool, `stackvo spx-top` — as
+  the functions that held the run, ranked, with the share each held in its own
+  body and the share it held including everything it called.
+
+  The format was established by recording against a real image, and two
+  properties of it decide the whole implementation: the metric values are
+  **cumulative totals**, so time is attributed by the gap between consecutive
+  events to whatever was on top of the stack, and the function table is written
+  **after** the events that index into it, so names are applied after the replay
+  rather than during it. Recursion is counted once — a function that calls
+  itself adds its inclusive time only when its outermost frame leaves, or it
+  reports having held 166% of the run. A very long trace is replayed up to a
+  limit and **says so** rather than presenting its first half as the whole.
+
+  There is also a **view** button per row now, which opens that recording in
+  SPX's own viewer rather than its index. The flame graph and the call tree are
+  that project's work and there was no reason to rebuild them; what was missing
+  was a way to reach _this_ report.
+
+- **A sampling period, so the pane's own first sentence is true.** php-spx's
+  default period is `0` — every call — which makes it a tracing profiler with
+  the cost this whole feature exists to avoid. Recordings started from StackVo
+  now sample every 100 µs by default, and "every call" is still one choice away
+  for counting a fast function exactly. Built-in functions are an option beside
+  it.
+
+  Measured, and not where it looked like it should go: php-spx has
+  `spx.http_profiling_sampling_period` and siblings that read exactly like a
+  place to put these, and they are never consulted for a recording. Its
+  `PHP_RINIT` reads the ini source **only when access was not granted** — a
+  request carrying no key, which is a request it is not profiling. Wiring the
+  pane to them would have produced controls that appeared to work and did
+  nothing. They ride in the request and in the environment instead.
+
+### Fixed
+
+- **A recorded run's time was shown a thousand times too long.** php-spx's
+  metadata calls the field `wall_time_ms` and it holds **microseconds**, so a
+  183 ms request was listed as "182837 ms". Measured rather than reasoned about:
+  a script written to burn a known 180 ms produced `"wall_time_ms": 182837`
+  while the trace's own cumulative total for the same run said `182837191`,
+  which is nanoseconds. The value now crosses as `wallTimeUs` and is formatted
+  by one function per surface, because a number that reads `736 µs` in the
+  window and `0 ms` in the terminal is the same bug twice.
+
+- **The profiler tool's redaction was tested against a copy of itself.** The
+  test that proved no key leaves the assistant surface re-implemented the
+  removal instead of calling it. It agreed with the code and neither matched
+  what ran — so when a second field carrying the key was added, the test would
+  have kept passing while the field walked straight out. The redaction is one
+  function now and the test goes through it.
+
+- **The profiler and the IDE setup reach the surfaces that get asked about
+  them.** `stackvo_profiler` and `stackvo spx` answer "why is _this page_ slow"
+  — the sampling profiler's three states and everything it has recorded — and
+  the AI rules name both it and `stackvo_ide_debug` in the table that says
+  which tool answers which question, which a test keeps honest by checking that
+  every tool the rules name exists. `stackvo spx-build` compiles the extension
+  from a terminal, the same throwaway-container build the pane runs.
+
+  **The tool redacts the control URL**, and that is the part worth writing down:
+  the URL carries the profiler's key, a key is a credential however cheap it is,
+  and this surface returns none — the loopback HTTP surface serves whatever the
+  tool dispatch returns. The pane keeps the URL because a person is going to
+  click it; a model cannot open a browser, so it is told where to find it
+  instead. Thirty-three tools now, sixteen of them served over loopback.
+
+  The CLI renderer also said "not mounted — recreate it" for a project with the
+  profiler switched **off**, which is telling somebody to recreate a container
+  to apply a setting they never asked for. The pane had always asked the second
+  question; the renderer had not.
+
+- **php-spx: the profiler you can leave on** (§3, the profiler). Herd and Lerd
+  both ship it and both sell it on one property — it samples, so it can be left
+  on during a real page load, where Xdebug's profiler costs several times the
+  request. That is not a nicer version of what this app had; it is the case
+  Xdebug's profiler cannot cover, because you cannot browse a site under it.
+
+  `profile.rs` had ruled it out, and the reasoning was right about the contract
+  and wrong about the conclusion: it assumed the only way to get an extension
+  into a container is to put it in the manifest. `php-extensions.json` is the
+  data half of the Bash generator's own install matrix, so adding `spx` would
+  claim the Bash CLI knows how to install something it has never heard of — and
+  it could not be honoured anyway, because **SPX is not on PECL** and the
+  contract's `special` install method is documented as v1-MUST-REJECT.
+
+  So the extension never enters the manifest, the Dockerfile or that contract.
+  It is installed the way the debug bridge is: compiled into a directory this
+  app owns, mounted, and switched on by an ini in `conf.d`. The build runs in a
+  **throwaway container of the project's own image**, because an extension has
+  to match the ABI of the php-fpm that loads it — and not against the running
+  container, which would mean `apt-get install` inside somebody's live php-fpm.
+  Output is keyed by PHP version, so every project on 8.4 shares one build.
+
+  Four things in this module were measured rather than read, and three
+  contradict what the documentation implies. **It is `extension=`, not
+  `zend_extension=`** — loading it the other way fails outright, which is the
+  error the first version of this was written against. A report is a **pair**
+  of files, `<key>.json` and `<key>.txt.gz`, and the JSON carries wall time,
+  peak memory, call counts and the request — enough that the list here needs
+  none of SPX's own UI to say what was recorded. And `spx_utils_ip_match`
+  accepts `*` and IPv4 CIDR and nothing else, which is what decides the
+  whitelist: behind this stack's own proxy the address SPX sees is the proxy's
+  container address, so the private ranges are what have to be allowed and `*`
+  is not needed to do it.
+
+  The whole path was driven for real before it shipped: the module's own build
+  script, run against this repository's project image, produced a loadable
+  `spx.so` and the web UI assets; the ini it renders, mounted at the paths the
+  overlay uses, loads the extension, applies every setting and records a report
+  into the host-visible directory.
+
+  Recording itself is SPX's own control panel, served by the extension from
+  inside the project's vhost — no port to publish and no second server. The
+  pane warns when Xdebug is recording too: two profilers hooking one engine is
+  unsupported by both projects and the symptom is wrong numbers rather than an
+  error, so it is said rather than prevented — which one to turn off is not
+  this app's decision.
+
+- **Two Xdebug modes that were missing, and one of them is not a mode.**
+  `coverage` is the fourth: DDEV exposes it, this did not, and without it
+  `--coverage-html` produces an empty report and a warning most people never
+  read. It is the only mode that records nothing of its own — PHPUnit writes
+  the report — so it mounts no ini, claims no recording directory, and the pane
+  says so instead of leaving somebody watching an empty list.
+
+  `develop` is the one that is **not** a mode, and modelling it as one would
+  have been the mistake worth avoiding: `xdebug.mode` is a _list_, and `develop`
+  is what makes `var_dump` readable and puts a stack trace on a warning. Herd's
+  own documented configuration is `debug,develop` — so a fifth radio button
+  would have made "step debugging with readable dumps" unreachable. It is a
+  switch beside the picker, `XDEBUG_MODE` becomes `debug,develop`, and moving
+  either control leaves the other exactly as it was.
+
+  That list is also why the front end's mismatch check had to change. It
+  compared the container's `XDEBUG_MODE` against the configured _mode_, so a
+  project with `develop` on ran `debug,develop` against a picker still reading
+  `debug` — a "recreate the container" warning for a container that was already
+  correct. It compares the rendered value now, which the backend computes so the
+  screen and the overlay cannot disagree about what was applied.
+
+- **`stackvo ide` and `stackvo_ide_debug`.** The IDE setup arrived on the
+  Settings screen and nowhere else, which left the two surfaces that are asked
+  the question unable to answer it: an assistant asked "why is my breakpoint not
+  hit" had no tool for it, and neither had the terminal. Both now read the same
+  status — the port, the mapping, each IDE's state, and whether anything is
+  listening. `stackvo ide-install <project> <ide>` does the same write the pane
+  does, audited the same way, because the trail's question is "did something
+  write into a repository" and it must not have a different answer depending on
+  which surface did it.
+
+- **The IDE setup for step debugging is filled in, not described.** Every
+  local-environment tool's step-debugging page is the same page — here is the
+  port, here is the host, here is the path mapping, now type them into your IDE
+  — and DDEV, Laradock, ServBay and Herd all then name **the path mapping** as
+  the usual reason a breakpoint never hits. `xdebug.rs` already computed both
+  halves of that mapping and this app had been printing them on screen as two
+  strings to copy into a dialog by hand.
+
+  `ide.rs` writes them. VS Code gets a `Listen for StackVo: <project>` entry in
+  the project's `.vscode/launch.json`, mapping written remote-to-local with
+  `${workspaceFolder}` on the local side rather than this machine's path —
+  `launch.json` is committed by roughly everybody, and an absolute path in it is
+  a configuration that works for exactly one person. The entry is replaced where
+  it stands, because that list is the IDE's dropdown and its order is somebody's
+  preference, and everything else in the file comes back unchanged with a
+  `.stackvo-backup` beside it. A `launch.json` with comments in it — which is
+  what VS Code itself creates — is reported rather than rewritten, the same
+  decision `agents.rs` made about the same editor's `mcp.json`.
+
+  **PhpStorm is deliberately not written.** Its equivalent lives in
+  `.idea/php.xml` and `.idea/workspace.xml`, which the IDE holds in memory and
+  rewrites on exit, so an edit made underneath a running PhpStorm is an edit
+  PhpStorm overwrites — leaving a tool that says it configured something and an
+  IDE that disagrees. Its server entry, with the name and both roots already
+  filled in, is offered to paste. Refusing to write is not a smaller feature
+  than writing badly.
+
+  And the half that is in no file: **is anything listening?** An IDE that is not
+  listening is the other reason a breakpoint never hits, and nothing in an IDE
+  says so out loud — DDEV is the only one of the five with a tool for it, and
+  it is a separate command. This reads the operating system's own table of
+  listening sockets, the one `doctor` already uses to say who holds port 80, and
+  names the process holding 9003 or says nothing does. A read, never a
+  connection: dialling a DBGp port to see whether anything answers would appear
+  in the user's IDE as a debug session that immediately dropped, which is noise
+  this app has no business generating on somebody's screen.
+
+- **The MCP surface goes from 17 tools to 31, and service control arrives on
+  it.** The gap against the five rivals with an MCP server was not the count.
+  ServBay exposes service start/stop/restart, system metrics, hosts and domains,
+  packages and backups; FlyEnv and EnvKit both expose service control as the
+  first thing they mention. This one exposed neither service control nor a
+  single metric, and the reason was structural: `instance_start` and its pair
+  took an `AppHandle`, so a stdio subprocess could not call them.
+
+  `progress::Null` is what let them off the window — the same split that made
+  `stack_up` reachable a release ago — so `stackvo_service_start`,
+  `_stop` and `_restart` now drive the exact function the window drives, with
+  the events dropped. They take an **instance** id rather than a service name:
+  a workspace running MySQL 8.0 and 8.4 has two answers to "restart MySQL", and
+  a tool that took the service name would work on the machine that has one and
+  be a coin toss on the machine that made instancing worth building.
+
+  The reads that came with it are the ones a question actually needs and this
+  surface could not answer: `stackvo_system` (host CPU, memory, disks, network,
+  the engine's totals, and which stack member holds the image bytes — sampled
+  twice because a single reading has no CPU delta), `stackvo_container_stats`,
+  `stackvo_hosts`, `stackvo_log_read` (the other half of `log_files`: that one
+  says which file changed a minute ago, this one reads it),
+  `stackvo_service_instances`, `stackvo_service_connection`,
+  `stackvo_packages`, `stackvo_snapshots` and `stackvo_mail_message`. Plus
+  `stackvo_project_restart` and `stackvo_snapshot_take` behind
+  `--allow-writes`.
+
+  **Restoring a snapshot is deliberately not a tool.** Taking one is: it adds a
+  file, changes nothing, and is the call to make before asking for a migration.
+  Putting data back over live rows is a decision for the app's own confirmation.
+  And no tool returns a credential — `service_connection` is hard-coded to the
+  unrevealed form, and a test now asserts that no schema on this surface has a
+  `reveal`, `password`, `secret` or `token` property, because the way that comes
+  back is somebody adding the parameter for symmetry with the IPC command.
+
+  Every one of the fourteen goes through the same three cross-checks the table
+  already had: it names a real `contracts/ipc.json` command, a read-only tool
+  cannot be backed by a declared mutation, and a write-gated tool cannot be
+  backed by a mere query.
+
+- **The server negotiates its protocol revision instead of asserting one.**
+  `initialize` answered with the constant `2024-11-05` whatever the client
+  asked for. The spec's rule is to echo the client's revision when it can be
+  supported, and a client that gets a different one back is entitled to hang up
+  — which reads to the user as "the server does not work", with the reason in a
+  log they never see. It now speaks `2025-06-18`, `2025-03-26` and
+  `2024-11-05`, answers with the one it was asked for, and falls back to its
+  own only for a revision it does not know.
+
+- **The loopback surface intersects over a tool's whole reach, not its
+  headline command** (§34). `websurface::tools()` asked `exposable` about the
+  one command a tool names, and that is the whole answer only while a tool
+  reads nothing else — which several do, correctly: `stackvo_project` reads the
+  certificate and the PHP limits along with the manifest because that is the
+  answer somebody wanted. Undeclared, that made the check a gap the width of
+  whatever the dispatch touched.
+
+  `stackvo_log_read` walked through it. It names `app_logs`, a `query` that
+  lists files, and returns the tail of one — which is `app_log_open`, a
+  `mutation`. Container logs were kept off that surface by their `stream` kind
+  and application log _contents_ would have been served beside them. Each tool
+  now declares the other commands it reaches in `mcp::Tool::also`, the surface
+  intersects over all of them, and a test names the regression rather than
+  implying it. Fourteen of the thirty-one tools are served, and `log_read` is
+  not one of them.
+
+- **`tunnel_providers` joins the keystore denial list.** It arrived with the
+  eight providers, hands back a `hasToken` boolean and no token, and computes
+  that boolean by calling `secrets::read` — which is exactly the argument this
+  list already refuses to accept from `service_db_clients`. Named for what is
+  proved rather than for what is suspected: the fixpoint in
+  `websurface_claims.rs` found it, nothing else had.
+
+- **Four tool calls that answered a mistake with a fact.** The names on this
+  surface come from a model rather than from a list somebody clicked, so a
+  misspelling is a case rather than an edge case — and four readers underneath
+  answered one with an empty result, which reads as a fact about the subject
+  instead of about the name. `stackvo_log_read` on a project that does not
+  exist returned no files, which is what a project that has never logged
+  anything returns; `stackvo_service_connection` returned `null`, which is what
+  a real service with no connection string returns; `stackvo_logs` returned no
+  lines for a container that is not there; and `stackvo_mail_message` failed
+  with a transport error naming an unreachable `127.0.0.1:8025` rather than
+  saying the catcher was off. All four now say which it is, and the project
+  lifecycle tools name the project before they ask the engine, so "no such
+  project" stops arriving as "no such container" — a different problem with a
+  different fix.
+
+- **AI rules — Settings → AI rules, and `stackvo rules-install`** (competitive
+  review K-3). Registering the server makes the tools reachable. It does not
+  make them used: an assistant that has never seen this stack reads the source,
+  guesses at nginx, and suggests editing a generated file, because nothing told
+  it that `stackvo_doctor` answers that question in one call. ServBay files
+  "AI Rule" beside its MCP documentation as a first-class feature, EnvKit
+  installs a skill, Lerd's `mcp:enable-global` writes context files. This
+  repository had no answer to that half at all.
+
+  `rules.rs` writes a marked section into the instructions file the assistant
+  already reads: `CLAUDE.md`, `AGENTS.md` (Codex and Zed), Cursor's
+  `.cursor/rules/stackvo.mdc`, VS Code's
+  `.github/instructions/stackvo.instructions.md`, `.windsurf/rules/stackvo.md`
+  and `GEMINI.md` — in the project, or in the home directory for the three that
+  read a global file. A row is a **file** rather than a product, because Codex
+  and Zed share one and two rows writing one path would disagree about whether
+  the rules are installed.
+
+  It follows the same three rules `agents.rs` follows, because it edits the same
+  class of file — somebody's own `CLAUDE.md`, not ours. Only the region between
+  `<!-- stackvo:rules:begin -->` and `<!-- stackvo:rules:end -->` is ever
+  written; a file with no markers is appended to, never replaced; everything
+  else comes back byte for byte; and a `.stackvo-backup` copy is left beside it
+  first. HTML comments as markers, so a Markdown preview shows the rules and not
+  the plumbing. The front matter Cursor and VS Code need to apply the file at
+  all is written when the file is created and never again — a user who narrowed
+  `applyTo` to their PHP directories meant it, and a test drives exactly that.
+
+  Audited, like `agent_install` and for the same reason: this writes
+  instructions into a file the user owns and usually commits. And a test asserts
+  that **every tool the rules name is a tool that exists** — rules that send an
+  assistant at a tool the server would refuse are worse than no rules.
+
+  **Reachable from the project as well as from Settings.** The rules are per
+  project, so the project page is where somebody looking for them looks first;
+  asking them to leave it, find the project again in a dropdown and press a
+  button there is asking them to hold a name in their head for no reason. The
+  detail page gains an **AI** tab over the same three commands, scoped to the
+  project it is on — the global rows stay in Settings, because "on this
+  machine" is not a fact about one project. The same tab names
+  `.stackvo/context.json` and explains it rather than offering it: the
+  generator writes that file for every project on every run, and a switch would
+  imply it could be off.
+
 - **Eight tunnel providers in the Share pane, not one** (§3, the tunnel).
   `tunnel.rs` was cloudflared and the shape of "one provider" had leaked into
   every part of it: the image was a constant, the URL was recognised by
@@ -34,7 +1136,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   comes back and is picked out of the client's own banner; and for the four
   that need an account that an invalid token is refused in words the pane can
   show. What is left untested for those four is a single step — what the
-  provider does with a *valid* token — and the pane says exactly that instead
+  provider does with a _valid_ token — and the pane says exactly that instead
   of a blanket "unverified".
 
   Five findings came out of watching the clients rather than reading about
@@ -48,7 +1150,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
     sidecar joins the **project container's network namespace** and the target
     is a port number — rather than a remote URL the documentation never
     promises to accept;
-  - localtunnel's `--host` names the *tunnel server*, not the target: pointed
+  - localtunnel's `--host` names the _tunnel server_, not the target: pointed
     at the project container it produced a client that sat in silence;
   - LocalXpose can present the local domain after all, through the
     `--request-header host:` plugin in its own help text;
@@ -91,7 +1193,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   of them:
 
   - The run was **scoped to `#app`**, and Vuetify's overlay container is a
-    *sibling* of `#app` rather than a child. Every tooltip, menu, dialog and
+    _sibling_ of `#app` rather than a child. Every tooltip, menu, dialog and
     side sheet in the application was outside the measurement.
   - Those overlays were **covering the page**. A closed overlay keeps a
     full-viewport box at `z-index: 2000`, so axe could not resolve a background
@@ -112,7 +1214,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   than a task — because `quickcmd.rs` had refused an in-app REPL in writing, and
   reversing a refusal is not something a commit does quietly.
 
-  **The refusal was right and it still stands.** A *line* REPL in a pane is
+  **The refusal was right and it still stands.** A _line_ REPL in a pane is
   exactly what it described: a worse `tinker` with no readline, no history file,
   none of the colours somebody configured, and a terminal one click away that
   does all of it better. `tinker` still opens the user's own terminal from the
@@ -134,7 +1236,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   against a digest first.
 
   Six runners in two tiers, and every row says which it is: `php artisan tinker
-  --execute`, `wp eval`, `python manage.py shell -c` and `bin/rails runner` boot
+--execute`, `wp eval`, `python manage.py shell -c` and `bin/rails runner` boot
   the application; `php -r` and `node -e` are the language on its own. A pane
   that showed them alike would let somebody debug for ten minutes before finding
   out their models were never loaded. Laravel is offered only where
@@ -184,7 +1286,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   "Reads" heading whose contract command is a mutation — because that heading
   is what somebody reads before typing into a machine they care about.
 
-  One part is tighter than the MCP table. A tool there dispatches on its *name*,
+  One part is tighter than the MCP table. A tool there dispatches on its _name_,
   so a table entry with no matching arm compiles and fails when called; the
   module says so and keeps a fallback for it. Here the table carries an
   `Action`, dispatch matches on the enum, and the compiler refuses a variant
@@ -196,7 +1298,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   stack (`up`, `down`, `start`, `stop`, `restart`, `generate`, `xdebug`,
   `certs-renew`, `mcp-install`, `mcp-remove`). Every one has `--json`, so the
   same value the table is rendered from is available to a script — the human
-  output is built *from* that value rather than from a second query, which is
+  output is built _from_ that value rather than from a second query, which is
   how the two cannot come to describe different things.
 
   **stdout is the answer, stderr is the narration.** The progress writer ADR
@@ -222,8 +1324,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   terminal" is part of that answer.
 
 - **The package index can be verified, withdrawn versions are refused** (C).
-  `market.rs` described a chain of three links and said the first one — *a
-  pinned key → registry.json* — was missing. `Trust::Signed` was a shape with
+  `market.rs` described a chain of three links and said the first one — _a
+  pinned key → registry.json_ — was missing. `Trust::Signed` was a shape with
   no implementation, so a third-party source could be fetched but never
   believed, and the claim that the architecture was "ready" for third-party
   distribution was not true of a door that could not be shut.
@@ -242,13 +1344,13 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   **No official key is shipped, and a test keeps it that way.** Inventing a
   placeholder would be worse than the gap, because every later reader would
   believe the chain was closed. A build with no key refuses a signed refresh
-  and names *that* as the missing half. An organisation running its own mirror
+  and names _that_ as the missing half. An organisation running its own mirror
   is not waiting on any of it: it signs its own index and pins its own key
   through `policy.market.additionalKeys` — a field written for exactly this
   and, until now, read by nothing.
 
   **Rotation is designed in, because it cannot be added afterwards.** A machine
-  holds a *set*, and a new key arrives in a `known-keys.json` signed by one
+  holds a _set_, and a new key arrives in a `known-keys.json` signed by one
   already trusted. What that deliberately cannot do is remove a compromised
   key on its own say-so — a leaked key can sign a document naming only itself —
   so retirement is a property of a build, and a retired key cannot be brought
@@ -256,7 +1358,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
   **Takedown has both halves.** A withdrawn version is refused at install
   rather than warned about: ADR 0014 keeps it in the index so a machine can
-  find out what happened to one it already has, and whether a *new* install may
+  find out what happened to one it already has, and whether a _new_ install may
   proceed is a different question. The other half is `doctor`, which lists
   installed versions the publisher has since withdrawn — without it the
   container keeps running, the stack looks healthy, and the withdrawal is a
@@ -267,13 +1369,13 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   for refusing them (that the two modes sign different things) does not survive
   contact with how the mode is declared and checked, and refusing bought
   nothing while costing an organisation whose mirror was signed by an older
-  tool. And the pinned-key check now happens *before* the signature file is
+  tool. And the pinned-key check now happens _before_ the signature file is
   fetched: fetching first told a machine with no key `registry.json.minisig: No
-  such file`, sending somebody to ask their publisher for a signature when the
+such file`, sending somebody to ask their publisher for a signature when the
   missing half was on this side.
 
 - **A project may declare its own commands** (B-4). The catalogue is eleven
-  commands most projects have; what it cannot know is the one *this* project
+  commands most projects have; what it cannot know is the one _this_ project
   runs every day — `artisan app:reindex`, `npm run codegen`, a `bin/` script
   somebody wrote last week. Now `stackvo.json` can say so:
 
@@ -290,7 +1392,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   **The security rule the catalogue existed for is intact.** The webview still
   only ever sends an **id** — it cannot name a program, and `quickcmd::resolve`
   is the one place either kind becomes an argv. What changed is where a command
-  may be *declared*, and `docs/durum.md` §5 had been holding exactly that
+  may be _declared_, and `docs/durum.md` §5 had been holding exactly that
   distinction open: the argument against a webview naming a program is about a
   surface that runs code it did not choose, and a file committed to the
   repository is not that surface.
@@ -300,7 +1402,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   container. There is no `host` form. `hooks.rs` already makes the argument: a
   container runs the repository's code anyway, so a repository able to run a
   command in it has gained nothing, whereas a host step is what turns `git
-  clone` plus a button into arbitrary code execution — and that one has a
+clone` plus a button into arbitrary code execution — and that one has a
   consent record keyed to a digest. Declaring `host` here is refused by name,
   so an author is told where the real feature lives.
 
@@ -341,7 +1443,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   `reset` blind. All four exits are covered: `Drop` for returning and for `?`,
   a panic hook because release builds are `panic = "abort"` and `Drop` does not
   run, and `Ctrl-C` read as a key because raw mode stops the terminal turning
-  it into a signal. The restore goes through one function that *takes* the
+  it into a signal. The restore goes through one function that _takes_ the
   saved settings, so a hook and a `Drop` firing together still put the terminal
   back exactly once.
 
@@ -439,7 +1541,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   returns nothing as the only symptom.
 
   **Three bugs came out of running it rather than reading it.** `git worktree
-  remove` refuses while the tree contains **untracked** files, not only modified
+remove` refuses while the tree contains **untracked** files, not only modified
   ones — and the untracked file was this app's own overlay, so a worktree with
   no user changes could not be removed, and git's message sent you looking for
   work you never did. The fix moves the overlay out of the way first, only when
@@ -462,7 +1564,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   quietly corrected itself.
 
   **The database half was run against live engines**, because a `CREATE
-  DATABASE` can be right in every unit test and wrong at the server — the lesson
+DATABASE` can be right in every unit test and wrong at the server — the lesson
   `mariadb-dump` and the QR encoder each cost this repository once. Two
   `#[ignore]`d tests create, list and drop on MySQL 9.7, MariaDB 12.3 and
   MongoDB 8.0, and check that the workspace's own database is refused. They do
@@ -544,7 +1646,6 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   registration, which is a per-provider rule that is invisible at their console
   and is now written down beside both addresses.
 
-
 - **A local DNS responder** (E-1). Every new project needed a line in
   `/etc/hosts` and an administrator password to put it there. Now a responder
   answers for the workspace's whole suffix, and `*.shop.loc` works — which
@@ -585,8 +1686,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   **Every reply echoes the question it answers.** This is the bug the first
   round shipped and the probe missed: a REFUSED or a NODATA carried a header
   claiming one question over a body with none, and `dig` said so on a line
-  above the one the probe was reading — *"Message parser reports malformed
-  message packet"*. A lenient tool reads it anyway; a stub resolver drops what
+  above the one the probe was reading — _"Message parser reports malformed
+  message packet"_. A lenient tool reads it anyway; a stub resolver drops what
   it cannot match against the query it sent, and a dropped reply is not a fast
   failure, it is a five-second timeout. The NODATA path is not an exotic one:
   every Chrome and Safari page load asks for an HTTPS record (type 65) before
@@ -606,7 +1707,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
   **Nothing is trusted to have worked.** Reading back the file this app just
   wrote proves a write happened and nothing else, so applying the change is
-  followed by measuring it *through the machine's own resolver*: a name under
+  followed by measuring it _through the machine's own resolver_: a name under
   the suffix has to come back as loopback, and a public name that resolved
   before the change has to still resolve after it. If either fails, the change
   is undone. That is what makes writing a resolver file on a Linux distribution
@@ -638,11 +1739,11 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   — including the feature being off — because a doctor that lists what is fine
   is one people stop reading.
 
-    **The responder comes back with the app.** Turning this on and quitting used
+  **The responder comes back with the app.** Turning this on and quitting used
   to leave the machine pointed at a port nothing was bound to, and every project
   domain stopped resolving until somebody found the switch again. The condition
   for starting at launch is read off the machine — a resolver file that names us
-  *is* the record that this was turned on — rather than out of a preference that
+  _is_ the record that this was turned on — rather than out of a preference that
   can disagree with what the machine actually does.
 
   **A name answered by DNS is no longer counted as missing from the hosts
@@ -678,7 +1779,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   **F-3 could not be closed by drawing the same numbers better.** A flame graph
   is built from stacks — each measurement carrying its whole path, so a function
   called from two places is two boxes with their own widths — and cachegrind
-  holds *edges*: the summed cost of "A called B" over every place A called B.
+  holds _edges_: the summed cost of "A called B" over every place A called B.
   `profile::call_tree` said so in its own comment and the screen honestly called
   itself a call tree. No arrangement of those edges recovers what the file does
   not contain, so the input had to change.
@@ -701,7 +1802,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   `/var/log/xdebug` from the day it shipped, and nothing on either side of the
   mount ever created that directory. Xdebug does not create it and does not
   complain — it writes nothing, silently — so switching profiling on, reloading
-  with the trigger and finding an empty list was the *normal* outcome, with no
+  with the trigger and finding an empty list was the _normal_ outcome, with no
   error anywhere to say why. It is created before every compose command now.
 
   **MariaDB 12 had no client to talk to.** MariaDB 11 removed the `mysql*`
@@ -709,7 +1810,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   and `mariadb-dump` and no `mysql` at all — and every database feature in this
   app asked it for `mysql`. Dumps, restores, snapshots, moves and the query log,
   all of them, on a service that is in the catalogue. The unit tests passed
-  throughout, because they assert the argument *list* and the list was right for
+  throughout, because they assert the argument _list_ and the list was right for
   the program it named. The container picks now, by asking itself which of the
   two it has.
 
@@ -738,7 +1839,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   Bind-mounted source on macOS and Windows is the single most common reason
   people leave a Docker-based workflow, and this section's own note said the
   remaining work was "a sync layer". It is not what was built, because measuring
-  the question the *feature* has to answer changed the answer.
+  the question the _feature_ has to answer changed the answer.
 
   `mount_bench` had established the general number — `:cached` and `:delegated`
   are inert, and bind→volume is 2–3× on metadata and writes.
@@ -798,9 +1899,9 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   **Zed** could not be verified against a running copy — it still cannot, so the
   shape comes from Zed's current published documentation: the flat
   `"context_servers": { "<name>": { "command": …, "args": [], "env": {} } }`,
-  with no `source` key. Zed does not document *where* that file is and keeps
+  with no `source` key. Zed does not document _where_ that file is and keeps
   some things under `~/.config/zed` and others under `~/Library/Application
-  Support/Zed`, so both are looked for and whichever exists is written. Picking
+Support/Zed`, so both are looked for and whichever exists is written. Picking
   one would have been silently wrong on half the machines.
 
   **And running it against real files found an older fault.**
@@ -820,7 +1921,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   the empty `mcpServers` map that removing deliberately leaves behind.
 
   One existing test had to change, and it is the interesting one: it asserted
-  that a spec serialised through `Value` *tripped* the W-01 rule, because the
+  that a spec serialised through `Value` _tripped_ the W-01 rule, because the
   sorted keys put `extensions` before `version` and broke the Bash parser. That
   ordering can no longer be produced. The rule is still tested — against the
   literal it used to produce — and the test now records that the path which
@@ -864,8 +1965,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   — because they are one kind of thing: a setting the generator cannot read from
   the manifest, since `project.schema.json` is `additionalProperties: false` and
   frozen. They do not share a destination, which is the part worth knowing: the
-  variables and the agent are a compose overlay, the listing is a *generated
-  server config*, so one save runs both paths.
+  variables and the agent are a compose overlay, the listing is a _generated
+  server config_, so one save runs both paths.
 
   The variables are set on the container and are never written into the
   application's own `.env` — that file belongs to Laravel, Symfony and everything
@@ -877,7 +1978,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   `$SSH_AUTH_SOCK`**: on macOS and Windows the daemon runs in a VM where the
   host's path means nothing, and Docker Desktop publishes the agent at a fixed
   path instead. Measured rather than trusted — a container with that path
-  mounted answers `ssh-add -l` with *"The agent has no identities"*, which is
+  mounted answers `ssh-add -l` with _"The agent has no identities"_, which is
   the agent **replying**, where an unforwarded one says it could not open a
   connection at all. It is off by default and per project, because anything
   running in that container can sign with every key in the agent for as long as
@@ -907,8 +2008,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   host. Traefik and the certificate were already here; the only addresses
   either would serve were the ones this app generated.
 
-  The whole difficulty is one string. `http://localhost:3000` is read *inside
-  Traefik's container*, where `localhost` is Traefik: the config loads, the
+  The whole difficulty is one string. `http://localhost:3000` is read _inside
+  Traefik's container_, where `localhost` is Traefik: the config loads, the
   browser gets a 502, and nothing anywhere says why. So `localhost` and
   `127.0.0.1` are rewritten to `host.docker.internal` and the row says they
   were. Refusing them would be defensible and useless — it is the address
@@ -942,7 +2043,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   edited in whatever the author already uses — the same reasoning `quickcmd`
   gives for opening their terminal instead of shipping a worse one.
 
-  Sealing is not a way past the validator. It recomputes hashes and *then*
+  Sealing is not a way past the validator. It recomputes hashes and _then_
   parses the manifest, runs the manifest's own checks and puts the fragment
   through the compose policy — and writes nothing if any of those fail, so the
   manifest keeps describing the old bytes and nothing downstream believes a
@@ -953,7 +2054,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   half a check rather than a whole one, said plainly: the key rules —
   `privileged`, `userns_mode`, and every key nobody has considered — are caught
   at the moment somebody writes them, while the value rules ask whether a mount
-  source is one the *renderer* produced, and those values do not exist until
+  source is one the _renderer_ produced, and those values do not exist until
   there is an instance. `render.rs` remains the check that decides whether this
   machine runs the thing; this one decides whether the author finds out from a
   user.
@@ -976,7 +2077,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   bug as reading `mysql:8.0`'s tag as a port.
 
   Enforced in `market::open`, the one place a source becomes something that can
-  read bytes — including for a *remembered* source, so a policy that arrives
+  read bytes — including for a _remembered_ source, so a policy that arrives
   after somebody has already fetched takes effect on the next refresh rather
   than on the next fresh install. Not a security boundary; ADR 0009's sentence
   holds here as everywhere in that file.
@@ -1000,7 +2101,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   runs the repository's code, its entrypoint and its dependencies, so a
   repository able to run a command in it has gained nothing it did not already
   have. A step that runs **on the machine** is gated, and the gate is consent
-  to a *digest of the exact commands*: approving means "I read these", and a
+  to a _digest of the exact commands_: approving means "I read these", and a
   hook that changes — or a commit that changes one — asks again. A per-project
   checkbox would have meant reviewing a repository once and then trusting
   whatever it grew afterwards, which is the property that makes supply-chain
@@ -1009,7 +2110,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   that was on screen.
 
   A step is an argv array and never a command string. Everything here spawns
-  argv and never a shell — that rule *is* the security model in `runner.rs` and
+  argv and never a shell — that rule _is_ the security model in `runner.rs` and
   `quickcmd.rs` — and a hook taking shell text would be the one place a shell
   came back, holding text from a cloned repository. The cost is real: no `&&`,
   no pipes, no globs. A step that needs them is a script, and a script is one
@@ -1034,6 +2135,61 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   person does after reading a list and a file pushed to three hundred laptops
   has read nothing.
 
+### Fixed
+
+- **A warning that named work and offered no way to do it, and a button that
+  did the work and then said it had not.** Two halves of the same gap in the
+  Debug section, and the second is the one that reads as a broken app.
+
+  Switching Xdebug on for the first time compiles the extension into the image,
+  so nothing happens until the project is regenerated and rebuilt — and the pane
+  said exactly that and stopped. Switching it _off_ was worse: the running
+  container keeps `XDEBUG_MODE` until it is recreated, and the pane said nothing
+  at all, so debugging carried on under a switch that read as off. Each state
+  now carries the button that answers it, and they are deliberately different
+  buttons: a first switch-on is a rebuild and takes minutes, a container that
+  merely predates the overlay is a recreate and takes seconds, and turning it
+  off never needs a rebuild because the extension stays in the image on purpose.
+  None of them runs on its own — a switch that quietly started a rebuild is a
+  surprise nobody asked for, so the warning asks.
+
+  The second half: **pressing the button fixed the container and the screen went
+  on saying it had not.** Every one of these commands returns an operation id as
+  soon as the work _starts_ — that is what the operation console is for — so the
+  caller's `await` resolved while docker was still recreating, and the panes
+  re-read nothing at all afterwards. "The container is in debug, the setting is
+  profile" survived the recreate that fixed it. All three surfaces now re-read on
+  the **falling edge of the busy flag**, which is set by the operation's own
+  finished event rather than by the call returning, and is therefore the first
+  instant at which the container on disk is the one being described.
+
+- **Every help document fetch was answering 404.** The repository moved to
+  `stackvo/stackvo` and `help.rs`'s remote base still named
+  `fahrettinaksoy/stackvo-tauri`, so the pull that exists to get a _corrected_
+  help page to somebody on last month's build fetched nothing, ever. Nothing
+  showed it and nothing could: a failed help fetch is silent by design and the
+  panel falls back to the copy the app shipped with, which is the right
+  behaviour on a slow connection and indistinguishable from a URL that can
+  never work. On the machine it was written on — where the bundled documents
+  _are_ the current ones — it looked perfect. The updater endpoint in
+  `tauri.conf.json` was stale in the same way and from the same move.
+
+  The interesting part is that one of the two was already guarded.
+  `updater_endpoint.rs` derives its expected URL from `.git/config` and argues
+  the case at length: a constant is a second copy of a fact, and the copy is
+  the one that goes stale. The argument was right and it was applied to exactly
+  one constant. `published_urls.rs` now applies it to the class — it scans the
+  crate and `tauri.conf.json` for every GitHub repository URL and requires each
+  to be the repository this checkout came from or one of a declared list with
+  a reason attached, currently just `stackvo/stackvo-service-packages`. Test
+  regions are excluded, so `market.rs`'s `github.com/o/r` parser fixture stays
+  a fixture. The gate was verified by breaking the URL and watching it name the
+  file and line.
+
+  The help base now answers 200. The updater endpoint still answers 404 and
+  that is no longer a code problem: the repository has zero releases, and
+  publishing one is the work §2 has been holding all along.
+
 ### Changed
 
 - **A finished build offers the hosts entry it needs.** `project_build`
@@ -1052,7 +2208,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   event rather than a claim, so the `success` flag decides. The DNS responder
   (E-1) answers for the whole suffix, which is what makes a per-project line
   unnecessary — where it is listening and the machine is asking it, there is
-  nothing to offer; where it is configured and *down*, the line is the repair
+  nothing to offer; where it is configured and _down_, the line is the repair
   and the offer stands. And the project is re-read rather than taken from the
   page's list, which the same event is refreshing — reading that would be a race
   whose loser is a modal over somebody's work.
@@ -1147,12 +2303,12 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   at the numbers. `examples/list_bench.rs` looks at them, and splits the call
   into the half that grows with the workspace and the half that does not:
 
-  | | 1 project | 50 projects |
-  | --- | --- | --- |
-  | the whole call | 26.7 ms | 38.1 ms |
-  | of which the engine | 24.6 ms | 34.4 ms |
-  | the tree, by difference | 2.1 ms | 3.7 ms |
-  | per project | 2.09 ms | **0.07 ms** |
+  |                         | 1 project | 50 projects |
+  | ----------------------- | --------- | ----------- |
+  | the whole call          | 26.7 ms   | 38.1 ms     |
+  | of which the engine     | 24.6 ms   | 34.4 ms     |
+  | the tree, by difference | 2.1 ms    | 3.7 ms      |
+  | per project             | 2.09 ms   | **0.07 ms** |
 
   The half a cache would help is free: fifty projects cost under four
   milliseconds of directory scanning and manifest reading. Everything else is
@@ -1294,13 +2450,13 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 - **`stackvo.local.json`, this machine's overrides** (B-2). A committed
   manifest is the whole of what makes a checkout reproducible, and is exactly
-  why there was nowhere to say "on *this* machine, PHP 8.3, because I am
+  why there was nowhere to say "on _this_ machine, PHP 8.3, because I am
   chasing a bug in it". Now there is a file beside it that is not committed,
   and the project detail page has an editor for it below the manifest editor.
 
   Merged as JSON before validation rather than as fields afterwards. That is
-  what lets an override be *checked*: a local file saying `"aliases": ["not a
-  hostname"]` is reported by the same rule the committed file would be, because
+  what lets an override be _checked_: a local file saying `"aliases": ["not a
+hostname"]` is reported by the same rule the committed file would be, because
   validation happens on the way in and a post-merge value would arrive after
   it. The merge nests one level, so a file setting only `php.version` keeps
   `php.extensions` — a whole-value overlay would leave the project building
@@ -1319,7 +2475,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   the effective manifest, because that is what all twenty-odd readers that run,
   render or inspect a project want, and making the overlay opt-in would have
   been twenty-odd chances to forget it. The five callers that read in order to
-  write back ask for `read_committed` — and forgetting *that* is not silent:
+  write back ask for `read_committed` — and forgetting _that_ is not silent:
   `manifest::write` refuses a manifest carrying overrides. So the mistake that
   would land one developer's settings in everybody's clone fails loudly, and
   the mistake that costs nothing is the default.
@@ -1429,7 +2585,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   MariaDB it does not, and this is why. Both keep a general query log that can
   be pointed at a table and switched on with two `SET GLOBAL` statements at
   runtime — no agent, no image change, no restart, no code in the application.
-  Statements are reduced to a *shape* (`WHERE id = 1` and `WHERE id = 4711` are
+  Statements are reduced to a _shape_ (`WHERE id = 1` and `WHERE id = 4711` are
   one question) and a shape seen three or more times is reported, which is the
   N+1 pattern. It is a session rather than a feed: the log is unsampled and
   costs write throughput, so you switch it on, reload the page you are
@@ -1550,7 +2706,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   depended on the number: an image carrying Xdebug at `mode=off` runs at the
   speed of one without it (0.009s against 0.009s), while `mode=debug` costs
   about 6.7×. The same measurement retired an assumption:
-  `start_with_request=trigger` does *not* reduce that cost — it is
+  `start_with_request=trigger` does _not_ reduce that cost — it is
   indistinguishable from `default`, because the hook is loaded whenever the mode
   is on and the trigger only decides whether to dial the debugger. The pane says
   which toggle rebuilds and which restarts, because otherwise the second one

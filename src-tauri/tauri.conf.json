@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.stackvo.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "node tools/sidecars.mjs && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "node tools/sidecars.mjs --verify && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -31,6 +31,10 @@
     "resources": {
       "../docs/help": "docs/help"
     },
+    "externalBin": [
+      "binaries/stackvo",
+      "binaries/stackvo-mcp"
+    ],
     "icon": [
       "icons/icon.png"
     ],
@@ -47,7 +51,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/fahrettinaksoy/stackvo-tauri/releases/latest/download/latest.json"
+        "https://github.com/stackvo/stackvo/releases/latest/download/latest.json"
       ],
       "dialog": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzQTk4N0U1QkFFRTdENjEKUldSaGZlNjY1WWVwUTZwU2RHaG5RSHhLdkdSV2JJWlExMU16QnIwRCtyd0VSdEwvY1hhaU1TZTMK"
