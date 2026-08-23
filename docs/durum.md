@@ -22,15 +22,21 @@ yanlış bir sayı build'i kırıyor.
 * **git geçmişi** — her satırın hangi turda ve neden değiştiği.
 
 Ve **yapılacak işler yalnız burada**: §2 ürün tarafı, §3 mühendislik tarafı, §4
-ikisinin sırası. `docs/` altındaki öteki iki dosya kayıttır, liste değil, ve
-ikisi de açık maddelerini buraya devretti:
+ikisinin sırası. `docs/` altında kalan tek öteki dosya bir kayıttır, liste
+değil, ve açık maddelerini buraya devretti:
 
 * **`docs/accessibility.md`** — EN 301 549 uygunluk beyanı. Yayımlanmış bir
   belge ve `tests/accessibility-claims.spec.js` onu okuyor, o yüzden duruyor;
   açık maddeleri §2'de Y-1…Y-3.
-* **`docs/servis-market-mimarisi.md`** — paket ve market mimarisi. On üç Rust
-  modülü, testler ve sözleşme ona **bölüm numarasıyla** atıf yapıyor
-  (`§4.4`, `§9`, `Faz 2`), o yüzden silinemez; tek açık fazı §2'de P.
+
+`docs/servis-market-mimarisi.md` **silindi**, ve silinmesi kendi §14'ünün
+yazdığı koşuldu: bir tasarım dokümanı, tarif ettiği şey var olduktan sonra
+ikinci bir doğruluk kaynağıdır ve kayar. Sekiz fazın sekizi kapandığında
+anlattığı her şeyin bir kodu, bir sözleşmesi ya da bir kararı vardı; kalan tek
+engel on üç Rust modülünün ona **bölüm numarasıyla** atıf yapmasıydı. Atıflar
+kaynağına taşındı — format `contracts/package-version.schema.json`, allowlist
+`contracts/compose-policy.json`, tehdit modeli `SECURITY.md`, kararlar §6 —
+ve `src-tauri/tests/no_dangling_docs.rs` geri gelmesini engelliyor.
 
 ---
 
@@ -46,9 +52,8 @@ Yapılanlar burada durmuyor — `CHANGELOG.md` her teslimatın ne olduğunu ve n
 
 | #   | Madde | Durum | Ne eksik, ve nasıl bakıldı |
 | --- | --- | :-: | --- |
-| C | Üçüncü taraf paket **dağıtımı** | ⛔ | **Kod tarafı kapandı** (ADR 0021): imza doğrulayıcı `signing.rs`'te, `refresh` onu indeksi ayrıştırmadan **önce** koşuyor, anahtar rotasyonu (`known-keys.json`) ve emeklilik var, geri çekilmiş sürüm kuruluma reddediliyor, kurulu olanı `doctor` bildiriyor. Kurumsal ayna bugün çalışıyor. Kalan üç şeyin üçü de kod değil: resmî anahtarın töreni (§5.3'ün arkasında), moderasyon süreci ve yayıncı kimliği kaydı |
+| C | Üçüncü taraf paket **dağıtımı** | ⛔ | **Kod tarafı kapandı** (ADR 0021): imza doğrulayıcı `signing.rs`'te, `refresh` onu indeksi ayrıştırmadan **önce** koşuyor, anahtar rotasyonu (`known-keys.json`) ve emeklilik var, geri çekilmiş sürüm kuruluma reddediliyor, kurulu olanı `doctor` bildiriyor. Kurumsal ayna bugün çalışıyor. **Anahtar töreni yapıldı** (`tools/keys.sh`, ADR 0033): resmî içerik anahtarı üretildi ve `signing::PINNED` artık onu taşıyor — updater'ınkinden ayrı bir anahtar, ve `key_ceremony.rs` ikisinin aynı olduğu bir derlemeyi reddediyor. **Ama pinlenmiş bir anahtar hiçbir şey imzalamaz**: paket deposunun `registry.json`'ı özel yarıyla, elle imzalanıp yayınlanana kadar zincirin ikinci ucu açık. Kalan üçü: **imzalı indeksin yayınlanması** (paket deposunda, bir komut — `tools/keys.sh sign`), moderasyon süreci ve yayıncı kimliği kaydı. Son ikisi kod değil |
 | W | **Windows'ta testlerin koşması** | 🟡 | Tip kontrolü geçiyor — `tools/linux/run.sh --windows`, `cargo-xwin` Microsoft'un SDK'sını indirip `aws-lc-sys`'in `windows.h` engelini kaldırıyor. **Kalan: koşmak.** CI'nın `windows-latest` bacağı `cargo test` koşuyor ve sonucu bu depodan görülmüyor; geliştirme makinesi macOS ve konteyner imajını kurmanın bedeli (Ubuntu + Rust + Node + clang + SDK + tüm crate'in Windows derlemesi) bir disk kararı. `tools/linux/Dockerfile` "testler burada koşamaz" diye bir olgu beyan ediyor ve **bu doğrulanmadı** — `cargo-xwin`'in Wine ile koşabildiği iddiası sınanmadan yazılmamalı |
-| P | **Uzatma noktaları** (market Faz 7) | 🟡 | `docs/servis-market-mimarisi.md` §10'un tek açık fazı: kullanıcının kendi paketi (yerel dizin), workspace override (`skeleton.rs`'in `materialize`/`revert` deseninin paketlere uygulanması), üçüncü taraf kaynak politikası. O dosyanın kalan işi budur; başka hiçbir fazı açık değil |
 | Y-1 | **Ekran okuyucu denetimi** | ⛔ | `docs/accessibility.md` §4. Otomatik araçlar WCAG başarı ölçütlerinin kabaca üçte birine karar veriyor; kalanı — bir etiketin *anlamlı* olup olmadığı, bir hata mesajının ne yapılacağını söyleyip söylemediği, okuma sırasının görsel sırayla eşleşip eşleşmediği — bir insan gerektiriyor ve kimse yapmadı |
 | Y-2 | **Yerel pencerenin denetimi** | ⛔ | `docs/accessibility.md` §4. Ölçüm ön yüzü bir tarayıcı motorunda sürüyor; pencere çerçevesi, menü çubuğu ve tepsi menüsü işletim sisteminin ve kapsam dışı. Bunları kapsayacak olan `tauri-driver` macOS'ta koşmuyor — yani W maddesiyle aynı makineye bağlı |
 | Y-3 | **Geçiş başına dil işareti** | 🟡 | `docs/accessibility.md` §4. Arayüz dili belgede duyuruluyor; iki dili karıştıran bir görünüm — Türkçe arayüzde İngilizce bir günlük satırı — değişimi geçiş başına işaretlemiyor |
@@ -147,7 +152,7 @@ yalnız kalanı taşıyor.
 
 | # | Madde | Durum | Nasıl bakıldı |
 | --- | --- | :-: | --- |
-| 2 | Güncelleme endpoint'i | 🟡 | **Karar verildi (ADR 0025) ve endpoint düzeltildi.** Eskisi iki bağımsız yönden yanlıştı ve ikisi de sessizdi: sahibi (`stackvo/stackvo-tauri`, oysa remote o gün `fahrettinaksoy/…`) ve mekanizması (`raw.githubusercontent.com/.../main/latest.json` — o dosyayı `main`'e yazan hiçbir şey yok; `tauri-action` onu release'in **içine** yazıyor). `dialog: false` olduğu için 404 hiç görünmüyordu. Artık `releases/latest/download/latest.json`, ve `updater_endpoint.rs` adresi `.git/config`'ten türetip karşılaştırıyor, `includeUpdaterJson` ile imzalama secret'ının workflow'da kaldığını da tutuyor. Depo sonradan `stackvo/stackvo`'ya taşındı ve sabit geride kaldı; ikisi de düzeltildi ve artık **sınıf** kapılı: `published_urls.rs` bu depoyu adlandıran her sabit URL'i tarayıp `.git/config`'e karşı tutuyor — aynı taşınma `help.rs`'in uzak adresini de bozmuştu, her yardım çekimi 404 dönüyordu ve başarısız bir yardım çekimi bilerek sessiz olduğu için hiçbir şey bunu göstermiyordu. Kalan **kod değil**: anahtarın repository secret'ı olarak eklenmesi ve bir sürümün yayınlanması (bugün depoda sıfır release var, endpoint bu yüzden hâlâ 404 — adresin kendisi artık doğru) |
+| 2 | Güncelleme endpoint'i | 🟡 | **Karar verildi (ADR 0025) ve endpoint düzeltildi.** Eskisi iki bağımsız yönden yanlıştı ve ikisi de sessizdi: sahibi (`stackvo/stackvo-tauri`, oysa remote o gün `fahrettinaksoy/…`) ve mekanizması (`raw.githubusercontent.com/.../main/latest.json` — o dosyayı `main`'e yazan hiçbir şey yok; `tauri-action` onu release'in **içine** yazıyor). `dialog: false` olduğu için 404 hiç görünmüyordu. Artık `releases/latest/download/latest.json`, ve `updater_endpoint.rs` adresi `.git/config`'ten türetip karşılaştırıyor, `includeUpdaterJson` ile imzalama secret'ının workflow'da kaldığını da tutuyor. Depo sonradan `stackvo/stackvo`'ya taşındı ve sabit geride kaldı; ikisi de düzeltildi ve artık **sınıf** kapılı: `published_urls.rs` bu depoyu adlandıran her sabit URL'i tarayıp `.git/config`'e karşı tutuyor — aynı taşınma `help.rs`'in uzak adresini de bozmuştu, her yardım çekimi 404 dönüyordu ve başarısız bir yardım çekimi bilerek sessiz olduğu için hiçbir şey bunu göstermiyordu. **Tören artık yazılı ve koşulabilir: `tools/keys.sh`** — iki anahtarı da üretiyor, hangi yarısının nereye gideceğini basıyor, ve indeksi imzalıyor. ADR 0015 iki anahtarı ayırmanın bedelini *prosedürün ortak olmasıyla* ödüyor, ve ortak prosedür yazılırken **gerçek bir hata çıktı**: `tauri signer sign` minisign dosyasının tamamını base64'e sarıyor, `signing::verify` yalnız düz hâli okuyordu — yani içerik anahtarı ikinci bir araç isteyecekti, ki ADR 0015'in "bakımsız kalan prosedür" dediği şey tam olarak bu. Artık iki zarfı da okuyor ve testi **aracın gerçekten ürettiği** bir imzayla tutuluyor. `tests/signed_refresh.rs` zincirin ilk halkasını uçtan uca kapatıyor — imzalı bir indeksin **geçtiği** ilk test; öncekilerin hepsi ret senaryosuydu. `tests/key_ceremony.rs` dördünü kapıya bağlıyor: commit'lenmiş özel anahtar yok, updater ile registry aynı anahtar değil, bir anahtar hem pinli hem emekli değil, parola komut satırına yazılmıyor. `tools/before-push.sh` `keys.sh check` koşuyor. Kalan **kod değil, iki eylem**: `gh secret set TAURI_SIGNING_PRIVATE_KEY` ve bir `v*` etiketi. Bugün depoda sıfır release var, endpoint bu yüzden hâlâ 404 — adres doğru, arkasında dosya yok |
 | 12 | E2E | 🟢 | **Koştu, ve koşmak dört ayrı kusuru buldu — üçü süitin kendisinde.** Playwright yarısı zaten vardı. `tauri-driver` yarısı `tools/linux/` ile bir konteynerde koşuyor. **(1)** İlk koşuda dört test düştü ve süit yeşil raporladı: `whyNotHere` Linux'ta `null` döndürüyordu ve `node:test` `null` bir `skip`'i direktif okuyor — düşen test `# skipped` altına yazılıp `# fail`'in dışında kalıyor ve süreç 0 ile çıkıyor. **(2)** Dört düşüşün mesajı da aynıydı ve hiçbir şey açıklamıyordu; düşen bir iddia artık sayfanın ve sürücünün ne dediğini basıyor, ve ilk baskıda cevap çıktı: `url: about:blank`, `"Could not connect to localhost"`. **(3)** Sebep `cargo build`'di — `tauri-build` düz bir cargo derlemesi için `cfg(dev)` yayıyor, yani ikili `devUrl`'i gömüyor ve webview `localhost:1420`'yi açıyor. Süitin manşet testi ("derlenmiş paket gerçek webview'de render oluyor") **süitin kendi seçtiği profille geçemezdi**. Eski yorum debug'ı maliyetle savunuyordu; maliyet gerçekti, karşılaştırma değildi — ikisi aynı soruyu farklı hızda cevaplamıyordu, biri cevaplamıyordu. Artık `npx tauri build --debug --no-bundle`. **(4)** `tauri-driver` bir vekil: dinlediği port o ayağa kalkar kalkmaz cevap veriyor, arkasındaki `WebKitWebDriver` ayrı başlıyor — erken sorulan oturum "connection refused" alıyordu; artık sınırlı bir yeniden deneme var. Beşincisi zarfı okumayan bir testti (`box.internals`, oysa `box.value.internals`) — geçmesi mümkün değildi ve dördünün mesajı aynı olduğu için tipo onların kılığındaydı. Sonuç: **5/5 geçiyor, 0 atlandı**. Kalanı CI'da ilk koşu |
 | 22 | Platform kapsamı (Linux aarch64, Win ARM64) | 🟡 | `release.yml` **altı** hedef sayıyor, iki ARM satırı yerel ARM koşucularıyla. `rehearsal` girdisi bu satırları imzalama kararından ayırdı: altısını da derliyor, testi her birinde koşuyor, paketleri run sayfasına bırakıyor ve **hiçbir şey yayımlamıyor**. GitHub Actions burada koşturulamaz ve `release_rehearsal.rs` bunun tersini iddia etmiyor — koşucusuz da ayakta kalan iddiayı tutuyor: **yayınlayabilecek her adım kapılı.** `tagName` ifadesinin yönü de dahil; `inputs.rehearsal && '' || github.ref_name` daha derli toplu görünür ve `''` yanlış-değerli olduğu için `||` ateşler, prova dal adıyla yayın yapar — girdinin önlemek için eklendiği hatanın ta kendisi. Değiştirip düştüğünü doğruladım. Kalan: **birinin çalıştırması** |
 | 31 | Air-gapped kurulum | 🟡 | **Paket yolu yazıldı.** Okuyan yarı `LocalSource`'tan beri vardı; **yazan** yarı yoktu — bir paketi üretmenin tek yolu paket deposunu klonlayıp düzeninin istemcinin okuduğu düzen olmasını ummaktı, ki bu bir kurulum yolu değil işe yarayan bir tahmin. `market::bundle` indeksi ve her paketi tek dizine yazıyor; çıktı **bir kaynak**: uzak uç `market_refresh` + `market_install`'ı ondan koşuyor ve bir checkout'tan ayırt edemiyor (test bunu iki ayrı çalışma alanıyla uçtan uca koşturuyor). `registry.json` **bayt bayt** kopyalanıyor — imza baytların üstünde (ADR 0015) ve `manifestSha256` onlardan zincirleniyor. Her manifest **burada**, ağı olan makinede doğrulanıyor; geri çekilmiş sürüm satırını koruyup dosyalarını bırakıyor (ADR 0014). Yüzey: `stackvo market-bundle <dizin>` — bir düğme değil, çünkü bunu yapan kişi ssh'tan koşan bir operatör. §9'un `stackvo-packages.tar`'ı bu dizinin **paketlenmesi**, ikinci bir mekanizma değil. **GUI karşılığı da var**: Ayarlar → Katalog panelinde bir klasör seçici; paket yazılınca boyutu MiB olarak, imzasızsa uyarıyı ve taşınmayan sürümleri yayıncının kendi sözleriyle gösteriyor — ikisi de koridoru yürümeden önce okunması gereken şeyler. Kalan: tar'ı üreten adım elle (`tar -cf … -C <dizin> .`) |
@@ -163,16 +168,19 @@ Karar gerektirmeyenler arasından, etki ÷ efor ile.
 Bu depodaki **yapılacak her iş** burada. §2 ürün tarafını, §3 mühendislik
 tarafını tarif ediyor; bu bölüm ikisini tek sıraya diziyor. Başka hiçbir
 dosyada bir yapılacaklar listesi yok — `docs/accessibility.md` bir uygunluk
-beyanı, `docs/servis-market-mimarisi.md` bir mimari kaydı, ve ikisinin de açık
-maddeleri §2'ye taşındı.
+beyanı ve açık maddeleri §2'ye taşındı; market mimarisi dokümanı bittiği için
+silindi (§1).
 
-**Kod yazılacak olanlar** — ikisi, ve ikisi de küçük değil:
+**Kod yazılacak olan** — bir tane, ve küçük değil:
 
 * **§2 B-1** — üç panelin (SPX, sorgu günlüğü, zaman çizelgesi) tek bir istek
   etrafında birleşmesi ve N+1 tespiti. Yeni ölçüm gerekmiyor; ortak bir istek
   anahtarı ve bir görünüm gerekiyor.
-* **§2 P** — market Faz 7: kullanıcının kendi paketi, workspace override,
-  üçüncü taraf kaynak politikası.
+
+İkinciydi ve kapandı: **§2 P**, paket uzatma noktaları. Üçünün üçü de indi — kullanıcının
+kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
+(`policy.market.allowedSources`, ADR 0021) ve workspace override
+(`overrides.rs`, **ADR 0031**).
 
 **Bir makine ya da bir insan gerektirenler** — kod değil, erişim:
 
@@ -195,8 +203,10 @@ maddeleri §2'ye taşındı.
   **koşması** — CI'nın `windows-latest` bacağı `cargo test` koşuyor, ve tip
   kontrolü koşma değildir.
 * **#31** — tar'ın elle üretilmesi (`tar -cf … -C <dizin> .`).
-* **#2** — anahtarın secret olarak eklenmesi ve bir sürümün yayınlanması. Bu tek
-  adım #22'nin provasını gerçek bir yayına, #21'i sahada sınanabilir bir şeye
+* **#2** — `tools/keys.sh generate`, sonra `gh secret set`, sonra bir `v*`
+  etiketi. Tören yazıldı ve koşuluyor; kalan iki eylem bir insanın, çünkü bir
+  anahtarı yayınlamaya bir betiğin karar vermesi tören olmaz. Bu tek adım
+  #22'nin provasını gerçek bir yayına, #21'i sahada sınanabilir bir şeye
   çeviriyor ve §2 C'nin son iki maddesinin önünü açıyor.
 * **#36** — 0.4.0'da silmek; kapı o gün build'i kırıyor.
 * **§2 C** — moderasyon süreci ve yayıncı kimliği kaydı; kod değil.
@@ -455,6 +465,16 @@ tabloyu kastediyor.
   aynasına değil. `reqwest` zaten bağımlılık; yeni crate yok. Docker Hub
   oran sınırları paket indirmeyi etkilemiyor — yalnız image çekmeyi, ki o
   zaten bugünkü durum.
+
+  **Reddedilen dört taşıma, ve neden.** Depoyu bir **git submodule** yapmak
+  kullanıcının makinesinde git gerektirirdi ve `git.rs` bilerek yalnız kullanıcı
+  deposunu klonluyor; kısmi indirme de yok, yani yüzden fazla sürümün tamamı
+  iner. Tüm depoyu **`git clone`** etmek aynısı, üstelik güncelleme = tüm ağaç,
+  ve imza doğrulaması git nesnelerine değil dosyalara yapılmalı. **npm paketi**
+  Node bağımlılığı ekler ve npm'in kendi tedarik zinciri riskini bu projenin
+  riskine ekler. Tek dev bir **`services.json`** ise her güncellemede tüm
+  dosyanın inmesi, kısmi doğrulamanın imkânsızlığı ve birleştirme çatışmaları
+  demek.
 
 ### 0014 — Depo desteklenen sürümleri taşır, `latest` bir dizin değildir
 
@@ -736,7 +756,7 @@ dürüst sınır bu, ve `ENV` ile fixture artık bir çift.
 
 ### 0021 — Güven zincirinin ilk halkası yazıldı; eksik olan bir anahtar, bir kod değil
 
-- **Status:** accepted
+- **Status:** accepted — anahtar kısmı **ADR 0033** ile kapandı
 - **Context:** `market.rs` zinciri üç halka olarak tarif ediyordu ve birincisi
   yoktu: *pinlenmiş anahtar → registry.json*. `Trust::Signed` uygulaması olmayan
   bir şekildi, `refresh` istendiğinde "uygulanmadı" diyerek reddediyordu. Yani
@@ -1114,6 +1134,133 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   sonrası birkaç dakika. Varsayılanın hızlı olması kasıtlı: koşulmayan bir kapı
   kapı değildir, ve bu deponun tekrar tekrar öğrendiği şey de o (ADR 0028).
 
+### 0031 — Bir çalışma alanı paketin bir dosyasını devralabilir, manifestini asla
+
+- **Status:** accepted
+- **Context:** Paket sisteminin son uzatma noktası. Paketlerden önce, kendi Redis
+  yapılandırmasını isteyen kişi `core/templates/services/redis/…`'i düzenliyordu
+  ve `skeleton.rs` bu düzenlemeyi binary'deki bayta üstün kılıyordu. ADR 0016 o
+  dizini sildi; yerine gelen şey **doğrulanmış** bir ağaç — manifest her dosyanın
+  sha256'sını bildiriyor ve `pkg::verify` her okuyuşta doğruluyor. Aynı düzenleme
+  artık yüklenmeyen bir paket üretiyor, ve hata az önce yazılan satırdan değil
+  baytlardan söz ediyor. `authoring.rs` bu engeli bir paket *yazan* için kaldırdı;
+  bir paketi *getiren* için kaldırmadı.
+- **Decision:** Çalışma alanının kopyası paketin **yanında** duruyor, içinde
+  değil: `<root>/overrides/<servis>/<sürüm>/<yol>`. `pkg::Tree::file` önce oraya
+  bakıyor, `market::catalogue` katmanı bağlayan tek yer. Devralınabilenler
+  **manifestin şablon olarak bildirdikleri** — compose parçası, konfig şablonları,
+  yardımcı konteyner parçaları. **Manifest asla.** Kurumsal yarısı
+  `policy.market.allowOverrides`.
+- **Consequences:** Paketin kendi dosyalarına hiç dokunulmuyor, yani hash zinciri
+  olduğu gibi duruyor ve yeniden kurulum eskisi kadar güvenli — üstelik override
+  yeniden kurulumdan sağ çıkıyor. Reddedilen alternatif, getirilen paketi yeniden
+  mühürlemekti: bir sonraki `market_install` onu hiçbir kaydı kalmadan geri alır.
+
+  Manifestin dışarıda kalması taşıyıcı kural. Manifest imajı, portları, birimleri
+  ve ayarları bildiriyor ve render bağlamı ondan kuruluyor; onu geçersiz kılabilen
+  bir çalışma alanı, katalog yayınlanan imajı bildirirken başkasını çalıştırabilir
+  ve uygulamanın "ne kurulu" hakkındaki her cümlesi "ne kurulmuştu"ya dönerdi. Bir
+  şablon bunu yapamaz — manifestin tanımladığı bağlamdan değiştiriliyor ve
+  `compose_policy`'den geçiyor, indirilen bir parçayla aynı allowlist'ten, aynı
+  kod yolunda, render sonrası.
+
+  Geri alma siliyor, geri yüklemiyor: yayınlanan baytları override'ın içine
+  yazmak, `skeleton.rs`'in uzun uzun anlattığı duruma — "devralınmış"ın
+  "kurulmuş" anlamına gelmesine — geri dönmek olurdu.
+
+  `tests/overrides_claims.rs` üç iddiayı tutuyor, ve birincisi bu turda gerçek bir
+  tutarsızlık buldu: `doctor.rs` ağacı hâlâ eski yazımla açıyordu. Bir override'ı
+  yalnız bazı ekranların gördüğü hâl, hiç override olmamasından kötüdür — compose
+  çalışma alanının parçasından render olurken bağlantı dizesi, ayarlar sayfası ve
+  doctor başka bir şeyi anlatır, ve ortaya çıkan hata "hakkında yazılan her şeye
+  aykırı davranan bir servis" olur.
+
+### 0032 — Bir sürüm bir dizindir, bir değişken değil
+
+- **Status:** accepted
+- **Context:** Paketlerden önce servis başına **tek** şablon vardı ve sürüm bir
+  değişkendi (`mysql:{{ VERSION }}`). Bu, sürümler arasında fark olmadığı sürece
+  çalışır. Ölçüldü, ve olmadığı doğru değil:
+
+  - **MySQL 5.7 → 8.0:** `caching_sha2_password` varsayılan oldu; eski
+    istemciler için `--default-authentication-plugin` gerekiyor.
+  - **Elasticsearch 7 → 8:** güvenlik varsayılan olarak **açık**;
+    `xpack.security.enabled=false` olmadan 8 hiç açılmıyor, 7'de o anahtar
+    gereksiz.
+  - **RabbitMQ:** `management` etiketi bazı serilerde var, bazılarında yok.
+  - **MongoDB 5 → 6 → 7:** konfigürasyon dosyası anahtarları değişti.
+
+  Bunun bedeli ölçüldü de: sürüm seçicisi MySQL 9.7 ve 9.4 sunarken tek bir
+  `my.cnf` her sürüme mount ediliyordu ve iki direktifi MySQL 9 kaldırmıştı —
+  **9.x hiç açılmıyordu** (`contracts/CONFLICTS.md` C-21).
+- **Decision:** `packages/<kategori>/<servis>/versions/<sürüm>/` — her sürüm
+  kendi manifesti, kendi compose parçası ve kendi konfig şablonlarıyla, **düz,
+  koşulsuz ve okunabilir**. Bir seri soyutlaması (`8.x`) yok.
+- **Consequences:** Tek şablon bu farkları `{{ if }}` ile taşımaya kalksaydı
+  şablon bir **programa** dönüşürdü — ve indirilen bir programın çalıştırılması
+  tam olarak `compose_policy` ile `render`'ın kısıtlı bağlamının engellemek için
+  var olduğu şey. Programlanabilir şablon (Lua/Rhai) bu yüzden ayrıca ve açıkça
+  reddedildi.
+
+  Bedeli **tekrar**, ve tekrarın bedeli bir kapının yakalayabileceği bir şey:
+  `tools/validate.mjs` her manifesti şemaya, `compose-check.mjs` her parçayı
+  allowlist'e karşı tutuyor. Bir programın bedeli ise yakalanamaz.
+
+  ADR 0014 buna dayanıyor: `latest` bir dizin olamıyorsa, bir sürüm dizininin
+  somut olması gerekiyor demektir.
+
+### 0033 — Tören bir betiktir, ve iki anahtarı da o üretir
+
+- **Status:** accepted
+- **Context:** §3 #2 hiçbir zaman bir mühendislik sorunu değildi — endpoint ADR
+  0025'ten beri doğru, updater bir açık anahtar taşıyor. Kimsenin töreni
+  yapmamış olmasının sebebi, **yapılacak bir tören olmamasıydı**: updater
+  anahtarının bir workflow yorumunda tek cümlesi vardı, içerik anahtarının
+  (ADR 0015) hiçbir şeyi yoktu, ve ikisine iki ayrı araçla gidiliyordu.
+- **Decision:** `tools/keys.sh` — `generate`, `check`, `sign`. Bir sayfa değil
+  bir **betik**, ve gerekçe bu deponun bir tasarım dokümanını silme gerekçesiyle
+  aynı: düzyazı kayar, ve *anahtarlar* hakkında bayatlamış bir düzyazı, biri
+  çoktan bir anahtar üretip bir yere koyduktan sonra fark edilir. Bir betik
+  yaptığı şeyden sapamaz.
+
+  Özel anahtar depoya hiç girmiyor, parola komut satırına hiç yazılmıyor, ve
+  yayınlayan iki eylem — `gh secret set` ve etiket — **basılıyor, koşulmuyor**:
+  bir anahtarın ne zaman yayınlandığına bir betiğin karar vermesi tören olmaz.
+- **Consequences:** Töreni yazmak **gerçek bir kusur buldu, ve taşıyıcı yerde.**
+  ADR 0015 iki anahtarın bedelini *prosedürün ortak olmasıyla* ödüyor.
+  `tauri signer` updater töreninin zaten kullandığı araç, ve ürettiği imzayı
+  uygulama **reddediyordu**: minisign dosyasının tamamını base64'e sarıyor
+  (updater manifesti imzayı tek bir JSON dizesi olarak taşıdığı için) ve
+  `signing::verify` yalnız düz hâli okuyordu. Ret mesajı "invalid encoding in
+  minisign data" — baytlar hakkında bir cümle, oysa sorun zarf hakkında, ve tam
+  da birinin zinciri **ilk kez** kapatmaya çalıştığı anda. Yani içerik anahtarı
+  ikinci bir araç isteyecekti: ADR 0015'in "bakımsız kalan prosedür" dediği şey.
+
+  `verify` artık iki zarfı da soyuyor. **Okunabileni** genişletiyor, kabul
+  edileni değil — güvenilmeyen bir anahtarın sardığı imza bir satır sonra yine
+  düşüyor. Geçen testin imzası aracın gerçekten ürettiği bir imza, atılabilir bir
+  anahtarla; mevcut vektörün `minisign-verify`'ın kendi testinden gelme
+  gerekçesiyle aynı gerekçe.
+
+  **Zincirin ilk halkasının geçtiği hiçbir test yoktu.** İmzalı yolun bütün
+  testleri retti — anahtar yok, anahtar imzadan önce kontrol ediliyor, indeks
+  geri gidiyor — ve başarı vakası olmayan bir zincirin ilk başarısı birinin ilk
+  sürümü olur. `tests/signed_refresh.rs` o vaka.
+
+  **`market_status.signed` kazara doğruydu.** Sabit `false` yazıyordu ve
+  "anahtar yok" olduğu sürece doğru görünüyordu. Artık `market/source.json`'dan
+  okunuyor: *bu makinedeki indeks doğrulandı mı*, *bu derleme doğrulayabilir mi*
+  değil. İkisi farklı cümle ve ekrana yalnız birincisi çıkar — resmî anahtarı
+  pinleyen bir makine, son tazelemesi bir klasördense hâlâ doğrulanmamış bir
+  katalog taşıyor. `verifiedBy` hangi anahtarın doğruladığını söylüyor, çünkü
+  aynası olan bir makinede "doğrulandı" ile "kimin anahtarıyla doğrulandı"
+  farklı cevaplar.
+
+  **Pinlenmiş bir anahtar hiçbir şey imzalamaz.** Zincirin ikinci ucu — paket
+  deposunun kendi `registry.json`'ını özel yarıyla imzalayıp yayınlaması — hâlâ
+  açık, ve içerik anahtarının bilerek bir CI secret'ı olmamasının sebebi bu:
+  her workflow'un erişebildiği bir içerik anahtarı, içerik anahtarı değildir.
+
 ---
 
 ## 7. Ölçüm
@@ -1123,13 +1270,13 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 
 | | Sayı | Nasıl sayıldı |
 |---|---|---|
-| Toplam IPC komutu | **284** | `contracts/ipc.json` → `commands` (281 Rust + 3 `frontend-plugin`) |
-| Bunlardan `#[tauri::command]` olarak yazılmış | **280** | `commands.rs`, `#[cfg(test)]` dışı |
-| Frontend kaynak dosyası | **147** | `src/**/*.{js,vue}`, spec dosyaları hariç |
+| Toplam IPC komutu | **287** | `contracts/ipc.json` → `commands` (284 Rust + 3 `frontend-plugin`) |
+| Bunlardan `#[tauri::command]` olarak yazılmış | **283** | `commands.rs`, `#[cfg(test)]` dışı |
+| Frontend kaynak dosyası | **148** | `src/**/*.{js,vue}`, spec dosyaları hariç |
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
-| `ipc.js` sarmalayıcısı | **277** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **105 modül, 100.553 satır** | `src-tauri/src/*.rs` |
+| `ipc.js` sarmalayıcısı | **280** | `api` nesnesinin üye sayısı |
+| Rust kaynağı | **106 modül, 101.747 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 
@@ -1166,7 +1313,7 @@ etmiyor; ayrım Docker'da değil, **sunucunun nerede çalıştığında**.
 
 ## 8. Bu dosya nasıl doğru kalır
 
-1. **§5'teki karar tablosu ve §7'deki ölçüm testlerle tutuluyor.** Bir karar
+1. **§6'daki karar tablosu ve §7'deki ölçüm testlerle tutuluyor.** Bir karar
    Status/Decision/Consequences taşımazsa, ya da bir sayı ağaçla uyuşmazsa,
    build kırılır (`architecture_claims.rs`, `platform_matrix_claims.rs`,
    `policy_claims.rs`, `secrets_claims.rs`).

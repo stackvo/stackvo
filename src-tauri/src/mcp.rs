@@ -940,7 +940,7 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
 
         "stackvo_service_instances" => {
             let table = crate::instances::Table::load(&root)?;
-            let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+            let tree = crate::market::catalogue(&root)?;
 
             let rows: Vec<Value> = table
                 .instances
@@ -1044,7 +1044,7 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
         "stackvo_snapshots" => Ok(json!({ "snapshots": crate::snapshot::list(&root) })),
 
         "stackvo_packages" => {
-            let tree = crate::pkg::Tree::open(&crate::market::dir(&root))?;
+            let tree = crate::market::catalogue(&root)?;
             let registry = crate::market::cached(&root)?;
 
             let packages: Vec<Value> = registry

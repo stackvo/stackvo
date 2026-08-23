@@ -106,8 +106,8 @@ pub struct Policy {
 
 /// The `market` block: where packages come from and which of them may be run.
 ///
-/// `docs/servis-market-mimarisi.md` §9. Every field is optional and the default
-/// for all of them is "no opinion", which is what an unmanaged machine has.
+/// Every field is optional and the default for all of them is "no opinion",
+/// which is what an unmanaged machine has.
 ///
 /// ## One of these is a lock and the rest are not
 ///
@@ -123,18 +123,23 @@ pub struct Policy {
 /// would mean the check was never one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Market {
-    /// A file server the organisation runs. Faz 5 reads it; today it is
-    /// recorded and reported so an admin can deploy the file before the
-    /// version that uses it, which is the order these things actually ship in.
+    /// A file server the organisation runs. [`crate::market::HttpSource`] reads
+    /// it, and it is reported as well as obeyed so an admin can see that the
+    /// file they deployed is the one this machine is going to fetch.
     pub registry_url: Option<String>,
     /// A directory or bundle to install from with no network at all.
     ///
     /// ADR 0011 makes this the **only** way an air-gapped machine gets a
     /// catalogue, because nothing is embedded. Not an enterprise extra.
     pub offline_bundle: Option<PathBuf>,
-    /// Refuse an unsigned index. Off by default only because no key is pinned
-    /// yet (ADR 0015); a machine that sets it gets a refusal rather than a
-    /// downgrade, which is `market::Trust::Signed`'s existing behaviour.
+    /// Refuse an unsigned index.
+    ///
+    /// Off by default, and that is about what is *published* rather than about
+    /// what this build can check: the official key is pinned (ADR 0015), and
+    /// turning this on before a signed index exists would refuse every refresh.
+    /// A machine that sets it gets a refusal rather than a downgrade, which is
+    /// `market::Trust::Signed`'s behaviour and the reason this is the one key
+    /// in the block that can only tighten.
     pub require_signature: bool,
     /// Services that may be installed. Empty means no opinion — **not** "none".
     pub allowed_packages: BTreeSet<String>,
@@ -142,12 +147,12 @@ pub struct Market {
     pub allowed_registries: BTreeSet<String>,
     /// Catalogue sources this machine may fetch a package index from.
     ///
-    /// `docs/servis-market-mimarisi.md` §4.6's recommendation, which is that
-    /// third-party packages are not a v1 feature and the architecture should be
-    /// *ready* for them: the source field, the signature verifier and the
-    /// compose policy exist, and opening the gate is a separate decision. This
-    /// is the enterprise half of that gate — an organisation that runs its own
-    /// mirror names it here and the machine will fetch from nothing else.
+    /// Third-party packages were deliberately not a v1 feature, and what was
+    /// built instead was an architecture *ready* for them: the source field, the
+    /// signature verifier (ADR 0021) and the compose policy all exist, and
+    /// opening the gate is a separate decision. This is the enterprise half of
+    /// that gate — an organisation that runs its own mirror names it here and
+    /// the machine will fetch from nothing else.
     ///
     /// An `https://` entry is matched on its **host**, so listing a mirror does
     /// not mean listing every path on it separately. A local path is matched as
@@ -158,6 +163,14 @@ pub struct Market {
     pub allowed_sources: BTreeSet<String>,
     /// Whether the app may replace an installed package on its own.
     pub auto_update: Option<bool>,
+    /// Whether a workspace may put its own copy of a package file in front of
+    /// the published one ([`crate::overrides`], ADR 0031).
+    ///
+    /// `None` is the same "no opinion" every other field here defaults to, and
+    /// no opinion means allowed — read [`Market::allows_overrides`]. An
+    /// organisation that vetted a catalogue has a real reason to say the vetted
+    /// bytes are the ones that run, and this is where it says it.
+    pub allow_overrides: Option<bool>,
     /// Extra ed25519 public keys, for an organisation signing its own mirror.
     pub additional_keys: Vec<String>,
 }
@@ -252,6 +265,15 @@ impl Market {
         }
     }
 
+    /// May this workspace override a package's files?
+    ///
+    /// Silence is permission, like every other list in this block. Reading it
+    /// the other way would mean an administrator who wrote a `market` block to
+    /// name one mirror had accidentally frozen every package on the machine.
+    pub fn allows_overrides(&self) -> bool {
+        self.allow_overrides.unwrap_or(true)
+    }
+
     fn is_set(&self) -> bool {
         self.registry_url.is_some()
             || self.offline_bundle.is_some()
@@ -260,6 +282,7 @@ impl Market {
             || !self.allowed_registries.is_empty()
             || !self.allowed_sources.is_empty()
             || self.auto_update.is_some()
+            || self.allow_overrides.is_some()
             || !self.additional_keys.is_empty()
     }
 }
@@ -609,6 +632,11 @@ fn parse_market(given: Option<&serde_json::Value>, complaints: &mut Vec<String>)
                 Some(on) => market.auto_update = Some(on),
                 None => complaints
                     .push("market.autoUpdate is not a boolean and was ignored".to_string()),
+            },
+            "allowOverrides" => match value.as_bool() {
+                Some(on) => market.allow_overrides = Some(on),
+                None => complaints
+                    .push("market.allowOverrides is not a boolean and was ignored".to_string()),
             },
             "allowedPackages" => market.allowed_packages = list(value, key, complaints),
             "allowedRegistries" => market.allowed_registries = list(value, key, complaints),

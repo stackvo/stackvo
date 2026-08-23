@@ -550,6 +550,35 @@ export default {
     bundleNext:
       'Öteki makinede bu klasörü katalog adresi olarak seçin — ya da market.offlineBundle’ı ona ayarlayın.',
   },
+  /**
+   * A workspace taking over one file of a package it did not write (P).
+   *
+   * `explain` leads with where the copy goes, because that is the fact that
+   * decides whether somebody trusts the feature: the package is not modified,
+   * so a reinstall does not quietly undo the edit and does not break the
+   * hashes StackVo checks on every read.
+   */
+  overrides: {
+    title: 'Dosyalar — {service} {version}',
+    explain:
+      'Bir paket getirdiği her dosyanın özetini bildirir ve StackVo bunu her okuyuşta doğrular; dosyayı yerinde düzenlemek yüklenemeyen bir paket bırakır. Onun yerine dosyayı devralın: kopya paketin içinde değil yanında, sizin çalışma alanınızda durur — paket bozulmaz ve düzenlemeniz yeniden kurulumdan sağ çıkar. Manifest asla devralınamaz; imajı, portları ve birimleri bildiren odur.',
+    inEffect: 'Bu çalışma alanındaki {count} dosya render ediliyor; yayınlanan hâlleri değil.',
+    kind: {
+      compose: 'Compose parçası',
+      config: 'Konfig şablonu',
+      companion: 'Yardımcı konteyner parçası',
+    },
+    take: 'Devral',
+    revert: 'Geri al',
+    confirmRevert: 'Kopyamı sil',
+    none: 'Bu sürüm devralınabilecek bir dosya getirmiyor.',
+    landed: 'Kopyanız burada — zaten kullandığınız editörle düzenleyin:',
+    thenRegenerate:
+      'Sonrasında yeniden üretin; bir render koşana kadar diskte hiçbir şey değişmez.',
+    overriddenCount: 'Burada {n} dosya devralındı',
+    files: 'Dosyalar',
+  },
+
   marketView: {
     createTitle: 'Yeni instance: {id}',
     createBody:
@@ -562,6 +591,7 @@ export default {
     sourceTitle: 'Katalog nereden geliyor',
     sourceCounts: '{packages} paket yayında, {installed} sürüm kurulu',
     unsigned: 'imza doğrulanmıyor',
+    verifiedBy: 'imzası {key} ile doğrulandı',
     sourceInSettings: 'Ayarlar → Katalog bu adresi tutuyor ve çekmeden test edebiliyor.',
     noCatalogue: 'Henüz katalog yok',
     noCatalogueBody:
@@ -2736,7 +2766,7 @@ export default {
       'Bu tür adresleri açan bir istemci kurun ya da bağlantı dizesini kopyalayıp kendiniz yapıştırın.',
     waitForOperation: 'Bitmesini bekleyin ya da ilerlemeyi işlem konsolundan izleyin.',
     noRegistryKey:
-      'Bu derleme hiçbir registry anahtarı pinlemiyor. Kendi aynasını çalıştıran bir kurum market.registryKey politikasıyla bir tane pinleyebilir.',
+      'Bu derleme hiçbir registry anahtarı pinlemiyor, yani bir imzayı doğrulayamaz. Kendi aynasını çalıştıran bir kurum policy.market.additionalKeys ile bir tane pinleyebilir.',
     signedByUnknownKey:
       'Dizin başka bir yerden geliyor olabilir ya da yayıncı, bu makine yenisini öğrenmeden anahtar değiştirmiş olabilir.',
     packageVersionRevoked:
@@ -2760,6 +2790,12 @@ export default {
     packageRefusedByPolicy:
       "Bu paket, StackVo'nun bir pakete vermediği bir şey istiyor. Yayınlayan kişiye bildirin.",
     packageNotInRegistry: 'Katalogu yenileyin, ya da listelediği bir sürüm seçin.',
+    onlyPackageTemplates:
+      'Yalnızca paketin birlikte getirdiği compose parçası ve konfig şablonları geçersiz kılınabilir — manifesti asla; imajı ve portları bildiren odur.',
+    revertOverrideFirst:
+      'Bu çalışma alanında o dosyanın kendi kopyası zaten var. Yayınlanan hâlini geri istiyorsanız önce onu geri alın.',
+    overridesRefusedByPolicy:
+      'Bir yöneticinin politikası, bu makinede yayınlanan paket dosyalarının çalışacağını söylüyor.',
     bundleNeedsAnEmptyDirectory:
       'Henüz var olmayan bir dizin seçin, ya da boş bir tane — başkasının dosyalarının üstüne yazılmış bir paket, kimsenin içeriğinden emin olamayacağı bir pakettir.',
     registryWentBackwards:
