@@ -1562,7 +1562,7 @@ volumes:
         std::fs::create_dir_all(parked.join("blog")).unwrap();
         std::fs::write(
             dir.join("config.json"),
-            format!(r#"{{"tld":"test","paths":["{}"]}}"#, parked.display()),
+            format!(r#"{{"tld":"test","paths":[{}]}}"#, json_path(&parked)),
         )
         .unwrap();
 
@@ -1576,6 +1576,17 @@ volumes:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A path as a JSON string, escaped.
+    ///
+    /// `format!("\"{}\"", p.display())` is what these fixtures did, and it is
+    /// correct on any platform whose separator is not also JSON's escape
+    /// character. On Windows `C:\\Users\\…` went in raw, the file was not valid
+    /// JSON, the parser found no sites, and five tests failed on an assertion
+    /// about Valet rather than about the fixture that never loaded.
+    fn json_path(path: &Path) -> String {
+        serde_json::Value::String(path.display().to_string()).to_string()
+    }
+
     /// Valet does the same: an explicit link is the thing somebody typed.
     #[test]
     fn a_link_wins_over_a_parked_directory_of_the_same_name() {
@@ -1584,7 +1595,7 @@ volumes:
         std::fs::create_dir_all(parked.join("shop")).unwrap();
         std::fs::write(
             dir.join("config.json"),
-            format!(r#"{{"tld":"test","paths":["{}"]}}"#, parked.display()),
+            format!(r#"{{"tld":"test","paths":[{}]}}"#, json_path(&parked)),
         )
         .unwrap();
 
