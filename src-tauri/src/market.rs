@@ -859,6 +859,87 @@ pub fn cached(root: &Path) -> Result<Option<Registry>> {
     Ok(Some(registry))
 }
 
+/// Every service id this machine has heard of — the catalogue it fetched, and
+/// the vocabulary compiled in.
+///
+/// ## Why the compiled-in list is not the answer on its own
+///
+/// `contracts/env.schema.json` carries a list of service ids, and its own note
+/// calls it "the vocabulary, not an inventory" — it has to grow when the
+/// published catalogue grows. It did not. Solr and ClickHouse were added late;
+/// dragonfly, soketi, prometheus and graylog were not added at all, so for four
+/// published services the Market offered an install on one screen while the
+/// project page called the same id unknown on another.
+///
+/// A list inside a binary cannot keep up with a repository that ships on its
+/// own schedule, and the maintenance answer — remember to edit it, then cut a
+/// release — puts the cost of forgetting on the user. The catalogue this
+/// machine has already fetched is the current answer, sitting on disk, updated
+/// by the button in Settings that exists for exactly that.
+///
+/// So the vocabulary stays as the floor: it is what a machine that has never
+/// fetched anything still knows, and it keeps a typo a typo.
+///
+/// ## Re-read when it changes, not once per process
+///
+/// Keyed on the index file's modification time, so refreshing the catalogue is
+/// visible without restarting the app — which is the whole point of a check
+/// that follows the catalogue.
+pub fn known_service_ids(root: &Path) -> std::collections::BTreeSet<String> {
+    use std::collections::BTreeSet;
+    use std::sync::Mutex;
+    use std::time::SystemTime;
+
+    /// The index this answer was computed from: which file, when it was last
+    /// written, and what it said.
+    type Cached = (PathBuf, Option<SystemTime>, BTreeSet<String>);
+
+    static CACHE: std::sync::OnceLock<Mutex<Option<Cached>>> = std::sync::OnceLock::new();
+
+    let path = registry_path(root);
+    let stamp = std::fs::metadata(&path)
+        .ok()
+        .and_then(|m| m.modified().ok());
+
+    let cache = CACHE.get_or_init(|| Mutex::new(None));
+    let mut slot = match cache.lock() {
+        Ok(slot) => slot,
+        // A poisoned lock means another thread panicked while holding it. The
+        // answer here is a set of strings; recomputing it is cheaper than
+        // propagating a panic into a manifest read.
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if let Some((cached_path, cached_stamp, ids)) = slot.as_ref() {
+        if cached_path == &path && cached_stamp == &stamp {
+            return ids.clone();
+        }
+    }
+
+    // A catalogue that cannot be read is the same as no catalogue: the
+    // vocabulary still answers, and `market_refresh` reports the real problem
+    // where somebody can act on it.
+    let ids: BTreeSet<String> = cached(root)
+        .ok()
+        .flatten()
+        .map(|registry| registry.packages.into_iter().map(|p| p.service).collect())
+        .unwrap_or_default();
+
+    *slot = Some((path, stamp, ids.clone()));
+    ids
+}
+
+/// Is this a word for a service — in the fetched catalogue, or in the
+/// vocabulary this build ships with?
+///
+/// The one place that question is answered, so the project page, the
+/// requirements card and `.env` detection cannot disagree about an id. See
+/// [`known_service_ids`] for why the compiled-in list alone is not enough.
+pub fn is_known_service(id: &str) -> bool {
+    crate::contracts::env_schema().knows_service(id)
+        || known_service_ids(&crate::workspace::app_root()).contains(id)
+}
+
 // ---------------------------------------------------------------- installing
 
 /// What an install did, for the caller that has to tell somebody.
@@ -1342,6 +1423,103 @@ pub fn uninstall(root: &Path, category: &str, service: &str, version: &str) -> R
         let _ = std::fs::remove_dir_all(packages_dir(root).join(category).join(service));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod known_service_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("stackvo-known-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("market")).expect("scratch market dir");
+        dir
+    }
+
+    fn write_registry(root: &Path, services: &[&str]) {
+        let packages: Vec<String> = services
+            .iter()
+            .map(|service| {
+                format!(
+                    r#"{{"service":"{service}","category":"cache","name":{{"en":"{service}"}},
+                        "instancing":{{"multiple":true}},"capabilities":[],
+                        "versions":[{{"version":"1","path":"packages/cache/{service}/versions/1",
+                        "manifestSha256":"{}","sizeBytes":10,"support":"supported",
+                        "recommended":true}}]}}"#,
+                    "0".repeat(64),
+                )
+            })
+            .collect();
+
+        std::fs::write(
+            registry_path(root),
+            format!(
+                r#"{{"schemaVersion":1,"sequence":1,"generatedAt":"2026-08-24T00:00:00Z",
+                    "packages":[{}]}}"#,
+                packages.join(",")
+            ),
+        )
+        .expect("writing the index");
+    }
+
+    /// The bug this exists for: a service that is published and installable,
+    /// and a build whose compiled-in list has never heard of it.
+    #[test]
+    fn a_fetched_catalogue_makes_an_id_the_vocabulary_never_learned_known() {
+        let root = scratch("fetched");
+        assert!(
+            !crate::contracts::env_schema().knows_service("brandnewthing"),
+            "the vocabulary is not supposed to know this one",
+        );
+
+        write_registry(&root, &["brandnewthing"]);
+
+        assert!(known_service_ids(&root).contains("brandnewthing"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A machine that has never fetched still knows the words it shipped with,
+    /// and a typo is still a typo.
+    #[test]
+    fn no_catalogue_is_not_an_empty_catalogue() {
+        let root = scratch("none");
+
+        assert!(known_service_ids(&root).is_empty());
+        assert!(crate::contracts::env_schema().knows_service("mysql"));
+        assert!(!crate::contracts::env_schema().knows_service("myqsl"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Refreshing the catalogue has to be visible without restarting the app —
+    /// otherwise the answer follows the process rather than the catalogue.
+    #[test]
+    fn a_refresh_is_picked_up_without_a_restart() {
+        let root = scratch("refresh");
+        write_registry(&root, &["one"]);
+        assert!(known_service_ids(&root).contains("one"));
+
+        // A second index, with a modification time the cache has to notice.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        write_registry(&root, &["one", "two"]);
+        let after = known_service_ids(&root);
+
+        assert!(
+            after.contains("two"),
+            "the cache outlived the file it described"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An index this app cannot read is the same as no index: the vocabulary
+    /// still answers, and `market_refresh` reports the real problem.
+    #[test]
+    fn an_unreadable_index_falls_back_rather_than_failing() {
+        let root = scratch("broken");
+        std::fs::write(registry_path(&root), "{ not json").unwrap();
+
+        assert!(known_service_ids(&root).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
 
 #[cfg(test)]

@@ -140,6 +140,60 @@ impl Provider {
     }
 }
 
+/// Serialise providers the way the *file* spells them: an object keyed by name,
+/// in the order they were declared.
+///
+/// The struct is a list because a recipe carries its own name and every
+/// consumer iterates it. The file is a map, and this is the single place the
+/// two shapes meet — the webview round-trips a serialised manifest straight
+/// back into `project_manifest_write`, so a `providers` that serialised as a
+/// list would parse back as nothing and vanish on the next form save. That is
+/// the bug this field exists to close, and it would have been reintroduced one
+/// layer further down.
+pub fn as_declared_map<S>(
+    providers: &[Provider],
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+
+    /// A provider minus its name, which is the key it is written under. Written
+    /// out rather than reusing [`Provider`] so the serialised shape is the
+    /// file's shape exactly, with no key the reader has to know to ignore.
+    #[derive(Serialize)]
+    struct Body<'a> {
+        image: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        about: &'a Option<String>,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        pull: &'a [String],
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        push: &'a [String],
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        env: &'a BTreeMap<String, String>,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        secrets: &'a [String],
+    }
+
+    let mut map = serializer.serialize_map(Some(providers.len()))?;
+    for provider in providers {
+        map.serialize_entry(
+            &provider.name,
+            &Body {
+                image: &provider.image,
+                about: &provider.about,
+                pull: &provider.pull,
+                push: &provider.push,
+                env: &provider.env,
+                secrets: &provider.secrets,
+            },
+        )?;
+    }
+    map.end()
+}
+
 /// Why a recipe was not read, in the reader's terms.
 ///
 /// The same shape `hooks::Problem` has: a manifest is a file somebody wrote by
@@ -346,7 +400,14 @@ pub fn parse(json: &serde_json::Value) -> (Vec<Provider>, Vec<Problem>) {
         });
     }
 
-    out.sort_by(|a, b| a.name.cmp(&b.name));
+    // In the order the file declared them, and deliberately not sorted.
+    //
+    // Alphabetising here was invisible while this block was read-only. It stops
+    // being invisible the moment the manifest is written back from it: a saved
+    // file returns with somebody's recipes re-ordered, which is the outcome
+    // `sidecar::Declared` and `quickcmd::Declared` each keep an explicit order
+    // list to avoid. `serde_json` is built with `preserve_order`, so the map
+    // above already iterates the way the file reads.
     (out, problems)
 }
 

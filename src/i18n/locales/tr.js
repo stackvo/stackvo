@@ -2350,8 +2350,47 @@ export default {
       'İşletim sisteminin anahtar deposunda tutulur, çalışma alanında değil, ve konteynere ortam değişkeni olarak verilir. Bir daha hiç gösterilmez.',
     publicWarning:
       'Bu URL genel internette canlıdır ve kimlik doğrulaması yoktur. Elinde olan herkes makinenizdeki bu projeye erişir. Test bitince paylaşımı durdurun.',
+    reservedMissed:
+      'Sağlayıcı bu tünele istenen adresi ({name}) vermedi, yerine yukarıdaki adresi atadı. Ayrılan adrese göre kaydedilen hiçbir şey bu tünele ulaşmaz. Sağlayıcılar bir tünel kapandıktan sonra adı bir süre tutar; bir dakika sonra durdurup yeniden başlatmak genelde adı geri getirir.',
+    protected: 'Bu bağlantı parola soruyor. Kullanıcı adı: {user}.',
+    restartToProtect:
+      'Bu proje için bir parola tanımlı, ama bu tünel parola tanımlanmadan önce açıldı — bağlantı hâlâ herkese açık. Parolanın devreye girmesi için tüneli durdurup yeniden başlatın.',
+    authTitle: 'Bağlantıyı kim açabilir',
+    authUser: 'Kullanıcı adı',
+    authOn: 'Parola sorulsun',
+    authOff: 'Kaldır',
+    authOnFor: 'Parola tanımlı. Kullanıcı adı: {user}.',
+    authShow: 'Parolayı göster',
+    authRegenerate: 'Yeni parola',
+    authHint:
+      'Parolayı StackVo üretir — telefonda yanlış okunan karakterler olmadan yirmi karakter — ve işletim sisteminin anahtar deposunda tutar, çalışma alanında değil. Denetimi StackVo kendisi yapar: tünel ile proje arasına küçük bir nginx konteyneri koyar, böylece her sağlayıcıda aynı şekilde çalışır. Bir sonraki başlatmadan itibaren geçerlidir.',
+    authNoKeystore:
+      'Bu makinede StackVo’nun parola koyabileceği bir anahtar deposu yok, bu yüzden tünel kimlik doğrulaması burada açılamıyor.',
+    reservedTitle: 'Adres',
+    reservedNone: 'Bu sağlayıcı her başlatmada yeni bir adres veriyor.',
+    reservedSave: 'Kaydet',
+    reservedKind: {
+      subdomain: 'Alt alan adı',
+      domain: 'Alan adı',
+      hostname: 'Makine adı',
+      name: 'Ad',
+    },
+    reservedNote: {
+      localtunnel:
+        'Ücretsiz, ve ölçüldü: aynı alt alan adı iki kez geri geldi. Yine de bir istek, garanti değil — ad az önceki tünelden hâlâ tutuluyorsa sağlayıcı sessizce başka bir ad atar; StackVo bu olduğunda söyler.',
+      ngrok:
+        'ngrok panelinizde göründüğü hâliyle alan adının tamamı — ücretsiz planda bir tane var.',
+      tailscale:
+        'Funnel’ın yayımlandığı makine adı: makine.tailnet.ts.net biçiminde. Boş bırakılırsa projenin adının başına stackvo- eklenmiş hâli kullanılır.',
+      zrok: 'Ayrılmış paylaşımın benzersiz adı. İlk başlatmada ayrılır, sonrasında hep o kullanılır.',
+      localxpose:
+        'LocalXpose planınızdaki alt alan adı. Ölçüldü: istemci bayrağı kabul etti, servis içinde tire olan adı reddetti — yalnız harf ve rakam kullanın.',
+      cloudflare_named:
+        'Bu tünelin Cloudflare panelinde yönlendirildiği makine adı. cloudflared bu adresi hiç yazmaz, bu yüzden StackVo burada yazdığınız adresi gösterir — ve başlatmak için bu alan gerekir.',
+    },
     providers: {
       cloudflare: 'Cloudflare hızlı tünel',
+      cloudflare_named: 'Cloudflare adlı tünel',
       localhost_run: 'localhost.run',
       pinggy: 'Pinggy',
       localtunnel: 'localtunnel',
@@ -2363,6 +2402,8 @@ export default {
     providerNote: {
       cloudflare:
         'Hesap gerekmez. Her başlatmada yeni bir rastgele trycloudflare.com adresi; erişilebilir olması bir dakikayı bulabilir.',
+      cloudflare_named:
+        'Cloudflare Zero Trust’tan bir tünel jetonu ve orada önceden oluşturulmuş bir tünel ister. Adres, tüneli yönlendirdiğiniz makine adıdır — kendi alan adınızda, yarın da aynı.',
       localhost_run: 'Hesap gerekmez, SSH üzerinden. Her başlatmada yeni bir lhr.life adresi.',
       pinggy:
         'Hesap gerekmez, SSH üzerinden. Ücretsiz oturumlar süre sınırlıdır ve aynı adresten arka arkaya açılan birkaç tünel bir süreliğine reddedilir.',

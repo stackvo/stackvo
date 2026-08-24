@@ -122,7 +122,27 @@ fn probe(provider: &Provider) -> (bool, String) {
 
     // The real arguments, from the real function. Only the container name is
     // changed, so a probe cannot collide with a tunnel somebody is using.
-    let mut args = tunnel::run_args(provider, "probe", Some("probe.loc"), 80, NET);
+    // B-7 added a reserved name to the plan, and the probe sends one wherever
+    // the provider can take it: a flag the client has removed or renamed shows
+    // up here as a usage error, which is the whole reason this file exists.
+    let reserved = provider.reserved.map(|shape| {
+        if shape.dotted {
+            "stackvo-probe.example.com".to_string()
+        } else {
+            "stackvo-probe".to_string()
+        }
+    });
+    let mut args = tunnel::run_args(
+        provider,
+        &tunnel::Plan {
+            project: "probe",
+            domain: Some("probe.loc"),
+            port: 80,
+            network: NET,
+            reserved: reserved.as_deref(),
+            guard: None,
+        },
+    );
     for arg in args.iter_mut() {
         if arg == "stackvo-tunnel-probe" {
             *arg = SIDECAR.to_string();

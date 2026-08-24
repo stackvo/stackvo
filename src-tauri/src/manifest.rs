@@ -256,6 +256,21 @@ pub struct Manifest {
     /// why this one never reaches `instances.json`.
     pub sidecars: crate::sidecar::Declared,
 
+    /// Named places this project's data really lives, and how to move it (A-1).
+    ///
+    /// Read here for the fourth time and for the reason the three above are: a
+    /// malformed recipe should be a manifest finding beside every other one,
+    /// and `read` stays the one place that knows how a project is described.
+    /// Whether a recipe may actually run is [`crate::provider`]'s business —
+    /// policy, consent per direction, and the keystore all sit between this
+    /// declaration and a container.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::provider::as_declared_map"
+    )]
+    pub providers: Vec<crate::provider::Provider>,
+
     /// Which fields this machine's `stackvo.local.json` supplied, dotted.
     ///
     /// Empty for a manifest read straight from the committed file, which is
@@ -436,8 +451,13 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
     }
     // A runtime block that does not belong to the declared runtime is dead
     // weight at best and a sign the file was hand-merged at worst.
+    // `is_null` and not `is_some`: a serialised manifest carries `"node": null`
+    // for every PHP project, and that value comes straight back here when the
+    // editor posts what it was handed. An absent block and a null one say the
+    // same thing — this project has no such runtime — and only one of them used
+    // to be readable.
     for orphan in ["python", "ruby", "golang", "go", "rust", "node"] {
-        if orphan != runtime && json.get(orphan).is_some() {
+        if orphan != runtime && json.get(orphan).is_some_and(|v| !v.is_null()) {
             error(
                 "C-02",
                 orphan,
@@ -569,6 +589,20 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
+    // ---- declared providers (A-1) -----------------------------------------
+    //
+    // Warnings, like the three blocks above and for the same reason: a project
+    // with one unreadable recipe still has a runtime, a domain and a database,
+    // and refusing to open it would be the wrong trade for a convenience.
+    let (providers, provider_problems) = crate::provider::parse(json);
+    for problem in provider_problems {
+        warnings.push(Finding {
+            code: "PROVIDER".into(),
+            path: format!("providers.{}", problem.provider),
+            message: problem.message,
+        });
+    }
+
     // ---- write rules the Bash parser depends on ---------------------------
     check_extension_layout(raw, &mut errors);
 
@@ -588,6 +622,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         schedule,
         commands,
         sidecars,
+        providers,
         valid: errors.is_empty(),
         errors,
         warnings,
@@ -768,6 +803,27 @@ fn overlay(
     }
 
     (applied, refused)
+}
+
+/// The manifest's own bytes, for the editor to edit.
+///
+/// The editor edits a **file**, and [`Manifest`] is not one: it is the reader's
+/// view, spelled the way `ipc.json` spells everything — `documentRoot`,
+/// `lanShare` — while the file spells them `document_root` and `lan_share`.
+/// Handing that view to a text editor and taking it back through
+/// [`write`] dropped both fields on every save, silently: the document root
+/// became `public` and LAN sharing switched itself off.
+///
+/// So the editor is handed the text, exactly as the machine-local override
+/// editor already is ([`LocalOverride::text`]), and the parsed view stays where
+/// it is for the panes that read fields rather than bytes.
+pub fn read_committed_text(path: &Path, dir_name: &str) -> Result<String> {
+    // Read through the reader first: a file this app cannot parse is one the
+    // editor should open with the reason on screen, not one it silently offers
+    // to save back over something it never understood.
+    let _ = read_committed(path, dir_name)?;
+
+    std::fs::read_to_string(path).map_err(|e| Error::io(format!("reading {}", path.display()), e))
 }
 
 /// What the machine-local overlay is, as the editor sees it.
@@ -1025,7 +1081,6 @@ fn read_services(json: &serde_json::Value, warnings: &mut Vec<Finding>) -> Vec<S
         return Vec::new();
     };
 
-    let catalog = crate::contracts::env_schema();
     let mut out: Vec<String> = Vec::new();
 
     for (index, item) in items.iter().enumerate() {
@@ -1055,12 +1110,18 @@ fn read_services(json: &serde_json::Value, warnings: &mut Vec<Finding>) -> Vec<S
             continue;
         }
 
-        if !catalog.knows_service(&id) {
+        // The catalogue this machine fetched, then the vocabulary compiled in
+        // — see `market::known_service_ids`. Asking only the second one is how
+        // four published services came to be reported as unknown on the project
+        // page while the Market offered to install them.
+        if !crate::market::is_known_service(&id) {
             warnings.push(Finding {
                 code: "UNKNOWN_SERVICE".into(),
                 path: format!("services[{index}]"),
                 message: format!(
-                    "\"{id}\" is not a service this version of StackVo has a template for"
+                    "\"{id}\" is not in the catalogue this machine has fetched, and is not a \
+                     name this version knows — check the spelling, or refresh the catalogue in \
+                     Settings"
                 ),
             });
         }
@@ -1831,12 +1892,12 @@ pub fn to_json(manifest: &Manifest) -> String {
             let items: Vec<String> = steps
                 .iter()
                 .map(|step| {
-                    let key = match step.kind {
-                        crate::hooks::Kind::Exec => "exec",
-                        crate::hooks::Kind::Host => "host",
-                    };
                     let argv: Vec<String> = step.argv.iter().map(|a| quote(a)).collect();
-                    format!("      {{ {}: [{}] }}", quote(key), argv.join(", "))
+                    format!(
+                        "      {{ {}: [{}] }}",
+                        quote(step.kind.key()),
+                        argv.join(", ")
+                    )
                 })
                 .collect();
             groups.push(format!(
@@ -1946,6 +2007,62 @@ pub fn to_json(manifest: &Manifest) -> String {
             })
             .collect();
         lines.push(format!("  \"sidecars\": {{\n{}\n  }}", items.join(",\n")));
+    }
+
+    // A-1, and here for the fourth time for the reason the three blocks above
+    // give: this text is what `project_manifest_write` saves on every form
+    // submission, so a field the serialiser does not know about is one that
+    // disappears the first time somebody changes an unrelated setting. A
+    // project losing the recipe that fetches staging is the same class of loss
+    // as one losing its commands — and worse to notice, because the button it
+    // removes is one nobody presses daily.
+    //
+    // Above the runtime blocks, like `sidecars`: W-01 reserves the end of the
+    // document for `php.extensions`.
+    if !manifest.providers.is_empty() {
+        let items: Vec<String> = manifest
+            .providers
+            .iter()
+            .map(|provider| {
+                let argv = |words: &[String]| -> String {
+                    words
+                        .iter()
+                        .map(|word| quote(word))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+
+                let mut fields = vec![format!("\"image\": {}", quote(&provider.image))];
+                if let Some(about) = &provider.about {
+                    fields.push(format!("\"about\": {}", quote(about)));
+                }
+                // Each direction only when it is offered: an empty `pull` is
+                // how a recipe says it does not fetch, and writing `[]` would
+                // turn that silence into a claim the reader has to interpret.
+                if !provider.pull.is_empty() {
+                    fields.push(format!("\"pull\": [{}]", argv(&provider.pull)));
+                }
+                if !provider.push.is_empty() {
+                    fields.push(format!("\"push\": [{}]", argv(&provider.push)));
+                }
+                if !provider.env.is_empty() {
+                    let pairs: Vec<String> = provider
+                        .env
+                        .iter()
+                        .map(|(k, v)| format!("{}: {}", quote(k), quote(v)))
+                        .collect();
+                    fields.push(format!("\"env\": {{ {} }}", pairs.join(", ")));
+                }
+                // Names, never values — the whole point of the block. What
+                // these name lives in the OS keystore and is not in this file.
+                if !provider.secrets.is_empty() {
+                    fields.push(format!("\"secrets\": [{}]", argv(&provider.secrets)));
+                }
+
+                format!("    {}: {{ {} }}", quote(&provider.name), fields.join(", "))
+            })
+            .collect();
+        lines.push(format!("  \"providers\": {{\n{}\n  }}", items.join(",\n")));
     }
 
     if let Some(lang) = &manifest.lang {
@@ -2102,6 +2219,7 @@ mod write_tests {
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            providers: Vec::new(),
             local: Vec::new(),
         }
     }
@@ -2389,6 +2507,7 @@ mod write_tests {
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            providers: Vec::new(),
             local: Vec::new(),
         };
         let text = to_json(&m);
@@ -2557,6 +2676,256 @@ mod write_tests {
         assert_eq!(ids, ["search", "cache"]);
 
         assert!(again.valid, "{:?}", again.errors);
+    }
+
+    /// Declared providers survive a form save (A-1).
+    ///
+    /// The fourth block to need this test and the fourth for the same reason,
+    /// except this one was found the hard way: `providers` was read by
+    /// `provider::parse` straight off the file and never reached `to_json`, so
+    /// every form save on the project page silently deleted the recipes. The
+    /// button that fetches staging simply stopped being there, and nothing on
+    /// screen had said why.
+    #[test]
+    fn declared_providers_survive_the_editor_round_trip() {
+        let raw = r#"{
+  "name": "shop",
+  "domain": "shop.loc",
+  "runtime": "php",
+  "providers": {
+    "staging": {
+      "about": "the staging site",
+      "image": "ghcr.io/example/dbtools:1",
+      "pull": ["fetch-dump", "--out", "/stackvo/dump.sql"],
+      "push": ["send-dump", "/stackvo/dump.sql"],
+      "env": { "REMOTE_HOST": "staging.example.com" },
+      "secrets": ["SSH_KEY"]
+    },
+    "production": {
+      "image": "ghcr.io/example/dbtools:1",
+      "pull": ["fetch-dump"]
+    }
+  },
+  "php": {
+    "version": "8.4"
+  }
+}
+"#;
+        let first = read_text(raw, "shop");
+        assert!(first.warnings.is_empty(), "{:?}", first.warnings);
+        let text = to_json(&first);
+        let again = read_text(&text, "shop");
+
+        assert_eq!(again.providers.len(), 2, "{text}");
+
+        let staging = &again.providers[0];
+        assert_eq!(staging.name, "staging");
+        assert_eq!(staging.about.as_deref(), Some("the staging site"));
+        assert_eq!(staging.image, "ghcr.io/example/dbtools:1");
+        assert_eq!(staging.pull, ["fetch-dump", "--out", "/stackvo/dump.sql"]);
+        assert_eq!(staging.push, ["send-dump", "/stackvo/dump.sql"]);
+        assert_eq!(
+            staging.env.get("REMOTE_HOST").map(String::as_str),
+            Some("staging.example.com")
+        );
+        assert_eq!(staging.secrets, ["SSH_KEY"]);
+
+        // A recipe that only fetches comes back only fetching: consent is per
+        // direction, so a `push` invented by the writer would be an offer the
+        // author never made.
+        let production = &again.providers[1];
+        assert!(production.push.is_empty(), "{text}");
+        assert!(production.about.is_none());
+
+        // The order the author wrote, and above the php block so W-01 holds.
+        assert!(
+            text.find("  \"providers\": {").unwrap() < text.find("  \"php\": {").unwrap(),
+            "{text}"
+        );
+        assert!(again.valid, "{:?}", again.errors);
+    }
+
+    /// The other half of the same round trip, and the half that actually bit.
+    ///
+    /// The webview does not hand `project_manifest_write` the file — it hands
+    /// back the manifest this app serialised for it. `providers` is a `Vec` in
+    /// the struct and a map in the file, so serialising the list shape would
+    /// have parsed back as nothing and dropped the block one layer below where
+    /// the test above looks.
+    #[test]
+    fn a_serialised_manifest_carries_providers_back_through_the_form_path() {
+        let m = read_text(
+            r#"{"name":"shop","domain":"shop.loc","runtime":"php",
+                "providers":{"staging":{"image":"a/b:1","pull":["dump"]}},
+                "php":{"version":"8.4"}}"#,
+            "shop",
+        );
+        assert_eq!(m.providers.len(), 1);
+
+        // Exactly what the webview posts back: the serialised manifest, minus
+        // the three fields `ProjectDetail.vue` strips.
+        let mut posted = serde_json::to_value(&m).expect("serialises");
+        let object = posted.as_object_mut().expect("an object");
+        object.remove("valid");
+        object.remove("errors");
+        object.remove("warnings");
+
+        let back = normalize_spec(&posted, "shop");
+
+        assert!(back.valid, "{:?}", back.errors);
+        assert_eq!(back.providers.len(), 1, "{posted:#}");
+        assert_eq!(back.providers[0].name, "staging");
+        assert_eq!(back.providers[0].pull, ["dump"]);
+    }
+
+    /// The payload this app hands the webview has to parse back into the same
+    /// manifest, because that is exactly what the webview does with it.
+    ///
+    /// Measured rather than assumed, and what the measurement found was four
+    /// blocks wide: `hooks` serialised as `{kind, argv}` and `commands` as
+    /// `argv`, neither of which the reader accepts; a sidecar wrote its empty
+    /// defaults and `command: []` is a step list with no first word, so the
+    /// sidecar came back refused; and `providers` was not serialised at all.
+    /// Every one of them was deleted the first time somebody pressed Save in
+    /// the manifest editor, and nothing on screen said so.
+    #[test]
+    fn every_declared_block_survives_the_payload_round_trip() {
+        let raw = r#"{
+  "name": "shop",
+  "domain": "shop.loc",
+  "runtime": "php",
+  "server": "apache",
+  "aliases": ["api.shop.loc"],
+  "services": ["mysql"],
+  "hooks": {
+    "post-start": [{ "exec": ["php", "artisan", "migrate"] }, { "host": ["sh", "scripts/x.sh"] }]
+  },
+  "schedule": [{ "label": "nightly", "cron": "0 3 * * *", "exec": ["php", "artisan", "x"] }],
+  "commands": {
+    "seed": { "exec": ["php", "artisan", "db:seed"], "about": "seed it" },
+    "shell": { "exec": ["php", "artisan", "tinker"], "interactive": true }
+  },
+  "sidecars": { "search": { "image": "typesense/typesense:27.1" } },
+  "providers": { "staging": { "image": "a/b:1", "pull": ["dump"] } },
+  "php": { "version": "8.4", "xdebug": true, "extensions": ["mbstring"] }
+}
+"#;
+        let m = read_text(raw, "shop");
+        assert!(m.valid, "{:?}", m.errors);
+
+        // What the webview posts back: the serialised manifest, minus the three
+        // fields `ProjectDetail.vue` strips.
+        let mut posted = serde_json::to_value(&m).expect("serialises");
+        let object = posted.as_object_mut().expect("an object");
+        object.remove("valid");
+        object.remove("errors");
+        object.remove("warnings");
+
+        let back = normalize_spec(&posted, "shop");
+        let pretty = serde_json::to_string_pretty(&posted).unwrap_or_default();
+
+        // `"node": null` is not a node block. It used to be read as one, so a
+        // PHP project posting its own payload back failed C-02.
+        assert!(back.valid, "{:?}\n{pretty}", back.errors);
+        assert!(back.warnings.is_empty(), "{:?}\n{pretty}", back.warnings);
+
+        assert_eq!(back.server.as_deref(), Some("apache"));
+        assert_eq!(back.aliases, ["api.shop.loc"]);
+        assert_eq!(back.services, ["mysql"]);
+
+        let steps = back.hooks.steps(crate::hooks::Event::PostStart);
+        assert_eq!(steps.len(), 2, "{pretty}");
+        assert_eq!(steps[0].kind, crate::hooks::Kind::Exec);
+        assert_eq!(steps[0].argv, ["php", "artisan", "migrate"]);
+        assert_eq!(steps[1].kind, crate::hooks::Kind::Host);
+
+        assert_eq!(back.schedule.len(), 1, "{pretty}");
+        assert_eq!(back.schedule[0].label, "nightly");
+
+        assert_eq!(back.commands.len(), 2, "{pretty}");
+        let seed = back.commands.get("seed").expect("kept");
+        assert_eq!(seed.argv, ["php", "artisan", "db:seed"]);
+        assert_eq!(seed.about, "seed it");
+        assert!(back.commands.get("shell").expect("kept").interactive);
+
+        assert_eq!(back.sidecars.len(), 1, "{pretty}");
+        assert_eq!(
+            back.sidecars.get("search").expect("kept").image,
+            "typesense/typesense:27.1"
+        );
+
+        assert_eq!(back.providers.len(), 1, "{pretty}");
+        assert_eq!(back.providers[0].name, "staging");
+
+        let php = back.php.expect("php block");
+        assert_eq!(php.version, "8.4");
+        assert!(php.xdebug, "the switch was on and came back off");
+        assert_eq!(php.extensions, ["mbstring"]);
+    }
+
+    /// The two fields the payload cannot carry, and what carries them instead.
+    ///
+    /// `documentRoot` and `lanShare` are camelCase on the IPC surface and
+    /// snake_case in the file, so a text editor handed the payload writes back
+    /// two keys the reader does not know — silently turning a project's
+    /// document root into `public` and switching LAN sharing off. The editor is
+    /// given the file's own bytes for that reason, and this is the test that
+    /// says so.
+    #[test]
+    fn the_editor_is_handed_the_file_and_not_the_readers_view_of_it() {
+        let raw = r#"{
+  "name": "shop",
+  "domain": "shop.loc",
+  "runtime": "php",
+  "document_root": "web",
+  "lan_share": true,
+  "php": {
+    "version": "8.4",
+    "extensions": [
+      "mbstring"
+    ]
+  }
+}
+"#;
+        let dir = std::env::temp_dir().join(format!("stackvo-doc-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE);
+        std::fs::write(&path, raw).unwrap();
+
+        let text = super::read_committed_text(&path, "shop").expect("reads");
+
+        // The bytes, unchanged — not a re-render of them.
+        assert_eq!(text, raw);
+
+        // And what the editor saves is those bytes, which parse back whole.
+        let posted: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let back = normalize_spec(&posted, "shop");
+        assert!(back.valid, "{:?}", back.errors);
+        assert_eq!(back.document_root.as_deref(), Some("web"));
+        assert!(back.lan_share);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A refused recipe is a warning on the manifest, not a failure to open it.
+    #[test]
+    fn a_broken_provider_is_a_warning_and_the_manifest_stays_valid() {
+        let m = read_text(
+            r#"{"name":"shop","domain":"shop.loc","runtime":"php",
+                "providers":{"staging":{"image":"a/b:1","pull":"pg_dump | gzip"}},
+                "php":{"version":"8.4"}}"#,
+            "shop",
+        );
+
+        assert!(m.valid, "{:?}", m.errors);
+        assert!(m.providers.is_empty());
+        assert!(
+            m.warnings
+                .iter()
+                .any(|w| w.code == "PROVIDER" && w.path == "providers.staging"),
+            "{:?}",
+            m.warnings
+        );
     }
 
     /// A refused sidecar is a warning on the manifest, not a failure to open it.

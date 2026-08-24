@@ -7,6 +7,174 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A shared tunnel can ask for a password, and can keep its address (B-7).**
+  The Share pane could hand out a public URL and then only *warn* that it was a
+  public, unauthenticated door into an application running on this laptop; and
+  a quick tunnel's address changes on every start, which is fine for "did the
+  webhook arrive" and useless for an OAuth redirect URI, a Stripe endpoint or a
+  QR code on a slide.
+
+  **Authentication is StackVo's, not the provider's.** Four of the providers can
+  do basic auth themselves, three cannot, and the four that can spell it four
+  different ways — one of them through a YAML policy file rather than a flag.
+  So when a credential is stored, the sidecar is pointed at an nginx container
+  of StackVo's own on the stack network, and that container is what asks. Every
+  provider reaches it identically — including Tailscale, whose sidecar joins the
+  guard's network namespace instead of the project's — and the check is
+  measurable here rather than in nine vendors' documentation:
+  `cargo run --example tunnel_guard_probe` starts it against real containers and
+  measures no credentials → 401 with a challenge, wrong credentials → 401, right
+  credentials → the application's own bytes. It also measures the failure that
+  would matter most: a guard that reaches no credential refuses to start rather
+  than coming up open.
+
+  The password is generated (twenty characters, without the ones misread on a
+  phone), kept in the OS keystore one entry per project, and reaches the guard
+  as an environment variable — never a file in the workspace, never an argument.
+  It is also the one secret in this app that can be read back, because unlike a
+  token it has to be typed into a browser on somebody else's device.
+
+  **A reserved name is sent through the flag the chosen client actually has**
+  — `--subdomain`, `--url=`, `--hostname=`, or zrok's reserve-then-share — and
+  then **checked**. Measured with localtunnel, which needs no account: the same
+  subdomain came back twice, ninety seconds apart. Started immediately after the
+  previous tunnel closed, the same request came back as
+  `bitter-bulldog-88.loca.lt` with no error at all — a tunnel that works and a
+  dashboard entry that points nowhere. The pane now says when the name asked for
+  was not the name granted.
+
+  A ninth provider came with it, as a row rather than a branch:
+  `cloudflare_named` is the same client as the quick tunnel, running a tunnel
+  somebody already created in Cloudflare — measured to read `TUNNEL_TOKEN` from
+  the environment on its own, so the credential never becomes an argument, and
+  its refusal (`Provided Tunnel token is not valid.`) needed a needle
+  `find_failure` did not have.
+
+  Two findings from the probe changed the code rather than the notes: an
+  unquoted heredoc performs command substitution, so a backtick in an nginx
+  *comment* became `sh: always: not found` and the guard would not start; and a
+  credential keyed into an nginx `map` needs a hash bucket bigger than the
+  credential, which nginx refuses with `could not build map_hash` on a password
+  no longer than one somebody might actually choose. The configuration compares
+  the header directly instead.
+
+### Fixed
+
+- **Saving a project's settings no longer deletes the half of its manifest the
+  form has no fields for.** Found while writing a test project that declares
+  every block the contract has: `providers` was read straight off the file by
+  `provider::parse` and never reached `manifest::to_json`, so the writer — which
+  re-renders the whole document on every save — wrote a file without it. The
+  button that fetches staging simply stopped being there.
+
+  Measuring the round trip rather than fixing the one report found four more,
+  all of the same shape and all silent:
+
+  - `hooks` serialised as `{"kind": "exec", "argv": [...]}` and `commands` as
+    `argv`, neither of which the reader accepts. `ipc.json` already said these
+    are "keyed maps whose values are defined by project.schema.json" — the
+    contract was right and the implementation was not.
+  - a sidecar serialised its empty defaults, and `command: []` is a step list
+    with no first word, so the reader refused the sidecar it had just written.
+  - `"node": null` is what a PHP project's payload carries for the runtime it
+    does not have. Posted back, C-02 read it as a node block and refused the
+    manifest.
+  - the settings sheet builds the whole file out of a form, and the form kept
+    only the fields it draws. `lan_share`, `php.xdebug`, `hooks`, `schedule`,
+    `commands`, `sidecars` and `providers` were dropped on every save —
+    `blankForm`'s own comment says "a field it forgets is a field that Save
+    deletes", and seven of them were being forgotten.
+
+  Each half now serialises the way the file spells it, `provider::parse` keeps
+  the file's order instead of alphabetising (the reordering `sidecar::Declared`
+  and `quickcmd::Declared` each keep an order list to avoid), and the form
+  carries what it does not edit.
+
+- **The manifest editor edits the file.** It was showing the reader's view of
+  it, which is spelled for the IPC boundary — `documentRoot`, `lanShare` —
+  while the file spells them `document_root` and `lan_share`. Saving what it
+  displayed turned a project's document root into `public` and switched LAN
+  sharing off, with nothing on screen saying so. `project_manifest_text` returns
+  the committed bytes, the way the machine-local override editor has always been
+  given them, and refuses with the reader's error when the file does not parse
+  rather than offering to save over something this app never understood.
+
+- **Three red CI jobs, and none of them was the product.** Each test was
+  asserting the machine it was written on:
+
+  - `supervisor::a_docker_command_with_input_is_given_a_standard_input` ran
+    `docker exec <container> false` for real. macos-latest has no `docker`
+    binary, so it failed for a reason that says nothing about this code — and
+    on a runner that *has* one it could not fail the way it was written for:
+    `false` exits non-zero with or without `-i`. The argv is built by
+    `docker_argv` now and asserted as a string, which is the flag in the
+    position that matters, everywhere.
+  - `dns::a_file_that_is_not_ours_is_summarised_rather_than_hidden` wrote a
+    fixture saying `port 53` and called it somebody else's file. On Windows
+    `PORT` **is** 53, so the "foreign" file was byte-for-byte the one this app
+    writes — the test failed on the single platform it was making a claim
+    about. The fixture uses a port that is nobody's on any platform and asserts
+    that it is not ours, so the next person to pick a number cannot pick this
+    one.
+  - `architecture_claims::the_counts_match_the_tree` was the module count, and
+    is covered by the claim refresh below.
+
+  Both habits are now refused where they happened, in `cfg_regions.rs`, beside
+  the rule that keeps a POSIX shell out of `runner.rs`'s tests — and scoped the
+  same way, to the one file that had them. A test in `supervisor.rs` may not
+  call `.exec()`; a test in `dns.rs` may not write `port 53` or `port 15353` as
+  a literal. Neither gate needs a Windows machine to fire, which is the point:
+  `tools/before-push.sh --all` type-checks the Windows branch but cannot *run*
+  its tests, so the class of bug that only fails there has to be caught by
+  reading rather than by running.
+
+- **`tools/linux/run.sh` builds what it needs, the way the Windows branch
+  already did.** Both Linux steps of `before-push.sh --all` failed on this
+  machine at `resource path binaries/stackvo-aarch64-unknown-linux-gnu doesn't
+  exist` — `tauri-build` checks every `externalBin` exists on any cargo build of
+  the package, and it looks for the *container's* triple, so the host's sidecars
+  are not ones. The `--windows` branch has written stubs for exactly this since
+  the day it was added and says why; the Linux side never did. The probe run
+  writes stubs (nothing executes them) and `--driver`, which builds the
+  application the way it ships, builds the real ones — `beforeBuildCommand`
+  refuses a placeholder, correctly.
+
+- **A service the catalogue publishes is no longer reported as unknown.**
+  `dragonfly`, `soketi`, `prometheus` and `graylog` are published packages that
+  this machine can install from Market — and every project declaring one was
+  told on its own page that "this version of StackVo has no template for it".
+  The check was reading the list compiled into the binary, whose own note in
+  `env.schema.json` calls it "the vocabulary, not an inventory" and says it has
+  to grow when the catalogue does. It had not, twice: Solr and ClickHouse were
+  added late, these four not at all.
+
+  A list inside a binary cannot follow a repository that ships on its own
+  schedule, so the answer no longer comes from one. `market::is_known_service`
+  asks the **catalogue this machine has fetched** first — the file the Refresh
+  button in Settings writes — and falls back to the compiled-in vocabulary,
+  which is what a machine that has never fetched still knows and what keeps a
+  typo a typo. It is re-read when the index changes rather than once per
+  process, so a refresh is visible without restarting the app.
+
+  The three places that judged an id separately — the manifest reader, the
+  requirements card and `.env` detection — now ask that one function, because a
+  Market that installs a service beside a card that calls it unknown is the
+  disagreement worth removing. The four ids are added to the vocabulary as well,
+  so a machine with no catalogue yet is right about them too.
+
+- **`project.schema.json` describes `schedule`.** The reader has accepted the
+  block since the Scheduled jobs panel shipped and the writer emits it, but the
+  one document both halves are meant to share never mentioned it — so the
+  contract described a manifest the app does not have. Labels, the portable cron
+  subset, the argv rule and what `enabled` means are now written down where the
+  other blocks are.
+
+- **The counted claims in `README.md`, `ARCHITECTURE.md` and `docs/durum.md`
+  are current again** — modules, commands, events, front-end files and the
+  `ipc.js` wrapper count had drifted, and their gates had been red for it.
+
+### Added
+
 - **The suite runs on Windows, and the two product bugs it found are fixed.**
   §3 #35's open half was whether the branches *run*, not whether they compile.
   They run now, and the first real Windows run failed nineteen tests. Sorting

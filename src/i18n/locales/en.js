@@ -2382,8 +2382,47 @@ export default {
       'Kept in the OS keystore, never in the workspace, and handed to the container as an environment variable. It is never displayed again.',
     publicWarning:
       'This URL is live on the public internet and has no authentication. Anyone who has it reaches this project on your machine. Stop sharing when the test is done.',
+    reservedMissed:
+      'The provider did not give this tunnel the address it asked for ({name}) — it assigned the one above instead. Anything registered against the reserved address will not be reached. Providers hold a name for a while after a tunnel closes; stopping and starting again in a minute usually gets it back.',
+    protected: 'This link asks for a password. The user name is {user}.',
+    restartToProtect:
+      'A password is set for this project, but this tunnel was opened before it — the link is still open to anyone. Stop and start it again to put the password in front of it.',
+    authTitle: 'Who can open the link',
+    authUser: 'User name',
+    authOn: 'Ask for a password',
+    authOff: 'Remove',
+    authOnFor: 'A password is set. The user name is {user}.',
+    authShow: 'Show password',
+    authRegenerate: 'New password',
+    authHint:
+      'The password is generated — twenty characters, without the ones that are misread on a phone — and kept in the OS keystore, never in the workspace. StackVo enforces it itself, with a small nginx container between the tunnel and the project, so it works the same on every provider. It applies from the next start.',
+    authNoKeystore:
+      'This machine has no keystore for StackVo to put a password in, so tunnel authentication cannot be switched on here.',
+    reservedTitle: 'The address',
+    reservedNone: 'This provider hands out a new address on every start.',
+    reservedSave: 'Save',
+    reservedKind: {
+      subdomain: 'Subdomain',
+      domain: 'Domain',
+      hostname: 'Hostname',
+      name: 'Name',
+    },
+    reservedNote: {
+      localtunnel:
+        'Free, and measured: the same subdomain came back twice. It is a request rather than a promise — if the name is still held from a moment ago, the provider quietly assigns a different one, and StackVo says so when it happens.',
+      ngrok:
+        'The whole domain, as it appears in your ngrok dashboard — the free plan includes one.',
+      tailscale:
+        'The hostname the funnel is published under, as hostname.tailnet.ts.net. Left empty it is the project name, prefixed with stackvo-.',
+      zrok: 'The unique name of a reserved share. It is reserved on the first start and used from then on.',
+      localxpose:
+        'The subdomain, from your LocalXpose plan. Measured: the client accepted the flag and the service refused a name with a hyphen in it, so keep it to letters and digits.',
+      cloudflare_named:
+        "The hostname this tunnel is routed at in Cloudflare's own dashboard. cloudflared never prints it, so StackVo shows the address you type here — and needs it before it will start.",
+    },
     providers: {
       cloudflare: 'Cloudflare quick tunnel',
+      cloudflare_named: 'Cloudflare named tunnel',
       localhost_run: 'localhost.run',
       pinggy: 'Pinggy',
       localtunnel: 'localtunnel',
@@ -2395,6 +2434,8 @@ export default {
     providerNote: {
       cloudflare:
         'No account. A new random trycloudflare.com address on every start, and it can take a minute to become reachable.',
+      cloudflare_named:
+        'Needs a tunnel token from Cloudflare Zero Trust, and a tunnel you already created there. The address is the hostname you routed it at — the same one tomorrow, on a domain you own.',
       localhost_run: 'No account, over SSH. A new lhr.life address on every start.',
       pinggy:
         'No account, over SSH. Free sessions are time-limited, and several opened in a row from one address are refused for a while.',

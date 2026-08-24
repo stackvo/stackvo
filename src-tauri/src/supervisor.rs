@@ -79,6 +79,27 @@ pub fn for_project(project: &str) -> Target {
     }
 }
 
+/// The whole command line, as an argv.
+///
+/// Its own function so it can be asserted without an engine. The test that used
+/// to cover this ran `docker exec` for real and could not fail the way it was
+/// written for — `docker exec <container> false` exits non-zero whether or not
+/// `-i` was passed, and on a machine with no `docker` at all it failed for a
+/// reason that says nothing about this code. What matters here is one flag in
+/// one position, which is a string comparison.
+fn docker_argv(container: &str, argv: &[String], with_input: bool) -> Vec<String> {
+    let mut full = vec!["docker".to_string(), "exec".to_string()];
+    // Without `-i` the engine gives the process a closed standard input, and a
+    // command reading from it reads nothing — successfully. `tee` exits 0 and
+    // writes an empty file, which is the destructive half of that.
+    if with_input {
+        full.push("-i".into());
+    }
+    full.push(container.to_string());
+    full.extend(argv.iter().cloned());
+    full
+}
+
 impl Target {
     /// Run a command in the container.
     ///
@@ -92,14 +113,7 @@ impl Target {
 
     /// The same, with something written to the command's standard input.
     pub async fn exec_with(&self, argv: &[String], input: Option<&str>) -> Result<Output> {
-        let mut full = vec!["docker".to_string(), "exec".to_string()];
-        // Without `-i` the engine gives the process a closed standard input,
-        // and a command reading from it reads nothing — successfully.
-        if input.is_some() {
-            full.push("-i".into());
-        }
-        full.push(self.container.clone());
-        full.extend(argv.iter().cloned());
+        let full = docker_argv(&self.container, argv, input.is_some());
 
         let (program, args) = full.split_first().expect("a program");
         let late = || {
@@ -1630,25 +1644,45 @@ error: <class 'FileNotFoundError'>, [Errno 2] No such file or directory
     /// A command that is going to read its standard input has to be given
     /// one. The failure without this is silent and destructive: `tee` exits 0
     /// and writes an empty file.
-    #[tokio::test]
-    async fn a_docker_command_with_input_is_given_a_standard_input() {
-        let target = Target {
-            project: "svprobe".into(),
-            container: "svprobe".into(),
-        };
+    ///
+    /// Asserted against the argv rather than against a running engine. The
+    /// version before this ran `docker exec <container> false` and checked that
+    /// it exited non-zero — which it does with or without `-i`, so the test
+    /// could not fail the way it was written for, and on a runner with no
+    /// `docker` binary it failed for a reason that says nothing about this
+    /// code (CI, macos-latest).
+    #[test]
+    fn a_docker_command_with_input_is_given_a_standard_input() {
+        let with = docker_argv("shop", &["tee".into(), "/etc/x.conf".into()], true);
+        let without = docker_argv("shop", &["tee".into(), "/etc/x.conf".into()], false);
 
-        // `false` is in every image and exits non-zero without touching
-        // anything, so this exercises the argv rather than a side effect.
-        let with = target
-            .exec_with(&["false".into()], Some("x"))
-            .await
-            .expect("docker ran");
-        let without = target.exec(&["false".into()]).await.expect("docker ran");
+        assert_eq!(
+            with,
+            ["docker", "exec", "-i", "shop", "tee", "/etc/x.conf"],
+            "a command being written to needs `-i`, and it goes before the container",
+        );
+        assert_eq!(
+            without,
+            ["docker", "exec", "shop", "tee", "/etc/x.conf"],
+            "and a command with nothing to read must not be given an open input",
+        );
+    }
 
-        // Both reached the engine and neither was refused for its arguments —
-        // a missing `-i` would have been accepted and quietly read nothing.
-        assert_ne!(with.code, 0);
-        assert_ne!(without.code, 0);
+    /// The argv is passed through, never re-split.
+    ///
+    /// `docker exec` execs the vector it is given, so a word with a space in it
+    /// is one argument. A shell anywhere in this path would make it two, and
+    /// this module exists partly to not have one.
+    #[test]
+    fn a_word_with_a_space_in_it_stays_one_word() {
+        let argv = docker_argv(
+            "shop",
+            &["supervisorctl".into(), "start php-fpm nginx".into()],
+            false,
+        );
+
+        assert_eq!(argv.len(), 5, "{argv:?}");
+        assert_eq!(argv[4], "start php-fpm nginx");
     }
 
     fn snap(rows: Vec<Process>) -> Snapshot {
