@@ -50,7 +50,12 @@ export function argvFor(kind, text) {
 /** Which kind an existing argv came from, so editing it opens the right form. */
 export function kindOf(exec) {
   const argv = asList(exec);
-  if (argv.length === 3 && argv[0] === 'php' && argv[1] === 'artisan' && argv[2] === 'schedule:run') {
+  if (
+    argv.length === 3 &&
+    argv[0] === 'php' &&
+    argv[1] === 'artisan' &&
+    argv[2] === 'schedule:run'
+  ) {
     return 'laravel';
   }
   if (argv[0] === 'php' && argv[1] === 'artisan') return 'artisan';
@@ -136,7 +141,7 @@ export function useScheduler(name) {
   function remove(id) {
     return save(
       jobs.value.filter((job) => job.id !== id),
-      id,
+      id
     );
   }
 
@@ -144,7 +149,7 @@ export function useScheduler(name) {
   function toggleJob(id) {
     return save(
       jobs.value.map((job) => (job.id === id ? { ...job, enabled: !job.enabled } : job)),
-      id,
+      id
     );
   }
 

@@ -68,6 +68,15 @@ pub struct AppState {
     /// One operation per subject. The front end's busy flag is per view; this
     /// is the boundary that the tray, a second view and a shortcut all share.
     pub inflight: crate::inflight::Registry,
+    /// What repeated looks at a supervisord have shown — restart counts and
+    /// flapping. Held here because it is the one thing in that feature with a
+    /// memory: a snapshot on its own cannot say that a process keeps coming
+    /// back, and two views of the same server have to agree about it.
+    pub supervisor_watch: Mutex<crate::supervisor::Watch>,
+    /// What each watched process looked like last time, so the background
+    /// watch reports changes rather than announcing a broken process every
+    /// twenty seconds for as long as nobody fixes it.
+    pub supervisor_alarms: Mutex<crate::supervisor::Alarms>,
     /// Generation writes shared files — `docker-compose.projects.yml` and
     /// everything under `generated/`. Many commands regenerate as one of their
     /// steps, so these queue rather than fail: refusing a build because another
@@ -125,12 +134,19 @@ impl AppState {
                     .unwrap_or_default(),
             ),
             inflight: crate::inflight::Registry::new(),
+            supervisor_watch: Mutex::new(crate::supervisor::Watch::default()),
+            supervisor_alarms: Mutex::new(crate::supervisor::Alarms::default()),
             generate_lock: std::sync::Arc::new(tokio::sync::Mutex::new(())),
             dns: Mutex::new(None),
         }
     }
 
-    fn root(&self) -> Result<std::path::PathBuf> {
+    /// The workspace root, or the reason there is not one.
+    ///
+    /// `pub(crate)` for the background watch in [`crate::supervisor`], which is
+    /// the one caller outside this module: it runs on its own timer rather than
+    /// from a command, so it has to ask for the root itself.
+    pub(crate) fn root(&self) -> Result<std::path::PathBuf> {
         recover(&self.workspace).require_root()
     }
 }
@@ -9692,6 +9708,263 @@ pub async fn scheduler_run(state: State<'_, AppState>, name: String, job: String
         .with_hint("the scheduler has to be running for a job to be run by hand"));
     }
     Ok(())
+}
+
+// --------------------------------------------------------------- supervisord
+
+/// What one project's own container is running, and why not when it is not.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSupervisor {
+    pub reach: crate::supervisor::Reach,
+    /// Present only when it answered.
+    pub snapshot: Option<crate::supervisor::Snapshot>,
+}
+
+/// The supervisord inside this project's own container.
+///
+/// Nothing is configured and nothing is stored: a project names its container,
+/// and StackVo's own generated image for an nginx or caddy project runs
+/// supervisord as its command. So the answer to "what is running in there" is
+/// one `docker exec` away and has been the whole time — there was simply no
+/// socket to ask through until the generated config grew one.
+#[tauri::command]
+pub async fn supervisor_project(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<ProjectSupervisor> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    let target = crate::supervisor::for_project(&name);
+
+    // Asked first, and with the failure kept rather than raised: the ways this
+    // can be empty send somebody to different places, and only the text of the
+    // refusal says which one it is.
+    let probe = target
+        .exec(&["supervisorctl".to_string(), "status".to_string()])
+        .await;
+
+    let reach = match &probe {
+        Ok(output) => crate::supervisor::classify(&format!("{}{}", output.stdout, output.stderr)),
+        // The engine itself did not answer — nothing ran, so nothing can be
+        // said about what is inside.
+        Err(_) => crate::supervisor::Reach::Stopped,
+    };
+
+    if reach != crate::supervisor::Reach::Ok {
+        return Ok(ProjectSupervisor {
+            reach,
+            snapshot: None,
+        });
+    }
+
+    // The watch is taken and put back around the observation only, never held
+    // across the call: a container that has gone away runs out its timeout, and
+    // holding the lock through that would stop every other project's poll.
+    let mut watch = std::mem::take(
+        &mut *state
+            .supervisor_watch
+            .lock()
+            .map_err(|_| Error::new(Code::Conflict, "the watch is poisoned"))?,
+    );
+    let looked = crate::supervisor::snapshot(&mut watch, &target).await;
+    if let Ok(mut held) = state.supervisor_watch.lock() {
+        *held = watch;
+    }
+
+    let mut snapshot = looked?;
+    crate::supervisor::attach_checks(&root, &mut snapshot).await;
+
+    Ok(ProjectSupervisor {
+        reach,
+        snapshot: Some(snapshot),
+    })
+}
+
+/// Which processes one control verb applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    Process,
+    Group,
+    All,
+}
+
+/// Start, stop, restart or signal — at a process, a group, or everything.
+///
+/// One command for the whole matrix rather than twelve, because supervisord
+/// treats them as one: the verb and the scope pick the method name, and every
+/// combination takes the same two arguments.
+#[tauri::command]
+pub async fn supervisor_control(
+    state: State<'_, AppState>,
+    name: String,
+    scope: String,
+    verb: String,
+    target: Option<String>,
+    signal: Option<String>,
+) -> Result<serde_json::Value> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let scope = match scope.as_str() {
+        "process" => Scope::Process,
+        "group" => Scope::Group,
+        "all" => Scope::All,
+        other => {
+            return Err(Error::new(
+                Code::InvalidInput,
+                format!("{other} is not a scope"),
+            ))
+        }
+    };
+    let subject = target.unwrap_or_default();
+    if scope != Scope::All && subject.trim().is_empty() {
+        return Err(Error::new(
+            Code::InvalidInput,
+            "this verb needs something to apply to",
+        ));
+    }
+
+    let _busy = state
+        .inflight
+        .acquire(format!("supervisor:{name}:{subject}"))?;
+    let supervisord = crate::supervisor::for_project(&name);
+
+    let method = |suffix: &str| -> String {
+        match scope {
+            Scope::Process => format!("supervisor.{suffix}Process"),
+            Scope::Group => format!("supervisor.{suffix}ProcessGroup"),
+            Scope::All => format!("supervisor.{suffix}AllProcesses"),
+        }
+    };
+    let args = |wait: bool| -> Vec<serde_json::Value> {
+        match scope {
+            Scope::All => vec![serde_json::json!(wait)],
+            _ => vec![serde_json::json!(subject), serde_json::json!(wait)],
+        }
+    };
+
+    match verb.as_str() {
+        "start" => supervisord.call(&method("start"), &args(true)).await,
+        "stop" => supervisord.call(&method("stop"), &args(true)).await,
+        // Two calls and not a method: supervisord has no `restartProcess`, and
+        // a UI offering one would be offering a verb the daemon does not have.
+        // Stopping something already stopped is a refusal, and here it is the
+        // expected first half of the pair — so it is allowed to fail and the
+        // start is what has to work.
+        "restart" => {
+            let _ = supervisord.call(&method("stop"), &args(true)).await;
+            supervisord.call(&method("start"), &args(true)).await
+        }
+        "signal" => {
+            let signal = signal.unwrap_or_else(|| "HUP".to_string());
+            let method = match scope {
+                Scope::Process => "supervisor.signalProcess",
+                Scope::Group => "supervisor.signalProcessGroup",
+                Scope::All => "supervisor.signalAllProcesses",
+            };
+            let args = match scope {
+                Scope::All => vec![serde_json::json!(signal)],
+                _ => vec![serde_json::json!(subject), serde_json::json!(signal)],
+            };
+            supervisord.call(method, &args).await
+        }
+        "clearLog" => {
+            let method = match scope {
+                Scope::All => "supervisor.clearAllProcessLogs",
+                _ => "supervisor.clearProcessLogs",
+            };
+            let args = match scope {
+                Scope::All => vec![],
+                _ => vec![serde_json::json!(subject)],
+            };
+            supervisord.call(method, &args).await
+        }
+        other => Err(Error::new(
+            Code::InvalidInput,
+            format!("{other} is not something to do to a process"),
+        )),
+    }
+}
+
+/// The tail of one process's log.
+#[tauri::command]
+pub async fn supervisor_log(
+    state: State<'_, AppState>,
+    name: String,
+    process: String,
+    channel: Option<String>,
+    lines: Option<i64>,
+) -> Result<String> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    let supervisord = crate::supervisor::for_project(&name);
+
+    let method = match channel.as_deref() {
+        Some("stderr") => "supervisor.tailProcessStderrLog",
+        _ => "supervisor.tailProcessStdoutLog",
+    };
+    let value = supervisord
+        .call(
+            method,
+            &[
+                serde_json::json!(process),
+                serde_json::json!(0),
+                serde_json::json!(lines.unwrap_or(500).clamp(10, 5000)),
+            ],
+        )
+        .await?;
+
+    Ok(value
+        .get(0)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string())
+}
+
+/// The health checks configured for one project.
+#[tauri::command]
+pub fn supervisor_checks(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<Vec<crate::supervisor::Check>> {
+    let root = state.root()?;
+    Ok(crate::supervisor::checks_for(&root, &name))
+}
+
+/// Add a check, or replace the one already on that process.
+#[tauri::command]
+pub fn supervisor_check_save(
+    state: State<'_, AppState>,
+    check: crate::supervisor::Check,
+) -> Result<Vec<crate::supervisor::Check>> {
+    let root = state.root()?;
+    let project = check.project.clone();
+    crate::supervisor::upsert_check(&root, check)?;
+    Ok(crate::supervisor::checks_for(&root, &project))
+}
+
+#[tauri::command]
+pub fn supervisor_check_remove(
+    state: State<'_, AppState>,
+    name: String,
+    process: String,
+) -> Result<Vec<crate::supervisor::Check>> {
+    let root = state.root()?;
+    crate::supervisor::remove_check(&root, &name, &process)?;
+    Ok(crate::supervisor::checks_for(&root, &name))
+}
+
+/// Run one check now, without waiting for the next poll.
+///
+/// Takes the check rather than a name so a form can try what is on screen
+/// before it is saved.
+#[tauri::command]
+pub async fn supervisor_check_run(
+    check: crate::supervisor::Check,
+) -> Result<crate::supervisor::CheckResult> {
+    check.validate()?;
+    Ok(crate::supervisor::probe(&check).await)
 }
 
 // ------------------------------------------------------------------ stripe

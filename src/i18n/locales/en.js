@@ -2247,7 +2247,8 @@ export default {
       artisan: 'artisan command',
       custom: 'Command',
     },
-    commandHint: 'Each word becomes one argument. There is no shell: &&, pipes and $VAR do not work.',
+    commandHint:
+      'Each word becomes one argument. There is no shell: &&, pipes and $VAR do not work.',
     frequency: 'Frequency',
     cron: 'Cron expression',
     cronHint: 'Five fields: minute hour day month weekday. *, , - and */n are supported.',
@@ -2276,6 +2277,50 @@ export default {
     neverRan: 'Has not run yet',
     lastRun: 'Last run: {at}',
     lastFailed: 'Last run failed: {at}',
+  },
+  projectSupervisor: {
+    title: 'supervisord in the container',
+    explain:
+      'This project\u2019s own container runs supervisord, with php-fpm and the web server under it. Nothing to add \u2014 the container is already known.',
+    needsRunning: 'Start the project first.',
+    noSupervisord:
+      'This project runs its server without supervisord (apache, frankenphp, swoole, or a runtime that is not PHP). There is nothing to show.',
+    noSocket:
+      'supervisord is running and will not talk: this image was built before StackVo put a socket in the generated config. Rebuild the project.',
+    stopped: 'The container is not running.',
+    counts: '{running} of {total} running',
+    logToStdout:
+      'This process writes its log to the container\u2019s stdout \u2014 see the Logs tab.',
+  },
+  supervisorCheck: {
+    title: 'Health check for {process}',
+    explain:
+      'supervisord reports that a process is up, not that the thing inside it is answering. A php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 all look RUNNING.',
+    kind: 'Kind of check',
+    kinds: { http: 'HTTP request', tcp: 'TCP connection' },
+    target: { http: 'Address', tcp: 'host:port' },
+    expect: 'Status that counts as answering',
+    try: 'Try it now',
+    trying: 'Trying\u2026',
+    remove: 'Remove the check',
+    button: 'Health check',
+    answering: 'answering',
+    failing: '{count} up and not answering',
+  },
+  supervisors: {
+    save: 'Save',
+    cancel: 'Cancel',
+    close: 'Close',
+    restart: 'Restart',
+    log: 'Log',
+    flapping: 'Keeps restarting',
+    flappingCount: '{count} keep restarting',
+    restarts: 'restarted {count} times',
+    alarms: {
+      fatal: '{process} gave up',
+      flapping: '{process} keeps restarting',
+      notAnswering: '{process} is up and not answering',
+    },
   },
   workers: {
     title: 'Workers',
