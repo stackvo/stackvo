@@ -17,6 +17,19 @@
 //!     which is what a project's own application wants, and which does not go
 //!     through a published port at all.
 //!
+//! ## Which side the string is for
+//!
+//! [`Side`] is not decoration on top of the host name: MongoDB needs different
+//! bytes for each. The packages run mongod as a single-node replica set, and
+//! the member is registered under the container name — so a client that
+//! follows replica-set discovery leaves the address it was handed and looks up
+//! `stackvo-mongo`, which resolves on the Docker network and nowhere else.
+//! Compass reports `getaddrinfo ENOTFOUND stackvo-mongo` while pointed at
+//! `127.0.0.1`, and the reader goes off to check the port. So a host string
+//! carries `directConnection=true`, which keeps the client on the address it
+//! was given; a container string does not, because that client can resolve the
+//! name and discovery is what it wants.
+//!
 //! ## Where the host port comes from
 //!
 //! From the engine when it can be asked, and only otherwise from `.env`. The
@@ -89,6 +102,20 @@ pub fn scheme_of(kind: Kind) -> &'static str {
     }
 }
 
+/// Which side of the network boundary a string is written for.
+///
+/// Carried rather than guessed from the host name: this module exists because
+/// inventing an address from something that looked like one is how the
+/// confusion started, and `host == "127.0.0.1"` is that same guess wearing a
+/// comparison.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    /// A client on this machine, reaching a port Docker published.
+    Host,
+    /// A client on the Docker network, reaching the container by name.
+    Container,
+}
+
 /// One address, and the string built from it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +186,7 @@ fn authority(user: Option<&str>, password: Option<&str>) -> String {
 /// tests below assert on shapes without a keychain anywhere near them.
 pub fn uri(
     kind: Kind,
+    side: Side,
     host: &str,
     port: u16,
     user: Option<&str>,
@@ -172,15 +200,29 @@ pub fn uri(
         Kind::Mysql => format!("mysql://{auth}{host}:{port}/{db}"),
         Kind::Postgres => format!("postgresql://{auth}{host}:{port}/{db}"),
         Kind::Mongo => {
+            let mut params = Vec::new();
+
             // Without this the driver authenticates against `db`, where the
             // root account does not exist, and the failure reads as a wrong
             // password rather than as the wrong database being asked.
-            let source = if auth.is_empty() {
-                ""
+            if !auth.is_empty() {
+                params.push("authSource=admin");
+            }
+
+            // And without this a host client follows replica-set discovery off
+            // to the container name, which only the Docker network resolves.
+            // The address it was handed was right; the second one it went and
+            // asked for is the one that does not exist. See the module docs.
+            if side == Side::Host {
+                params.push("directConnection=true");
+            }
+
+            let query = if params.is_empty() {
+                String::new()
             } else {
-                "?authSource=admin"
+                format!("?{}", params.join("&"))
             };
-            format!("mongodb://{auth}{host}:{port}/{db}{source}")
+            format!("mongodb://{auth}{host}:{port}/{db}{query}")
         }
         Kind::Redis => format!("redis://{auth}{host}:{port}"),
         Kind::Amqp => format!("amqp://{auth}{host}:{port}/"),
@@ -322,9 +364,10 @@ async fn instance_of(root: &Path, id: &str, reveal: bool) -> Result<Option<Conne
     });
     let rendered_user = user.as_deref().map(encode);
 
-    let build = |host: &str, port: u16| Endpoint {
+    let build = |side: Side, host: &str, port: u16| Endpoint {
         uri: uri(
             kind,
+            side,
             host,
             port,
             rendered_user.as_deref(),
@@ -345,8 +388,8 @@ async fn instance_of(root: &Path, id: &str, reveal: bool) -> Result<Option<Conne
         .unwrap_or(port.preferred);
 
     let from_host = match published(&instance.container(), port.container).await {
-        Published::Port(host_port) => Some(build("127.0.0.1", host_port)),
-        Published::Unknown => Some(build("127.0.0.1", configured)),
+        Published::Port(host_port) => Some(build(Side::Host, "127.0.0.1", host_port)),
+        Published::Unknown => Some(build(Side::Host, "127.0.0.1", configured)),
         Published::Nothing => None,
     };
 
@@ -358,7 +401,7 @@ async fn instance_of(root: &Path, id: &str, reveal: bool) -> Result<Option<Conne
         // while this one is primary, but it is the one that stops resolving the
         // moment somebody promotes another version — and a connection string is
         // a thing people paste into a file and keep.
-        from_container: build(&instance.container(), port.container),
+        from_container: build(Side::Container, &instance.container(), port.container),
         masked: secret.is_some() && !reveal,
         // The manifest's setting key, not a `.env` key. Nothing reads it as a
         // `.env` key any more: `service_reveal` dispatches the same way this
@@ -430,6 +473,7 @@ mod tests {
     fn the_two_addresses_are_different_strings() {
         let host = uri(
             Kind::Mongo,
+            Side::Host,
             "127.0.0.1",
             27017,
             Some("root"),
@@ -438,6 +482,7 @@ mod tests {
         );
         let internal = uri(
             Kind::Mongo,
+            Side::Container,
             "stackvo-mongo",
             27017,
             Some("root"),
@@ -447,12 +492,66 @@ mod tests {
 
         assert_eq!(
             host,
-            "mongodb://root:root@127.0.0.1:27017/?authSource=admin"
+            "mongodb://root:root@127.0.0.1:27017/?authSource=admin&directConnection=true"
         );
         assert_eq!(
             internal,
             "mongodb://root:root@stackvo-mongo:27017/?authSource=admin"
         );
+    }
+
+    /// The second half of the same bug: the host string was right and the
+    /// client left it anyway.
+    ///
+    /// mongod runs as a single-node replica set and registers its member as
+    /// `stackvo-mongo:27017`, so a client pointed at `127.0.0.1` is told the
+    /// set lives somewhere else and goes to resolve a name that exists only on
+    /// the Docker network. Compass says `getaddrinfo ENOTFOUND stackvo-mongo`
+    /// while the address on screen was reachable the whole time — which is the
+    /// container name back in the error message, by a longer route than the
+    /// one this module already closed.
+    ///
+    /// Only the host side carries it. A container client resolves the name,
+    /// and discovery is the behaviour it should have.
+    #[test]
+    fn only_the_host_side_of_a_mongo_uri_stays_on_the_address_it_was_given() {
+        let host = uri(
+            Kind::Mongo,
+            Side::Host,
+            "127.0.0.1",
+            27017,
+            Some("root"),
+            Some("root"),
+            Some("stackvo"),
+        );
+        let internal = uri(
+            Kind::Mongo,
+            Side::Container,
+            "stackvo-mongo-8-0",
+            27017,
+            Some("root"),
+            Some("root"),
+            Some("stackvo"),
+        );
+
+        assert!(
+            host.contains("directConnection=true"),
+            "a host client that follows discovery ends up at a name it cannot \
+             resolve: {host}"
+        );
+        assert!(
+            !internal.contains("directConnection"),
+            "a container client can resolve the name and should discover: {internal}"
+        );
+
+        // One `?`, and every parameter after it joined with `&`. A second `?`
+        // parses as part of the previous value, and the driver reports the
+        // authentication database as unset rather than as malformed.
+        assert_eq!(
+            host,
+            "mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true"
+        );
+        assert_eq!(host.matches('?').count(), 1);
     }
 
     /// Without `authSource` the driver looks for the root account in the
@@ -462,6 +561,7 @@ mod tests {
     fn a_mongo_uri_with_credentials_names_the_authentication_database() {
         let with = uri(
             Kind::Mongo,
+            Side::Host,
             "127.0.0.1",
             27017,
             Some("root"),
@@ -470,13 +570,24 @@ mod tests {
         );
         assert_eq!(
             with,
-            "mongodb://root:s3cret@127.0.0.1:27017/shop?authSource=admin"
+            "mongodb://root:s3cret@127.0.0.1:27017/shop?authSource=admin&directConnection=true"
         );
 
         // And not when there are none: `authSource` against an unauthenticated
         // server is a parameter describing a login that is not happening.
-        let without = uri(Kind::Mongo, "127.0.0.1", 27017, None, None, Some("shop"));
-        assert_eq!(without, "mongodb://127.0.0.1:27017/shop");
+        let without = uri(
+            Kind::Mongo,
+            Side::Host,
+            "127.0.0.1",
+            27017,
+            None,
+            None,
+            Some("shop"),
+        );
+        assert_eq!(
+            without,
+            "mongodb://127.0.0.1:27017/shop?directConnection=true"
+        );
     }
 
     /// A password is arbitrary text, and three of the characters people put in
@@ -491,6 +602,7 @@ mod tests {
 
         let built = uri(
             Kind::Postgres,
+            Side::Host,
             "127.0.0.1",
             5432,
             Some(&encode("stackvo")),
@@ -510,6 +622,7 @@ mod tests {
     fn the_masked_string_is_the_real_one_with_the_password_swapped() {
         let masked = uri(
             Kind::Mysql,
+            Side::Host,
             "127.0.0.1",
             3306,
             Some("root"),
@@ -529,23 +642,55 @@ mod tests {
     #[test]
     fn the_engines_that_are_not_uris_are_not_given_one() {
         assert_eq!(
-            uri(Kind::Memcached, "127.0.0.1", 11211, None, None, None),
+            uri(
+                Kind::Memcached,
+                Side::Host,
+                "127.0.0.1",
+                11211,
+                None,
+                None,
+                None
+            ),
             "127.0.0.1:11211"
         );
         assert_eq!(
-            uri(Kind::HostPort, "stackvo-cassandra", 9042, None, None, None),
+            uri(
+                Kind::HostPort,
+                Side::Container,
+                "stackvo-cassandra",
+                9042,
+                None,
+                None,
+                None
+            ),
             "stackvo-cassandra:9042"
         );
         assert_eq!(
-            uri(Kind::Redis, "127.0.0.1", 6379, None, None, None),
+            uri(Kind::Redis, Side::Host, "127.0.0.1", 6379, None, None, None),
             "redis://127.0.0.1:6379"
         );
         assert_eq!(
-            uri(Kind::Redis, "127.0.0.1", 6379, None, Some("pw"), None),
+            uri(
+                Kind::Redis,
+                Side::Host,
+                "127.0.0.1",
+                6379,
+                None,
+                Some("pw"),
+                None
+            ),
             "redis://:pw@127.0.0.1:6379"
         );
         assert_eq!(
-            uri(Kind::Smtp, "stackvo-mailpit", 1025, None, None, None),
+            uri(
+                Kind::Smtp,
+                Side::Container,
+                "stackvo-mailpit",
+                1025,
+                None,
+                None,
+                None
+            ),
             "smtp://stackvo-mailpit:1025"
         );
     }
@@ -590,6 +735,7 @@ mod tests {
         assert_eq!(
             uri(
                 Kind::Mysql,
+                Side::Host,
                 "127.0.0.1",
                 3306,
                 Some("root"),
@@ -600,7 +746,7 @@ mod tests {
             "a user with no password is written without one"
         );
         assert_eq!(
-            uri(Kind::Redis, "127.0.0.1", 6379, None, None, None),
+            uri(Kind::Redis, Side::Host, "127.0.0.1", 6379, None, None, None),
             "redis://127.0.0.1:6379",
             "and neither half present writes no authority at all"
         );

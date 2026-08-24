@@ -230,6 +230,15 @@ pub struct Manifest {
     #[serde(skip_serializing_if = "crate::hooks::Hooks::is_empty")]
     pub hooks: crate::hooks::Hooks,
 
+    /// Commands this project runs on a timer.
+    ///
+    /// Here for the same reason `hooks` is: a malformed job should be a
+    /// manifest finding like everything else, and `read` is the one place that
+    /// knows how a project is described. Whether a job actually fires is
+    /// [`crate::cron`]'s business — this struct states the intent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub schedule: Vec<crate::cron::Job>,
+
     /// Commands this project offers next to the built-in ones (B-4).
     ///
     /// Here for the same reason `hooks` is: a malformed declaration becomes a
@@ -518,6 +527,20 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
+    // ---- scheduled jobs ---------------------------------------------------
+    //
+    // Warnings for the third time and for the third identical reason: a
+    // project with one unreadable job still has three that run, and a typo in
+    // a schedule must not be why a project cannot be opened.
+    let (schedule, schedule_problems) = crate::cron::parse(json);
+    for problem in schedule_problems {
+        warnings.push(Finding {
+            code: "SCHEDULE".into(),
+            path: problem.path,
+            message: problem.message,
+        });
+    }
+
     // ---- declared commands (B-4) ------------------------------------------
     //
     // Warnings for the same reason hooks are: a project with one unreadable
@@ -562,6 +585,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         node,
         lang,
         hooks,
+        schedule,
         commands,
         sidecars,
         valid: errors.is_empty(),
@@ -1824,6 +1848,34 @@ pub fn to_json(manifest: &Manifest) -> String {
         lines.push(format!("  \"hooks\": {{\n{}\n  }}", groups.join(",\n")));
     }
 
+    // And here for the same reason the hooks block above is written at all:
+    // this text is what `project_manifest_write` saves on every form save, so
+    // a field the serialiser does not know about is one that disappears the
+    // first time somebody edits an unrelated setting. A project quietly losing
+    // its nightly job is the same class of bug as one that quietly stopped
+    // migrating on start.
+    if !manifest.schedule.is_empty() {
+        let items: Vec<String> = manifest
+            .schedule
+            .iter()
+            .map(|job| {
+                let argv: Vec<String> = job.exec.iter().map(|a| quote(a)).collect();
+                let mut fields = vec![
+                    format!("\"label\": {}", quote(&job.label)),
+                    format!("\"cron\": {}", quote(&job.cron)),
+                    format!("\"exec\": [{}]", argv.join(", ")),
+                ];
+                // Written only when false: on is the default, and a manifest
+                // full of restated defaults is one nobody reads.
+                if !job.enabled {
+                    fields.push("\"enabled\": false".to_string());
+                }
+                format!("    {{ {} }}", fields.join(", "))
+            })
+            .collect();
+        lines.push(format!("  \"schedule\": [\n{}\n  ]", items.join(",\n")));
+    }
+
     // B-4, and here for exactly the reason the hooks block above is: this text
     // is what `project_manifest_write` saves on every form submission, so a
     // field the serialiser does not know about is one that disappears the
@@ -2047,6 +2099,7 @@ mod write_tests {
             errors: vec![],
             warnings: vec![],
             hooks: Default::default(),
+            schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             local: Vec::new(),
@@ -2333,6 +2386,7 @@ mod write_tests {
             errors: vec![],
             warnings: vec![],
             hooks: Default::default(),
+            schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             local: Vec::new(),
@@ -2374,6 +2428,42 @@ mod write_tests {
     /// The hazard `to_json`'s own comment names: a field the serialiser does
     /// not know about disappears the first time somebody edits an unrelated
     /// setting. For hooks that would be a project that quietly stopped
+    /// A schedule the serialiser did not know about would disappear the first
+    /// time somebody changed an unrelated setting in the project form — and
+    /// the failure is silent, because a job that stopped existing is a job
+    /// that stopped running without saying so.
+    #[test]
+    fn a_schedule_survives_the_editor_round_trip() {
+        let raw = r#"{
+  "name": "shop",
+  "domain": "shop.loc",
+  "runtime": "php",
+  "document_root": "public",
+  "schedule": [
+    { "label": "Cache cleanup", "cron": "*/5 * * * *", "exec": ["php", "artisan", "cache:clear"] },
+    { "label": "Nightly prune", "cron": "0 3 * * *", "exec": ["php", "artisan", "model:prune"], "enabled": false }
+  ],
+  "php": {
+    "version": "8.4",
+    "extensions": ["pdo_mysql"]
+  }
+}
+"#;
+        let first = read_text(raw, "shop");
+        let again = read_text(&to_json(&first), "shop");
+
+        assert_eq!(again.schedule.len(), 2, "{}", to_json(&first));
+        assert_eq!(again.schedule[0].label, "Cache cleanup");
+        assert_eq!(again.schedule[0].cron, "*/5 * * * *");
+        assert_eq!(
+            again.schedule[0].exec,
+            vec!["php", "artisan", "cache:clear"]
+        );
+        assert!(again.schedule[0].enabled, "absent means on");
+        assert!(!again.schedule[1].enabled, "a pause survives the trip");
+        assert!(again.valid, "{:?}", again.errors);
+    }
+
     /// migrating on start.
     #[test]
     fn hooks_survive_the_editor_round_trip() {

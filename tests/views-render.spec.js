@@ -370,6 +370,10 @@ describe('the project page', () => {
     indicator: () => en.projectDetail.composition,
     configuration: () => en.detail.manifest,
     container: () => en.tunnel.title,
+    // In rail order, because the loop falls back to the index for the two
+    // entries whose label is not `projectDetail[key]`.
+    jobs: () => en.scheduler.title,
+    shell: () => en.terminal.explain,
     logs: () => en.logs.sources,
     debug: () => en.profiler.title,
     runtime: () => en.phpIni.title,
@@ -425,7 +429,7 @@ describe('the project page', () => {
     const wrapper = await render(ProjectDetail, 'en', { name: 'shop' });
 
     const rail = wrapper.findAll('.detail-nav .nav-item');
-    expect(rail.length, 'a PHP project offers every section').toBe(8);
+    expect(rail.length, 'a PHP project offers every section').toBe(10);
     expect(Object.keys(OWN_TEXT)).toHaveLength(rail.length);
 
     for (const key of Object.keys(OWN_TEXT)) {
@@ -477,7 +481,7 @@ describe('the project page', () => {
     expect(nav.classes()).toContain('detail-nav--rail');
 
     const items = nav.findAll('.nav-item');
-    expect(items.length).toBe(8);
+    expect(items.length).toBe(10);
     expect(nav.text()).not.toContain(en.projectDetail.runtime);
     expect(items.map((i) => i.attributes('aria-label'))).toContain(en.projectDetail.runtime);
     expect(items.every((i) => i.attributes('aria-label')?.trim())).toBe(true);

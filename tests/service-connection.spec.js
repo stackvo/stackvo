@@ -67,7 +67,7 @@ const MASKED = {
   service: 'mongo',
   kind: 'mongo',
   fromHost: {
-    uri: 'mongodb://root:••••••••@127.0.0.1:27017/stackvo?authSource=admin',
+    uri: 'mongodb://root:••••••••@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true',
     host: '127.0.0.1',
     port: 27017,
   },
@@ -84,7 +84,7 @@ const REVEALED = {
   ...MASKED,
   fromHost: {
     ...MASKED.fromHost,
-    uri: 'mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin',
+    uri: 'mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true',
   },
   fromContainer: {
     ...MASKED.fromContainer,
@@ -145,7 +145,7 @@ describe('the two addresses', () => {
     await flushPromises();
 
     const text = wrapper.text();
-    expect(text).toContain('mongodb://root:••••••••@127.0.0.1:27017/stackvo?authSource=admin');
+    expect(text).toContain('mongodb://root:••••••••@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true');
     expect(text).toContain('mongodb://root:••••••••@stackvo-mongo:27017/stackvo?authSource=admin');
     expect(text).toContain('From this machine');
     expect(text).toContain('From another container');
@@ -209,7 +209,7 @@ describe('the password', () => {
 
     expect(api.serviceConnection).toHaveBeenLastCalledWith('mongo', true);
     expect(wrapper.text()).toContain(
-      'mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin'
+      'mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true'
     );
   });
 
@@ -233,7 +233,7 @@ describe('the password', () => {
     await flushPromises();
 
     expect(writeText).toHaveBeenCalledWith(
-      'mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin'
+      'mongodb://root:root@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true'
     );
     // And the sheet is still masked — the reveal button was never pressed.
     expect(wrapper.text()).toContain('••••••••');
@@ -359,7 +359,7 @@ describe('opening it in a client', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain(
-      'mongodb://root:••••••••@127.0.0.1:27017/stackvo?authSource=admin'
+      'mongodb://root:••••••••@127.0.0.1:27017/stackvo?authSource=admin&directConnection=true'
     );
     expect(
       wrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Copy')
