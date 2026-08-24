@@ -700,6 +700,17 @@ export const api = {
   workerStatus: () => call('worker_status'),
   workerStart: (name, kind) => call('worker_start', { name, kind }),
   workerStop: (name, kind) => call('worker_stop', { name, kind }),
+
+  /** One project's scheduled jobs, each with its last run. */
+  schedulerJobs: (name) => call('scheduler_jobs', { name }),
+  /** Replace the whole schedule — one value in the manifest, one directory on disk. */
+  schedulerSave: (name, jobs) => call('scheduler_save', { name, jobs }),
+  schedulerStart: (name) => call('scheduler_start', { name }),
+  schedulerStop: (name) => call('scheduler_stop', { name }),
+  /** The tail of one job's log, which is where the reason for a failure is. */
+  schedulerLog: (name, job, lines) => call('scheduler_log', { name, job, lines }),
+  /** Run one job now, by the same path a tick would. */
+  schedulerRun: (name, job) => call('scheduler_run', { name, job }),
   /** Pre-flight a spec before anything touches disk. */
   projectValidate: (name, spec) => call('project_validate', { name, spec }),
   projectCreate: (spec) => call('project_create', { spec }),

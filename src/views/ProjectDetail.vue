@@ -32,6 +32,7 @@ import TunnelPane from '@/components/project/TunnelPane.vue';
 import OAuthPane from '@/components/project/OAuthPane.vue';
 import StripePane from '@/components/project/StripePane.vue';
 import LanPane from '@/components/project/LanPane.vue';
+import SchedulerPane from '@/components/project/SchedulerPane.vue';
 import WorkersPane from '@/components/project/WorkersPane.vue';
 import TerminalPane from '@/components/project/TerminalPane.vue';
 import ReplPane from '@/components/project/ReplPane.vue';
@@ -111,9 +112,20 @@ const SECTIONS = [
   // the Dockerfile they produce. Three views of one subject that were three
   // tabs, so seeing what a setting did meant leaving the page you set it on.
   { key: 'configuration', icon: 'mdi-folder-cog', label: 'projectDetail.configuration' },
-  // What is running: the container's own facts, the workers inside it, and the
-  // tunnel that exposes it. All three are about the process, not the project.
+  // What is running: the container's own facts and the addresses that reach
+  // it. About the process, not the project.
   { key: 'container', icon: 'mdi-docker', label: 'projectDetail.container' },
+  // The processes beside the web container: the long-running workers and the
+  // jobs on a timer. They were panes at the bottom of Container, which is
+  // where a reader scrolled past them — and "did my job run?" is a question
+  // people arrive at the page already asking, not one they discover.
+  { key: 'jobs', icon: 'mdi-cog-sync-outline', label: 'projectDetail.jobs' },
+  // A shell, and the REPL under it. Its own entry because it is the one place
+  // on this page you go to *do* something rather than to read something, and
+  // it was at the bottom of a tab about the container. Opening the session is
+  // still a button: arriving somewhere is not the same act as asking for a
+  // shell, and one that opened itself would reopen itself on every visit.
+  { key: 'shell', icon: 'mdi-console', label: 'terminal.title' },
   // A section rather than a dialog over the page: logs are something you read
   // while looking at the rest, and a modal on top of a detail page hides the
   // thing it is about.
@@ -139,6 +151,19 @@ const SECTIONS = [
   { key: 'agent', icon: 'mdi-robot-outline', label: 'projectAgent.tab' },
 ];
 const section = ref('indicator');
+
+/**
+ * Has the shell tab ever been opened on this page?
+ *
+ * The shell pane is kept mounted so its session survives a trip to another
+ * tab, and this is what stops that costing anything for the people who never
+ * open one: nothing is mounted until the first visit, and after it the pane is
+ * hidden rather than destroyed.
+ */
+const shellVisited = ref(false);
+watch(section, (key) => {
+  if (key === 'shell') shellVisited.value = true;
+});
 
 /**
  * The panes this project actually has.
@@ -936,24 +961,33 @@ onUnmounted(() => {
           <StripePane :name="name" :running="running" />
         </template>
 
-        <!-- WORKERS --------------------------------------------------------- -->
-        <template v-if="shows('container')">
+        <!-- WORKERS AND SCHEDULED JOBS -------------------------------------- -->
+        <template v-if="shows('jobs')">
           <WorkersPane :name="name" :running="running" />
+          <!-- Beside the workers rather than on a page of its own: the pane
+               above runs Laravel's scheduler as one process, and this is the
+               table of individual jobs. Reading them apart would leave the
+               reader unsure which of the two ran their task. -->
+          <SchedulerPane :name="name" :running="running" />
         </template>
 
-        <!-- TERMINAL ------------------------------------------------------- -->
-        <!-- Beside the container it attaches to, rather than on a page of its
-             own: a shell is something you want *while* looking at the thing it
-             runs in. The header still offers the system terminal for the other
-             case. -->
-        <template v-if="shows('container')">
+        <!-- SHELL ---------------------------------------------------------- -->
+        <!-- Hidden rather than unmounted, and the only tab on this page that
+             is. Every other pane reads something and can be rebuilt from the
+             backend on the way back; this one holds a live PTY. Unmounting it
+             would kill whatever is running in it, so glancing at the Logs tab
+             while a build ran in the shell would silently cancel the build.
+
+             Mounted only once somebody has opened the tab, so a project page
+             nobody runs a shell on never pays for the pane at all. -->
+        <div v-if="!loading && shellVisited" v-show="section === 'shell'">
           <TerminalPane :container-name="project?.containerName" :running="running" />
           <!-- F-5, and deliberately directly under the terminal. §5.5 was the
                decision to reverse `quickcmd.rs`'s refusal of an in-app REPL,
                and the refusal is answered by adjacency rather than by argument:
                a line at a time goes above, a snippet you edit goes here. -->
           <ReplPane :name="name" :running="running" />
-        </template>
+        </div>
 
         <!-- MANIFEST ------------------------------------------------------ -->
         <!-- What the project needs *around* it. Beside the manifest because

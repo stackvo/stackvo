@@ -16,6 +16,7 @@ pub mod config;
 pub mod connect;
 pub mod contracts;
 pub mod crash;
+pub mod cron;
 pub mod daemon;
 pub mod db;
 pub mod dbmove;
@@ -445,6 +446,12 @@ pub fn run() {
             commands::stripe_stop,
             commands::worker_start,
             commands::worker_stop,
+            commands::scheduler_jobs,
+            commands::scheduler_save,
+            commands::scheduler_start,
+            commands::scheduler_stop,
+            commands::scheduler_log,
+            commands::scheduler_run,
             commands::project_scaffold,
             commands::project_clone,
             commands::project_register,

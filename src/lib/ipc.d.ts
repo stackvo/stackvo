@@ -8,22 +8,9 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 138 named types, 280 wrappers, 3 field(s) the
+ * Measured at generation: 142 named types, 286 wrappers, 3 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
-
-export interface Adoptable {
-    /** string */
-    name: string;
-    /** string */
-    path: string;
-    /** Detected */
-    detected: Detected;
-    /** bool */
-    hasFiles: boolean;
-    /** string? */
-    composeFile?: string;
-}
 
 export interface AdoptBatch {
     /** string? — the single generate this batch ran; absent when it had nothing to generate */
@@ -43,6 +30,19 @@ export interface AdoptOutcome {
     code?: string;
     /** string? — why, whenever it is not `adopted` */
     reason?: string;
+}
+
+export interface Adoptable {
+    /** string */
+    name: string;
+    /** string */
+    path: string;
+    /** Detected */
+    detected: Detected;
+    /** bool */
+    hasFiles: boolean;
+    /** string? */
+    composeFile?: string;
 }
 
 export interface App {
@@ -266,6 +266,43 @@ export interface Credential {
     secret: boolean;
 }
 
+export interface CronJob {
+    /** string */
+    label: string;
+    /** string */
+    cron: string;
+    /** string[] */
+    exec: string[];
+    /** bool */
+    enabled: boolean;
+}
+
+export interface CronJobStatus {
+    /** string */
+    id: string;
+    /** string */
+    label: string;
+    /** string */
+    cron: string;
+    /** string[] */
+    exec: string[];
+    /** string */
+    command: string;
+    /** bool */
+    enabled: boolean;
+    /** CronLastRun? */
+    lastRun?: CronLastRun;
+}
+
+export interface CronLastRun {
+    /** string */
+    at: string;
+    /** bool */
+    ok: boolean;
+    /** i32? */
+    status?: number;
+}
+
 export interface DbInstance {
     /** string */
     id: string;
@@ -347,6 +384,23 @@ export interface DeclaredPort {
     protocol: 'tcp' | 'udp';
 }
 
+export interface DeclaredSidecar {
+    /** string — the key the manifest gave it */
+    id: string;
+    /** string — with a tag, always */
+    image: string;
+    /** string — one line the repository wrote, so a reader knows what the extra container is for */
+    about: string;
+    /** string[] — argv, empty when the image's own command stands */
+    command: string[];
+    /** Record<string, string> */
+    env: Record<string, unknown>;
+    /** SidecarVolume[] */
+    volumes: SidecarVolume[];
+    /** string — `stackvo-<project>-<id>`, the hostname the application connects to */
+    container: string;
+}
+
 export interface DependencyReport {
     /** string */
     service: string;
@@ -395,26 +449,6 @@ export interface Detected {
     evidence: string[];
 }
 
-export interface DevcontainerFile {
-    /** string — relative to `.devcontainer/` */
-    path: string;
-    /** string */
-    contents: string;
-}
-
-export interface DevcontainerPlan {
-    /** string */
-    project: string;
-    /** DevcontainerFile[] */
-    files: DevcontainerFile[];
-    /** string[] — the `${DEV_…}` names the reader has to fill in */
-    secrets: string[];
-    /** string[] — services or config files that could not be carried, with why */
-    skipped: string[];
-    /** string[] — true things a reader would otherwise discover by failing */
-    notes: string[];
-}
-
 export interface DevServerStatus {
     /** bool */
     supported: boolean;
@@ -444,6 +478,26 @@ export interface DevServerStatus {
     port: number;
     /** string */
     overlayPath: string;
+}
+
+export interface DevcontainerFile {
+    /** string — relative to `.devcontainer/` */
+    path: string;
+    /** string */
+    contents: string;
+}
+
+export interface DevcontainerPlan {
+    /** string */
+    project: string;
+    /** DevcontainerFile[] */
+    files: DevcontainerFile[];
+    /** string[] — the `${DEV_…}` names the reader has to fill in */
+    secrets: string[];
+    /** string[] — services or config files that could not be carried, with why */
+    skipped: string[];
+    /** string[] — true things a reader would otherwise discover by failing */
+    notes: string[];
 }
 
 export interface DiskOwner {
@@ -727,32 +781,6 @@ export interface HookStep {
     command: string;
     /** string? — policy-off | policy-host | needs-consent; absent means it runs */
     blocked?: string;
-}
-
-export interface DeclaredSidecar {
-    /** string — the key the manifest gave it */
-    id: string;
-    /** string — with a tag, always */
-    image: string;
-    /** string — one line the repository wrote, so a reader knows what the extra container is for */
-    about: string;
-    /** string[] — argv, empty when the image's own command stands */
-    command: string[];
-    /** Record<string, string> */
-    env: Record<string, unknown>;
-    /** SidecarVolume[] */
-    volumes: SidecarVolume[];
-    /** string — `stackvo-<project>-<id>`, the hostname the application connects to */
-    container: string;
-}
-
-export interface SidecarVolume {
-    /** string — the handle the manifest gave it */
-    name: string;
-    /** string — where it is mounted inside the container */
-    path: string;
-    /** string — what `docker volume ls` calls it */
-    volume: string;
 }
 
 export interface HostStats {
@@ -1536,6 +1564,36 @@ export interface Provider {
     secrets: string[];
 }
 
+export interface ProviderPlan {
+    /** string */
+    provider: string;
+    /** 'pull' | 'push' */
+    direction: 'pull' | 'push';
+    /** string */
+    image: string;
+    /** string[] */
+    command: string[];
+    /** Record<string, string> */
+    env: Record<string, unknown>;
+    /** string[] — names, never values */
+    secrets: string[];
+    /** string — what a consent screen would grant */
+    digest: string;
+    /**
+     * 'policy-off' | 'not-offered' | 'needs-consent' | { missingSecrets: { names: string[] } } | null
+     */
+    blocked: 'policy-off' | 'not-offered' | 'needs-consent' | Record<string, unknown> | null;
+}
+
+export interface ProviderSet {
+    /** Provider[] */
+    recipes: Provider[];
+    /** ProviderPlan[] — both directions of every recipe */
+    plans: ProviderPlan[];
+    /** { provider: string, message: string }[] — recipes that could not be read, named */
+    problems: (Record<string, unknown>)[];
+}
+
 export interface PruneReport {
     /** u64 */
     imagesDeleted: number;
@@ -1717,6 +1775,17 @@ export interface ReplSnippet {
     code: string;
 }
 
+export interface SchedulerView {
+    /** CronJobStatus[] */
+    jobs: CronJobStatus[];
+    /** bool */
+    running: boolean;
+    /** i64? */
+    restarts?: number;
+    /** bool */
+    buildable: boolean;
+}
+
 export interface Service {
     /** string — the instance id (mysql-8-0) on the market model, the service id before it */
     id: string;
@@ -1768,6 +1837,15 @@ export interface Service {
 
 /** string */
 export type SessionId = string;
+
+export interface SidecarVolume {
+    /** string — the handle the manifest gave it */
+    name: string;
+    /** string — where it is mounted inside the container */
+    path: string;
+    /** string — what `docker volume ls` calls it */
+    volume: string;
+}
 
 export interface SiteSettings {
     /** Record<string, string> */
@@ -1869,21 +1947,6 @@ export interface TimelineMoment {
     shape: string | null;
 }
 
-export interface TunnelStatus {
-    /** string */
-    project: string;
-    /** bool */
-    running: boolean;
-    /** string? */
-    url?: string;
-    /** string */
-    container: string;
-    /** string? */
-    provider?: string;
-    /** string? */
-    failure?: string;
-}
-
 export interface TunnelProviderStatus {
     /** string */
     id: string;
@@ -1903,6 +1966,21 @@ export interface TunnelProviderStatus {
     verified: boolean;
     /** bool */
     hasToken: boolean;
+}
+
+export interface TunnelStatus {
+    /** string */
+    project: string;
+    /** bool */
+    running: boolean;
+    /** string? */
+    url?: string;
+    /** string */
+    container: string;
+    /** string? */
+    provider?: string;
+    /** string? */
+    failure?: string;
 }
 
 export interface UpdateInfo {
@@ -2098,36 +2176,6 @@ export interface XdebugStatus {
     peclVersion?: string;
     /** string */
     overlayPath: string;
-}
-
-export interface ProviderSet {
-    /** Provider[] */
-    recipes: Provider[];
-    /** ProviderPlan[] — both directions of every recipe */
-    plans: ProviderPlan[];
-    /** { provider: string, message: string }[] — recipes that could not be read, named */
-    problems: (Record<string, unknown>)[];
-}
-
-export interface ProviderPlan {
-    /** string */
-    provider: string;
-    /** 'pull' | 'push' */
-    direction: 'pull' | 'push';
-    /** string */
-    image: string;
-    /** string[] */
-    command: string[];
-    /** Record<string, string> */
-    env: Record<string, unknown>;
-    /** string[] — names, never values */
-    secrets: string[];
-    /** string — what a consent screen would grant */
-    digest: string;
-    /**
-     * 'policy-off' | 'not-offered' | 'needs-consent' | { missingSecrets: { names: string[] } } | null
-     */
-    blocked: 'policy-off' | 'not-offered' | 'needs-consent' | Record<string, unknown> | null;
 }
 
 export interface StackvoApi {
@@ -2755,6 +2803,18 @@ export interface StackvoApi {
   workerStatus(): Promise<WorkerStatus[]>;
   workerStart(name: string, kind: 'queue' | 'scheduler' | 'horizon'): Promise<void>;
   workerStop(name: string, kind: 'queue' | 'scheduler' | 'horizon'): Promise<void>;
+  /**
+   * worker_start('scheduler') runs Laravel's own scheduler as one all-or-nothing process, and nothing on screen says which entry last ran. This is the table instead: every job in stackvo.json with its last run read from disk, plus whether anything is actually running them — a schedule with no sidecar up is a list of intentions, and the screen must not let that read as scheduled.
+   */
+  schedulerJobs(name: string): Promise<SchedulerView>;
+  schedulerSave(name: string, jobs: CronJob[]): Promise<SchedulerView>;
+  schedulerStart(name: string): Promise<void>;
+  schedulerStop(name: string): Promise<void>;
+  /**
+   * Where the reason lives. The exit status a job records is xargs's rather than the command's — every failure is 123 — so the number answers whether it worked and this answers why. Empty rather than an error when the job has never run.
+   */
+  schedulerLog(name: string, job: string, lines?: number): Promise<string>;
+  schedulerRun(name: string, job: string): Promise<void>;
   /**
    * Pre-flight the new-project form against project.schema.json + php-extensions.json before anything touches disk. Today a bad extension name is only discovered when the Docker build fails minutes later.
    */
