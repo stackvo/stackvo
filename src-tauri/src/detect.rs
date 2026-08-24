@@ -556,12 +556,13 @@ pub fn services_from_env(text: &str) -> Vec<ServiceHint> {
         ("MONGODB_URI", "mongo"),
     ];
 
-    let catalog = crate::contracts::env_schema();
     let pairs = env_pairs(text);
     let mut out: Vec<ServiceHint> = Vec::new();
 
     let add = |service: &str, key: &str, out: &mut Vec<ServiceHint>| {
-        if !catalog.knows_service(service) {
+        // Catalogue first, vocabulary second — a hint for a service this
+        // machine can actually install is a hint worth making.
+        if !crate::market::is_known_service(service) {
             return;
         }
         if out.iter().any(|h| h.service == service) {

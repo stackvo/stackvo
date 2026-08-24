@@ -93,10 +93,22 @@ pub struct Sidecar {
     /// the same reason: an untagged image moves under somebody who pulled it
     /// last month.
     pub image: String,
+    /// Every optional half below is omitted when it is empty rather than
+    /// written out as `""`, `[]` or `{}`.
+    ///
+    /// Not tidiness: this payload is what the manifest editor posts back on
+    /// Save, and the reader refuses a `command: []` — a step list with no first
+    /// word. A sidecar serialised with its empty defaults parsed back as a
+    /// *broken* sidecar and was dropped, so the project came up one container
+    /// short with a warning nobody had asked for.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub about: String,
     /// argv, never a command string.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub command: Vec<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub volumes: Vec<Volume>,
 }
 

@@ -98,6 +98,7 @@ pub mod trace;
 pub mod tray;
 pub mod tui;
 pub mod tunnel;
+pub mod tunnelid;
 pub mod watcher;
 pub mod websurface;
 pub mod worker;
@@ -423,6 +424,8 @@ pub fn run() {
             commands::env_defaults,
             commands::tunnel_status,
             commands::tunnel_providers,
+            commands::tunnel_identity,
+            commands::tunnel_auth_reveal,
             commands::qr_encode,
             commands::help_doc,
             commands::landing_status,
@@ -443,6 +446,8 @@ pub fn run() {
             commands::tunnel_start,
             commands::tunnel_stop,
             commands::tunnel_token_set,
+            commands::tunnel_auth_set,
+            commands::tunnel_name_set,
             commands::landing_start,
             commands::landing_stop,
             commands::landing_refresh,
@@ -647,6 +652,7 @@ pub fn run() {
             commands::project_adopt,
             commands::project_adopt_many,
             commands::project_manifest_read,
+            commands::project_manifest_text,
             commands::project_local_read,
             commands::project_local_write,
             commands::project_hooks_plan,

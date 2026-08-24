@@ -624,7 +624,7 @@ export const api = {
   /** Every tunnel sidecar and its public URL, read live from its log. */
   tunnelStatus: () => call('tunnel_status'),
   /**
-   * The eight providers, and whether this machine holds a token for each.
+   * The nine providers, and whether this machine holds a token for each.
    *
    * The table is Rust's because the invocation is: a list kept here would go
    * on offering a provider the day one is removed.
@@ -641,6 +641,34 @@ export const api = {
    * `stripeKeySet` makes.
    */
   tunnelTokenSet: (provider, token) => call('tunnel_token_set', { provider, token }),
+
+  /**
+   * Whether this project's tunnel asks for a password, and what its address is
+   * called on each provider (B-7). Never the password itself.
+   */
+  tunnelIdentity: (name) => call('tunnel_identity', { name }),
+  /**
+   * Turn tunnel authentication on with a credential, or off with `null`.
+   *
+   * An empty password means "generate one", which is the path the button
+   * takes: a field somebody has to fill in is a field that gets `test123`,
+   * and this one sits behind an address on the public internet.
+   */
+  tunnelAuthSet: (name, credentials) => call('tunnel_auth_set', { name, credentials }),
+  /**
+   * The tunnel's password, in full — the one readable secret in this app.
+   *
+   * A token is entered from elsewhere and never needed again; this one is
+   * generated here and has to be typed into a browser on somebody else's
+   * phone, so a password nobody can read is a password nobody can use.
+   */
+  tunnelAuthReveal: (name) => call('tunnel_auth_reveal', { name }),
+  /**
+   * The address one provider should keep for this project, or `null` to
+   * forget it. Refused for a provider that keeps nothing.
+   */
+  tunnelNameSet: (name, provider, reserved) =>
+    call('tunnel_name_set', { name, provider, reserved }),
 
   /**
    * A QR code for an address meant to be opened on another device (M-3).
@@ -770,6 +798,10 @@ export const api = {
   providerRun: (name, provider, direction, service, snapshotFirst = true) =>
     call('provider_run', { name, provider, direction, service, snapshotFirst }),
   projectManifestRead: (name) => call('project_manifest_read', { name }),
+  // The file's own bytes. The editor edits those and not the reader's view of
+  // them, which is spelled for this boundary (`documentRoot`) rather than for
+  // the file (`document_root`) and loses both fields when posted back.
+  projectManifestText: (name) => call('project_manifest_text', { name }),
   projectManifestWrite: (name, manifest) => call('project_manifest_write', { name, manifest }),
 
   // B-2. `stackvo.local.json` — this machine's overrides for a committed

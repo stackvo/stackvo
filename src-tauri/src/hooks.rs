@@ -125,12 +125,44 @@ pub enum Kind {
     Host,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+impl Kind {
+    /// The key the file writes a step under. One name, used by the serialiser,
+    /// the writer in [`crate::manifest::to_json`] and the reader alike.
+    pub fn key(self) -> &'static str {
+        match self {
+            Kind::Exec => "exec",
+            Kind::Host => "host",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
     pub kind: Kind,
     /// Program first, then arguments. Never passed to a shell.
     pub argv: Vec<String>,
+}
+
+/// Serialised the way the *file* spells a step: `{ "exec": [...] }`, one key.
+///
+/// Not `{ "kind": "exec", "argv": [...] }`, which is what a derived `Serialize`
+/// produced and what `ipc.json` never claimed: the contract says a manifest's
+/// `hooks` values are "defined by project.schema.json", and the reader only
+/// accepts the file's spelling. The two disagreeing is not cosmetic — the
+/// manifest editor round-trips this payload straight back through
+/// `project_manifest_write`, so every hook in the project was dropped the first
+/// time somebody pressed Save in it.
+impl Serialize for Step {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        let mut map = serializer.serialize_map(Some(1))?;
+        map.serialize_entry(self.kind.key(), &self.argv)?;
+        map.end()
+    }
 }
 
 impl Step {

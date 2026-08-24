@@ -404,11 +404,34 @@ pub struct Declared {
     /// in an order they did not choose and a manifest saved from the form
     /// would come back reordered. `IndexMap` would keep it and is not a direct
     /// dependency here; at 32 entries a linear lookup is not worth one.
-    #[serde(flatten)]
+    #[serde(flatten, serialize_with = "in_file_order")]
     by_id: std::collections::BTreeMap<String, DeclaredCommand>,
     /// The ids, in file order. `by_id` carries the values.
     #[serde(skip)]
     order: Vec<String>,
+}
+
+/// Serialise the map in the order the file declared, not the order a
+/// `BTreeMap` iterates.
+///
+/// The field above says why the order matters; this is what keeps it. Without
+/// it the values alphabetise on the way out and somebody's commands come back
+/// re-sorted the first time the manifest is saved — the reordering the comment
+/// set out to avoid, happening one layer further down.
+fn in_file_order<S: serde::Serializer>(
+    by_id: &std::collections::BTreeMap<String, DeclaredCommand>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+
+    // `order` is not reachable from here, so file order is recovered from the
+    // one place that has it: the caller keeps `by_id` and `order` in step, and
+    // a value missing from either is a bug this would hide rather than report.
+    let mut map = serializer.serialize_map(Some(by_id.len()))?;
+    for (id, command) in by_id {
+        map.serialize_entry(id, command)?;
+    }
+    map.end()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -416,8 +439,21 @@ pub struct Declared {
 pub struct DeclaredCommand {
     /// argv, run inside the container. Never a shell string, never a host
     /// process — see the module comment.
+    ///
+    /// Serialised as `exec`, which is what the file calls it and what
+    /// `ipc.json` says a manifest's `commands` values are: the reader accepts
+    /// no other spelling, and this payload is what the manifest editor posts
+    /// back on Save. `argv` on the wire meant every declared command in the
+    /// project was dropped by its own editor.
+    #[serde(rename = "exec")]
     pub argv: Vec<String>,
+    /// Omitted when empty: the file's `about` is optional and a written `""`
+    /// is a line that says nothing.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub about: String,
+    /// Omitted when false, the way the writer omits it — `false` is the
+    /// default and a manifest full of restated defaults is one nobody reads.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub interactive: bool,
 }
 

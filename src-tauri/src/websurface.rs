@@ -78,7 +78,7 @@ use serde::Serialize;
 /// `secrets::read` to compute that boolean, and a list named for what is
 /// proved rather than for what is suspected has to hold every path, including
 /// the ones that look harmless today. The fixpoint found it; nothing else had.
-pub const REACHES_THE_KEYSTORE: [&str; 17] = [
+pub const REACHES_THE_KEYSTORE: [&str; 19] = [
     "db_targets",
     "doctor",
     "generator_verify",
@@ -97,6 +97,15 @@ pub const REACHES_THE_KEYSTORE: [&str; 17] = [
     "service_db_clients",
     "service_reveal",
     "stripe_status",
+    // The tunnel's own password, in full — the one secret this app hands back
+    // deliberately, because it has to be read out to whoever opens the link.
+    // That is a decision about a person at this machine's screen, and it says
+    // nothing about a caller on a loopback port.
+    "tunnel_auth_reveal",
+    // No password in it, and it is here for the reason `project_providers` is:
+    // presence is information. "This project's tunnel asks for a password, and
+    // the user name is X" is half a credential and a map of what is protected.
+    "tunnel_identity",
     "tunnel_providers",
     "worktree_plan",
     "worktree_support",

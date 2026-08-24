@@ -102,12 +102,19 @@ impl EnvSchema {
 
     /// Is this a service the contract knows about?
     ///
-    /// The catalog is the whole set — there are twenty of them and they are
-    /// fixed by the schema. An unknown id is not a service that happens to be
-    /// missing; it is a typo or a stale caller, and acting on it writes a
-    /// `SERVICE_<JUNK>_ENABLE` key into the user's .env and brings up a compose
-    /// profile that matches nothing. Silently doing nothing is the failure mode
-    /// this project keeps finding in the shell version (CONFLICTS.md C-09).
+    /// The catalog is a **vocabulary**, not an inventory — since ADR 0016 there
+    /// are no templates in this binary and a service comes from a package. So
+    /// this answers "is that a word for a service", and an id that fails it is a
+    /// typo or a stale caller: acting on one writes a `SERVICE_<JUNK>_ENABLE`
+    /// key into the user's .env and brings up a compose profile that matches
+    /// nothing. Silently doing nothing is the failure mode this project keeps
+    /// finding in the shell version (CONFLICTS.md C-09).
+    ///
+    /// The vocabulary has to grow when the published catalogue does, and the
+    /// cost of forgetting lands on the user rather than here: four package ids
+    /// — dragonfly, soketi, prometheus, graylog — were missing from it, so a
+    /// manifest that named any of them was told this version does not know it
+    /// while the Market offered it for installation on the same screen.
     pub fn knows_service(&self, service: &str) -> bool {
         self.service_catalog().iter().any(|(id, _)| id == service)
     }
@@ -211,14 +218,21 @@ mod tests {
     }
 
     #[test]
-    fn the_service_catalog_has_twenty_seven_entries() {
+    fn the_service_catalog_has_thirty_one_entries() {
         // Was 25, and the number is a record rather than a rule: it counted the
         // template directories that shipped inside the binary. (The original
-        // README claims of "40+" and "14" were both wrong, C-17.) It is 27 now
-        // — Solr and ClickHouse — and they are the first two that were never
-        // templates at all, which is what ADR 0011 was aiming at and ADR 0016
-        // finished.
-        assert_eq!(env_schema().service_catalog().len(), 27);
+        // README claims of "40+" and "14" were both wrong, C-17.) It became 27
+        // with Solr and ClickHouse — the first two that were never templates at
+        // all, which is what ADR 0011 was aiming at and ADR 0016 finished.
+        //
+        // 31 now, and the four that closed the gap are the reason this number
+        // is worth keeping: dragonfly, soketi, prometheus and graylog were
+        // published as packages and never added here, so for four services the
+        // Market offered an install and the project page called the resulting
+        // manifest unknown. Exactly the failure the note in env.schema.json
+        // predicts when the vocabulary stops growing with the catalogue — and
+        // the second time it has happened, Solr and ClickHouse being the first.
+        assert_eq!(env_schema().service_catalog().len(), 31);
     }
 
     /// The catalog is a vocabulary, and the one thing left to check is that it
