@@ -68,6 +68,7 @@ export const HELP_TOPICS = [
   'project-release',
   'project-repl',
   'project-requirements',
+  'project-scheduler',
   'project-sidecars',
   'project-site',
   'project-spx',

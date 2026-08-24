@@ -1886,6 +1886,7 @@ mod tests {
             errors: vec![],
             warnings: vec![],
             hooks: Default::default(),
+            schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             local: Vec::new(),

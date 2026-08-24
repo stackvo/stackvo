@@ -150,7 +150,7 @@ watch(() => props.name, load);
           density="compact"
           hide-details
           prepend-inner-icon="mdi-play-box-outline"
-          style="max-width: 280px"
+          class="repl-runner-select"
         />
         <code v-else class="repl-runner">{{ current?.display }}</code>
 
@@ -272,6 +272,17 @@ watch(() => props.name, load);
 <style scoped>
 .repl-runner {
   font-size: 0.8rem;
+}
+
+/* A basis rather than a cap. The runners are named by the command they are —
+   `php artisan tinker --execute` is the longest — and a fixed 280px spent a
+   floating label and a prepend icon out of that before the text started, so
+   the one thing the control exists to tell you was the part that was cut.
+   It still wraps: the row it sits in is `flex-wrap`, so a narrow window puts
+   the chip on the next line instead of squeezing the name again. */
+.repl-runner-select {
+  flex: 1 1 320px;
+  max-width: 420px;
 }
 
 /* Bounded and scrolled rather than let to run off the page: `PageLayout` is a

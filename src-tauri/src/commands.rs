@@ -328,6 +328,7 @@ pub async fn list_projects(root: &std::path::Path) -> Result<Vec<Project>> {
                         document_root: None,
                         aliases: Vec::new(),
                         lan_share: false,
+                        schedule: Vec::new(),
                         services: Vec::new(),
                         php: None,
                         node: None,
@@ -9437,6 +9438,258 @@ pub async fn worker_stop(state: State<'_, AppState>, name: String, kind: String)
             Code::NotFound,
             String::from_utf8_lossy(&output.stderr).trim().to_string(),
         ));
+    }
+    Ok(())
+}
+
+// --------------------------------------------------- scheduled jobs (cron)
+
+/// One project's schedule, and whether anything is running it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchedulerView {
+    pub jobs: Vec<crate::cron::JobStatus>,
+    /// Is the sidecar up? A schedule with nothing running it is a list of
+    /// intentions, and the screen should not let that read as "scheduled".
+    pub running: bool,
+    /// How often Docker has had to bring it back. A large number is a crash
+    /// loop, on the same terms as a worker's.
+    pub restarts: Option<i64>,
+    /// Can it be started at all? A project with no built container has no
+    /// image to run a job in, and the answer is that rather than an error.
+    pub buildable: bool,
+}
+
+/// Read one project's schedule, with each job's last run.
+#[tauri::command]
+pub async fn scheduler_jobs(state: State<'_, AppState>, name: String) -> Result<SchedulerView> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let manifest = crate::manifest::read(&dir.join("stackvo.json"), &name)?;
+
+    let containers = engine::stackvo_containers().await?;
+    let sidecar = crate::cron::container_id(&name);
+    let running = containers.get(&sidecar).is_some_and(|c| c.running);
+    let restarts = if containers.contains_key(&sidecar) {
+        engine::inspect(&sidecar)
+            .await
+            .ok()
+            .map(|d| d.restart_count)
+    } else {
+        None
+    };
+
+    Ok(SchedulerView {
+        jobs: crate::cron::statuses(&root, &name, &manifest.schedule),
+        running,
+        restarts,
+        buildable: containers
+            .get(&name)
+            .and_then(|c| c.image.clone())
+            .is_some(),
+    })
+}
+
+/// Replace one project's schedule.
+///
+/// One command for the whole list rather than add/edit/delete verbs: the
+/// schedule is a single value in `stackvo.json` and in the generated
+/// directory, and three verbs would be three chances for the file and the
+/// directory to disagree about what is scheduled.
+///
+/// A running sidecar is recreated. The tick loop reads its expressions from
+/// disk every minute, so an edit would eventually take — but "eventually" is
+/// up to a minute of the old schedule still firing, and the deleted job firing
+/// once more after it was deleted is the report nobody can reproduce.
+#[tauri::command]
+pub async fn scheduler_save(
+    state: State<'_, AppState>,
+    name: String,
+    jobs: Vec<crate::cron::Job>,
+) -> Result<SchedulerView> {
+    crate::cron::validate(&jobs).map_err(|message| Error::new(Code::InvalidInput, message))?;
+
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    if !dir.is_dir() {
+        return Err(Error::not_found(format!("project {name}")));
+    }
+
+    {
+        let _busy = state.inflight.acquire(format!("project:{name}"))?;
+        let path = dir.join("stackvo.json");
+        let mut manifest = crate::manifest::read(&path, &name)?;
+        manifest.schedule = jobs.clone();
+        crate::manifest::write(&path, &manifest)?;
+        crate::cron::write_schedule(&root, &name, &jobs)?;
+    }
+
+    // Recreated only if it was already up. Saving a schedule is not asking for
+    // it to start running — that is a separate act, with a button of its own.
+    let sidecar = crate::cron::container_id(&name);
+    let was_running = engine::stackvo_containers()
+        .await?
+        .get(&sidecar)
+        .is_some_and(|c| c.running);
+    if was_running {
+        scheduler_stop(state.clone(), name.clone()).await?;
+        scheduler_start(state.clone(), name.clone()).await?;
+    }
+
+    scheduler_jobs(state, name).await
+}
+
+/// Start the sidecar that runs this project's schedule.
+#[tauri::command]
+pub async fn scheduler_start(state: State<'_, AppState>, name: String) -> Result<()> {
+    let _busy = state.inflight.acquire(format!("cron:{name}"))?;
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let manifest = crate::manifest::read(&dir.join("stackvo.json"), &name)?;
+
+    // A sidecar with nothing to run is a process in the list that means
+    // nothing, and the list is where people look to find out what is running.
+    if crate::cron::runnable(&manifest.schedule).is_empty() {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("{name} has no enabled scheduled job"),
+        ));
+    }
+
+    // The image comes from the project's web container, on the same terms as a
+    // worker's: the one image guaranteed to carry the right runtime for this
+    // code.
+    let containers = engine::stackvo_containers().await?;
+    let image = containers
+        .get(&name)
+        .and_then(|c| c.image.clone())
+        .ok_or_else(|| {
+            Error::new(Code::Conflict, format!("{name} has no built container"))
+                .with_hint(crate::hints::BUILD_AND_START_FOR_WORKER)
+        })?;
+
+    let network = Env::load(&root)
+        .ok()
+        .and_then(|env| env.get("DOCKER_DEFAULT_NETWORK").map(str::to_string))
+        .unwrap_or_else(|| "stackvo-net".to_string());
+
+    // Written before the container starts, not after: a sidecar whose schedule
+    // directory does not exist yet gets it created by the engine, root-owned,
+    // and the container is not root.
+    crate::cron::write_schedule(&root, &name, &manifest.schedule)?;
+
+    let args = crate::cron::run_args(
+        &name,
+        &image,
+        &root.display().to_string(),
+        &network,
+        &crate::cron::schedule_dir(&root, &name)
+            .display()
+            .to_string(),
+        &crate::cron::state_dir(&root, &name).display().to_string(),
+    );
+
+    let output = tokio::process::Command::new("docker")
+        .args(&args)
+        .output()
+        .await
+        .map_err(|e| Error::io("running docker", e))?;
+    if !output.status.success() {
+        return Err(Error::new(
+            Code::Conflict,
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Stop the sidecar. Removal, not just stop: `--restart unless-stopped` means
+/// a merely-stopped container is one engine restart away from coming back.
+#[tauri::command]
+pub async fn scheduler_stop(state: State<'_, AppState>, name: String) -> Result<()> {
+    let _busy = state.inflight.acquire(format!("cron:{name}"))?;
+    let container = format!("stackvo-{}", crate::cron::container_id(&name));
+
+    let output = tokio::process::Command::new("docker")
+        .args(["rm", "-f", &container])
+        .output()
+        .await
+        .map_err(|e| Error::io("running docker", e))?;
+
+    // A sidecar that was already gone is the state being asked for, not a
+    // failure: `rm -f` on an absent container says "No such container".
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.contains("No such container") {
+            return Err(Error::new(Code::Conflict, stderr.trim().to_string()));
+        }
+    }
+    Ok(())
+}
+
+/// The tail of one job's log.
+#[tauri::command]
+pub fn scheduler_log(
+    state: State<'_, AppState>,
+    name: String,
+    job: String,
+    lines: Option<usize>,
+) -> Result<String> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    // A job id is a slug this app generated. Refusing anything else here is
+    // what stops `../` from reaching a file outside the log directory.
+    if job != crate::cron::slug(&job) {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("{job} is not a job"),
+        ));
+    }
+    Ok(crate::cron::log_tail(
+        &root,
+        &name,
+        &job,
+        lines.unwrap_or(500),
+    ))
+}
+
+/// Run one job now, without waiting for its next tick.
+///
+/// Runs it **the way a tick would** — the sidecar sources its own script and
+/// calls `run_job`, so the log and the last run are written by the same code
+/// that writes them on a schedule. A second path here would be a second set of
+/// bugs, and the first symptom would be a manual run that logged nothing.
+#[tauri::command]
+pub async fn scheduler_run(state: State<'_, AppState>, name: String, job: String) -> Result<()> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    if job != crate::cron::slug(&job) {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("{job} is not a job"),
+        ));
+    }
+
+    let container = format!("stackvo-{}", crate::cron::container_id(&name));
+    let script = format!("{}/tick.sh", crate::cron::SCHEDULE_DIR);
+
+    // `tick.sh run <job>`, and no shell anywhere: the script is named, the
+    // mode is an argument and the job id is an argument. An earlier version of
+    // this passed `sh -c` a fixed string, which was safe but could hang — a
+    // variable the script did not recognise fell through to the tick loop, and
+    // the exec never returned.
+    let output = tokio::process::Command::new("docker")
+        .args(["exec", &container, "sh", &script, "run", &job])
+        .output()
+        .await
+        .map_err(|e| Error::io("running docker", e))?;
+
+    if !output.status.success() {
+        return Err(Error::new(
+            Code::Conflict,
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        )
+        .with_hint("the scheduler has to be running for a job to be run by hand"));
     }
     Ok(())
 }
