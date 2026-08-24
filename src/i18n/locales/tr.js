@@ -2247,6 +2247,49 @@ export default {
     lastRun: 'Son çalışma: {at}',
     lastFailed: 'Son çalışma başarısız: {at}',
   },
+  projectSupervisor: {
+    title: 'Container içindeki supervisord',
+    explain:
+      'Bu projenin kendi container’ında supervisord çalışıyor: php-fpm ve web sunucusu onun altında. Eklenecek bir şey yok — container zaten biliniyor.',
+    needsRunning: 'Önce projeyi başlatın.',
+    noSupervisord:
+      'Bu proje sunucusunu supervisord olmadan çalıştırıyor (apache, frankenphp, swoole ya da PHP dışı bir runtime). Gösterilecek süreç yok.',
+    noSocket:
+      'supervisord çalışıyor ama konuşmuyor: bu imaj, StackVo üretilen yapılandırmaya soketi eklemeden önce derlenmiş. Projeyi yeniden derleyin.',
+    stopped: 'Container çalışmıyor.',
+    counts: '{total} süreçten {running} tanesi çalışıyor',
+    logToStdout: 'Bu süreç logunu container’ın stdout’una yazıyor — Loglar sekmesinde.',
+  },
+  supervisorCheck: {
+    title: '{process} için sağlık kontrolü',
+    explain:
+      'supervisord bir sürecin ayakta olduğunu bildirir; içindeki şeyin cevap verdiğini değil. İşçisi tükenmiş bir php-fpm, kilitte takılmış bir kuyruk işçisi ve 502 döndüren bir web sunucusu — üçü de RUNNING görünür.',
+    kind: 'Kontrol türü',
+    kinds: { http: 'HTTP isteği', tcp: 'TCP bağlantısı' },
+    target: { http: 'Adres', tcp: 'host:port' },
+    expect: 'Beklenen durum kodu',
+    try: 'Şimdi dene',
+    trying: 'Deneniyor…',
+    remove: 'Kontrolü kaldır',
+    button: 'Sağlık kontrolü',
+    answering: 'cevap veriyor',
+    failing: '{count} süreç ayakta ama cevap vermiyor',
+  },
+  supervisors: {
+    save: 'Kaydet',
+    cancel: 'Vazgeç',
+    close: 'Kapat',
+    restart: 'Yeniden başlat',
+    log: 'Log',
+    flapping: 'Sürekli yeniden başlıyor',
+    flappingCount: '{count} süreç sürekli yeniden başlıyor',
+    restarts: '{count} kez yeniden başladı',
+    alarms: {
+      fatal: '{process} pes etti',
+      flapping: '{process} sürekli yeniden başlıyor',
+      notAnswering: '{process} ayakta ama cevap vermiyor',
+    },
+  },
   workers: {
     title: 'İşçiler',
     explain:

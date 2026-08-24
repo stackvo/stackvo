@@ -2645,6 +2645,76 @@
       "why": "Turning it off has to be as easy as turning it on.",
       "notes": "Removes rather than stops: the signing secret is in that container's log and it is dead the moment the listener is, so leaving it behind would leave a stale secret on screen for the next person to paste."
     },
+    "supervisor_check_remove": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "process": "string"
+      },
+      "returns": "SupervisorCheck[]"
+    },
+    "supervisor_check_run": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "check": "SupervisorCheck"
+      },
+      "returns": "SupervisorCheckResult",
+      "why": "Takes the check rather than an id so a form can try what is on screen before it is saved — the same reason supervisor_test takes a server record. Never fails: a probe that could not be made is a failing check, not an error."
+    },
+    "supervisor_check_save": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "check": "SupervisorCheck"
+      },
+      "returns": "SupervisorCheck[]",
+      "notes": "Replaces the check already on that process rather than adding a second. Returns the checks for the server it was about, not all of them. Probes run during the snapshot poll — there is no scheduler here and no automatic restart: a local tool that silently restarted php-fpm would be hiding the thing somebody opened it to see."
+    },
+    "supervisor_checks": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string"
+      },
+      "returns": "SupervisorCheck[]",
+      "why": "supervisord reports that a process is up. It has no idea whether the thing inside it is answering — a php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 are all RUNNING, and that is the state somebody is staring at when they open this. One check per process, because a process either answers or it does not."
+    },
+    "supervisor_control": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "scope": "'process' | 'group' | 'all'",
+        "verb": "'start' | 'stop' | 'restart' | 'signal' | 'clearLog'",
+        "target": "string?",
+        "signal": "string?"
+      },
+      "returns": "any",
+      "notes": "One command for the whole matrix rather than twelve, because supervisord treats it as one: the verb and the scope pick the method name and every combination takes the same arguments. `restart` is two calls and not a method — supervisord has no restartProcess, and the stop half is allowed to fail because stopping something already stopped is a refusal and the expected first step."
+    },
+    "supervisor_log": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string",
+        "process": "string",
+        "channel": "'stdout' | 'stderr'?",
+        "lines": "number?"
+      },
+      "returns": "string",
+      "why": "Where a FATAL says why. The last N bytes, which is the shape supervisord's own web interface uses; paging back through a log is a separate feature and is not pretended at."
+    },
+    "supervisor_project": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string"
+      },
+      "returns": "ProjectSupervisor",
+      "why": "StackVo's own generated image for an nginx or caddy project runs supervisord as its command, with php-fpm and the web server under it — so every such project has had a supervisord in it the whole time and nothing could talk to it. Nothing is configured and nothing is stored: a project names its container. `reach` separates the ways this can be empty, because they look identical on screen and send somebody to different places — no supervisord in the image at all, an image built before the config grew a socket (rebuild), or a container that is not running."
+    },
     "system_accent": {
       "new": true,
       "kind": "query",
@@ -3005,147 +3075,18 @@
   },
   "events": {
     "_note": "Names are preserved from Socket.io so the Vue listeners keep working, with ONE deliberate change: the terminal events move from dash to colon separators for consistency. That is a 4-line change in the terminal component.",
+    "_removed": {
+      "generate:error": "Removed: `generate:done` carries `success` and `error`, and generate_run returns Err as well. A second failure channel is one more thing to keep consistent for no gain.",
+      "terminal:error": "Removed: pty_open returns Err when the shell cannot start, which is the only case this covered."
+    },
     "app:close_requested": {
       "new": true,
       "payload": {},
       "notes": "The window was asked to close and closeBehaviour is \"ask\". Rust prevents the close and emits this; the front end shows the choice dialog and answers with window_close_action."
     },
-    "project:creating": {
-      "payload": {
-        "project": "string"
-      }
-    },
-    "project:created": {
-      "payload": {
-        "project": "string"
-      }
-    },
-    "project:deleting": {
-      "payload": {
-        "project": "string"
-      }
-    },
-    "project:deleted": {
-      "payload": {
-        "project": "string"
-      }
-    },
-    "project:starting": {
-      "payload": {
-        "project": "string"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "project:started": {
-      "payload": {
-        "project": "string",
-        "running": "bool"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "project:stopping": {
-      "payload": {
-        "project": "string"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "project:stopped": {
-      "payload": {
-        "project": "string",
-        "running": "bool"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "project:restarting": {
-      "payload": {
-        "project": "string"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "project:restarted": {
-      "payload": {
-        "project": "string",
-        "running": "bool"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "project:error": {
-      "payload": {
-        "project": "string",
-        "error": "string"
-      }
-    },
-    "service:starting": {
-      "payload": {
-        "service": "string"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "service:started": {
-      "payload": {
-        "service": "string",
-        "running": "bool"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "service:stopping": {
-      "payload": {
-        "service": "string"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "service:stopped": {
-      "payload": {
-        "service": "string",
-        "running": "bool"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "service:restarting": {
-      "payload": {
-        "service": "string"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "service:restarted": {
-      "payload": {
-        "service": "string",
-        "running": "bool"
-      },
-      "emittedDynamically": true,
-      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
-    },
-    "build:start": {
-      "payload": {
-        "project": "string",
-        "operationId": "string"
-      }
-    },
-    "build:progress": {
-      "payload": {
-        "project": "string",
-        "operationId": "string",
-        "line": "string"
-      }
-    },
     "build:built": {
       "payload": "FinishedEvent",
       "note": "The IMAGE finished building. `project_build` has three stages — generate, build image, recreate container — and this marks the end of the second. The UI shows 'starting container…' between this and build:success."
-    },
-    "build:success": {
-      "payload": "FinishedEvent",
-      "note": "The container is up from the fresh image; the whole operation is done."
     },
     "build:error": {
       "payload": {
@@ -3155,108 +3096,39 @@
         "logPath": "string?"
       }
     },
-    "compose:progress": {
+    "build:progress": {
+      "payload": {
+        "project": "string",
+        "operationId": "string",
+        "line": "string"
+      }
+    },
+    "build:start": {
+      "payload": {
+        "project": "string",
+        "operationId": "string"
+      }
+    },
+    "build:success": {
+      "payload": "FinishedEvent",
+      "note": "The container is up from the fresh image; the whole operation is done."
+    },
+    "certs:changed": {
       "new": true,
-      "payload": "ProgressEvent",
-      "why": "`docker compose up/down` writes its progress to stderr line by line. The old UI held the HTTP request open for the whole run (proxy_read_timeout 600s) and showed nothing until it ended."
+      "payload": {
+        "added": "string[]",
+        "removed": "string[]"
+      },
+      "why": "The certificate was reissued, so anything showing coverage or an expiry has to re-read it. Traefik picks the new file up on its own; the UI has no way to know without being told."
     },
     "compose:done": {
       "new": true,
       "payload": "FinishedEvent"
     },
-    "generate:start": {
-      "new": true,
-      "payload": {
-        "scope": "string",
-        "subject": "string — the scope again, because progress and done are subjected on it and a reader that opens an operation under a different subject never closes it",
-        "operationId": "string"
-      }
-    },
-    "generate:progress": {
-      "new": true,
-      "payload": {
-        "operationId": "string",
-        "subject": "string — the SCOPE, not a project name. A caller that marked a project busy before invoking generate_run must clear that flag itself.",
-        "line": "string"
-      }
-    },
-    "generate:done": {
-      "new": true,
-      "payload": {
-        "operationId": "string",
-        "projects": "u32",
-        "services": "u32"
-      }
-    },
-    "scaffold:progress": {
+    "compose:progress": {
       "new": true,
       "payload": "ProgressEvent",
-      "why": "composer create-project downloads a framework — minutes on a slow line, and the installer's own lines are the only honest progress there is."
-    },
-    "scaffold:done": {
-      "new": true,
-      "payload": "FinishedEvent"
-    },
-    "tunnel:progress": {
-      "new": true,
-      "payload": "ProgressEvent",
-      "why": "The first tunnel_start pulls the cloudflared image; the pull's own lines belong in the operation console like every other long-running docker invocation."
-    },
-    "tunnel:done": {
-      "new": true,
-      "payload": "FinishedEvent"
-    },
-    "terminal:ready": {
-      "renamedFrom": "terminal-ready",
-      "payload": {
-        "sessionId": "string"
-      }
-    },
-    "terminal:output": {
-      "renamedFrom": "terminal-output",
-      "payload": {
-        "sessionId": "string",
-        "data": "string"
-      }
-    },
-    "terminal:closed": {
-      "renamedFrom": "terminal-closed",
-      "payload": {
-        "sessionId": "string",
-        "exitCode": "i32"
-      }
-    },
-    "logs:line": {
-      "new": true,
-      "payload": {
-        "streamId": "string",
-        "container": "string",
-        "line": "string",
-        "stream": "'stdout'|'stderr'",
-        "source": "string? (LogFile.id, fanout only)"
-      },
-      "notes": "`container` is the container for a container stream and the project for the cross-project fanout — one stream has one origin, a fanout has one per line, which is why it is carried per event rather than settled when the stream opens. `source` is omitted entirely on a single-source stream, so those payloads are byte-identical to what they were before the fanout existed."
-    },
-    "logs:closed": {
-      "new": true,
-      "payload": {
-        "streamId": "string"
-      }
-    },
-    "logs:sources": {
-      "new": true,
-      "payload": {
-        "streamId": "string",
-        "followed": "number",
-        "total": "number",
-        "projects": "number"
-      },
-      "why": "The fanout follows at most 60 files. Emitting what it dropped is the difference between a view that is honest about its coverage and one that silently implies it sees everything. Re-emitted after every rediscovery, so a file appearing at midnight moves the number on screen."
-    },
-    "engine:status_changed": {
-      "new": true,
-      "payload": "EngineStatus",
-      "why": "Drives the whole-app connected/disconnected state and the tray icon."
+      "why": "`docker compose up/down` writes its progress to stderr line by line. The old UI held the HTTP request open for the whole run (proxy_read_timeout 600s) and showed nothing until it ended."
     },
     "container:state_changed": {
       "new": true,
@@ -3266,49 +3138,6 @@
         "running": "bool"
       },
       "why": "Sourced from the Docker events stream. Today the UI polls on a visibility-gated timer (useVisiblePolling); a push stream removes the polling entirely."
-    },
-    "manifest:changed": {
-      "new": true,
-      "payload": {
-        "project": "string",
-        "path": "string"
-      },
-      "why": "fs-watcher on projects/*/stackvo.json. Enables 'config changed — regenerate?' instead of the user remembering to run `stackvo generate`.",
-      "emittedBy": "the fs-watcher on projects/*/stackvo.json",
-      "notes": "Debounced 400ms — editors write a file several times per save. The app does NOT regenerate on its own; it offers the action, because rebuilding a container under someone who is mid-edit is worse than the staleness it fixes."
-    },
-    "folder:appeared": {
-      "new": true,
-      "payload": {
-        "folder": "string",
-        "path": "string"
-      },
-      "notes": "A directory that was not there when the watch started now is. The project directory is a park, and cloning a repository into it used to be silent — the answer to \"why is my new site not listed\" was \"reopen this dialog\", which is the part a park exists to remove. The watcher was already receiving those events and dropping them: its manifest reader accepts `<projects>/<name>/stackvo.json` and nothing else, which is right for its own question and misses every git clone. Announced on the folder becoming NEW TO THE WATCHER rather than on a timer: a clone writes for as long as the repository takes and every second of it is a create event, so a time window would either repeat the same folder a dozen times or be long enough to miss the next one. A folder that is removed is forgotten, so cloning over the same name announces it again. Decides nothing — the UI refetches, which is the only thing that can tell an adoptable folder from one that arrived with its manifest committed."
-    },
-    "hosts:changed": {
-      "new": true,
-      "payload": {
-        "added": "string[]",
-        "removed": "string[]"
-      },
-      "why": "Warn when a project's domain has no hosts entry, with a one-click fix."
-    },
-    "db:start": {
-      "new": true,
-      "payload": {
-        "operationId": "string",
-        "service": "string",
-        "action": "'dump'|'restore'",
-        "path": "string"
-      }
-    },
-    "db:progress": {
-      "new": true,
-      "payload": {
-        "operationId": "string",
-        "line": "string"
-      },
-      "notes": "The tools write progress and warnings to stderr; stdout is the dump itself and never reaches the UI."
     },
     "db:done": {
       "new": true,
@@ -3328,20 +3157,22 @@
         "error": "string"
       }
     },
-    "xdebug:changed": {
+    "db:progress": {
       "new": true,
       "payload": {
-        "project": "string",
-        "enabled": "bool"
+        "operationId": "string",
+        "line": "string"
       },
-      "why": "The toggle changes the manifest and the compose overlay, so anything showing the project's configuration or its pending-regenerate state is now out of date."
+      "notes": "The tools write progress and warnings to stderr; stdout is the dump itself and never reaches the UI."
     },
-    "preset:applied": {
+    "db:start": {
       "new": true,
       "payload": {
-        "changed": "number"
-      },
-      "why": "Importing a preset rewrites service enablement and versions across .env, so the services list, the enabled/disabled chips and the pending-regenerate state are all now out of date."
+        "operationId": "string",
+        "service": "string",
+        "action": "'dump'|'restore'",
+        "path": "string"
+      }
     },
     "devserver:changed": {
       "new": true,
@@ -3351,39 +3182,52 @@
       },
       "why": "Turning dev mode on changes the compose overlay, which changes what the container is and what an `up` would recreate — so anything showing the project's configuration is out of date."
     },
-    "php_ini:changed": {
+    "engine:status_changed": {
+      "new": true,
+      "payload": "EngineStatus",
+      "why": "Drives the whole-app connected/disconnected state and the tray icon."
+    },
+    "folder:appeared": {
       "new": true,
       "payload": {
-        "project": "string",
-        "exists": "bool"
+        "folder": "string",
+        "path": "string"
       },
-      "why": "Creating or removing the file changes the compose overlay, which changes what a `up` would recreate — so anything showing the project's configuration is now out of date."
+      "notes": "A directory that was not there when the watch started now is. The project directory is a park, and cloning a repository into it used to be silent — the answer to \"why is my new site not listed\" was \"reopen this dialog\", which is the part a park exists to remove. The watcher was already receiving those events and dropping them: its manifest reader accepts `<projects>/<name>/stackvo.json` and nothing else, which is right for its own question and misses every git clone. Announced on the folder becoming NEW TO THE WATCHER rather than on a timer: a clone writes for as long as the repository takes and every second of it is a create event, so a time window would either repeat the same folder a dozen times or be long enough to miss the next one. A folder that is removed is forgotten, so cloning over the same name announces it again. Decides nothing — the UI refetches, which is the only thing that can tell an adoptable folder from one that arrived with its manifest committed."
     },
-    "certs:changed": {
+    "generate:done": {
+      "new": true,
+      "payload": {
+        "operationId": "string",
+        "projects": "u32",
+        "services": "u32"
+      }
+    },
+    "generate:progress": {
+      "new": true,
+      "payload": {
+        "operationId": "string",
+        "subject": "string — the SCOPE, not a project name. A caller that marked a project busy before invoking generate_run must clear that flag itself.",
+        "line": "string"
+      }
+    },
+    "generate:start": {
+      "new": true,
+      "payload": {
+        "scope": "string",
+        "subject": "string — the scope again, because progress and done are subjected on it and a reader that opens an operation under a different subject never closes it",
+        "operationId": "string"
+      }
+    },
+    "hosts:changed": {
       "new": true,
       "payload": {
         "added": "string[]",
         "removed": "string[]"
       },
-      "why": "The certificate was reissued, so anything showing coverage or an expiry has to re-read it. Traefik picks the new file up on its own; the UI has no way to know without being told."
+      "why": "Warn when a project's domain has no hosts entry, with a one-click fix."
     },
-    "_removed": {
-      "generate:error": "Removed: `generate:done` carries `success` and `error`, and generate_run returns Err as well. A second failure channel is one more thing to keep consistent for no gain.",
-      "terminal:error": "Removed: pty_open returns Err when the shell cannot start, which is the only case this covered."
-    },
-    "instance:enabling": {
-      "new": true,
-      "payload": "SubjectEvent",
-      "emittedDynamically": true,
-      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
-    },
-    "instance:progress": {
-      "new": true,
-      "payload": "SubjectEvent",
-      "emittedDynamically": true,
-      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
-    },
-    "instance:enabled": {
+    "instance:disabled": {
       "new": true,
       "payload": "SubjectEvent",
       "emittedDynamically": true,
@@ -3395,7 +3239,13 @@
       "emittedDynamically": true,
       "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
     },
-    "instance:disabled": {
+    "instance:enabled": {
+      "new": true,
+      "payload": "SubjectEvent",
+      "emittedDynamically": true,
+      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
+    },
+    "instance:enabling": {
       "new": true,
       "payload": "SubjectEvent",
       "emittedDynamically": true,
@@ -3407,31 +3257,7 @@
       "emittedDynamically": true,
       "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
     },
-    "instance:starting": {
-      "new": true,
-      "payload": "SubjectEvent",
-      "emittedDynamically": true,
-      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
-    },
-    "instance:started": {
-      "new": true,
-      "payload": "SubjectEvent",
-      "emittedDynamically": true,
-      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
-    },
-    "instance:stopping": {
-      "new": true,
-      "payload": "SubjectEvent",
-      "emittedDynamically": true,
-      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
-    },
-    "instance:stopped": {
-      "new": true,
-      "payload": "SubjectEvent",
-      "emittedDynamically": true,
-      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
-    },
-    "instance:restarting": {
+    "instance:progress": {
       "new": true,
       "payload": "SubjectEvent",
       "emittedDynamically": true,
@@ -3443,33 +3269,281 @@
       "emittedDynamically": true,
       "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
     },
-    "perf:changed": {
-      "payload": "{ project: string, path: string, enabled: bool }",
-      "why": "A layer moved. The container is still reading the old arrangement until it is recreated, which is the same 'written to disk, not to the container' state xdebug:changed reports."
-    },
-    "site:changed": {
-      "payload": "{ project: string }",
-      "why": "A per-project setting was written. The container is still the old one until it is recreated, which is the same state xdebug:changed and perf:changed report."
-    },
-    "landing:progress": {
+    "instance:restarting": {
       "new": true,
-      "payload": "{ operationId: string, line: string }",
-      "why": "The image pull, streamed — the same console every other long-running thing in this app reports into."
+      "payload": "SubjectEvent",
+      "emittedDynamically": true,
+      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
+    },
+    "instance:started": {
+      "new": true,
+      "payload": "SubjectEvent",
+      "emittedDynamically": true,
+      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
+    },
+    "instance:starting": {
+      "new": true,
+      "payload": "SubjectEvent",
+      "emittedDynamically": true,
+      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
+    },
+    "instance:stopped": {
+      "new": true,
+      "payload": "SubjectEvent",
+      "emittedDynamically": true,
+      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
+    },
+    "instance:stopping": {
+      "new": true,
+      "payload": "SubjectEvent",
+      "emittedDynamically": true,
+      "notes": "The instance id rides in the `service` field. A fourth shape of event would be a fourth thing every listener has to know about, for no information it does not already have."
     },
     "landing:done": {
       "new": true,
       "payload": "{ operationId: string, ok: boolean }",
       "why": "The sidecar is up, or it is not."
     },
-    "stripe:progress": {
+    "landing:progress": {
       "new": true,
       "payload": "{ operationId: string, line: string }",
-      "why": "The image pull, streamed into the operation console."
+      "why": "The image pull, streamed — the same console every other long-running thing in this app reports into."
+    },
+    "logs:closed": {
+      "new": true,
+      "payload": {
+        "streamId": "string"
+      }
+    },
+    "logs:line": {
+      "new": true,
+      "payload": {
+        "streamId": "string",
+        "container": "string",
+        "line": "string",
+        "stream": "'stdout'|'stderr'",
+        "source": "string? (LogFile.id, fanout only)"
+      },
+      "notes": "`container` is the container for a container stream and the project for the cross-project fanout — one stream has one origin, a fanout has one per line, which is why it is carried per event rather than settled when the stream opens. `source` is omitted entirely on a single-source stream, so those payloads are byte-identical to what they were before the fanout existed."
+    },
+    "logs:sources": {
+      "new": true,
+      "payload": {
+        "streamId": "string",
+        "followed": "number",
+        "total": "number",
+        "projects": "number"
+      },
+      "why": "The fanout follows at most 60 files. Emitting what it dropped is the difference between a view that is honest about its coverage and one that silently implies it sees everything. Re-emitted after every rediscovery, so a file appearing at midnight moves the number on screen."
+    },
+    "manifest:changed": {
+      "new": true,
+      "payload": {
+        "project": "string",
+        "path": "string"
+      },
+      "why": "fs-watcher on projects/*/stackvo.json. Enables 'config changed — regenerate?' instead of the user remembering to run `stackvo generate`.",
+      "emittedBy": "the fs-watcher on projects/*/stackvo.json",
+      "notes": "Debounced 400ms — editors write a file several times per save. The app does NOT regenerate on its own; it offers the action, because rebuilding a container under someone who is mid-edit is worse than the staleness it fixes."
+    },
+    "perf:changed": {
+      "payload": "{ project: string, path: string, enabled: bool }",
+      "why": "A layer moved. The container is still reading the old arrangement until it is recreated, which is the same 'written to disk, not to the container' state xdebug:changed reports."
+    },
+    "php_ini:changed": {
+      "new": true,
+      "payload": {
+        "project": "string",
+        "exists": "bool"
+      },
+      "why": "Creating or removing the file changes the compose overlay, which changes what a `up` would recreate — so anything showing the project's configuration is now out of date."
+    },
+    "preset:applied": {
+      "new": true,
+      "payload": {
+        "changed": "number"
+      },
+      "why": "Importing a preset rewrites service enablement and versions across .env, so the services list, the enabled/disabled chips and the pending-regenerate state are all now out of date."
+    },
+    "project:created": {
+      "payload": {
+        "project": "string"
+      }
+    },
+    "project:creating": {
+      "payload": {
+        "project": "string"
+      }
+    },
+    "project:deleted": {
+      "payload": {
+        "project": "string"
+      }
+    },
+    "project:deleting": {
+      "payload": {
+        "project": "string"
+      }
+    },
+    "project:error": {
+      "payload": {
+        "project": "string",
+        "error": "string"
+      }
+    },
+    "project:restarted": {
+      "payload": {
+        "project": "string",
+        "running": "bool"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "project:restarting": {
+      "payload": {
+        "project": "string"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "project:started": {
+      "payload": {
+        "project": "string",
+        "running": "bool"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "project:starting": {
+      "payload": {
+        "project": "string"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "project:stopped": {
+      "payload": {
+        "project": "string",
+        "running": "bool"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "project:stopping": {
+      "payload": {
+        "project": "string"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "scaffold:done": {
+      "new": true,
+      "payload": "FinishedEvent"
+    },
+    "scaffold:progress": {
+      "new": true,
+      "payload": "ProgressEvent",
+      "why": "composer create-project downloads a framework — minutes on a slow line, and the installer's own lines are the only honest progress there is."
+    },
+    "service:restarted": {
+      "payload": {
+        "service": "string",
+        "running": "bool"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "service:restarting": {
+      "payload": {
+        "service": "string"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "service:started": {
+      "payload": {
+        "service": "string",
+        "running": "bool"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "service:starting": {
+      "payload": {
+        "service": "string"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "service:stopped": {
+      "payload": {
+        "service": "string",
+        "running": "bool"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "service:stopping": {
+      "payload": {
+        "service": "string"
+      },
+      "emittedDynamically": true,
+      "emittedBy": "commands::lifecycle — the name is built from the subject kind and the phase verb, so no literal appears in the source."
+    },
+    "site:changed": {
+      "payload": "{ project: string }",
+      "why": "A per-project setting was written. The container is still the old one until it is recreated, which is the same state xdebug:changed and perf:changed report."
     },
     "stripe:done": {
       "new": true,
       "payload": "{ operationId: string, ok: boolean }",
       "why": "The listener is up, or it is not — what it then says about the key is read from its log."
+    },
+    "stripe:progress": {
+      "new": true,
+      "payload": "{ operationId: string, line: string }",
+      "why": "The image pull, streamed into the operation console."
+    },
+    "supervisor:alarm": {
+      "payload": "SupervisorAlarm",
+      "why": "Emitted by a background loop rather than by a pane, which is the whole point: a notification matters when nobody is looking, and a poll that only runs while its tab is open can only tell somebody what is already in front of them. Edge-triggered — a process sitting in FATAL is not news every twenty seconds, it was news once — and the first look after start records without announcing, because a process that was already broken did not just break. Running projects only: a stopped one has no container to exec into."
+    },
+    "terminal:closed": {
+      "renamedFrom": "terminal-closed",
+      "payload": {
+        "sessionId": "string",
+        "exitCode": "i32"
+      }
+    },
+    "terminal:output": {
+      "renamedFrom": "terminal-output",
+      "payload": {
+        "sessionId": "string",
+        "data": "string"
+      }
+    },
+    "terminal:ready": {
+      "renamedFrom": "terminal-ready",
+      "payload": {
+        "sessionId": "string"
+      }
+    },
+    "tunnel:done": {
+      "new": true,
+      "payload": "FinishedEvent"
+    },
+    "tunnel:progress": {
+      "new": true,
+      "payload": "ProgressEvent",
+      "why": "The first tunnel_start pulls the cloudflared image; the pull's own lines belong in the operation console like every other long-running docker invocation."
+    },
+    "xdebug:changed": {
+      "new": true,
+      "payload": {
+        "project": "string",
+        "enabled": "bool"
+      },
+      "why": "The toggle changes the manifest and the compose overlay, so anything showing the project's configuration or its pending-regenerate state is now out of date."
     }
   },
   "types": {
@@ -4420,6 +4494,10 @@
       "$ref": "project.schema.json",
       "note": "The create form's payload IS a project manifest. The old POST body used a flat shape (runtime, version, extensions at top level) that ProjectService then reassembled — and reassembled wrongly for node. v1 sends the manifest itself, so there is nothing to reassemble."
     },
+    "ProjectSupervisor": {
+      "reach": "'ok' | 'noSupervisord' | 'noSocket' | 'stopped'",
+      "snapshot": "SupervisorSnapshot?"
+    },
     "Provider": {
       "name": "string",
       "about": "string?",
@@ -4634,6 +4712,56 @@
       "mountPoint": "string"
     },
     "StreamId": "string",
+    "SupervisorAlarm": {
+      "project": "string",
+      "process": "string",
+      "kind": "'fatal' | 'flapping' | 'notAnswering'",
+      "detail": "string"
+    },
+    "SupervisorCheck": {
+      "project": "string",
+      "process": "string",
+      "kind": "'http' | 'tcp'",
+      "target": "string",
+      "expectStatus": "number?",
+      "timeoutMs": "number?"
+    },
+    "SupervisorCheckResult": {
+      "ok": "bool",
+      "detail": "string",
+      "ms": "number"
+    },
+    "SupervisorProcess": {
+      "fullName": "string",
+      "name": "string",
+      "group": "string",
+      "state": "i64",
+      "stateName": "string",
+      "description": "string",
+      "pid": "i64",
+      "uptime": "i64?",
+      "uptimeText": "string?",
+      "spawnErr": "string",
+      "restarts": "i64",
+      "flapping": "bool",
+      "check": "SupervisorCheckResult?"
+    },
+    "SupervisorSnapshot": {
+      "project": "string",
+      "daemon": "string",
+      "version": "string",
+      "processes": "SupervisorProcess[]",
+      "summary": "SupervisorSummary"
+    },
+    "SupervisorSummary": {
+      "total": "number",
+      "running": "number",
+      "stopped": "number",
+      "fatal": "number",
+      "other": "number",
+      "flapping": "number",
+      "failing": "number"
+    },
     "SystemResources": {
       "images": {
         "total": "u32",

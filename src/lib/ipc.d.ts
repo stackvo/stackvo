@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 142 named types, 286 wrappers, 3 field(s) the
+ * Measured at generation: 149 named types, 293 wrappers, 4 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -1547,6 +1547,13 @@ export interface ProjectSpec {
 
 }
 
+export interface ProjectSupervisor {
+    /** 'ok' | 'noSupervisord' | 'noSocket' | 'stopped' */
+    reach: 'ok' | 'noSupervisord' | 'noSocket' | 'stopped';
+    /** SupervisorSnapshot? */
+    snapshot?: SupervisorSnapshot;
+}
+
 export interface Provider {
     /** string */
     name: string;
@@ -1919,6 +1926,100 @@ export interface StorageStats {
 
 /** string */
 export type StreamId = string;
+
+export interface SupervisorAlarm {
+    /** string */
+    project: string;
+    /** string */
+    process: string;
+    /** 'fatal' | 'flapping' | 'notAnswering' */
+    kind: 'fatal' | 'flapping' | 'notAnswering';
+    /** string */
+    detail: string;
+}
+
+export interface SupervisorCheck {
+    /** string */
+    project: string;
+    /** string */
+    process: string;
+    /** 'http' | 'tcp' */
+    kind: 'http' | 'tcp';
+    /** string */
+    target: string;
+    /** number? */
+    expectStatus?: number;
+    /** number? */
+    timeoutMs?: number;
+}
+
+export interface SupervisorCheckResult {
+    /** bool */
+    ok: boolean;
+    /** string */
+    detail: string;
+    /** number */
+    ms: number;
+}
+
+export interface SupervisorProcess {
+    /** string */
+    fullName: string;
+    /** string */
+    name: string;
+    /** string */
+    group: string;
+    /** i64 */
+    state: number;
+    /** string */
+    stateName: string;
+    /** string */
+    description: string;
+    /** i64 */
+    pid: number;
+    /** i64? */
+    uptime?: number;
+    /** string? */
+    uptimeText?: string;
+    /** string */
+    spawnErr: string;
+    /** i64 */
+    restarts: number;
+    /** bool */
+    flapping: boolean;
+    /** SupervisorCheckResult? */
+    check?: SupervisorCheckResult;
+}
+
+export interface SupervisorSnapshot {
+    /** string */
+    project: string;
+    /** string */
+    daemon: string;
+    /** string */
+    version: string;
+    /** SupervisorProcess[] */
+    processes: SupervisorProcess[];
+    /** SupervisorSummary */
+    summary: SupervisorSummary;
+}
+
+export interface SupervisorSummary {
+    /** number */
+    total: number;
+    /** number */
+    running: number;
+    /** number */
+    stopped: number;
+    /** number */
+    fatal: number;
+    /** number */
+    other: number;
+    /** number */
+    flapping: number;
+    /** number */
+    failing: number;
+}
 
 export interface SystemResources {
     images: { total: number; inUse: number; unused: number; size: number };
@@ -2815,6 +2916,25 @@ export interface StackvoApi {
    */
   schedulerLog(name: string, job: string, lines?: number): Promise<string>;
   schedulerRun(name: string, job: string): Promise<void>;
+  /**
+   * StackVo's own generated image for an nginx or caddy project runs supervisord as its command, with php-fpm and the web server under it — so every such project has had a supervisord in it the whole time and nothing could talk to it. Nothing is configured and nothing is stored: a project names its container. `reach` separates the ways this can be empty, because they look identical on screen and send somebody to different places — no supervisord in the image at all, an image built before the config grew a socket (rebuild), or a container that is not running.
+   */
+  supervisorProject(name: string): Promise<ProjectSupervisor>;
+  supervisorControl(name: string, scope: 'process' | 'group' | 'all', verb: 'start' | 'stop' | 'restart' | 'signal' | 'clearLog', target?: string, signal?: string): Promise<unknown>;
+  /**
+   * Where a FATAL says why. The last N bytes, which is the shape supervisord's own web interface uses; paging back through a log is a separate feature and is not pretended at.
+   */
+  supervisorLog(name: string, process: string, channel?: 'stdout' | 'stderr', lines?: number): Promise<string>;
+  /**
+   * supervisord reports that a process is up. It has no idea whether the thing inside it is answering — a php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 are all RUNNING, and that is the state somebody is staring at when they open this. One check per process, because a process either answers or it does not.
+   */
+  supervisorChecks(name: string): Promise<SupervisorCheck[]>;
+  supervisorCheckSave(check: SupervisorCheck): Promise<SupervisorCheck[]>;
+  supervisorCheckRemove(name: string, process: string): Promise<SupervisorCheck[]>;
+  /**
+   * Takes the check rather than an id so a form can try what is on screen before it is saved — the same reason supervisor_test takes a server record. Never fails: a probe that could not be made is a failing check, not an error.
+   */
+  supervisorCheckRun(check: SupervisorCheck): Promise<SupervisorCheckResult>;
   /**
    * Pre-flight the new-project form against project.schema.json + php-extensions.json before anything touches disk. Today a bad extension name is only discovered when the Docker build fails minutes later.
    */

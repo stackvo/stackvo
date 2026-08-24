@@ -385,6 +385,30 @@ onMounted(async () => {
     })
   );
 
+  /**
+   * Something broke on a server nobody is looking at.
+   *
+   * The backend does the noticing — a screen's own poll only runs while its
+   * page is open, which is the one case where a notification is not needed.
+   * Here the event only has to become an interruption.
+   *
+   * Unlike the operation notifications, this fires whether or not the window is
+   * in front: a process on somebody's server that has just given up is worth
+   * saying while they are reading a different page of this app, not only while
+   * they are in another application.
+   */
+  keep(
+    await listenAll(['supervisor:alarm'], (_event, alarm) => {
+      if (!alarm) return;
+      notify(
+        t(`supervisors.alarms.${alarm.kind}`, { process: alarm.process }),
+        // The server first, because the process name means nothing without it
+        // — two servers run a `php-fpm` and they are not the same one.
+        [alarm.server, alarm.detail].filter(Boolean).join(' · ')
+      );
+    })
+  );
+
   keep(
     await listenAll(['tray:open_project', 'tray:navigate'], (event, payload) => {
       if (!payload) return;
