@@ -257,6 +257,43 @@
       "default": {},
       "description": "OPTIONAL. Commands to run when this project is rebuilt, started or stopped. `pre-start` is deliberately NOT an event: there is no container to run in before a start, so every pre-start step would have to be a host step — the dangerous kind — and offering a slot whose only possible occupant is the dangerous kind is an invitation rather than a feature. A step that cannot be read is a WARNING and not an error: a typo in an optional convenience must not be the reason a project cannot be opened, so the step does not run and the reason is reported. Steps run in order and stop at the first failure, and a failed hook does NOT fail the start it hangs off — a container that started is started."
     },
+    "schedule": {
+      "type": "array",
+      "maxItems": 64,
+      "default": [],
+      "description": "OPTIONAL. Commands this project runs on a timer, as a table of NAMED jobs — each with its own last run and its own log — rather than the one all-or-nothing process `schedule:work` gives. Read by src-tauri/src/cron.rs and written by the Scheduled jobs panel. A job runs in a sidecar built from the project's own image, so it sees the same PHP, the same .env and the same bind mount as the site; there is deliberately no host-side job kind, because that would be the dangerous half of `hooks` on a timer with nobody watching. A malformed entry is a WARNING and the other jobs still run.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "cron", "exec"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "What the reader calls it, and — slugged — the name of its log: `cache-cleanup.log` is findable and `cron_1780135038297.log` is not. Two labels that slug the same are refused rather than allowed to share one log."
+          },
+          "cron": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 100,
+            "description": "Five fields: minute, hour, day of month, month, day of week. The portable subset only — `*`, `a`, `a-b`, `*/n`, `a-b/n` and comma-separated lists of those. Names (`MON`, `JAN`) and macros (`@daily`) are refused: each is a second spelling of something already expressible, and a second spelling is a second thing the matcher has to agree with. Day of week takes 7 as Sunday as well as 0, because both appear in real crontabs."
+          },
+          "exec": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Run inside the project's own container, as an argv ARRAY and never a command string — the same rule `commands` and `hooks` follow. The text reaches a shell script the app generates, and survives it: the argv is stored NUL-separated and handed to `env`, so nothing ever splits, globs or expands a word that came out of a repository. A job that needs a pipeline is a script, and a script is one argv element: [\"sh\", \"scripts/nightly.sh\"]."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "OPTIONAL. Absent means on: a schedule somebody wrote is one they meant to run, and requiring `\"enabled\": true` on every entry would make the common case carry the rare one's field. A paused job stays in the file and out of the schedule — pausing by deleting would lose the command, which is the part that took effort to write."
+          }
+        }
+      }
+    },
     "php": {
       "type": "object",
       "additionalProperties": false,

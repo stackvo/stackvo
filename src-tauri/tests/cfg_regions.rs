@@ -328,6 +328,51 @@ fn the_linux_runner_is_still_here_and_matches_what_ci_installs() {
         }
     }
 
+    // Two more habits, each one a red CI job that was green on the machine it
+    // was written on. Both are scoped to the file that had them, for the reason
+    // the `sh` rule above is: a check that flags correct code is one people
+    // learn to work around.
+    //
+    // **A test that needs a Docker engine.** `supervisor.rs` ran a real
+    // `docker exec` to prove a flag was passed. macos-latest has no `docker`
+    // binary, so it failed for a reason unrelated to the code — and on a runner
+    // that has one it still could not fail the way it was written for, because
+    // the command it ran exits non-zero either way. The argv is `docker_argv`'s
+    // now and is asserted as a string.
+    let supervisor = std::fs::read_to_string(repo_root().join("src-tauri/src/supervisor.rs"))
+        .expect("supervisor.rs is readable");
+    if let Some(tests) = supervisor.split("\n#[cfg(test)]\n").nth(1) {
+        for spelling in [".exec(", ".exec_with("] {
+            assert!(
+                !tests.contains(spelling),
+                "supervisor.rs's tests call {spelling} — that spawns `docker`, \
+                 which two of the three CI runners do not have. Assert \
+                 `docker_argv` instead: the argv is the thing under test."
+            );
+        }
+    }
+
+    // **A test hardcoding a number that `cfg` changes.** `dns::PORT` is 53 on
+    // Windows and 15353 everywhere else, and a test wrote a fixture saying
+    // `port 53` and called it somebody else's file. On Windows that fixture is
+    // byte-for-byte what this app writes, so the test failed on the single
+    // platform it was making a claim about. A fixture has to name a port and
+    // then say, in an assertion, that it is not ours.
+    let dns = std::fs::read_to_string(repo_root().join("src-tauri/src/dns.rs"))
+        .expect("dns.rs is readable");
+    if let Some(tests) = dns.split("\n#[cfg(test)]\n").nth(1) {
+        for spelling in ["port 53", "port 15353", "127.0.0.1#53", "127.0.0.1:15353"] {
+            assert!(
+                !tests.contains(spelling),
+                "dns.rs's tests write `{spelling}` as a literal, and `PORT` is \
+                 53 on Windows and 15353 elsewhere — so a fixture meant to be \
+                 somebody else's file is this app's own file on one of them. \
+                 Build the string from a constant and assert it differs from \
+                 `PORT`."
+            );
+        }
+    }
+
     let toolchain = std::fs::read_to_string(repo_root().join("src-tauri/rust-toolchain.toml"))
         .expect("rust-toolchain.toml is readable");
     let pinned = toolchain

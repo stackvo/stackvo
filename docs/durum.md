@@ -58,7 +58,9 @@ Yapılanlar burada durmuyor — `CHANGELOG.md` her teslimatın ne olduğunu ve n
 | Y-2 | **Yerel pencerenin denetimi** | ⛔ | `docs/accessibility.md` §4. Ölçüm ön yüzü bir tarayıcı motorunda sürüyor; pencere çerçevesi, menü çubuğu ve tepsi menüsü işletim sisteminin ve kapsam dışı. Bunları kapsayacak olan `tauri-driver` macOS'ta koşmuyor — yani W maddesiyle aynı makineye bağlı |
 | Y-3 | **Geçiş başına dil işareti** | 🟡 | `docs/accessibility.md` §4. Arayüz dili belgede duyuruluyor; iki dili karıştıran bir görünüm — Türkçe arayüzde İngilizce bir günlük satırı — değişimi geçiş başına işaretlemiyor |
 | B-1 | **"Bu istek neden yavaştı" tek ekranı** | 🟡 | Üç ayrı panel var: SPX (`hotspots`), sorgu günlüğü (`querylog.rs`, dört motor), zaman çizelgesi (`timeline.rs`). Eksik olan üçünü **tek bir istek** etrafında birleştiren görünüm ve **N+1 tespiti**. Yeni ölçüm gerekmiyor, ortak bir istek anahtarı ve bir görünüm gerekiyor. Rakiplerin hiçbirinde bu üçlü yok; Herd'ün profil aracı en yakını ve o bile sorgu günlüğünü görmüyor |
-| B-7 | **Tünelde kimlik ve kalıcı ad** | 🟡 | Altı sağlayıcı var ve rakipler 1–4 arası, yani bu taraf zaten önde. Eksik olan **temel kimlik doğrulama** ve **kalıcı adlandırılmış alan adı** — paylaşılan bir bağlantının ikinci sorusu |
+| R-1 | **Editörün kendisi konteynerin içinde — VS Code** | ⬜ | `ide.rs` bugün yalnız **hata ayıklayıcıyı** bağlıyor: `.vscode/launch.json`'a bir `Listen for StackVo` girdisi, PhpStorm'a yapıştırılacak XML. Editörün *kendisinin* konteynerde koşması — dil sunucusu, uzantılar, terminal, `composer` ve `artisan` hepsi imajın içinde, host'ta hiçbir PHP olmadan — hiçbir yerde yok. Gereken üç olgunun üçü de bu ağaçta **zaten duruyor**: konteyner adı `stackvo-<proje>` (`engine::container_name`), çalışma dizini `/var/www/html` (`generator.rs`), ve PHP tarafında kaynak zaten bind mount (`render_compose_service`). Eksik olan tek şey bir **adres**: VS Code çalışan bir konteynere `vscode-remote://attached-container+<hex>/<yol>` ile bağlanıyor, `<hex>` de `{"containerName":"/stackvo-shop"}` JSON'ının onaltılığı — yani bu üç olgudan **türetilebilen** bir dize, ve `pty::open_external`'ın harici terminali açtığı yerden açılabilir. Ölçüldü: `grep -rn 'attached-container\|folder-uri' src-tauri/src src contracts` → **0** |
+| R-2 | **Aynısı PhpStorm için** | 🔒 | Aynı iş değil, ve bunu önce ölçmek gerekiyordu: **JetBrains çalışan bir konteynere bağlanamıyor.** Gateway'in bağlantı tipleri SSH, WSL2, Dev Containers ve bulut eklentileri (Gitpod, Coder, CodeCanvas, Cloud Workstations); "attach to running container" diye bir tip yok. Kalan üç yolun üçü de bir bedel taşıyor, o yüzden §5'te bir soru: **(a) sshd** — Gateway'in resmî yolu, ama sftp alt sistemi *ve bir host portu* gerekiyor, ki ADR 0023 yan konteynerlere host portu vermiyor; **(b) join link** — arka ucu `docker exec` ile elle başlatıp (`remote-dev-server.sh run`) çıktısındaki `tcp://…` bağlantısını `jetbrains-gateway://` ile açmak, SSH'sız, ama arka ucu konteynere **StackVo'nun** koyması gerekiyor (JetBrains'in kendi asgarisi 2 çekirdek, 4 GB bellek, 5 GB disk); **(c)** PhpStorm'un kendi **Dev Containers**'ı, ki `devcontainer.json`'dan **ikinci bir konteyner kurar** — StackVo'nunki çalışırken kaynağın ikinci bir kopyası, ayrı bir veritabanı bağlantısı, ayrı bir port. `devcontainer.rs` o dosyayı zaten yazıyor ama **başka bir soruya** cevap olarak: kendi doküman başlığının dediği gibi, StackVo'su **olmayan** bir makine için |
+| R-3 | **Konteynerin bir editör taşıyabilmesi** | ⬜ | R-1 ve R-2'nin ortak ön koşulu, ve runtime'a göre değişiyor — bu yüzden ayrı bir satır. **libc:** PHP imajları `php:X-fpm`/`-apache` ve `dunglas/frankenphp:…-bookworm`, yani Debian ve glibc; ikisi de koşar. **Node `node:X-alpine`** (`generator.rs`), yani musl: VS Code sunucusunun musl derlemesi var, JetBrains arka ucunun **yok** ("glibc tabanlı imaj, Alpine değil", JetBrains'in kendi gereksinimi). Bun ve Deno de alpine; Python, Go, Ruby, Rust `-slim`, yani Debian. **Kaynak:** PHP'de mount var; Node'da **yalnız dev server örtüsü açıkken** (`devserver.rs`, bind + `node_modules` üstünde anonim volume). Örtü kapalıyken imaj kaynağın *anlık görüntüsü* — `devserver.rs`'in kendi başlığının söylediği gibi — ve orada açılan bir editörde yapılan düzenleme host'taki depoya **hiç ulaşmıyor**. Sessizce yanlış olan tek hâl bu, ve bir uyarı değil bir **kapı** gerektiriyor. **Kalıcılık:** VS Code sunucusu `~/.vscode-server`'a, JetBrains arka ucu `~/.cache/JetBrains`'e iniyor; ikisi de imaj yeniden kurulunca gidiyor ve her `Rebuild`'den sonra yüz megabayt yeniden iniyor. Adlandırılmış bir volume gerekiyor, ve şekli `sidecar::volume_name`'de zaten var. **git:** `generator.rs`'te opsiyonel bir toolchain girdisi, yani garanti değil |
 
 ### Anlatılmayan güçler
 
@@ -170,11 +172,18 @@ dosyada bir yapılacaklar listesi yok — `docs/accessibility.md` bir uygunluk
 beyanı ve açık maddeleri §2'ye taşındı; market mimarisi dokümanı bittiği için
 silindi (§1).
 
-**Kod yazılacak olan** — bir tane, ve küçük değil:
+**Kod yazılacak olanlar** — iki tane, ve ikisi de küçük değil:
 
 * **§2 B-1** — üç panelin (SPX, sorgu günlüğü, zaman çizelgesi) tek bir istek
   etrafında birleşmesi ve N+1 tespiti. Yeni ölçüm gerekmiyor; ortak bir istek
   anahtarı ve bir görünüm gerekiyor.
+* **§2 R-1 + R-3** — editörün konteynerin içinde koşması, VS Code tarafı. Bu
+  ikisi **birlikte** yapılır ve sırası tersten: önce R-3'ün kapısı (kaynak
+  gerçekten mount mı, libc doğru mu, sunucu için bir volume var mı), sonra
+  R-1'in adresi. Tersi, bir düğmenin editörü Node imajının içindeki *ölü
+  kopyaya* açması demek — ve o oturumda yazılan hiçbir satır depoya varmıyor.
+  R-1 tek başına küçük: bir dize, bir dosya ve bir `open`. Onu küçük olmaktan
+  çıkaran R-3, ve R-3'ün asıl işi compose çıktısında — yani `generator.rs`'te.
 
 İkinciydi ve kapandı: **§2 P**, paket uzatma noktaları. Üçünün üçü de indi — kullanıcının
 kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
@@ -209,7 +218,6 @@ kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
 * **§2 C** — moderasyon süreci ve yayıncı kimliği kaydı; kod değil.
 * **§2 Y-3** — geçiş başına dil işareti. Küçük, ve bir insan denetimi
   gerektirmiyor.
-* **§2 B-7** — tünelde temel kimlik doğrulama ve kalıcı adlandırılmış alan adı.
 * **§2 "Anlatılmayan güçler"** — dördü de bir sayfa ya da bir başlık; hiçbiri
   mühendislik değil.
 
@@ -227,8 +235,22 @@ görüyordu. Hepsi yeşil raporluyordu — ya da hiç raporlamıyordu.
 Kodla çözülmeyen maddeler. Cevaplanmadan planlanamazlar — sessizce varsayılan
 seçmek, bu listenin var olma sebebine aykırı.
 
-**Liste boş.** Beşinin dördü cevaplandı ve cevapları kod oldu; beşincisi
-sorulduğunda **zaten kapatılmış** olduğu görüldü.
+**Bir soru açık, ve yeni.** Önceki beşin dördü cevaplandı ve cevapları kod
+oldu; beşincisi sorulduğunda **zaten kapatılmış** olduğu görüldü. Altıncısı
+§2 R-2 ile birlikte geldi:
+
+* **PhpStorm konteynerin içinde nasıl koşar (§2 R-2)?** Üç yol var ve üçü de
+  bir şey feda ediyor. **sshd** resmî yol ama bir host portu istiyor, ki
+  ADR 0023 yan konteynerlere tam da onu vermiyor — ve gerekçesi hâlâ geçerli,
+  çünkü bu kez dinleyen şey bir kabuk. **Join link** portu istemiyor ama arka
+  ucun konteynere nasıl gireceğini soruyor: indiren StackVo olursa proje
+  imajına ürünün kendi indirdiği bir gigabaytlarca yabancı ikili giriyor,
+  indiren kullanıcı olursa "tek tık" iddiası düşüyor. **Dev Containers**
+  hiçbirini istemiyor ama ikinci bir konteyner kuruyor, yani projenin tek bir
+  çalışan hâli olduğu varsayımını — bu ürünün her yerinde duran varsayımı —
+  kırıyor. Dördüncü bir cevap da var ve yazılı olması gerekiyor: **hiçbiri**,
+  yani PhpStorm'a `devcontainer.rs`'in bugün yazdığı dosyayı verip orada
+  durmak. R-1'in VS Code tarafı bu sorunun cevabını beklemiyor; R-2 bekliyor.
 
 **Cevaplananlar:**
 
@@ -1267,13 +1289,13 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 
 | | Sayı | Nasıl sayıldı |
 |---|---|---|
-| Toplam IPC komutu | **287** | `contracts/ipc.json` → `commands` (284 Rust + 3 `frontend-plugin`) |
-| Bunlardan `#[tauri::command]` olarak yazılmış | **283** | `commands.rs`, `#[cfg(test)]` dışı |
-| Frontend kaynak dosyası | **148** | `src/**/*.{js,vue}`, spec dosyaları hariç |
+| Toplam IPC komutu | **305** | `contracts/ipc.json` → `commands` (302 Rust + 3 `frontend-plugin`) |
+| Bunlardan `#[tauri::command]` olarak yazılmış | **301** | `commands.rs`, `#[cfg(test)]` dışı |
+| Frontend kaynak dosyası | **153** | `src/**/*.{js,vue}`, spec dosyaları hariç |
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
-| `ipc.js` sarmalayıcısı | **280** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **106 modül, 101.841 satır** | `src-tauri/src/*.rs` |
+| `ipc.js` sarmalayıcısı | **298** | `api` nesnesinin üye sayısı |
+| Rust kaynağı | **109 modül, 108.088 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 

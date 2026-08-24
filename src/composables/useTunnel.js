@@ -11,6 +11,13 @@ import { api, asList } from '@/lib/ipc';
  *
  * Lifted out of `ProjectDetail.vue` with the Tunnel pane under §14.16, and
  * given the provider table when the pane stopped being cloudflared's.
+ *
+ * B-7 added the two things a link is asked about the moment it is shared: who
+ * else can open it, and whether it will still be this address tomorrow. Both
+ * are state of the *project* rather than of a running tunnel, so they load
+ * beside the status rather than out of it — and `tunnel.guarded` is still read
+ * off the running sidecar, because turning authentication on does not protect
+ * a link handed out before it.
  */
 
 /** How long to wait between polls, and how many times. */
@@ -22,6 +29,10 @@ export function useTunnel(name) {
   const providers = ref([]);
   const busy = ref(false);
   const error = ref(null);
+  /** Who may open this project's tunnel, and what its address is called. */
+  const identity = ref(null);
+  /** The password, only once somebody has asked to see it. */
+  const revealed = ref(null);
   /** Which provider the next start uses. Seeded from the table, not hard-coded
    *  here: "the default" is a fact about the providers and Rust owns them. */
   const chosen = ref('cloudflare');
@@ -47,6 +58,80 @@ export function useTunnel(name) {
       tunnel.value = null;
     }
     return tunnel.value;
+  }
+
+  /** Whether this link asks for a password at all. */
+  const authenticated = computed(() => !!identity.value?.authUser);
+
+  /** The name the chosen provider has been asked to keep, if any. */
+  const reservedName = computed(() => identity.value?.reserved?.[chosen.value] ?? '');
+
+  /**
+   * The identity, which is two questions and no password.
+   *
+   * Absent is not a failure: a machine with no keystore answers `keystore:
+   * false` and the pane says so rather than offering a switch that would fail
+   * when pressed.
+   */
+  async function loadIdentity() {
+    try {
+      identity.value = await api.tunnelIdentity(name.value);
+    } catch {
+      identity.value = null;
+    }
+    // A password shown for one project must not still be on screen after the
+    // pane moves to another.
+    revealed.value = null;
+    return identity.value;
+  }
+
+  /**
+   * Turn authentication on, generating the password when none was typed, or
+   * off with `null`.
+   */
+  async function saveAuth(credentials) {
+    busy.value = true;
+    error.value = null;
+    try {
+      const now = await api.tunnelAuthSet(name.value, credentials);
+      await loadIdentity();
+      // What was just set is worth showing: it is the thing that has to be
+      // handed to somebody along with the link.
+      revealed.value = now;
+      return now;
+    } catch (e) {
+      error.value = e;
+      return null;
+    } finally {
+      busy.value = false;
+    }
+  }
+
+  /** Ask for the password, deliberately and one project at a time. */
+  async function reveal() {
+    error.value = null;
+    try {
+      revealed.value = await api.tunnelAuthReveal(name.value);
+    } catch (e) {
+      error.value = e;
+    }
+    return revealed.value;
+  }
+
+  /** Remember the address this provider should keep, or forget it. */
+  async function saveName(reserved) {
+    busy.value = true;
+    error.value = null;
+    try {
+      await api.tunnelNameSet(name.value, chosen.value, reserved || null);
+      await loadIdentity();
+      return true;
+    } catch (e) {
+      error.value = e;
+      return false;
+    } finally {
+      busy.value = false;
+    }
   }
 
   /** The table, and with it which providers this machine has a token for. */
@@ -129,6 +214,14 @@ export function useTunnel(name) {
     provider,
     chosen,
     needsToken,
+    identity,
+    authenticated,
+    revealed,
+    reservedName,
+    loadIdentity,
+    saveAuth,
+    reveal,
+    saveName,
     busy,
     error,
     load,
