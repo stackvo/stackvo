@@ -82,7 +82,7 @@ const formCron = computed(() => {
 const formArgv = computed(() => (form.value ? argvFor(form.value.kind, form.value.text) : []));
 
 const formValid = computed(
-  () => Boolean(form.value?.label.trim()) && formArgv.value.length > 0 && Boolean(formCron.value),
+  () => Boolean(form.value?.label.trim()) && formArgv.value.length > 0 && Boolean(formCron.value)
 );
 
 async function submit() {
@@ -95,7 +95,7 @@ async function submit() {
       exec: formArgv.value,
       enabled: true,
     },
-    form.value.editing,
+    form.value.editing
   );
   if (ok) form.value = null;
 }

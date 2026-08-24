@@ -33,6 +33,7 @@ import OAuthPane from '@/components/project/OAuthPane.vue';
 import StripePane from '@/components/project/StripePane.vue';
 import LanPane from '@/components/project/LanPane.vue';
 import SchedulerPane from '@/components/project/SchedulerPane.vue';
+import SupervisorPane from '@/components/project/SupervisorPane.vue';
 import WorkersPane from '@/components/project/WorkersPane.vue';
 import TerminalPane from '@/components/project/TerminalPane.vue';
 import ReplPane from '@/components/project/ReplPane.vue';
@@ -969,6 +970,11 @@ onUnmounted(() => {
                table of individual jobs. Reading them apart would leave the
                reader unsure which of the two ran their task. -->
           <SchedulerPane :name="name" :running="running" />
+          <!-- The processes StackVo did not put there. An nginx or caddy image
+               runs supervisord as its command, so php-fpm and the web server
+               are under one — and until the generated config grew a socket,
+               nothing could see them. -->
+          <SupervisorPane :name="name" :running="running" />
         </template>
 
         <!-- SHELL ---------------------------------------------------------- -->

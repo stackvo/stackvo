@@ -90,6 +90,7 @@ pub mod spx;
 pub mod stats;
 pub mod stats_store;
 pub mod stripe;
+pub mod supervisor;
 pub mod template;
 pub mod timeline;
 pub mod tooling;
@@ -159,6 +160,14 @@ pub fn run() {
             let handle = app.handle().clone();
 
             tray::build(&handle)?;
+
+            // The one background loop this feature has, and it is here rather
+            // than in a screen because that is the whole point of it: a
+            // notification matters when nobody is looking, and a poll that
+            // only runs while its page is open can only tell somebody what is
+            // already in front of them. It watches the servers that asked to
+            // be watched and nothing else.
+            supervisor::watch(handle.clone());
 
             // Localised from the same preference the tray reads, so the menu
             // bar does not sit in English beside a Turkish window.
@@ -452,6 +461,13 @@ pub fn run() {
             commands::scheduler_stop,
             commands::scheduler_log,
             commands::scheduler_run,
+            commands::supervisor_control,
+            commands::supervisor_log,
+            commands::supervisor_project,
+            commands::supervisor_checks,
+            commands::supervisor_check_save,
+            commands::supervisor_check_remove,
+            commands::supervisor_check_run,
             commands::project_scaffold,
             commands::project_clone,
             commands::project_register,

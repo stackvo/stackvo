@@ -1102,6 +1102,31 @@ pub fn render_nginx_conf_with(document_root: &str, limits: &ServerSettings, extr
 /// server, foreground, everything to the container's stdout/stderr. The web
 /// server block is the only variable part, exactly as in
 /// `generate_supervisord_config`.
+///
+/// ## The one place byte parity is deliberately broken
+///
+/// Everything else here is held byte-for-byte against what the Bash generator
+/// wrote, and the module header says why. This function is not, and the reason
+/// is worth stating rather than discovering in a diff.
+///
+/// The Bash version wrote no `[unix_http_server]`, no `[rpcinterface:supervisor]`
+/// and no `[supervisorctl]`. Without those three, supervisord opens no RPC
+/// surface at all — so `supervisorctl status` inside the container answers
+/// "refused connection", and the two processes it is supervising cannot be
+/// seen, started or stopped by anything. Every nginx and caddy project has had
+/// a supervisord in it the whole time and nothing has ever been able to talk
+/// to it.
+///
+/// The socket is a **Unix socket inside the container**, mode 0700. Nothing is
+/// published, no port is opened, and no password is set because there is
+/// nobody outside the container to authenticate: reaching it means already
+/// being able to run a process in there, which is the same line
+/// [`crate::hooks`] draws around an `exec` step.
+///
+/// The cost is real and is paid once: a project built before this change has an
+/// image whose config predates the socket, and it has to be rebuilt before the
+/// Supervisor pane can reach it. The pane says so rather than reporting the
+/// project as broken.
 fn render_supervisord_conf(webserver: &str, command: &str) -> String {
     format!(
         "[supervisord]\n\
@@ -1109,6 +1134,16 @@ fn render_supervisord_conf(webserver: &str, command: &str) -> String {
          user=root\n\
          logfile=/var/log/supervisord.log\n\
          pidfile=/var/run/supervisord.pid\n\
+         \n\
+         [unix_http_server]\n\
+         file=/var/run/supervisor.sock\n\
+         chmod=0700\n\
+         \n\
+         [rpcinterface:supervisor]\n\
+         supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface\n\
+         \n\
+         [supervisorctl]\n\
+         serverurl=unix:///var/run/supervisor.sock\n\
          \n\
          [program:php-fpm]\n\
          command=/usr/local/sbin/php-fpm -F\n\
@@ -2173,6 +2208,33 @@ mod tests {
         // Bash's final heredoc has no blank line after the last key.
         assert!(conf.ends_with("stderr_logfile_maxbytes=0\n"));
         assert!(!conf.ends_with("\n\n"));
+    }
+
+    /// The three sections that make the daemon reachable, and the reason this
+    /// file is the one that no longer matches Bash byte for byte.
+    ///
+    /// Asserted rather than left to the parity fixture because the absence was
+    /// invisible: supervisord starts happily without them, supervises its two
+    /// programs, and simply has no interface. Nothing failed — there was just
+    /// nothing to talk to.
+    #[test]
+    fn supervisord_opens_a_socket_so_something_can_ask_it_what_it_is_running() {
+        let conf = render_supervisord_conf("nginx", "/usr/sbin/nginx -g 'daemon off;'");
+
+        assert!(conf.contains("[unix_http_server]\nfile=/var/run/supervisor.sock\nchmod=0700\n"));
+        assert!(conf.contains(
+            "[rpcinterface:supervisor]\n\
+             supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface\n"
+        ));
+        assert!(conf.contains("[supervisorctl]\nserverurl=unix:///var/run/supervisor.sock\n"));
+
+        // Inside the container and nowhere else. An inet server here would be
+        // a port on every project, unauthenticated, for a convenience.
+        assert!(!conf.contains("inet_http_server"), "nothing is published");
+        assert!(!conf.contains("port="), "no port is opened");
+
+        // And the programs still come after, unchanged.
+        assert!(conf.contains("[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\n"));
     }
 
     #[test]

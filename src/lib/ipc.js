@@ -711,6 +711,19 @@ export const api = {
   schedulerLog: (name, job, lines) => call('scheduler_log', { name, job, lines }),
   /** Run one job now, by the same path a tick would. */
   schedulerRun: (name, job) => call('scheduler_run', { name, job }),
+
+  /** The supervisord inside one project's own container. Nothing to configure. */
+  supervisorProject: (name) => call('supervisor_project', { name }),
+  supervisorControl: (name, scope, verb, target, signal) =>
+    call('supervisor_control', { name, scope, verb, target, signal }),
+  supervisorLog: (name, process, channel, lines) =>
+    call('supervisor_log', { name, process, channel, lines }),
+  /** The probes that answer what RUNNING cannot. One per process. */
+  supervisorChecks: (name) => call('supervisor_checks', { name }),
+  supervisorCheckSave: (check) => call('supervisor_check_save', { check }),
+  supervisorCheckRemove: (name, process) => call('supervisor_check_remove', { name, process }),
+  /** Try a check before it is saved. */
+  supervisorCheckRun: (check) => call('supervisor_check_run', { check }),
   /** Pre-flight a spec before anything touches disk. */
   projectValidate: (name, spec) => call('project_validate', { name, spec }),
   projectCreate: (spec) => call('project_create', { spec }),
