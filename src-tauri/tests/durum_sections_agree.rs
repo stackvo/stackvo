@@ -180,17 +180,29 @@ fn the_windows_branch_can_be_built_here_and_the_document_may_not_say_otherwise()
 
 /// What is actually left of #35, so the next reader starts in the right place.
 ///
-/// Type-checking is not running, and the document has to keep saying which of
-/// the two it has. The word is checked rather than the sentence: what §35's
-/// remaining half *is* cannot be settled by a parser, but whether the document
-/// still distinguishes the two can be.
+/// This gate has now turned over twice, and both turns are the same shape: it
+/// pins the distinction the document is currently at risk of losing, and that
+/// distinction moves as the work does.
+///
+/// It first asked whether §4 still said the Windows branch could not be
+/// *compiled* here — `cargo-xwin` had removed that obstacle and the sentence
+/// had not caught up. Then it asked whether the document still separated
+/// type-checking from **running**, because passing a type check is not running
+/// a suite and the two are easy to blur in a summary.
+///
+/// Both are settled: the branch compiles here and the suite runs on CI. The
+/// distinction that can be lost now is the next one along — **running is not
+/// passing.** The first real Windows run produced nineteen failures, two of
+/// them product bugs; a §4 that says "Windows runs now" and stops has told a
+/// reader the work is done.
 #[test]
 fn the_order_still_says_which_half_of_35_is_left() {
     let bullet = order_bullets(&durum())
         .remove(&35)
         .expect("§4 still tracks #35");
     assert!(
-        bullet.contains("koşması") || bullet.contains("koşma"),
-        "§4's #35 no longer says that the remaining half is the tests RUNNING: {bullet}"
+        bullet.contains("yeşil"),
+        "§4's #35 no longer distinguishes the suite RUNNING from the suite \
+         PASSING, which is the half that is left: {bullet}"
     );
 }
