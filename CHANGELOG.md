@@ -7,6 +7,45 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The suite runs on Windows, and the two product bugs it found are fixed.**
+  §3 #35's open half was whether the branches *run*, not whether they compile.
+  They run now, and the first real Windows run failed nineteen tests. Sorting
+  them apart mattered more than the count: **two were the product**, the rest
+  were tests asserting the platform they were written on.
+
+  `dns.rs` built `/etc/resolver` paths with `PathBuf::join`, which uses the
+  **host's** separator — so the same plan rendered `/etc/resolver\test` on
+  Windows and every command built from it named a file that cannot exist
+  anywhere. A path belonging to another operating system is a string; only a
+  path on this machine is a `Path`.
+
+  `runner.rs` had no Windows coverage at all while looking thoroughly tested:
+  nine of its tests drove `sh -c`, and Windows has no `sh`. That is the module
+  which spawns `docker compose`. They run `node` now — already required to build
+  this repository, writes the bytes it is given on every platform, one payload
+  instead of a per-platform pair. `cmd` was the obvious alternative and can
+  neither write a bare carriage return nor omit a trailing newline, which are
+  the two cases those tests exist for.
+
+  The rest were assertions about separators. `imports.rs` wrote paths into JSON
+  unescaped, so on Windows the fixture was invalid JSON, the parser found no
+  sites, and five tests failed on a claim about Valet rather than about a file
+  that never loaded; it also declined to create the symlinks a Valet layout
+  *is*, which is a fixture quietly building less than it says. `agents.rs`
+  compared a rendered path against a POSIX literal. `stats.rs` asserted a
+  tighter tolerance than `breakdown_is_credible` enforces, so a breakdown the
+  code calls fine failed the test that checks it — one constant now.
+
+  `cfg_regions.rs` refuses a POSIX shell in `runner.rs`'s tests, scoped to that
+  file on purpose: `quickcmd.rs` names `sh` throughout and is right to, because
+  that `sh` runs inside a container. The first version flagged it, and a gate
+  that fails correct code is one people work around.
+
+  **Three other jobs went green with it.** `driver` closes §3 #12 — the suite
+  had run 5/5 in a container here and the last open question was CI, which is
+  now answered. `coverage` and `ubuntu-latest` were red for reasons the previous
+  round fixed. Seven jobs, six green; `windows-latest` is the one left.
+
 - **`tools/before-push.sh` now asks what CI asks, which it had been claiming
   since the day it was written.** Its opening line is "everything CI will ask,
   asked here first" and ADR 0030 is the decision behind it. It was not true, and
