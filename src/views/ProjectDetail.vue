@@ -211,12 +211,6 @@ const running = computed(() => !!project.value?.running);
 /** Both URLs are shown; Traefik serves the project on HTTPS and redirects HTTP. */
 const httpsUrl = computed(() => (project.value?.domain ? `https://${project.value.domain}` : null));
 
-/** Strip the diagnostics the reader adds, so the editor shows the file itself. */
-function stripDiagnostics(manifest) {
-  const { valid, errors, warnings, ...rest } = manifest ?? {};
-  return rest;
-}
-
 async function saveManifest() {
   error.value = null;
   manifestSaving.value = true;
@@ -381,8 +375,7 @@ watch(
  */
 async function reloadManifest() {
   try {
-    const m = await api.projectManifestRead(props.name);
-    manifestText.value = JSON.stringify(stripDiagnostics(m), null, 2);
+    manifestText.value = await api.projectManifestText(props.name);
     manifestDirty.value = false;
   } catch {
     manifestText.value = '';

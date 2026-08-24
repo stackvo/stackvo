@@ -2043,8 +2043,24 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("loc");
 
-        std::fs::write(&path, "# somebody's file\nnameserver 127.0.0.1\nport 53\n").unwrap();
-        assert!(!file_points_at_us(&path), "port 53 is not this responder");
+        // A port that is nobody's here on any platform. `53` was the literal
+        // before, and on Windows `PORT` *is* 53 — so the file the test calls
+        // foreign was byte-for-byte the file this app writes there, and the
+        // assertion failed on the one platform it was making a claim about
+        // (CI, windows-latest). 5353 is mDNS, which the module comment above
+        // names as the port this responder deliberately does not take.
+        const FOREIGN_PORT: u16 = 5353;
+        assert_ne!(FOREIGN_PORT, PORT, "the fixture has to be somebody else's");
+
+        std::fs::write(
+            &path,
+            format!("# somebody's file\nnameserver 127.0.0.1\nport {FOREIGN_PORT}\n"),
+        )
+        .unwrap();
+        assert!(
+            !file_points_at_us(&path),
+            "port {FOREIGN_PORT} is not this responder",
+        );
 
         // The summary skips the comment and reports the first line that says
         // something.

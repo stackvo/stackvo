@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../stackvo-service-packages"
+		},
+		{
+			"path": "../www/stackvo-test-projects"
 		}
 	]
 }

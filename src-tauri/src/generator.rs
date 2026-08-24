@@ -1924,6 +1924,7 @@ mod tests {
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            providers: Vec::new(),
             local: Vec::new(),
         }
     }

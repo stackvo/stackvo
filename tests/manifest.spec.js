@@ -284,6 +284,73 @@ describe('fields the form does not edit but must not lose', () => {
     expect(spec).not.toHaveProperty('services');
   });
 
+  it('carries every block the sheet has no fields for', () => {
+    // Measured, not feared: before this, changing a PHP version through the
+    // settings sheet deleted all of these at once and said nothing. The form
+    // builds the WHOLE file, so a block it forgets is a block Save removes.
+    const manifest = {
+      name: 'shop',
+      domain: 'shop.loc',
+      runtime: 'php',
+      lanShare: true,
+      hooks: { 'post-start': [{ exec: ['php', 'artisan', 'migrate'] }] },
+      schedule: [{ label: 'nightly', cron: '0 3 * * *', exec: ['php', 'artisan', 'x'] }],
+      commands: { seed: { exec: ['php', 'artisan', 'db:seed'], about: 'seed it' } },
+      sidecars: { search: { image: 'typesense/typesense:27.1' } },
+      providers: { staging: { image: 'a/b:1', pull: ['dump'] } },
+      php: { version: '8.4', xdebug: true, extensions: ['mbstring'] },
+    };
+
+    const spec = formToSpec(formFromManifest(manifest), 'stackvo.loc');
+
+    expect(spec.lan_share).toBe(true);
+    expect(spec.hooks).toEqual(manifest.hooks);
+    expect(spec.schedule).toEqual(manifest.schedule);
+    expect(spec.commands).toEqual(manifest.commands);
+    expect(spec.sidecars).toEqual(manifest.sidecars);
+    expect(spec.providers).toEqual(manifest.providers);
+    // The switch, not the extension: the Xdebug pane writes it and this sheet
+    // must not be what turns it back off.
+    expect(spec.php.xdebug).toBe(true);
+  });
+
+  it('writes no key for a block the manifest never had', () => {
+    const spec = formToSpec(
+      formFromManifest({
+        name: 'shop',
+        domain: 'shop.loc',
+        runtime: 'php',
+        hooks: {},
+        commands: {},
+        sidecars: {},
+        schedule: [],
+        php: { version: '8.4', extensions: [] },
+      }),
+      'stackvo.loc'
+    );
+
+    for (const key of ['lan_share', 'hooks', 'schedule', 'commands', 'sidecars', 'providers']) {
+      expect(spec).not.toHaveProperty(key);
+    }
+    expect(spec.php).not.toHaveProperty('xdebug');
+  });
+
+  it('keeps extensions the last key of the php block, with xdebug above it', () => {
+    // W-01 is about the bytes: `php.extensions` is the last key in the file,
+    // so anything the form adds to that block goes above it.
+    const spec = formToSpec(
+      formFromManifest({
+        name: 'shop',
+        domain: 'shop.loc',
+        runtime: 'php',
+        php: { version: '8.4', xdebug: true, extensions: ['mbstring'] },
+      }),
+      'stackvo.loc'
+    );
+
+    expect(Object.keys(spec.php)).toEqual(['version', 'xdebug', 'extensions']);
+  });
+
   it('does not share the arrays with the manifest it was loaded from', () => {
     const manifest = { name: 'shop', domain: 'shop.loc', runtime: 'php', aliases: ['a.loc'] };
     const form = formFromManifest(manifest);

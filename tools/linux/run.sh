@@ -73,6 +73,13 @@ if [ "${1:-}" = "--driver" ]; then
     set -euo pipefail
     cd /repo
     npm ci --no-audit --no-fund
+    # Real sidecars, not stubs: `beforeBuildCommand` runs `sidecars.mjs
+    # --verify`, which refuses a placeholder — correctly, since this step builds
+    # the application the way it ships. Without this the run stopped at
+    #   sidecars: these are placeholders, not builds
+    # on any machine that had never built the Linux binaries, which reads as a
+    # broken driver suite rather than as a missing step.
+    npm run sidecars:release
     npm run build
     npx tauri build --debug --no-bundle
     command -v tauri-driver >/dev/null || cargo install tauri-driver --locked
@@ -81,6 +88,18 @@ if [ "${1:-}" = "--driver" ]; then
   '
   exit $?
 fi
+
+# `tauri-build` checks every `externalBin` file exists on any cargo build of
+# this package, and it looks for the CONTAINER's triple — so the host's stubs
+# are not ones. The `--windows` branch below has done this since the day it was
+# written, for exactly the reason it gives; the Linux side never did, so on a
+# machine that had not built Linux sidecars this script stopped at
+#   resource path `binaries/stackvo-aarch64-unknown-linux-gnu` doesn't exist
+# which reads as a missing file rather than as a missing step. Stubs are enough
+# here: nothing in the probe run executes them.
+# `uname -m` inside the container, not out here: the host says `arm64` and
+# the triple wants `aarch64`.
+run bash -lc 'node ../tools/sidecars.mjs --stubs --target "$(uname -m)-unknown-linux-gnu"'
 
 # The exit status is the point of running this at all: the first version of
 # this script ended on a pipeline whose status was the tail's, so a failing

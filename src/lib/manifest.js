@@ -186,6 +186,13 @@ export function blankForm() {
     langBuild: '',
     langStart: '',
     langPort: 8080,
+    // Everything the manifest can say that this form does not edit, carried
+    // through untouched. `formToSpec` builds the WHOLE file, so a block missing
+    // here is a block that Save deletes — measured, not feared: changing a PHP
+    // version through this sheet used to drop the project's hooks, scheduled
+    // jobs, declared commands, sidecars, provider recipes, LAN sharing and the
+    // Xdebug switch, all at once and all silently.
+    carried: {},
   };
 }
 
@@ -221,6 +228,24 @@ export function formFromManifest(manifest) {
     form.langStart = manifest.lang.start ?? '';
     form.langPort = manifest.lang.port ?? 8080;
   }
+
+  // The blocks this form has no fields for. Kept in the file's own spelling so
+  // `formToSpec` can hand them straight back — the payload already carries them
+  // that way, which is the property `manifest::Document` and the file-shaped
+  // serialisers exist to give it.
+  form.carried = {};
+  if (manifest.lanShare) form.carried.lan_share = true;
+  for (const key of ['hooks', 'schedule', 'commands', 'sidecars', 'providers']) {
+    const block = manifest[key];
+    const empty =
+      block == null ||
+      (Array.isArray(block) ? block.length === 0 : Object.keys(block).length === 0);
+    if (!empty) form.carried[key] = block;
+  }
+  // The switch, not the extension: `php.extensions` decides what the image
+  // carries and this decides the mode the container starts in. The Xdebug pane
+  // writes it, and this form must not be the thing that turns it back off.
+  if (manifest.php?.xdebug) form.carried.xdebug = true;
 
   if (manifest.node) {
     form.nodeVersion = manifest.node.version ?? '';
@@ -265,6 +290,17 @@ export function formToSpec(form, tld) {
   if (form.aliases?.length) spec.aliases = [...form.aliases];
   if (form.services?.length) spec.services = [...form.services];
 
+  // The blocks nothing on this sheet edits, put back exactly as they came. The
+  // order matters as little as it does in the file — `manifest::to_json` lays
+  // the document out on the Rust side and reserves the end of it for
+  // `php.extensions` — but every one of these has to be here, because this
+  // object IS the file the writer renders.
+  const carried = form.carried ?? {};
+  if (carried.lan_share) spec.lan_share = true;
+  for (const key of ['hooks', 'schedule', 'commands', 'sidecars', 'providers']) {
+    if (carried[key]) spec[key] = carried[key];
+  }
+
   if (form.runtime === 'node') {
     spec.node = {
       version: form.nodeVersion,
@@ -288,7 +324,10 @@ export function formToSpec(form, tld) {
   } else {
     spec.server = form.server;
     spec.document_root = form.documentRoot;
-    spec.php = { version: form.phpVersion, extensions: [...form.extensions] };
+    spec.php = { version: form.phpVersion };
+    // Above `extensions`, which the writer keeps last (W-01).
+    if (carried.xdebug) spec.php.xdebug = true;
+    spec.php.extensions = [...form.extensions];
   }
 
   return spec;

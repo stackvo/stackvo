@@ -359,6 +359,7 @@ pub async fn list_projects(root: &std::path::Path) -> Result<Vec<Project>> {
                         hooks: Default::default(),
                         commands: Default::default(),
                         sidecars: Default::default(),
+                        providers: Vec::new(),
                         local: Vec::new(),
                     },
                 ));
@@ -5611,6 +5612,21 @@ pub fn project_manifest_read(state: State<'_, AppState>, name: String) -> Result
     )
 }
 
+/// The committed manifest as **text**, which is what the editor edits.
+///
+/// Its own command rather than a field on the one above, because the two
+/// answers have different shapes and only one of them may be posted back:
+/// `project_manifest_write` parses the file's spelling, and the reader's view
+/// is spelled for this boundary. See [`manifest::read_text`].
+#[tauri::command]
+pub fn project_manifest_text(state: State<'_, AppState>, name: String) -> Result<String> {
+    let root = state.root()?;
+    manifest::read_committed_text(
+        &workspace::project_dir(&root, &name)?.join("stackvo.json"),
+        &name,
+    )
+}
+
 /// This machine's overrides for a project (B-2).
 #[tauri::command]
 pub fn project_local_read(
@@ -5831,13 +5847,16 @@ pub fn project_requirements(state: State<'_, AppState>, name: String) -> Result<
     let manifest = manifest::read(&dir.join("stackvo.json"), &name)?;
 
     let env = Env::load(&root)?;
-    let catalog = crate::contracts::env_schema();
 
     let declared = manifest
         .services
         .iter()
         .map(|id| DeclaredService {
-            known: catalog.knows_service(id),
+            // The same question the manifest reader asks, answered by the same
+            // function: a card saying "no template for this" beside a Market
+            // that installs it is the disagreement `is_known_service` exists to
+            // end.
+            known: crate::market::is_known_service(id),
             enabled: env.service_enabled(id),
             id: id.clone(),
         })
@@ -7421,7 +7440,16 @@ pub async fn project_delete(
 /// Docker will refuse to reuse, still a row in `docker ps -a`, and still the
 /// thing that makes recreating a project under the same name fail.
 async fn remove_project_containers(name: &str) {
-    let mut ids = vec![name.to_string(), crate::tunnel::container_id(name)];
+    let mut ids = vec![
+        name.to_string(),
+        crate::tunnel::container_id(name),
+        // The tunnel's guard, if authentication was ever switched on. It
+        // outlives the tunnel by design — it is started before the sidecar and
+        // removed with it — so a project deleted while one is up would leave an
+        // nginx container holding a name and a password for a project that no
+        // longer exists.
+        crate::tunnelid::guard_id(name),
+    ];
     ids.extend(
         crate::worker::Kind::ALL
             .iter()
@@ -10388,6 +10416,81 @@ pub fn tunnel_token_set(provider: String, token: Option<String>) -> Result<bool>
     }
 }
 
+/// What this project's tunnel asks for, and what it is called (B-7).
+///
+/// Never the password: that has a command of its own, named after what it
+/// does. This one answers the two questions a pane opens with — is this link
+/// protected, and does this provider have an address kept for it.
+#[tauri::command]
+pub fn tunnel_identity(name: String) -> Result<crate::tunnelid::Identity> {
+    crate::tunnelid::identity(&name)
+}
+
+/// Turn tunnel authentication on with a credential, or off with `null`.
+///
+/// One command for both directions, like `tunnel_token_set`. An empty password
+/// means "generate one", which is the path the button takes: a field somebody
+/// has to fill in is a field that gets `test123`, and this one sits behind an
+/// address on the public internet.
+///
+/// Returns the credential now in force, password included — see
+/// `tunnel_auth_reveal` for why this one secret is readable.
+#[tauri::command]
+pub fn tunnel_auth_set(
+    name: String,
+    credentials: Option<crate::tunnelid::Credentials>,
+) -> Result<Option<crate::tunnelid::Credentials>> {
+    match credentials {
+        None => crate::tunnelid::set(&name, None),
+        Some(asked) => {
+            // `generate` settles the user name — blank becomes the default —
+            // and its password is kept only when none was typed.
+            let mut credentials = crate::tunnelid::generate(Some(&asked.user));
+            if !asked.password.trim().is_empty() {
+                credentials.password = asked.password;
+            }
+            crate::tunnelid::set(&name, Some(credentials))
+        }
+    }
+}
+
+/// The tunnel's credential, in full.
+///
+/// The one secret in this app that is readable, and deliberately: a Stripe key
+/// and a provider token are *entered* from elsewhere and never needed again,
+/// while this one is generated here and has to be typed into a browser on
+/// somebody else's phone. A password nobody can read is a password nobody can
+/// use.
+#[tauri::command]
+pub fn tunnel_auth_reveal(name: String) -> Result<Option<crate::tunnelid::Credentials>> {
+    crate::tunnelid::reveal(&name)
+}
+
+/// Remember the address one provider should keep for this project, or forget
+/// it with `null`.
+///
+/// Refused for a provider that keeps nothing, rather than stored and silently
+/// ignored: three of the nine hand out a new address on every start, and a
+/// name sitting in a file for one of them would look like configuration that
+/// works.
+#[tauri::command]
+pub fn tunnel_name_set(name: String, provider: String, reserved: Option<String>) -> Result<()> {
+    let p = crate::tunnel::provider(&provider)?;
+    let Some(shape) = p.reserved else {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("{provider} hands out a new address on every start"),
+        ));
+    };
+
+    // Checked here rather than by the client, which would cost an image pull,
+    // a start and a log read to say the same thing.
+    if let Some(value) = reserved.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+        crate::tunnelid::validate_name(value, shape.dotted)?;
+    }
+    crate::tunnelid::set_name(&name, &provider, reserved.as_deref())
+}
+
 /// Start a tunnel sidecar for one project.
 ///
 /// An operation, not a mutation: the first start pulls the provider's image,
@@ -10436,12 +10539,73 @@ pub async fn tunnel_start(
         .ok()
         .and_then(|env| env.get("DOCKER_DEFAULT_NETWORK").map(str::to_string))
         .unwrap_or_else(|| "stackvo-net".to_string());
+    let port = crate::tunnel::internal_port(&manifest);
+
+    // B-7, the second half: the address this provider is asked to keep. Stored
+    // per project AND per provider, because a name is granted by one account
+    // on one service — an ngrok domain is not a tailnet hostname.
+    let reserved = crate::tunnelid::name_of(&name, provider.id);
+    if reserved.is_none() && provider.reserved.is_some_and(|r| !r.in_log) {
+        // The one provider whose address cannot be discovered: a named
+        // Cloudflare tunnel is routed from Cloudflare's own configuration and
+        // `cloudflared` never prints the hostname. Starting anyway would give
+        // a tunnel that works and a pane that says "connecting" for ever.
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("{} needs the hostname its tunnel is routed at", provider.id),
+        )
+        .with_hint("Set the tunnel's hostname before starting it."));
+    }
+
+    // B-7, the first half: a credential in the keystore IS authentication
+    // being on. When there is one, the sidecar is pointed at a guard of ours
+    // rather than at the project, and the guard is what asks for a password.
+    let credentials = crate::tunnelid::read(&name)?;
+    let guard = match &credentials {
+        Some(credentials) => {
+            let id = crate::tunnelid::guard_id(&name);
+            // A guard left over from a previous start holds the name, and it
+            // holds the previous password.
+            let _ = engine::remove_container(&id).await;
+
+            let args =
+                crate::tunnelid::guard_args(&name, &engine::container_name(&name), port, &network);
+            let output = tokio::process::Command::new("docker")
+                .args(&args)
+                // The credential exists in this process and in the child's
+                // environment, and nowhere else: not in the workspace, not in
+                // a mount, and not in the argv the console prints.
+                .env(crate::tunnelid::AUTH_ENV, credentials.header_value())
+                .output()
+                .await
+                .map_err(|e| Error::io("running docker", e))?;
+            if !output.status.success() {
+                return Err(Error::new(
+                    Code::Conflict,
+                    String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                ));
+            }
+            Some(engine::container_name(&id))
+        }
+        None => {
+            // Nothing to guard, and nothing left guarding: a container from a
+            // start when authentication *was* on would sit there for ever
+            // serving a password nobody is being asked for.
+            let _ = engine::remove_container(&crate::tunnelid::guard_id(&name)).await;
+            None
+        }
+    };
+
     let args = crate::tunnel::run_args(
         provider,
-        &name,
-        manifest.domain.as_deref(),
-        crate::tunnel::internal_port(&manifest),
-        &network,
+        &crate::tunnel::Plan {
+            project: &name,
+            domain: manifest.domain.as_deref(),
+            port,
+            network: &network,
+            reserved: reserved.as_deref(),
+            guard: guard.as_deref(),
+        },
     );
 
     // Whatever is left of a previous tunnel, gone before this one starts: the
@@ -10455,7 +10619,7 @@ pub async fn tunnel_start(
     };
 
     let operation_id = events::next_operation_id("tunnel");
-    runner::run_operation(
+    let started = runner::run_operation(
         &events::sink(&app),
         runner::Operation {
             operation_id: &operation_id,
@@ -10470,7 +10634,15 @@ pub async fn tunnel_start(
             env: &env,
         },
     )
-    .await?;
+    .await;
+
+    // A guard with no tunnel in front of it protects nothing and is invisible
+    // — it has no pane of its own, so it would only ever be found in
+    // `docker ps`.
+    if started.is_err() && guard.is_some() {
+        let _ = engine::remove_container(&crate::tunnelid::guard_id(&name)).await;
+    }
+    started?;
     Ok(operation_id)
 }
 
@@ -10482,6 +10654,11 @@ pub async fn tunnel_start(
 #[tauri::command]
 pub async fn tunnel_stop(state: State<'_, AppState>, name: String) -> Result<()> {
     let _busy = state.inflight.acquire(format!("tunnel:{name}"))?;
+    // The guard first, and unconditionally: it is removed even when there was
+    // none to remove, because the alternative is reading the keystore to find
+    // out — and a keystore that says "no credential" while a guard is running
+    // is exactly the state this line exists to end.
+    let _ = engine::remove_container(&crate::tunnelid::guard_id(&name)).await;
     engine::remove_container(&crate::tunnel::container_id(&name)).await
 }
 

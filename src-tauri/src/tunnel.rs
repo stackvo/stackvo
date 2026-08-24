@@ -22,6 +22,21 @@
 //! container, the shape of the URL it prints, and whether it needs a token.
 //! Adding the ninth is a row, not a branch.
 //!
+//! The ninth is here now, and it was added as a row: `cloudflare_named` is the
+//! same client as `cloudflare`, told to run a tunnel that already exists
+//! instead of inventing one — because the two halves of that trade, "an
+//! address in ten seconds" and "the same address tomorrow", are what B-7 is
+//! about.
+//!
+//! ## The second question about a link you just pasted
+//!
+//! Who else can open it, and will it still be this address tomorrow. Neither
+//! is a provider setting here: authentication belongs to
+//! [`crate::tunnelid`]'s guard, which every provider reaches identically, and
+//! a reserved name is a per-provider flag whose result is **checked** rather
+//! than assumed — [`TunnelStatus::reserved_honoured`], and the measurement
+//! behind it, are in that module's note.
+//!
 //! ## What each sidecar is pointed at
 //!
 //! The project container directly, never Traefik: with SSL on, every project
@@ -104,6 +119,45 @@ pub const ID_PREFIX: &str = "tunnel-";
 /// before any URL exists to infer it from.
 pub const PROVIDER_LABEL: &str = "stackvo.tunnel.provider";
 
+/// Whether this sidecar forwards through [`crate::tunnelid`]'s guard.
+///
+/// On the sidecar rather than inferred from a running guard: the question the
+/// pane asks is "is the link I handed out asking for a password", and only the
+/// container that was actually pointed somewhere can answer it. A guard
+/// started after the tunnel protects nothing.
+pub const GUARDED_LABEL: &str = "stackvo.tunnel.guarded";
+
+/// The name this sidecar asked its provider to keep, where one was asked for.
+///
+/// Read back rather than remembered, for the reason the whole module reads its
+/// state off the engine: a reserved name that was requested and not granted is
+/// the failure this label exists to make visible, and it can only be seen by
+/// comparing what was asked with what the client printed.
+pub const RESERVED_LABEL: &str = "stackvo.tunnel.reserved";
+
+/// What a provider is able to keep, for the providers that keep anything.
+///
+/// The distinction that matters is [`Self::kind`]: ngrok reserves a whole
+/// hostname (`shop.ngrok-free.app`) and localtunnel one label of one (`shop`),
+/// and a field that asked for the wrong one of those costs an image pull and a
+/// failed start to discover.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Reserved {
+    /// The provider's own word for it: `subdomain`, `domain`, `hostname` or
+    /// `name`. Also the translation key the field's label is looked up under.
+    pub kind: &'static str,
+    /// Whether the field takes a whole domain rather than one label.
+    pub dotted: bool,
+    /// Whether the client still prints the address it ended up on.
+    ///
+    /// False for exactly one provider: a Cloudflare named tunnel is routed by
+    /// a hostname configured in Cloudflare's own dashboard, and `cloudflared`
+    /// never learns it — so the address can only be the one the user typed
+    /// here, and it cannot be checked against anything.
+    pub in_log: bool,
+}
+
 /// One tunnel provider, as data.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,6 +189,13 @@ pub struct Provider {
     /// the stronger claim, and it is true only of the ones no account stood in
     /// the way of. See the module note.
     pub verified: bool,
+    /// What this provider can be asked to keep between starts, if anything.
+    ///
+    /// `None` is the honest answer for three of them and the reason the field
+    /// exists: a quick tunnel's address is new on every start, and the pane
+    /// has to be able to say that in front of the field rather than after
+    /// somebody has registered one in a dashboard.
+    pub reserved: Option<Reserved>,
     /// Whether the sidecar runs inside the project container's network
     /// namespace rather than beside it on the stack network.
     ///
@@ -157,6 +218,11 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: true,
         session_minutes: None,
         verified: true,
+        // A quick tunnel is quick because nobody registered anything, and it
+        // holds nothing: the four words change on every start. The named
+        // Cloudflare tunnel below is the same client answering the other half
+        // of that trade.
+        reserved: None,
         shares_project_netns: false,
     },
     Provider {
@@ -174,6 +240,10 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: false,
         session_minutes: None,
         verified: true,
+        // The client authenticates as `nokey@`, and a kept address is what a
+        // registered key buys. Anonymous means new on every start, and saying
+        // so is better than a field that never works.
+        reserved: None,
         shares_project_netns: false,
     },
     Provider {
@@ -192,6 +262,11 @@ pub const PROVIDERS: &[Provider] = &[
         // has to be able to say why rather than reporting a crash.
         session_minutes: Some(60),
         verified: true,
+        // A kept subdomain is a Pro token, and the token travels in the SSH
+        // user name rather than an environment variable — a different shape
+        // from every other provider here, and not one worth inventing a
+        // second token field for. Anonymous sessions get a new address.
+        reserved: None,
         shares_project_netns: false,
     },
     Provider {
@@ -206,6 +281,49 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: false,
         session_minutes: None,
         verified: true,
+        // MEASURED, and it is the only free one: `--subdomain stackvo-probe-11959`
+        // came back as exactly that address, and again ninety seconds later.
+        // Started immediately after the previous tunnel closed, the same
+        // request came back as `bitter-bulldog-88.loca.lt` with no error at
+        // all — which is why a granted name is checked rather than assumed.
+        reserved: Some(Reserved {
+            kind: "subdomain",
+            dotted: false,
+            in_log: true,
+        }),
+        shares_project_netns: false,
+    },
+    Provider {
+        // The same client as the row above, answering the other half of the
+        // trade it makes. A quick tunnel is anonymous and its address is new
+        // every time; a *named* tunnel is a tunnel created in Cloudflare's
+        // dashboard, routed at a hostname on a domain somebody owns, and it is
+        // the same address for as long as it exists.
+        //
+        // The ninth row, and it is a row: the module note said adding a
+        // provider should be data rather than a branch, and B-7 is where that
+        // was collected on.
+        id: "cloudflare_named",
+        image: "cloudflare/cloudflared:latest",
+        anonymous: false,
+        // MEASURED: `cloudflared` reads this variable by itself — the same
+        // invocation with the token only in the environment answered `Provided
+        // Tunnel token is not valid.`, which means it had read it. So the
+        // token never has to appear as an argument.
+        token_env: Some("TUNNEL_TOKEN"),
+        // Deliberately empty, and the only row where that is right: the
+        // hostname is whatever was configured in Cloudflare, on a domain this
+        // app has never heard of, and `cloudflared` does not print it. The
+        // address comes from `Reserved`, which is why `in_log` is false.
+        url_suffixes: &[],
+        rewrites_host: true,
+        session_minutes: None,
+        verified: false,
+        reserved: Some(Reserved {
+            kind: "hostname",
+            dotted: true,
+            in_log: false,
+        }),
         shares_project_netns: false,
     },
     Provider {
@@ -222,6 +340,15 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: true,
         session_minutes: None,
         verified: false,
+        // The free plan includes one static domain, which is the whole reason
+        // somebody sets ngrok up at all. `--url` and not `--domain`: measured,
+        // the agent answers `Flag --domain has been deprecated, use --url
+        // instead` and then honours it.
+        reserved: Some(Reserved {
+            kind: "domain",
+            dotted: true,
+            in_log: true,
+        }),
         shares_project_netns: false,
     },
     Provider {
@@ -233,6 +360,15 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: false,
         session_minutes: None,
         verified: false,
+        // The one provider whose address was already stable: the funnel is
+        // published at `<hostname>.<tailnet>.ts.net`, and the hostname is this
+        // sidecar's to choose. Left empty it is `stackvo-<project>`, which is
+        // what the invocation has always sent.
+        reserved: Some(Reserved {
+            kind: "hostname",
+            dotted: false,
+            in_log: true,
+        }),
         shares_project_netns: true,
     },
     Provider {
@@ -244,6 +380,13 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: false,
         session_minutes: None,
         verified: false,
+        // A reserved share, by the vendor's own two-step design: reserve a
+        // unique name once, then share it under that name from then on.
+        reserved: Some(Reserved {
+            kind: "name",
+            dotted: false,
+            in_log: true,
+        }),
         shares_project_netns: false,
     },
     Provider {
@@ -257,6 +400,13 @@ pub const PROVIDERS: &[Provider] = &[
         rewrites_host: true,
         session_minutes: None,
         verified: false,
+        // Its own `--subdomain`, from the client's help text. Not measured —
+        // nobody here has an account — which is what `verified` already says.
+        reserved: Some(Reserved {
+            kind: "subdomain",
+            dotted: false,
+            in_log: true,
+        }),
         shares_project_netns: false,
     },
 ];
@@ -333,6 +483,23 @@ pub struct TunnelStatus {
     /// and "there is no network" are three different problems with three
     /// different fixes, and they look identical from the outside.
     pub failure: Option<String>,
+    /// Whether this link asks for a password — whether the sidecar forwards
+    /// through [`crate::tunnelid`]'s guard rather than straight at the
+    /// project.
+    ///
+    /// Read off the sidecar's own label, so it describes the tunnel that is
+    /// actually running rather than what the keystore holds now: switching
+    /// authentication on does not protect a link that was handed out before.
+    pub guarded: bool,
+    /// The address this tunnel asked its provider to keep, where it asked.
+    pub reserved: Option<String>,
+    /// Whether the address that came back is the one that was asked for.
+    ///
+    /// `None` when nothing was reserved, or when there is no URL yet to
+    /// compare. `Some(false)` is the measured failure this field exists for: a
+    /// provider that quietly assigns a different name, leaving a tunnel that
+    /// works and a dashboard entry that points nowhere.
+    pub reserved_honoured: Option<bool>,
 }
 
 /// A provider and whether this machine could use it right now.
@@ -415,6 +582,11 @@ pub fn find_failure(log: &str) -> Option<String> {
     const NEEDLES: &[&str] = &[
         "authentication failed",
         "invalid token",
+        // Cloudflare's named tunnel, MEASURED against an invalid token:
+        // `Provided Tunnel token is not valid.` — a refusal none of the
+        // needles below recognised, which would have left the pane spinning
+        // on the one provider whose token is hardest to get right.
+        "is not valid",
         "invalid key",
         "unauthorized",
         "unauthenticated",
@@ -461,6 +633,13 @@ pub async fn status_all() -> Result<Vec<TunnelStatus>> {
         let Some(project) = id.strip_prefix(ID_PREFIX) else {
             continue;
         };
+        // A guard's id begins with the tunnel prefix too, and its label is the
+        // only thing that tells them apart for certain: a project genuinely
+        // named `guard-shop` would otherwise appear here as a tunnel nobody
+        // opened, on a project that does not exist.
+        if info.labels.contains_key(crate::tunnelid::GUARD_LABEL) {
+            continue;
+        }
 
         let provider_id = info.labels.get(PROVIDER_LABEL).cloned();
         let known = provider_id
@@ -490,6 +669,29 @@ pub async fn status_all() -> Result<Vec<TunnelStatus>> {
             Err(_) => (None, None),
         };
 
+        let reserved = info.labels.get(RESERVED_LABEL).cloned();
+        // The address a named Cloudflare tunnel serves is in Cloudflare's
+        // configuration and nowhere in this client's output, so for that one
+        // provider the reserved name IS the address — and it is shown only
+        // while the sidecar is actually up, like every other URL here.
+        let url = match (&url, &reserved) {
+            (None, Some(name))
+                if info.running && known.and_then(|p| p.reserved).is_some_and(|r| !r.in_log) =>
+            {
+                Some(format!("https://{name}"))
+            }
+            _ => url,
+        };
+
+        // Asked for, and granted? Only answerable once there is an address,
+        // and only meaningful for a provider that prints one.
+        let reserved_honoured = match (&reserved, &url) {
+            (Some(name), Some(url)) if known.and_then(|p| p.reserved).is_none_or(|r| r.in_log) => {
+                Some(crate::tunnelid::honoured(url, name))
+            }
+            _ => None,
+        };
+
         out.push(TunnelStatus {
             project: project.to_string(),
             running: info.running,
@@ -497,6 +699,9 @@ pub async fn status_all() -> Result<Vec<TunnelStatus>> {
             container: info.name,
             provider: provider_id,
             failure,
+            guarded: info.labels.get(GUARDED_LABEL).map(String::as_str) == Some("true"),
+            reserved,
+            reserved_honoured,
         });
     }
 
@@ -519,6 +724,47 @@ pub fn providers() -> Vec<ProviderStatus> {
         .collect()
 }
 
+/// Everything about one start that is not the provider.
+///
+/// A struct rather than five positional arguments, and it earned that when
+/// B-7 added the sixth and seventh: `run_args(p, "shop", Some("shop.loc"), 80,
+/// net, false, None)` is a line where two neighbouring booleans can be swapped
+/// and every test still passes.
+#[derive(Debug, Clone)]
+pub struct Plan<'a> {
+    pub project: &'a str,
+    /// The project's local domain, for the providers that can present it.
+    pub domain: Option<&'a str>,
+    /// The port the **project's** container serves on. What the sidecar is
+    /// actually pointed at is [`Self::guard`]'s business.
+    pub port: u16,
+    pub network: &'a str,
+    /// The address the provider is asked to keep, for the providers that can.
+    pub reserved: Option<&'a str>,
+    /// The guard container in front of the project, when authentication is on.
+    ///
+    /// One field and not two — a name and a flag saying whether to use it —
+    /// because the pair can disagree, and the disagreement is the worst
+    /// outcome this feature has: a link that asks for no password while the
+    /// pane reports that it does.
+    pub guard: Option<&'a str>,
+}
+
+impl<'a> Plan<'a> {
+    /// A tunnel straight to the project's own container — no guard, no
+    /// reserved name. What every start was before B-7.
+    pub fn direct(project: &'a str, domain: Option<&'a str>, port: u16, network: &'a str) -> Self {
+        Self {
+            project,
+            domain,
+            port,
+            network,
+            reserved: None,
+            guard: None,
+        }
+    }
+}
+
 /// The `docker run` invocation for one project's sidecar.
 ///
 /// Returned as arguments rather than executed here so the caller can drive it
@@ -533,15 +779,22 @@ pub fn providers() -> Vec<ProviderStatus> {
 /// shows no tunnel, no error and no reason for the likeliest failure the
 /// feature has. `tunnel_start` clears the old container before starting a new
 /// one and `tunnel_stop` removes it.
-pub fn run_args(
-    provider: &Provider,
-    project: &str,
-    domain: Option<&str>,
-    port: u16,
-    network: &str,
-) -> Vec<String> {
-    let host = crate::engine::container_name(project);
+pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
+    let project = plan.project;
+    let domain = plan.domain;
+    let network = plan.network;
+    // The guard decides both halves of the target at once. Derived here rather
+    // than passed in, so no caller can point a sidecar at a guard on the
+    // project's own port — which would be a tunnel that bypasses the password
+    // it just switched on.
+    let (host, port) = match plan.guard {
+        Some(guard) => (guard.to_string(), crate::tunnelid::GUARD_PORT),
+        None => (crate::engine::container_name(project), plan.port),
+    };
     let target = format!("http://{host}:{port}");
+    // Only where the provider has somewhere to put it: a name sent to a
+    // provider that keeps nothing is a flag its client would refuse.
+    let reserved = plan.reserved.filter(|_| provider.reserved.is_some());
 
     let mut args: Vec<String> = vec![
         "run".into(),
@@ -562,7 +815,17 @@ pub fn run_args(
         },
         "--label".into(),
         format!("{PROVIDER_LABEL}={}", provider.id),
+        // What this tunnel is, said by the tunnel itself: whether it asks for
+        // a password, and what address it asked to be given. Both are read
+        // back by `status_all` rather than remembered anywhere.
+        "--label".into(),
+        format!("{GUARDED_LABEL}={}", plan.guard.is_some()),
     ];
+
+    if let Some(name) = reserved {
+        args.push("--label".into());
+        args.push(format!("{RESERVED_LABEL}={name}"));
+    }
 
     // The token, by name only. Docker copies the value from this process's
     // environment, which `runner::run_operation` sets for the child alone —
@@ -588,6 +851,33 @@ pub fn run_args(
                 args.push("--http-host-header".into());
                 args.push(domain.into());
             }
+        }
+
+        // The same client, told to run a tunnel that already exists rather
+        // than to invent one.
+        "cloudflare_named" => {
+            args.push(provider.image.into());
+            args.extend(
+                ["tunnel", "--no-autoupdate", "run", "--url"]
+                    .into_iter()
+                    .map(String::from),
+            );
+            args.push(target);
+            // No `--token` argument: MEASURED, `cloudflared` reads
+            // `TUNNEL_TOKEN` from the environment on its own — the same
+            // invocation with the token only there answered `Provided Tunnel
+            // token is not valid.`, which it could only have done after
+            // reading it. So the credential stays out of the argv the
+            // operation console prints.
+            if let Some(domain) = domain {
+                args.push("--http-host-header".into());
+                args.push(domain.into());
+            }
+            // The reserved hostname is not sent anywhere: Cloudflare routes a
+            // named tunnel from its own configuration, and this client is
+            // never told which hostname it is serving. It is kept as a label
+            // so the pane has an address to show — which is exactly what
+            // `Reserved::in_log = false` means.
         }
 
         // Both SSH providers run the same client; what differs is the port,
@@ -639,6 +929,14 @@ pub fn run_args(
             // server — the client sat there saying nothing at all.
             args.push("--local-host".into());
             args.push(host.clone());
+            if let Some(name) = reserved {
+                // The only free reserved address on this table, and MEASURED:
+                // the same subdomain came back twice, ninety seconds apart.
+                // It is a request rather than a grant — see `status_all`,
+                // which checks what came back against what was asked.
+                args.push("--subdomain".into());
+                args.push(name.into());
+            }
         }
 
         "ngrok" => {
@@ -651,6 +949,13 @@ pub fn run_args(
             // Without it the agent logs to nowhere at all: `--log` defaults to
             // `false`, and the URL it assigns is only ever printed to that log.
             args.push("--log=stdout".into());
+            if let Some(name) = reserved {
+                // `--url` and not `--domain`: MEASURED, the agent answers
+                // `Flag --domain has been deprecated, use --url instead` and
+                // then honours it. The free plan includes one static domain,
+                // which is the reason most people set ngrok up at all.
+                args.push(format!("--url=https://{name}"));
+            }
             if let Some(domain) = domain {
                 // The agent calls this flag deprecated on every start — "use
                 // traffic policy instead" — and then honours it, which the
@@ -681,6 +986,13 @@ pub fn run_args(
             args.push("sh".into());
             args.push(provider.image.into());
             args.push("-c".into());
+            // The funnel is published at `<hostname>.<tailnet>.ts.net`, so the
+            // hostname *is* the reserved name here — there is no second flag.
+            // Left empty it stays what it has always been, which is the
+            // project's own name.
+            let hostname = reserved
+                .map(String::from)
+                .unwrap_or_else(|| format!("stackvo-{project}"));
             args.push(format!(
                 // Userspace networking, so no TUN device and no privileged
                 // container; `--state=mem:` because the node is as temporary
@@ -692,7 +1004,7 @@ pub fn run_args(
                 "tailscaled --tun=userspace-networking --state=mem: \
                  >/tmp/tailscaled.log 2>&1 & \
                  sleep 2; \
-                 tailscale up --authkey=\"$TS_AUTHKEY\" --hostname=stackvo-{project} \
+                 tailscale up --authkey=\"$TS_AUTHKEY\" --hostname={hostname} \
                  || {{ tail -20 /tmp/tailscaled.log; exit 1; }}; \
                  tailscale funnel --bg --yes {port} || exit 1; \
                  tailscale funnel status; \
@@ -708,12 +1020,24 @@ pub fn run_args(
             args.push("sh".into());
             args.push(provider.image.into());
             args.push("-c".into());
-            args.push(format!(
+            args.push(match reserved {
+                // The vendor's own two-step for a kept address: reserve the
+                // name once, then share under it. The reserve is allowed to
+                // fail — the second start is the case where the name is
+                // already held, which is the whole point of reserving it —
+                // and only the share decides whether this sidecar lives.
+                Some(name) => format!(
+                    "zrok enable \"$ZROK_TOKEN\" --headless || exit 1; \
+                     zrok reserve public {target} --backend-mode proxy --unique-name {name} || true; \
+                     exec zrok share reserved {name} --headless"
+                ),
                 // `--headless` on both halves: each subcommand draws its own
                 // terminal UI otherwise, and neither has a terminal here.
-                "zrok enable \"$ZROK_TOKEN\" --headless || exit 1; \
-                 exec zrok share public --headless --backend-mode proxy {target}"
-            ));
+                None => format!(
+                    "zrok enable \"$ZROK_TOKEN\" --headless || exit 1; \
+                     exec zrok share public --headless --backend-mode proxy {target}"
+                ),
+            });
         }
 
         "localxpose" => {
@@ -722,6 +1046,13 @@ pub fn run_args(
             // `--to app.corp:8080` is the client's own example of forwarding to
             // another machine, so the project container is a target it names.
             args.push(format!("{host}:{port}"));
+            if let Some(name) = reserved {
+                // From the client's own help text, like the header plugin
+                // below. Not measured — nobody here has an account, which is
+                // what `verified` already says of this row.
+                args.push("--subdomain".into());
+                args.push(name.into());
+            }
             if let Some(domain) = domain {
                 // Its header plugin, not a special case: `--request-header
                 // host:myapp.com` is in the help text, and Host is the header
@@ -964,6 +1295,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            providers: Vec::new(),
             local: Vec::new(),
         };
         assert_eq!(internal_port(&m), 80);
@@ -990,10 +1322,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
     fn the_sidecar_forwards_to_the_container_with_the_local_host_header() {
         let args = run_args(
             by_id("cloudflare"),
-            "myapp",
-            Some("myapp.loc"),
-            80,
-            "stackvo-net",
+            &Plan::direct("myapp", Some("myapp.loc"), 80, "stackvo-net"),
         );
         let line = args.join(" ");
         assert!(line.contains("--name stackvo-tunnel-myapp"));
@@ -1003,14 +1332,20 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
         assert!(line.contains("--label stackvo.tunnel.provider=cloudflare"));
 
         // No domain, no header — never an empty flag value.
-        let bare = run_args(by_id("cloudflare"), "myapp", None, 3000, "stackvo-net");
+        let bare = run_args(
+            by_id("cloudflare"),
+            &Plan::direct("myapp", None, 3000, "stackvo-net"),
+        );
         assert!(!bare.join(" ").contains("--http-host-header"));
     }
 
     #[test]
     fn every_provider_points_at_the_project_container_and_labels_itself() {
         for p in PROVIDERS {
-            let args = run_args(p, "shop", Some("shop.loc"), 8080, "stackvo-net");
+            let args = run_args(
+                p,
+                &Plan::direct("shop", Some("shop.loc"), 8080, "stackvo-net"),
+            );
             let line = args.join(" ");
             assert!(
                 line.contains("stackvo-shop"),
@@ -1044,7 +1379,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
     fn a_token_reaches_the_container_by_name_and_never_by_value() {
         for p in PROVIDERS.iter().filter(|p| p.token_env.is_some()) {
             let var = p.token_env.unwrap();
-            let args = run_args(p, "shop", None, 80, "stackvo-net");
+            let args = run_args(p, &Plan::direct("shop", None, 80, "stackvo-net"));
             let line = args.join(" ");
             assert!(line.contains(&format!("-e {var}")), "{} ", p.id);
             // The value is never here: the only spellings allowed are the bare
@@ -1059,7 +1394,8 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
         // And the anonymous ones ask for nothing at all.
         for p in PROVIDERS.iter().filter(|p| p.token_env.is_none()) {
             assert!(
-                !run_args(p, "shop", None, 80, "stackvo-net").contains(&"-e".to_string()),
+                !run_args(p, &Plan::direct("shop", None, 80, "stackvo-net"))
+                    .contains(&"-e".to_string()),
                 "{} passes an environment variable it does not need",
                 p.id
             );
@@ -1076,10 +1412,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
     fn tailscale_joins_the_project_container_rather_than_the_stack_network() {
         let args = run_args(
             by_id("tailscale"),
-            "shop",
-            Some("shop.loc"),
-            8080,
-            "stackvo-net",
+            &Plan::direct("shop", Some("shop.loc"), 8080, "stackvo-net"),
         );
         let line = args.join(" ");
 
@@ -1098,7 +1431,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
 
         // And every other provider stays on the stack network.
         for p in PROVIDERS.iter().filter(|p| p.id != "tailscale") {
-            let other = run_args(p, "shop", None, 80, "stackvo-net").join(" ");
+            let other = run_args(p, &Plan::direct("shop", None, 80, "stackvo-net")).join(" ");
             assert!(
                 other.contains("--network stackvo-net"),
                 "{} left the stack network",
@@ -1113,7 +1446,11 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
     #[test]
     fn the_local_domain_is_presented_by_exactly_the_providers_that_can() {
         for p in PROVIDERS {
-            let line = run_args(p, "shop", Some("shop.loc"), 80, "stackvo-net").join(" ");
+            let line = run_args(
+                p,
+                &Plan::direct("shop", Some("shop.loc"), 80, "stackvo-net"),
+            )
+            .join(" ");
             assert_eq!(
                 line.contains("shop.loc"),
                 p.rewrites_host,
@@ -1123,24 +1460,33 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
         }
 
         // The spellings are the clients', and they are all different.
-        assert!(
-            run_args(by_id("cloudflare"), "shop", Some("shop.loc"), 80, "n")
-                .join(" ")
-                .contains("--http-host-header shop.loc")
-        );
-        assert!(run_args(by_id("ngrok"), "shop", Some("shop.loc"), 80, "n")
-            .join(" ")
-            .contains("--host-header=shop.loc"));
-        assert!(
-            run_args(by_id("localxpose"), "shop", Some("shop.loc"), 80, "n")
-                .join(" ")
-                .contains("--request-header host:shop.loc")
-        );
+        assert!(run_args(
+            by_id("cloudflare"),
+            &Plan::direct("shop", Some("shop.loc"), 80, "n")
+        )
+        .join(" ")
+        .contains("--http-host-header shop.loc"));
+        assert!(run_args(
+            by_id("ngrok"),
+            &Plan::direct("shop", Some("shop.loc"), 80, "n")
+        )
+        .join(" ")
+        .contains("--host-header=shop.loc"));
+        assert!(run_args(
+            by_id("localxpose"),
+            &Plan::direct("shop", Some("shop.loc"), 80, "n")
+        )
+        .join(" ")
+        .contains("--request-header host:shop.loc"));
         // localtunnel's single host flag is its target as well, so it names
         // the container and the application sees that as `Host`. `--host` is
         // a different flag entirely — the tunnel server — and pointing it at
         // the project was a real defect the probe caught.
-        let lt = run_args(by_id("localtunnel"), "shop", Some("shop.loc"), 80, "n").join(" ");
+        let lt = run_args(
+            by_id("localtunnel"),
+            &Plan::direct("shop", Some("shop.loc"), 80, "n"),
+        )
+        .join(" ");
         assert!(lt.contains("--local-host stackvo-shop"), "{lt}");
         assert!(!lt.contains("--host http"), "{lt}");
     }
@@ -1150,11 +1496,13 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
     fn a_client_that_needs_telling_where_to_log_is_told() {
         // ngrok's `--log` defaults to `false`: without this the agent runs
         // perfectly and prints the URL nowhere at all.
-        assert!(run_args(by_id("ngrok"), "shop", None, 80, "n")
-            .join(" ")
-            .contains("--log=stdout"));
+        assert!(
+            run_args(by_id("ngrok"), &Plan::direct("shop", None, 80, "n"))
+                .join(" ")
+                .contains("--log=stdout")
+        );
         // Both zrok subcommands draw a terminal UI otherwise.
-        let zrok = run_args(by_id("zrok"), "shop", None, 80, "n").join(" ");
+        let zrok = run_args(by_id("zrok"), &Plan::direct("shop", None, 80, "n")).join(" ");
         assert_eq!(zrok.matches("--headless").count(), 2, "{zrok}");
     }
 
@@ -1179,6 +1527,10 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
                 r#"{"level":"error","msg":"the zrok service returned an error: [POST /enable][401] enableUnauthorized ","time":"2026-08-20T20:37:52.612Z"}"#,
             ),
             ("localxpose", "Error: unauthenticated access"),
+            // MEASURED here, with the same throwaway token the four above
+            // were measured with, and it is the one that needed a new needle:
+            // none of the others matched this sentence.
+            ("cloudflare_named", "Provided Tunnel token is not valid."),
         ];
 
         for (id, log) in cases {
@@ -1222,7 +1574,207 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
                 "{} is not usable as a translation key",
                 p.id
             );
-            assert!(!p.url_suffixes.is_empty(), "{} recognises no URL", p.id);
+            // A provider with no suffixes is one whose address cannot be read
+            // out of a log, and there is exactly one of those — the named
+            // Cloudflare tunnel, whose hostname lives in Cloudflare's own
+            // configuration. Everybody else has to recognise their own URL.
+            assert_eq!(
+                p.url_suffixes.is_empty(),
+                p.reserved.is_some_and(|r| !r.in_log),
+                "{} disagrees with its own `Reserved::in_log`",
+                p.id
+            );
         }
+    }
+
+    // ------------------------------------------------------------ B-7
+
+    /// With the guard on, every provider forwards to it — including the one
+    /// that joins a network namespace rather than a network.
+    ///
+    /// This is the test that would catch the worst outcome the feature has: a
+    /// sidecar pointed at the project while the pane says the link asks for a
+    /// password.
+    #[test]
+    fn a_guarded_plan_points_every_provider_at_the_guard() {
+        let guard = "stackvo-tunnel-guard-shop";
+        for p in PROVIDERS {
+            let plan = Plan {
+                project: "shop",
+                domain: Some("shop.loc"),
+                // The project's own port, which nothing may forward to while
+                // a guard is in front of it.
+                port: 3000,
+                network: "stackvo-net",
+                reserved: None,
+                guard: Some(guard),
+            };
+            let line = run_args(p, &plan).join(" ");
+
+            assert!(
+                line.contains(guard),
+                "{} does not forward through the guard: {line}",
+                p.id
+            );
+            assert!(
+                line.contains(&crate::tunnelid::GUARD_PORT.to_string()),
+                "{} is not on the guard's port: {line}",
+                p.id
+            );
+            assert!(
+                !line.contains(":3000") && !line.contains(" 3000"),
+                "{} still reaches the project's own port past the guard: {line}",
+                p.id
+            );
+            assert!(
+                line.contains(&format!("--label {GUARDED_LABEL}=true")),
+                "{} does not say it is guarded: {line}",
+                p.id
+            );
+        }
+
+        // Tailscale's namespace is the guard's, not the project's — the one
+        // provider that could not have taken an authentication flag needs no
+        // special case at all.
+        let line = run_args(
+            by_id("tailscale"),
+            &Plan {
+                project: "shop",
+                domain: None,
+                port: 3000,
+                network: "stackvo-net",
+                reserved: None,
+                guard: Some(guard),
+            },
+        )
+        .join(" ");
+        assert!(
+            line.contains(&format!("--network container:{guard}")),
+            "{line}"
+        );
+        assert!(line.contains("tailscale funnel --bg --yes 8080"), "{line}");
+    }
+
+    /// An unguarded plan is exactly what it was before B-7, and says so.
+    #[test]
+    fn an_unguarded_plan_still_goes_straight_at_the_project() {
+        for p in PROVIDERS {
+            let line = run_args(p, &Plan::direct("shop", None, 80, "stackvo-net")).join(" ");
+            assert!(line.contains("stackvo-shop"), "{} : {line}", p.id);
+            assert!(
+                !line.contains(crate::tunnelid::GUARD_ID_PREFIX),
+                "{} : {line}",
+                p.id
+            );
+            assert!(
+                line.contains(&format!("--label {GUARDED_LABEL}=false")),
+                "{} does not say it is unguarded: {line}",
+                p.id
+            );
+        }
+    }
+
+    /// Each provider's own spelling for the address it keeps, and no spelling
+    /// at all for the three that keep nothing.
+    #[test]
+    fn a_reserved_name_reaches_the_flag_the_client_actually_has() {
+        let plan = |reserved| Plan {
+            project: "shop",
+            domain: None,
+            port: 80,
+            network: "stackvo-net",
+            reserved: Some(reserved),
+            guard: None,
+        };
+
+        assert!(run_args(by_id("localtunnel"), &plan("shop-dev"))
+            .join(" ")
+            .contains("--subdomain shop-dev"));
+        assert!(run_args(by_id("ngrok"), &plan("shop.ngrok-free.app"))
+            .join(" ")
+            .contains("--url=https://shop.ngrok-free.app"));
+        assert!(run_args(by_id("localxpose"), &plan("shop-dev"))
+            .join(" ")
+            .contains("--subdomain shop-dev"));
+        // Tailscale has no second flag: the hostname is the address.
+        let ts = run_args(by_id("tailscale"), &plan("shop-dev")).join(" ");
+        assert!(ts.contains("--hostname=shop-dev"), "{ts}");
+        assert!(!ts.contains("--hostname=stackvo-shop"), "{ts}");
+        // And left empty it is the project's name, as it always was.
+        assert!(
+            run_args(by_id("tailscale"), &Plan::direct("shop", None, 80, "n"))
+                .join(" ")
+                .contains("--hostname=stackvo-shop")
+        );
+        // zrok reserves once and shares under the name from then on; the
+        // reserve is allowed to fail, because the second start is the case it
+        // exists for.
+        let zrok = run_args(by_id("zrok"), &plan("shopdev")).join(" ");
+        assert!(zrok.contains("zrok reserve public"), "{zrok}");
+        assert!(zrok.contains("--unique-name shopdev || true"), "{zrok}");
+        assert!(zrok.contains("exec zrok share reserved shopdev"), "{zrok}");
+
+        // The three that keep nothing are never handed one — a flag their
+        // client does not have is a container that exits on its usage text.
+        for id in ["cloudflare", "localhost_run", "pinggy"] {
+            let line = run_args(by_id(id), &plan("shop-dev")).join(" ");
+            assert!(!line.contains("shop-dev"), "{id} was handed a name: {line}");
+            assert!(
+                !line.contains(RESERVED_LABEL),
+                "{id} claims a name it cannot keep: {line}"
+            );
+        }
+
+        // Everybody who can keep one labels what they asked for, so the
+        // status call can check it against what came back.
+        for p in PROVIDERS.iter().filter(|p| p.reserved.is_some()) {
+            assert!(
+                run_args(p, &plan("shopdev"))
+                    .join(" ")
+                    .contains(&format!("--label {RESERVED_LABEL}=shopdev")),
+                "{} does not record the name it asked for",
+                p.id
+            );
+        }
+    }
+
+    /// The ninth row: the same client, running a tunnel somebody already
+    /// created, with its token in the environment and nowhere else.
+    #[test]
+    fn the_named_cloudflare_tunnel_runs_rather_than_invents() {
+        let p = by_id("cloudflare_named");
+        let line = run_args(
+            p,
+            &Plan {
+                project: "shop",
+                domain: Some("shop.loc"),
+                port: 80,
+                network: "stackvo-net",
+                reserved: Some("shop.example.com"),
+                guard: None,
+            },
+        )
+        .join(" ");
+
+        assert!(line.contains("tunnel --no-autoupdate run --url"), "{line}");
+        assert!(line.contains("http://stackvo-shop:80"), "{line}");
+        assert!(line.contains("--http-host-header shop.loc"), "{line}");
+        // MEASURED: the client reads TUNNEL_TOKEN itself, so the credential
+        // never becomes an argument.
+        assert!(line.contains("-e TUNNEL_TOKEN"), "{line}");
+        assert!(!line.contains("--token"), "{line}");
+        // The hostname is Cloudflare's to route; this client is never told
+        // it, and the label is the only place it exists.
+        assert!(
+            line.contains(&format!("--label {RESERVED_LABEL}=shop.example.com")),
+            "{line}"
+        );
+        assert_eq!(line.matches("shop.example.com").count(), 1, "{line}");
+        assert!(p.reserved.is_some_and(|r| !r.in_log));
+
+        // And the quick tunnel it shares a client with keeps its own shape.
+        let quick = run_args(by_id("cloudflare"), &Plan::direct("shop", None, 80, "n")).join(" ");
+        assert!(!quick.contains(" run "), "{quick}");
+        assert!(!quick.contains("-e TUNNEL_TOKEN"), "{quick}");
     }
 }

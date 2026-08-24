@@ -42,17 +42,32 @@ const {
   provider,
   chosen,
   needsToken,
+  identity,
+  authenticated,
+  revealed,
+  reservedName,
   busy,
   error,
   load,
+  loadIdentity,
   loadProviders,
   start,
   stop,
   saveToken,
+  saveAuth,
+  reveal,
+  saveName,
 } = useTunnel(toRef(props, 'name'));
 const { copied, copy } = useCopyTick();
 
-watch(() => props.name, load, { immediate: true });
+watch(
+  () => props.name,
+  async (value) => {
+    await load(value);
+    await loadIdentity();
+  },
+  { immediate: true }
+);
 loadProviders();
 
 /** The picker's rows. Everything shown about a provider is the table's. */
@@ -85,6 +100,36 @@ async function submitToken(value) {
   token.value = '';
   editingToken.value = false;
 }
+
+/**
+ * The user name the visitor is asked for. Only ever edited before
+ * authentication is switched on — changing it afterwards is switching it on
+ * again, which is what the Replace button does.
+ */
+const authUser = ref('');
+
+/** Switch protection on. An empty password means Rust generates one. */
+async function protect() {
+  await saveAuth({ user: authUser.value, password: '' });
+  authUser.value = '';
+}
+
+/**
+ * The address this provider is asked to keep, as a field.
+ *
+ * Seeded from the identity rather than bound to it: a half-typed name must not
+ * become the stored one, and the stored one must come back when the picker
+ * moves to another provider.
+ */
+const nameField = ref('');
+watch(reservedName, (value) => (nameField.value = value), { immediate: true });
+
+const nameDirty = computed(() => nameField.value.trim() !== (reservedName.value ?? ''));
+
+/** A tunnel that is up while the credential was added afterwards. */
+const unprotectedLink = computed(
+  () => authenticated.value && !!tunnel.value?.running && !tunnel.value?.guarded
+);
 </script>
 
 <template>
@@ -162,10 +207,51 @@ async function submitToken(value) {
         </v-btn>
       </div>
 
+      <!-- The name that was asked for and not granted (B-7). Measured on a
+           real provider: the tunnel is up, the pane is green, and the address
+           registered in somebody's dashboard points nowhere. -->
+      <v-alert v-if="tunnel.reservedHonoured === false" type="warning" variant="tonal" class="mb-3">
+        <div class="text-caption">
+          {{ t('tunnel.reservedMissed', { name: tunnel.reserved }) }}
+        </div>
+      </v-alert>
+
+      <!-- Who can open the link. Said about the tunnel that is running rather
+           than about the keystore: switching authentication on does not
+           protect a link handed out before it. -->
+      <v-alert v-if="tunnel.url && tunnel.guarded" type="info" variant="tonal" class="mt-3">
+        <div class="text-caption mb-2">
+          {{ t('tunnel.protected', { user: identity?.authUser }) }}
+        </div>
+        <div class="d-flex align-center ga-2 flex-wrap">
+          <v-btn v-if="!revealed" size="x-small" variant="tonal" @click="reveal">
+            {{ t('tunnel.authShow') }}
+          </v-btn>
+          <template v-else>
+            <code class="credential">{{ revealed.user }} / {{ revealed.password }}</code>
+            <v-btn
+              icon
+              :aria-label="t('a11y.copy')"
+              size="x-small"
+              variant="text"
+              @click="copy(revealed.password, 'password')"
+            >
+              <v-icon>{{ copied === 'password' ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
+              <v-tooltip activator="parent">{{ t('a11y.copy') }}</v-tooltip>
+            </v-btn>
+          </template>
+        </div>
+      </v-alert>
+
       <!-- Said before anyone pastes the URL into a public issue: the
            link is live, unauthenticated, and reaches this machine. -->
-      <v-alert v-if="tunnel.url" type="warning" variant="tonal" class="mt-3">
+      <v-alert v-if="tunnel.url && !tunnel.guarded" type="warning" variant="tonal" class="mt-3">
         <div class="text-caption">{{ t('tunnel.publicWarning') }}</div>
+        <!-- The one case a warning alone would be wrong about: a credential
+             exists, and this link predates it. -->
+        <div v-if="unprotectedLink" class="text-caption mt-2">
+          {{ t('tunnel.restartToProtect') }}
+        </div>
       </v-alert>
     </template>
 
@@ -273,6 +359,110 @@ async function submitToken(value) {
         </div>
       </template>
 
+      <!-- Who else can open the link, before it exists rather than after it
+           has been pasted somewhere (B-7). -->
+      <div class="mb-3">
+        <div class="text-caption text-medium-emphasis mb-1">{{ t('tunnel.authTitle') }}</div>
+
+        <v-alert
+          v-if="identity && !identity.keystore"
+          type="info"
+          variant="tonal"
+          density="compact"
+        >
+          <div class="text-caption">{{ t('tunnel.authNoKeystore') }}</div>
+        </v-alert>
+
+        <template v-else-if="!authenticated">
+          <div class="d-flex align-center ga-2 flex-wrap">
+            <v-text-field
+              v-model="authUser"
+              :label="t('tunnel.authUser')"
+              :placeholder="'stackvo'"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="user-field"
+            />
+            <v-btn size="small" variant="tonal" :loading="busy" @click="protect">
+              {{ t('tunnel.authOn') }}
+            </v-btn>
+          </div>
+          <div class="text-caption text-medium-emphasis mt-1">{{ t('tunnel.authHint') }}</div>
+        </template>
+
+        <template v-else>
+          <div class="d-flex align-center ga-2 flex-wrap">
+            <v-icon size="16" color="success">mdi-lock-outline</v-icon>
+            <span class="text-caption">{{
+              t('tunnel.authOnFor', { user: identity.authUser })
+            }}</span>
+            <v-btn v-if="!revealed" size="x-small" variant="text" @click="reveal">
+              {{ t('tunnel.authShow') }}
+            </v-btn>
+            <code v-else class="credential">{{ revealed.user }} / {{ revealed.password }}</code>
+            <v-btn
+              v-if="revealed"
+              icon
+              :aria-label="t('a11y.copy')"
+              size="x-small"
+              variant="text"
+              @click="copy(revealed.password, 'password')"
+            >
+              <v-icon>{{ copied === 'password' ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
+              <v-tooltip activator="parent">{{ t('a11y.copy') }}</v-tooltip>
+            </v-btn>
+            <v-btn
+              size="x-small"
+              variant="text"
+              :loading="busy"
+              @click="saveAuth({ user: identity.authUser, password: '' })"
+            >
+              {{ t('tunnel.authRegenerate') }}
+            </v-btn>
+            <v-btn
+              size="x-small"
+              variant="text"
+              color="error"
+              :loading="busy"
+              @click="saveAuth(null)"
+            >
+              {{ t('tunnel.authOff') }}
+            </v-btn>
+          </div>
+        </template>
+      </div>
+
+      <!-- The address, for the providers that can keep one. -->
+      <div v-if="provider" class="mb-3">
+        <div class="text-caption text-medium-emphasis mb-1">{{ t('tunnel.reservedTitle') }}</div>
+        <template v-if="provider.reserved">
+          <div class="d-flex align-center ga-2 flex-wrap">
+            <v-text-field
+              v-model="nameField"
+              :label="t(`tunnel.reservedKind.${provider.reserved.kind}`)"
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="name-field"
+            />
+            <v-btn
+              size="small"
+              variant="tonal"
+              :disabled="!nameDirty"
+              :loading="busy"
+              @click="saveName(nameField)"
+            >
+              {{ t('tunnel.reservedSave') }}
+            </v-btn>
+          </div>
+          <div class="text-caption text-medium-emphasis mt-1">
+            {{ t(`tunnel.reservedNote.${provider.id}`) }}
+          </div>
+        </template>
+        <div v-else class="text-caption text-medium-emphasis">{{ t('tunnel.reservedNone') }}</div>
+      </div>
+
       <v-btn
         color="primary"
         variant="flat"
@@ -299,5 +489,18 @@ async function submitToken(value) {
 
 .break {
   word-break: break-word;
+}
+
+/* Both fields hold a hostname label, not a sentence. */
+.user-field,
+.name-field {
+  max-width: 260px;
+}
+
+/* Read off one screen and typed into another device, so it is monospaced and
+   it wraps rather than being cut off. */
+.credential {
+  font-family: var(--v-font-monospace, monospace);
+  word-break: break-all;
 }
 </style>
