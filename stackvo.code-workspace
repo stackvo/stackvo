@@ -6,8 +6,5 @@
 		{
 			"path": "../stackvo-service-packages"
 		}
-	],
-	"settings": {
-		"postman.settings.dotenv-detection-notification-visibility": false
-	}
+	]
 }

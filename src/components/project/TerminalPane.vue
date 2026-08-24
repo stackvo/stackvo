@@ -27,8 +27,12 @@ import PaneHeader from '@/components/PaneHeader.vue';
  *
  * Mounting a pane must not spawn a process. Every other pane on this page reads
  * something; this one would start a shell in a container merely because the
- * page scrolled far enough to render it, and would keep doing so on every
- * visit.
+ * page rendered it, and would keep doing so on every visit.
+ *
+ * That still holds now the pane has a tab of its own, and the tab is the
+ * reason to say so again: arriving somewhere is not the same act as asking for
+ * a shell, and a session that opened itself would also be one that reopened
+ * itself every time somebody passed through. The button stays.
  */
 const props = defineProps({
   containerName: { type: String, default: null },
