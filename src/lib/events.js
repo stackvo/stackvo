@@ -47,6 +47,9 @@ export const EVENTS = {
   // finally opened a session — which is the same ten-month gap that left the
   // four `pty_*` wrappers with no caller.
   terminal: ['terminal:ready', 'terminal:output', 'terminal:closed'],
+  // Raised by a background loop rather than by a screen — see the event's
+  // own note in the IPC contract for why that is the whole point of it.
+  supervisor: ['supervisor:alarm'],
 };
 
 /**
