@@ -7,6 +7,41 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **§2 C is closed and its row is gone.** Third-party package distribution had
+  three things left, and the last round called all three process. Measuring
+  them said otherwise, and the last of them was a hole this repository had just
+  opened for itself.
+
+  `maintainer` is a free string in the schema, and the app had just started
+  **showing it on the market card**. Those two facts side by side are an
+  impersonation hole with nothing in between: a pull request could name
+  `stackvo` as the publisher of anything, and every user would read a name
+  nobody had checked. Showing the field did not create the hole — the string
+  was always free — it created the cost, so it is closed in the same round.
+
+  `publishers.json` in the packages repository is the list of who may be named,
+  and `validate.mjs` refuses any maintainer that is not in it, or none at all.
+  The check lives there rather than in the client, and that is the whole trust
+  argument: the index is signed with the registry key **after** those gates
+  run, so the signature carries *the registry vouches for this* and the
+  maintainer strings are inside what it covers. A client cannot verify an
+  identity claim on its own; it can only verify that the registry made it.
+  Adding a publisher is a separate pull request from adding a package, because
+  bundled, the decision that matters arrives as one line in a diff about YAML.
+
+  `CONTRIBUTING.md` is the moderation process, and most of it is not judgement:
+  the gates already decide, the same way every time, most of what a reviewer
+  would otherwise be trusted to notice. The three things a gate cannot hold are
+  named — vouching for a publisher, whether a service belongs in the catalogue,
+  and whether an image is one to hand to a stranger's daemon. A review whose
+  rules are not written down is a review that changes with whoever does it.
+
+  Takedown was already there (§6, decision 0014). So the row is deleted per §8,
+  its decisions live in §6 (0021, 0033, 0034, 0035) and its record here, and
+  the seven comments that pointed at it now point at what actually owns the
+  behaviour. Two of those had been dangling already: `C-1` names a row that has
+  not existed for some time.
+
 - **The catalogue can say whose a package is (§2 C).** `maintainer` has been in
   `package.schema.json` all along and every one of the 31 published packages
   fills it in — and the index dropped every one of them. `grep` found no screen

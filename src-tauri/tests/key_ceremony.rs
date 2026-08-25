@@ -663,8 +663,8 @@ fn function_body<'a>(script: &'a str, name: &str) -> &'a str {
 /// meant for the chain — honest, load-bearing prose that the ceremony turned
 /// into confident, specific, wrong claims. Two of them survived the round that
 /// filled `PINNED` and were still telling readers the chain's first link was
-/// open while a key sat six lines above them. §2 C is a row somebody plans work
-/// from; the cost of that being stale is the work.
+/// open while a key sat six lines above them. A row somebody plans work from is
+/// a row whose staleness costs the work.
 ///
 /// The README is scanned for the same reason and it had the same fault, one
 /// paragraph long and pointed at users: "no official key is pinned yet (the
