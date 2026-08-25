@@ -1163,6 +1163,10 @@ export interface MarketPackage {
     keywords: string[];
     /** boolean — whether two versions may run at once */
     multiple: boolean;
+    /**
+     * string? — who publishes it. Every package names one and no screen showed it; a catalogue meaning to carry third-party packages has to say whose a package is
+     */
+    maintainer?: string;
     /** MarketVersion[] */
     versions: MarketVersion[];
 }
@@ -2475,7 +2479,7 @@ export interface StackvoApi {
    */
   marketStatus(): Promise<MarketStatus>;
   /**
-   * Read a catalogue from a directory the user chose — an offline bundle, or a checkout of the packages repository. The only source this build has; HTTPS waits on the key ceremony.
+   * Read a catalogue from wherever this machine gets one — an https:// address, an offline bundle, or a directory the user picked. Which one comes from the string. The signature is checked before the index is parsed when a signature is asked for; a signature the publisher published is checked without anybody asking, a source that stops signing is refused, and policy.market.requireSignature only tightens further (ADR 0034).
    */
   marketRefresh(location: string): Promise<MarketStatus>;
   /**

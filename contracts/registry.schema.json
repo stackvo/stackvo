@@ -123,7 +123,11 @@
             "uniqueItems": true,
             "description": "What this service can be used as, for matching another package's dependsOn without downloading either."
           },
-          "legacyEnvPrefix": {
+          "maintainer": {
+          "type": "string",
+          "description": "Who publishes this package. Carried from the package manifest into the index because a catalogue offering third-party packages has to be able to say whose they are — it is the one fact a person weighs before installing somebody else's compose fragment, and dropping it here is what made it invisible for as long as it was."
+        },
+        "legacyEnvPrefix": {
             "type": "string",
             "description": "The SERVICE_<ID>_ prefix this service used before packages existed, carried for migration."
           },

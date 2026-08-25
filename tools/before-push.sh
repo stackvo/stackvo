@@ -68,9 +68,10 @@ step "supply · deny"        bash -c 'cd src-tauri && cargo deny check'
 step "supply · notice"      npm run --silent notice:check
 # Not what CI asks — CI cannot see the keys — but the same instinct, and the one
 # check whose failure is unrecoverable rather than inconvenient: a private key
-# in a commit is public the moment it is pushed. `keys.sh check` also reports
-# the states nobody has closed yet (no pinned registry key, no release), which
-# is the last place they are visible before a push.
+# in a commit is public the moment it is pushed. `keys.sh check` also asks
+# whether each key on this machine is the one the build pins — the content key's
+# version of that going wrong is caught nowhere else, and its symptom is an
+# index every installed copy of the app refuses at once.
 step "keys · ceremony"      tools/keys.sh check
 
 if [ "$all" -eq 1 ]; then
