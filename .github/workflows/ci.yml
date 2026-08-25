@@ -149,9 +149,19 @@ jobs:
         working-directory: src-tauri
         run: cargo check --all-targets
 
+      # `--no-fail-fast`, and it is the difference between one round of this and
+      # four. `cargo test` stops at the first test BINARY that fails, so a
+      # Windows run reports the alphabetically-first broken file and nothing
+      # about what is behind it — which is how "nineteen Windows failures" was
+      # read as a finished count three times running, and how a CRLF bug sat
+      # behind `agent_install` for a full round waiting its turn.
+      #
+      # The cost is the wall-clock of running the rest of a suite that is
+      # already failing. The cost of not paying it is a person waiting on a
+      # ten-minute runner to be told one thing at a time.
       - name: Test
         working-directory: src-tauri
-        run: cargo test
+        run: cargo test --no-fail-fast
 
       - name: Clippy
         working-directory: src-tauri
