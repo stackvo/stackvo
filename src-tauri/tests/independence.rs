@@ -7,7 +7,7 @@
 //! A missing template does not crash, it just renders a shorter file, and the
 //! only way to notice is to check that the output is actually complete.
 
-use stackvo_desktop_lib::{commands, instances, skeleton, workspace};
+use stackvo_desktop_lib::{commands, instances, paths, skeleton, workspace};
 
 /// Installs into a fresh temp directory and renders. No `STACKVO_ROOT`, no
 /// sibling checkout, nothing on disk but what `install` put there.
@@ -230,8 +230,15 @@ fn the_project_tree_can_live_outside_the_app_directory() {
         .find(|f| f.path.ends_with("docker-compose.projects.yml"))
         .expect("the projects compose file");
     let text = &compose.content;
-    let code_str = code.display().to_string();
-    let app_str = app.display().to_string();
+    // Through `to_docker_mount`, because that is what the generator writes and
+    // therefore what this is entitled to expect. On macOS and Linux it is the
+    // identity, so these two lines change nothing here; on Windows the compose
+    // file says `/c/Users/...` and a raw `C:\Users\...` expectation failed
+    // with "the source mount did not follow the project tree" — which reads as
+    // the mount being wrong when the mount was right and the test was asserting
+    // its own platform.
+    let code_str = paths::to_docker_mount(&code.display().to_string());
+    let app_str = paths::to_docker_mount(&app.display().to_string());
 
     // The source mount follows the user.
     assert!(
