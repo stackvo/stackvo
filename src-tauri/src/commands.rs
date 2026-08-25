@@ -12549,11 +12549,14 @@ pub fn render_generated(root: &std::path::Path) -> Result<Rendered> {
                 files.push(GenFile {
                     label: format!(
                         "configs/{}",
-                        config
-                            .path
-                            .strip_prefix(root.join("generated/configs"))
-                            .unwrap_or(&config.path)
-                            .display()
+                        crate::paths::to_label(
+                            &config
+                                .path
+                                .strip_prefix(root.join("generated/configs"))
+                                .unwrap_or(&config.path)
+                                .display()
+                                .to_string()
+                        )
                     ),
                     path: config.path,
                     scope: "services",

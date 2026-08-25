@@ -194,6 +194,34 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`--no-fail-fast` paid for itself on its first run.** With it, one Windows
+  job listed four remaining failures at once instead of the one it would have
+  reported before — and three of the four were tests asserting the platform
+  they were written on, which is exactly the class §3 #35 has been working
+  through.
+
+  `independence.rs` built its expectation from a raw host path and the compose
+  file it was reading says `/c/Users/...`, because `paths::to_docker_mount`
+  already does that job — so a correct mount failed with "the source mount did
+  not follow the project tree". `worktree_flow.rs` created its own git
+  repository and let it inherit the machine's `core.autocrlf`, so `git worktree
+  add` handed back a manifest with `\r\n` in it and the assertion that the
+  branch's committed manifest is *untouched* named this application as having
+  rewritten a file it never opened. `foreign_import.rs` gated its symlink setup
+  to Unix and left its assertions ungated, so on Windows it measured a tree
+  where the setup had quietly not happened and reported the reader as broken; a
+  Valet site *is* a symlink — `imports::linked` uses `read_link` — so the link
+  has to be real wherever this runs, and on Windows that needs Developer Mode
+  or elevation, which is not this test's to demand, so a refusal skips out loud.
+
+- **Generated file labels were half one path convention and half the other.**
+  `configs/mysql-8-0\my.cnf.tpl` — a `/`-written prefix joined onto a
+  `Path::display()`. A label is an identifier: it appears in the generated-files
+  list, it is what somebody searches for, and it is compared against in tests,
+  so it has to be one string rather than one per platform. `paths::to_label`
+  is that line given a name, and `applog.rs` — which had already reached the
+  same conclusion on its own — now calls it instead of repeating it.
+
 - **A Windows checkout was CRLF, and the tests that read this repository's own
   source had never seen one.** Git for Windows ships with `core.autocrlf=true`
   and the Actions runner inherits it, so `cfg_regions.rs` — which finds out

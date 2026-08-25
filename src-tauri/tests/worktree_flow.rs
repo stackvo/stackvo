@@ -41,6 +41,17 @@ fn git(dir: &Path, args: &[&str]) -> bool {
     std::process::Command::new("git")
         .arg("-C")
         .arg(dir)
+        // The fixture repository is created here, so it must not inherit the
+        // machine's line-ending policy. Git for Windows ships with
+        // `core.autocrlf=true`, which converts on checkout — so `git worktree
+        // add` handed back a manifest with `\r\n` in it and the assertion that
+        // the branch's committed manifest is *untouched* failed, naming this
+        // application as having rewritten a file it never opened.
+        //
+        // Passed per command rather than configured after `init`, because the
+        // first thing that happens after `init` is `add`, and the conversion
+        // starts there.
+        .args(["-c", "core.autocrlf=false", "-c", "core.eol=lf"])
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_AUTHOR_NAME", "StackVo Test")
