@@ -227,7 +227,11 @@ watch(service, load);
         <div class="entries">
           <div v-for="(entry, i) in entries" :key="i" class="entry">
             <span class="entry-at">{{ entry.at }}</span>
-            <code class="entry-sql">{{ entry.sql }}</code>
+            <!-- WCAG 3.1.2, undetermined: a statement carries its literals,
+                 which are the application's own data in whatever language it
+                 wrote them. The keywords are technical terms and exempt; the
+                 row that came back is not. -->
+            <code class="entry-sql" lang="">{{ entry.sql }}</code>
           </div>
         </div>
       </template>

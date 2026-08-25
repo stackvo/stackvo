@@ -105,7 +105,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             <span class="text-h6 side-sheet__title">{{ title }}</span>
             <slot name="header-append" />
             <v-spacer />
-            <HelpButton v-if="help" :topic="help" />
+            <HelpButton v-if="help" :topic="help" :subject="title" />
             <v-btn icon :aria-label="t('a11y.close')" @click="close">
               <v-icon>mdi-close</v-icon>
               <v-tooltip activator="parent">{{ t('a11y.close') }}</v-tooltip>

@@ -404,6 +404,15 @@ pub fn compose_base_args(root: &Path) -> Vec<String> {
         args.push("-f".to_string());
         args.push(crate::debugbridge::overlay_path(root).display().to_string());
     }
+    // The editor server's volume (R-3). Independent of everything above it,
+    // and it only adds a mount — but it goes in before the dev server for the
+    // reason the dev server is last: that one changes what the container is
+    // running, and a `volumes:` key merged onto a service already in a
+    // different mode is a harder thing to reason about than one merged before.
+    if crate::editor::sync(root) {
+        args.push("-f".to_string());
+        args.push(crate::editor::overlay_path(root).display().to_string());
+    }
     // Last of the three, and it is the only one that overrides rather than
     // adds: it replaces the container's `command` with the dev server. Anything
     // layered after it would be merging onto a service already in a different

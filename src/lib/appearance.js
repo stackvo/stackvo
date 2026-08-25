@@ -356,6 +356,22 @@ export function applyAppearance(appearance, systemAccent = null) {
   if (typeof document !== 'undefined') {
     const rtl = rtlFor(i18n.global.locale.value, a.rtl);
     document.documentElement.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+
+    // And the language, on the same element and for the same reason `dir` is
+    // here — except that this one was not merely incomplete, it was **wrong**.
+    //
+    // `index.html` ships `lang="en"` and nothing ever changed it, so a Turkish
+    // window announced itself as English for its whole life. That is WCAG
+    // 3.1.1, and it is the criterion everything else about language rests on: a
+    // screen reader picks its voice and its pronunciation rules from this
+    // attribute, so a Turkish interface was being read out with English
+    // phonetics. `docs/accessibility.md` said the interface language "is
+    // announced on the document", which was the claim this line makes true.
+    //
+    // The **active** locale, like `dir` above — including a pack's tag, which
+    // is what makes a third language announce itself as itself rather than as
+    // one of the two this build was born with.
+    document.documentElement.setAttribute('lang', i18n.global.locale.value);
   }
 }
 

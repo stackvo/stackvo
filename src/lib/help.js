@@ -78,6 +78,7 @@ export const HELP_TOPICS = [
   'project-timeline',
   'project-tunnel',
   'project-workers',
+  'project-why-slow',
   'project-worktree',
   'project-xdebug',
   'settings-agents',

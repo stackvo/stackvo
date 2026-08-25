@@ -395,6 +395,7 @@ onUnmounted(() => clearInterval(timer));
                 clearable
                 prepend-inner-icon="mdi-magnify"
                 :placeholder="t('mail.searchPlaceholder')"
+                :aria-label="t('mail.searchPlaceholder')"
                 :loading="searching"
                 @update:model-value="onSearch"
                 @click:clear="onSearch('')"

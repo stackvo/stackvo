@@ -198,6 +198,37 @@ pub fn config_path(id: &str) -> Option<PathBuf> {
         .cloned()
 }
 
+/// The home directory, asking the environment first on every platform.
+///
+/// `dirs::home_dir()` is not symmetric and the asymmetry is invisible from a
+/// Mac: on Unix it reads `$HOME`, and on Windows it ignores `%USERPROFILE%` and
+/// asks the shell for `FOLDERID_Profile` instead. So this module honoured a
+/// relocated home on two platforms out of three, and the third was the one
+/// nobody here runs.
+///
+/// It surfaced as the last failing test on Windows — `agent_install.rs` points
+/// `HOME` and `USERPROFILE` at a scratch directory and asserts the path it gets
+/// back is inside it, which is the only way that file can exercise the write
+/// half without editing the real profile of whoever is running it. On Windows
+/// the assertion failed, and the honest reading is not that the test assumes
+/// POSIX: it is that this module would have written into a place Windows itself
+/// says is not the user's home.
+///
+/// The alternative was to skip the test on Windows, and that is the trade #35
+/// already caught once — `runner.rs` looked thoroughly tested there while
+/// having no coverage at all. A file that installs into somebody's home is the
+/// wrong one to leave untested on the platform where the resolution differs.
+fn home() -> Option<PathBuf> {
+    // Windows sets this itself, to the same directory the shell reports, and
+    // the two part company exactly where honouring it matters: a redirected
+    // profile, a service, a test that owns its own home.
+    #[cfg(windows)]
+    if let Some(profile) = std::env::var_os("USERPROFILE").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(profile));
+    }
+    dirs::home_dir()
+}
+
 /// Every place a client might keep its configuration, best first.
 ///
 /// One entry for all but two of them, and the two are not an inconsistency:
@@ -211,7 +242,7 @@ pub fn config_path(id: &str) -> Option<PathBuf> {
 ///   it. A hard-coded `~/.codex` would edit a file that installation does not
 ///   read.
 pub fn config_candidates(id: &str) -> Vec<PathBuf> {
-    let Some(home) = dirs::home_dir() else {
+    let Some(home) = home() else {
         return Vec::new();
     };
 

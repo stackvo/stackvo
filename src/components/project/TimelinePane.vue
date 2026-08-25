@@ -149,7 +149,9 @@ watch(service, load);
             }}
           </v-icon>
           <div class="moment-body">
-            <code class="moment-summary">{{ moment.summary }}</code>
+            <!-- WCAG 3.1.2, undetermined: a dump label, a statement or a
+                 subject line, all of them the application's own words. -->
+            <code class="moment-summary" lang="">{{ moment.summary }}</code>
             <span v-if="moment.request" class="moment-request">{{ moment.request }}</span>
           </div>
         </div>

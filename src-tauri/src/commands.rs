@@ -3448,6 +3448,85 @@ pub async fn request_timeline(
     Ok(crate::timeline::build(&dumps, &queries, &mail, recording))
 }
 
+/// Why one recorded request was slow — the three instruments around it.
+///
+/// B-1. SPX says where the code's time went, the query log says what the
+/// database was asked, and the axis says what else happened; each was its own
+/// pane, and putting them around **one** request meant reading three of them
+/// and comparing clocks by eye.
+///
+/// The recording is the key: `spx::Report` is the only thing in this system
+/// that names a request, says when it started and says how long it took, so
+/// everything else is placed against the stretch of wall clock it claims. That
+/// is a join by time and [`crate::explain`] is explicit about it — including
+/// naming any other recording that claims part of the same stretch.
+///
+/// Three absences are survived rather than raised, and each is reported so the
+/// screen can tell them apart:
+///
+///   * **no trace half** — the metadata still says what the request was and
+///     when, and the database half is untouched by it;
+///   * **no database named, or one that cannot be reached** — the same rule
+///     [`request_timeline`] follows, and for the same reason;
+///   * **no mail catcher** — best effort, as everywhere else.
+///
+/// The one thing that is *not* survived is a report key that names nothing:
+/// that is a screen asking about a recording that does not exist, and answering
+/// it with an empty explanation would present "we have nothing on this request"
+/// as an answer about the request.
+#[tauri::command]
+pub async fn request_explain(
+    state: State<'_, AppState>,
+    project: String,
+    key: String,
+    service: Option<String>,
+) -> Result<crate::explain::Explanation> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &project)?;
+    crate::spx::check_key(&key)?;
+
+    let reports = crate::spx::list(&root, &project);
+    let report = reports
+        .iter()
+        .find(|report| report.key == key)
+        .ok_or_else(|| Error::not_found(format!("report {key}")))?;
+
+    // The whole hotspot list, not the twenty-five a screen shows: a request
+    // whose driver frames all sit below the top of the list is exactly the one
+    // the split exists for, and computing it from a trimmed list would report
+    // it as pure PHP. `explain` does the trimming for the boundary.
+    let analysis = crate::spx::analyse(&root, &project, &key, usize::MAX).ok();
+
+    let (queries, recording) = match service {
+        Some(service) => match crate::querylog::read(&root, &service).await {
+            Ok(session) => (session.entries, session.recording),
+            Err(_) => (Vec::new(), false),
+        },
+        None => (Vec::new(), false),
+    };
+
+    let dumps = crate::debugbridge::read_events(&root, &project);
+    let mail = crate::mail::messages(&root, 100).await.unwrap_or_default();
+    let builtins = crate::spx::read_config(&root, &project).builtins;
+
+    // The stretch this app watched, if it was this app that sent the request.
+    // Where there is one it replaces the arithmetic — see `explain::Window::of`
+    // for the premise it makes unnecessary.
+    let observed = crate::spx::read_observed(&root, &project);
+
+    Ok(crate::explain::explain(
+        report,
+        analysis.as_ref(),
+        observed.get(&key),
+        &queries,
+        recording,
+        &dumps,
+        &mail,
+        &reports,
+        builtins,
+    ))
+}
+
 /// Read a database out to a file the user chose.
 #[tauri::command]
 pub async fn db_dump(
@@ -4015,6 +4094,11 @@ pub async fn spx_record_request(
         .map(|report| report.key)
         .collect();
 
+    // The clock, on this side of the request. This is what makes the window
+    // `request_explain` joins statements to an **observation** rather than
+    // arithmetic over `exec_ts` — see `explain::Window::of` for the premise
+    // that removes, and `spx::record_observed` for where it is kept.
+    let opened = host_seconds();
     let code = crate::spx::send(&url, &crate::spx::trigger_cookie(&profiler_key, &config)).await?;
 
     // The report lands during the request's own shutdown, which can finish
@@ -4028,6 +4112,19 @@ pub async fn spx_record_request(
             .into_iter()
             .find(|report| !before.contains(&report.key))
         {
+            // Closed here rather than after `send` returned: php-spx writes the
+            // pair during shutdown, so the request is not over until the file
+            // exists. A window that ended at the response would cut off the
+            // statements of everything the request did after flushing it.
+            crate::spx::record_observed(
+                &root,
+                &name,
+                &fresh.key,
+                crate::spx::Observed {
+                    from: opened,
+                    to: host_seconds(),
+                },
+            );
             return Ok(fresh);
         }
     }
@@ -4040,6 +4137,20 @@ pub async fn spx_record_request(
         format!("{name} answered {code}, and the profiler recorded nothing"),
     )
     .with_hint(crate::hints::SPX_RECORDED_NOTHING))
+}
+
+/// The host clock, in the unit and epoch every other source on the axis uses.
+///
+/// Seconds since the epoch with fractions, which is what the debug bridge's
+/// `microtime` writes and what `UNIX_TIMESTAMP` gives back for a statement. A
+/// clock that will not read answers zero, which `record_observed` refuses —
+/// so the window falls back to the arithmetic rather than pinning the request
+/// to 1970, where nothing at all falls inside it.
+fn host_seconds() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs_f64())
+        .unwrap_or(0.0)
 }
 
 /// Record one of the project's own commands.
@@ -4092,6 +4203,17 @@ pub async fn spx_record_command(
         }),
     );
 
+    // The same two things `spx_record_request` keeps, for the same reason: the
+    // keys that already existed, so the one this run writes can be told from
+    // them, and the clock on this side of it. A command is a slower subject
+    // than a page load — a queue worker or a migration — which makes the
+    // arithmetic's unmeasured premise about `exec_ts` cost more here, not less.
+    let before: std::collections::HashSet<String> = crate::spx::list(&root, &name)
+        .into_iter()
+        .map(|report| report.key)
+        .collect();
+    let opened = host_seconds();
+
     let handle = app.clone();
     let subject = name.clone();
     let op_id = operation_id.clone();
@@ -4110,6 +4232,24 @@ pub async fn spx_record_command(
             },
         )
         .await;
+
+        // After the operation, whatever it exited with. A command that failed
+        // half way still profiled the half it ran, and that recording is one
+        // somebody will open — the failure is often the reason they are looking.
+        if let Some(fresh) = crate::spx::list(&root, &subject)
+            .into_iter()
+            .find(|report| !before.contains(&report.key))
+        {
+            crate::spx::record_observed(
+                &root,
+                &subject,
+                &fresh.key,
+                crate::spx::Observed {
+                    from: opened,
+                    to: host_seconds(),
+                },
+            );
+        }
     });
 
     Ok(operation_id)

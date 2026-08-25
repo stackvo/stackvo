@@ -87,7 +87,10 @@ function keyClass(item) {
 <template>
   <!-- A value the older bridge already formatted. Nothing to fold and nothing
        to colour: what arrived is the rendering. -->
-  <pre v-if="isLegacy(node)" class="tok-legacy legacy-block">{{ node }}</pre>
+  <!-- WCAG 3.1.2, undetermined: a captured value is the application's data —
+       a row, a message, a name — and nothing here knows what language it is
+       in. See `LogView` for why the value is empty rather than `en`. -->
+  <pre v-if="isLegacy(node)" class="tok-legacy legacy-block" lang="">{{ node }}</pre>
 
   <span v-else-if="!branch" :class="leafClass">{{ summary(node) }}</span>
 

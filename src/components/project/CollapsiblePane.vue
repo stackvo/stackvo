@@ -70,7 +70,7 @@ const bodyId = useId();
 
       <v-spacer />
 
-      <HelpButton v-if="help" :topic="help" />
+      <HelpButton v-if="help" :topic="help" :subject="title" />
     </div>
 
     <!-- Outside the fold and inside the card. A failure the pane is reporting
