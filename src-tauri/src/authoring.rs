@@ -1,6 +1,6 @@
 //! Writing a service package, rather than only installing one.
 //!
-//! C-1. Everything a third-party package needs already exists: the format, the
+//! Everything a third-party package needs already exists: the format, the
 //! validator, the compose policy, and a `local` source that installs from any
 //! directory the user points at. What was missing was the act of *authoring*
 //! one, and the reason is narrower and more annoying than "there is no editor".
@@ -36,13 +36,24 @@
 //!
 //! ## This authors a package; it does not publish one
 //!
-//! There is no signing here and no upload. Third-party *distribution* needs a
-//! moderation process, a publisher identity and a takedown mechanism, and
-//! opening that gate is a separate decision — `docs/durum.md` §2 C tracks the
-//! three of them, all of which are process rather than code. Authoring a package
-//! for your own machine, or for a mirror your organisation already runs, needs
-//! none of them, and the organisation's half of the gate is
-//! `policy.market.allowedSources`.
+//! There is no signing here and no upload, and that division is not a gap. The
+//! three things third-party *distribution* needs beyond authoring all exist and
+//! all live where they can be enforced: a takedown mechanism (§6, decision
+//! 0014 — a withdrawn version is refused at install and `doctor` names one
+//! already installed), a publisher identity (`publishers.json` in the packages
+//! repository, checked before the index is signed), and a written moderation
+//! process (its `CONTRIBUTING.md`).
+//!
+//! The identity check is deliberately *there* and not here, and the reason is
+//! the whole trust argument: the index is signed with the registry key after
+//! those gates run, so the signature is what carries "the registry vouches for
+//! this". A client cannot verify an identity claim on its own — only that the
+//! registry made it.
+//!
+//! Authoring for your own machine, or for a mirror your organisation already
+//! runs, needs none of it: the organisation's half of the gate is
+//! `policy.market.allowedSources` and its own signing key in
+//! `policy.market.additionalKeys`.
 
 use crate::error::{Code, Error, Result};
 use serde::Serialize;

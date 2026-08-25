@@ -4,8 +4,8 @@
 //! endpoint, the endpoint answered 404, and the row said so — but the reason it
 //! answered 404 was a **decision**: nobody had said where `latest.json` would
 //! be published or who would hold the signing key. §5 held it, and #21 (release
-//! channels, staged rollout, rollback) sat behind it, and so did the key
-//! ceremony half of §2 C. One answer, three rows.
+//! channels, staged rollout, rollback) sat behind it, and so did the package
+//! registry's key ceremony (§6, decision 0033). One answer, three rows.
 //!
 //! The answer is GitHub Releases on this repository. Which makes the endpoint
 //! derivable rather than typed, and that is what this file checks — because the

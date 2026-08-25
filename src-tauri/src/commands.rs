@@ -13282,7 +13282,7 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
     market_status(state)
 }
 
-// ------------------------------------------------------- authoring (C-1)
+// ------------------------------------------------------------- authoring
 
 /// Write a new package under this workspace's own package tree.
 ///
