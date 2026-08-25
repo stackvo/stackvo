@@ -248,6 +248,22 @@ fn the_views_source_list_and_the_backends_agree() {
     }
 }
 
+/// A directory symlink, on whichever platform this is.
+///
+/// Reported rather than unwrapped: on Windows this is a privileged operation
+/// and its absence is a fact about the machine, not a failure of the code under
+/// test.
+fn link_dir(target: &std::path::Path, link: &std::path::Path) -> bool {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_dir(target, link).is_ok()
+    }
+}
+
 /// Herd is Valet's shape with a different root, and the point of the test is
 /// that a real tree goes through the reader that already existed — and comes
 /// out carrying the one thing Valet cannot say.
@@ -266,8 +282,28 @@ fn a_herd_tree_is_read_by_valets_reader_and_keeps_its_pinned_version() {
     std::fs::create_dir_all(code.join("shop/public")).unwrap();
     std::fs::create_dir_all(&sites).unwrap();
     write(&config.join("config.json"), r#"{"tld":"test","paths":[]}"#);
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(code.join("shop"), sites.join("shop")).unwrap();
+    // A Valet/Herd site IS a symlink — `imports::linked` uses `read_link`, and a
+    // plain directory is not a linked site by any definition. So the link has
+    // to be real on every platform this runs on.
+    //
+    // It used to be `#[cfg(unix)]` with nothing on the other side, which left
+    // the assertions below running on Windows against a tree where the setup
+    // had quietly not happened: `install.sites.len()` was 0 against an expected
+    // 1, and the message read as the reader being broken. A test whose setup is
+    // platform-gated and whose assertions are not is a test that reports the
+    // wrong thing.
+    //
+    // `symlink_dir` on Windows needs either Developer Mode or elevation, and
+    // neither is this test's to demand — so a refusal skips, out loud, the same
+    // way `worktree_flow.rs` skips without git. Silent is the one thing it must
+    // not be.
+    if !link_dir(&code.join("shop"), &sites.join("shop")) {
+        eprintln!(
+            "skipping: this platform would not create a directory symlink \
+             (on Windows that needs Developer Mode or an elevated shell)"
+        );
+        return;
+    }
     write(
         &config.join("Nginx/shop.test.conf"),
         "server {\n  location ~ \\.php$ {\n    fastcgi_pass unix:/x/herd-83.sock;\n  }\n}\n",

@@ -212,7 +212,7 @@ fn collect(base: &Path, dir: &Path, which: Root, depth: usize, out: &mut Vec<Log
         let Ok(relative) = path.strip_prefix(base) else {
             continue;
         };
-        let label = relative.to_string_lossy().replace('\\', "/");
+        let label = crate::paths::to_label(&relative.to_string_lossy());
 
         out.push(LogFile {
             id: format!("{}:{}", which.prefix(), label),

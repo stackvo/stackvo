@@ -43,6 +43,24 @@ pub fn to_docker_mount(text: &str) -> String {
     format!("/{}/{}", drive.to_lowercase(), rest)
 }
 
+/// A relative path as a label, with forward slashes on every platform.
+///
+/// Not the same job as [`to_docker_mount`] and deliberately a separate
+/// function: that one rewrites an absolute *host* path for a container, this
+/// one renders a path this application already owns for a person to read. A
+/// label is an identifier — it appears in the generated-files list, it is what
+/// somebody searches for, and it is compared against in tests — so it has to be
+/// one string rather than one per platform.
+///
+/// The failure that named it: `configs/mysql-8-0\my.cnf.tpl`, built by joining
+/// a `/`-written prefix onto a `Path::display()`, so the label was half one
+/// convention and half the other. `applog.rs` had already reached this
+/// conclusion for its own labels; this is that line, given a name, so the two
+/// cannot come apart.
+pub fn to_label(text: &str) -> String {
+    text.replace('\\', "/")
+}
+
 /// `C:\…` or `C:/…` — a drive letter followed by a colon.
 fn looks_like_windows_path(text: &str) -> bool {
     let mut chars = text.chars();
@@ -148,5 +166,17 @@ mod tests {
             "//./pipe/docker_engine"
         );
         assert_eq!(strip_endpoint_scheme("/already/bare"), "/already/bare");
+    }
+
+    /// A label is one string on every platform, or it is not an identifier.
+    #[test]
+    fn a_label_is_forward_slashed_whatever_wrote_it() {
+        assert_eq!(to_label(r"mysql-8-0\my.cnf.tpl"), "mysql-8-0/my.cnf.tpl");
+        assert_eq!(
+            to_label("redis-7-0/redis.conf.tpl"),
+            "redis-7-0/redis.conf.tpl"
+        );
+        assert_eq!(to_label(r"a\b\c"), "a/b/c");
+        assert_eq!(to_label(""), "");
     }
 }
