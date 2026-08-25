@@ -181,14 +181,19 @@ function duration(op) {
         <div v-show="expanded">
           <v-divider />
           <div ref="viewport" class="console-output">
-            <pre v-for="(line, i) in current.lines" :key="i" class="console-line">{{ line }}</pre>
+            <!-- WCAG 3.1.2, undetermined: this is docker's output and the
+                 build output of whatever is in the image. See `LogView` for why
+                 the value is empty rather than `en`. -->
+            <pre v-for="(line, i) in current.lines" :key="i" class="console-line" lang="">{{
+              line
+            }}</pre>
             <div v-if="!current.lines.length" class="text-caption text-medium-emphasis pa-2">
               {{ t('app.loading') }}
             </div>
           </div>
 
           <v-alert v-if="current.error" type="error" variant="tonal" class="ma-2">
-            <pre class="console-line">{{ current.error }}</pre>
+            <pre class="console-line" lang="">{{ current.error }}</pre>
           </v-alert>
         </div>
       </v-expand-transition>

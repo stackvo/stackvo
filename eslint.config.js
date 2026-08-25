@@ -82,6 +82,10 @@ export default [
         // Node 17+, and the honest way to build a fixture a test then mutates
         // without the mutation leaking into the next test.
         structuredClone: 'readonly',
+        // Node 18+. `tools/check-updater-endpoint.mjs` makes the one HTTP
+        // request this repository makes outside a test — asking the update
+        // endpoint whether it answers, which nothing here had ever done.
+        fetch: 'readonly',
         // Resizing the window is the only way to ask Vuetify's display for a
         // different breakpoint, and it listens for one of these.
         Event: 'readonly',

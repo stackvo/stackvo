@@ -107,8 +107,13 @@ const findings = computed(() => {
     @click:close="$emit('close')"
   >
     <div v-if="headline" class="text-body-2 font-weight-medium">{{ headline }}</div>
-    <div class="text-caption" :class="{ 'mt-1': headline }">{{ detail }}</div>
-    <ul v-if="findings.length" class="text-caption mt-2 ms-4">
+    <!-- WCAG 3.1.2. `headline` and `hint` are translated; this is the message
+         Rust wrote, and Rust writes one language. A Turkish window read out
+         with Turkish phonetics over an English sentence is the failure the
+         criterion names, and it is exactly the mix this alert makes: a
+         translated heading, an English detail, a translated suggestion. -->
+    <div class="text-caption" lang="en" :class="{ 'mt-1': headline }">{{ detail }}</div>
+    <ul v-if="findings.length" class="text-caption mt-2 ms-4" lang="en">
       <li v-for="(f, i) in findings" :key="i">
         <strong v-if="f.code">{{ f.code }}</strong>
         <span v-if="f.path" class="text-medium-emphasis"> {{ f.path }}</span>

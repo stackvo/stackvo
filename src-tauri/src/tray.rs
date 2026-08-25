@@ -179,6 +179,12 @@ pub const LABEL_KEYS: &[&str] = &[
     // "the translations live in the frontend's locale files, and a second copy
     // in Rust is a second thing to keep in step." `lib.rs` kept one anyway.
     "menuAbout",
+    // The two macOS app-menu items that interpolate the application's own
+    // name. Tauri's predefined pair fills that hole with the CRATE name, so a
+    // window called StackVo offered "Quit stackvo-desktop" — measured through
+    // the accessibility API, which is what a screen reader reads.
+    "menuHide",
+    "menuQuit",
     "menuDocs",
     "menuSource",
     "menuIssues",
@@ -189,6 +195,8 @@ pub fn menu_labels() -> crate::menu::Labels {
     let lang = locale();
     crate::menu::Labels {
         about: tr(&lang, "menuAbout"),
+        hide: tr(&lang, "menuHide"),
+        quit: tr(&lang, "menuQuit"),
         docs: tr(&lang, "menuDocs"),
         source: tr(&lang, "menuSource"),
         issues: tr(&lang, "menuIssues"),
@@ -281,6 +289,10 @@ fn tr(locale: &str, key: &str) -> String {
         ("navSettings", false) => "Settings",
         ("menuAbout", true) => "StackVo Hakkında",
         ("menuAbout", false) => "About StackVo",
+        ("menuHide", true) => "{product} uygulamasını gizle",
+        ("menuHide", false) => "Hide {product}",
+        ("menuQuit", true) => "{product} uygulamasından çık",
+        ("menuQuit", false) => "Quit {product}",
         ("menuDocs", true) => "Belgeler",
         ("menuDocs", false) => "Documentation",
         ("menuSource", true) => "Kaynak kodu",
@@ -532,6 +544,23 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
 
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().expect("bundled icon").clone())
+        // The tooltip is the only name this status item carries, and it was
+        // only ever set by `refresh` — so between the icon appearing and the
+        // first engine check landing there was nothing, and an engine check
+        // that hangs left it that way. The product name alone here rather than
+        // the live summary: there is no summary yet, and a tooltip claiming a
+        // state nothing has checked would be worse than a short one. `refresh`
+        // replaces it a second later with "StackVo — <summary>".
+        //
+        // Which attribute it lands in was measured rather than assumed, and the
+        // first guess was wrong: it is `AXHelp`, not `AXTitle`. An icon-only
+        // status item has no `AXTitle` on macOS by construction — giving it one
+        // means putting visible text in the menu bar beside the icon, which is
+        // a product decision rather than an accessibility fix. So the name is
+        // programmatically determinable, and it is supplementary rather than
+        // primary. `examples/native_ax_probe.rs` prints all three attributes for
+        // exactly that reason.
+        .tooltip("StackVo")
         .menu(&menu)
         // Both buttons open the menu. Left-click used to raise the window
         // instead, which made the two buttons do unrelated things from the
@@ -584,6 +613,14 @@ pub fn relabel<R: Runtime>(app: &AppHandle<R>) {
         .unwrap_or_else(|| "StackVo".to_string());
     if let Ok(menu) = crate::menu::build(app, &menu_labels(), &product) {
         let _ = app.set_menu(menu);
+    }
+
+    // And the About window's title, which is its accessible name and is drawn
+    // from the same catalogue as the item that opens it. A window left with the
+    // old language announces itself in it — the same failure this function
+    // exists to fix for the menu, one window along.
+    if let Some(about) = app.get_webview_window(crate::menu::ABOUT_LABEL) {
+        let _ = about.set_title(&menu_labels().about);
     }
 
     let Some(tray) = app.tray_by_id("main") else {

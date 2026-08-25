@@ -332,61 +332,15 @@ const canCreate = computed(
          and four branches hidden inside a select is a menu you have to open to
          learn what the panel can do. The form is the work; the choice sits
          beside it, visible, and the two stack on a narrow window. -->
+    <!-- Reading order note (WCAG 1.3.2): the chooser is FIRST in the markup and
+         second on screen on a wide window, which is the way round that keeps
+         the meaningful sequence programmatically determinable. It used to be
+         the other way — the form first in the markup, the chooser pulled above
+         it with `order: -1` on a narrow window — so a screen reader read the
+         whole form and only then reached the control that decides what those
+         fields mean. You pick a template, then you fill it in; the markup says
+         so now, and `order` moves the box rather than the sequence. -->
     <div class="new-project">
-      <div class="new-project__form">
-        <!-- One form for both paths, in `scaffold` mode for a template. It
-             drops the runtime and the document root — the template is the
-             first and the framework is the second — and keeps the three a
-             framework does not answer: PHP version, web server, extensions.
-             The duplicate name and domain fields that used to live here were
-             the same two fields written twice. -->
-        <ProjectFormFields ref="fields" v-model="form" :catalog="catalog" :scaffold="detected" />
-
-        <!-- The one thing a clone needs that nothing else does. Above the
-             hints, because with this empty the panel cannot do anything. -->
-        <v-text-field
-          v-if="cloning"
-          v-model="gitUrl"
-          class="mt-4"
-          variant="outlined"
-          density="comfortable"
-          spellcheck="false"
-          autocomplete="off"
-          prepend-inner-icon="mdi-source-branch"
-          :label="t('newProject.gitUrl')"
-          :placeholder="t('newProject.gitUrlPlaceholder')"
-          :hint="t('newProject.gitUrlHint')"
-          persistent-hint
-        />
-
-        <v-alert v-if="cloning" type="info" variant="tonal" class="mt-4">
-          <div class="text-caption">{{ t('newProject.gitAuthHint') }}</div>
-          <div class="text-caption mt-2">{{ t('newProject.gitManifestHint') }}</div>
-          <div class="text-caption mt-2">{{ t('newProject.detectedHint') }}</div>
-        </v-alert>
-
-        <!-- Said rather than left as an absence: a Laravel document root typed
-             by hand is a 404 nobody can explain. -->
-        <v-alert v-if="scaffolding" type="info" variant="tonal" class="mt-4">
-          <div class="text-caption">{{ t('newProject.templateHint') }}</div>
-          <div class="text-caption mt-2">{{ t('newProject.detectedHint') }}</div>
-        </v-alert>
-
-        <v-alert v-if="report && !report.valid" type="warning" variant="tonal" class="mt-5">
-          <div v-for="(issue, i) in report.errors" :key="i" class="text-caption">
-            <strong>{{ issue.code }}</strong> {{ issue.path }} — {{ issue.message }}
-          </div>
-        </v-alert>
-
-        <v-alert v-if="unavailable.length" type="info" variant="tonal" class="mt-5">
-          <div class="text-caption">
-            {{
-              t('newProject.unavailableRuntimes', { list: unavailable.map((r) => r.id).join(', ') })
-            }}
-          </div>
-        </v-alert>
-      </div>
-
       <div class="new-project__choice">
         <div class="sheet-group">{{ t('newProject.template') }}</div>
 
@@ -468,6 +422,59 @@ const canCreate = computed(
           </v-expansion-panel>
         </v-expansion-panels>
       </div>
+      <div class="new-project__form">
+        <!-- One form for both paths, in `scaffold` mode for a template. It
+             drops the runtime and the document root — the template is the
+             first and the framework is the second — and keeps the three a
+             framework does not answer: PHP version, web server, extensions.
+             The duplicate name and domain fields that used to live here were
+             the same two fields written twice. -->
+        <ProjectFormFields ref="fields" v-model="form" :catalog="catalog" :scaffold="detected" />
+
+        <!-- The one thing a clone needs that nothing else does. Above the
+             hints, because with this empty the panel cannot do anything. -->
+        <v-text-field
+          v-if="cloning"
+          v-model="gitUrl"
+          class="mt-4"
+          variant="outlined"
+          density="comfortable"
+          spellcheck="false"
+          autocomplete="off"
+          prepend-inner-icon="mdi-source-branch"
+          :label="t('newProject.gitUrl')"
+          :placeholder="t('newProject.gitUrlPlaceholder')"
+          :hint="t('newProject.gitUrlHint')"
+          persistent-hint
+        />
+
+        <v-alert v-if="cloning" type="info" variant="tonal" class="mt-4">
+          <div class="text-caption">{{ t('newProject.gitAuthHint') }}</div>
+          <div class="text-caption mt-2">{{ t('newProject.gitManifestHint') }}</div>
+          <div class="text-caption mt-2">{{ t('newProject.detectedHint') }}</div>
+        </v-alert>
+
+        <!-- Said rather than left as an absence: a Laravel document root typed
+             by hand is a 404 nobody can explain. -->
+        <v-alert v-if="scaffolding" type="info" variant="tonal" class="mt-4">
+          <div class="text-caption">{{ t('newProject.templateHint') }}</div>
+          <div class="text-caption mt-2">{{ t('newProject.detectedHint') }}</div>
+        </v-alert>
+
+        <v-alert v-if="report && !report.valid" type="warning" variant="tonal" class="mt-5">
+          <div v-for="(issue, i) in report.errors" :key="i" class="text-caption">
+            <strong>{{ issue.code }}</strong> {{ issue.path }} — {{ issue.message }}
+          </div>
+        </v-alert>
+
+        <v-alert v-if="unavailable.length" type="info" variant="tonal" class="mt-5">
+          <div class="text-caption">
+            {{
+              t('newProject.unavailableRuntimes', { list: unavailable.map((r) => r.id).join(', ') })
+            }}
+          </div>
+        </v-alert>
+      </div>
     </div>
 
     <template #footer>
@@ -492,9 +499,12 @@ const canCreate = computed(
 }
 
 /* Fixed, and narrow: it is a list of five short labels, and letting it share
-   the growth would take width from the form, which is where the typing is. */
+   the growth would take width from the form, which is where the typing is.
+   `order` puts it on the right on a wide window while it stays FIRST in the
+   markup — see the reading order note above the template. */
 .new-project__choice {
   flex: 0 0 260px;
+  order: 1;
 }
 
 .template-panel-title {
@@ -518,10 +528,13 @@ const canCreate = computed(
     flex-direction: column;
   }
 
+  /* Reading order note: nothing to re-order here any more. The chooser is
+     first in the markup, so a single column already puts it where it belongs
+     — above the form it decides the meaning of. */
   .new-project__choice {
     flex: 1 1 auto;
     width: 100%;
-    order: -1;
+    order: 0;
   }
 }
 

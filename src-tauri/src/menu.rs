@@ -46,7 +46,7 @@ const LINKS: [(&str, &str); 3] = [
 
 /// The window the About item opens. Its own label, so the frontend can tell it
 /// apart from the main window and render the card alone rather than the shell.
-const ABOUT_LABEL: &str = "about";
+pub const ABOUT_LABEL: &str = "about";
 
 /// The default menu, with "About StackVo" added to Help.
 ///
@@ -94,10 +94,13 @@ pub fn build<R: Runtime>(
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::services(app, None)?,
                 &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::hide(app, None)?,
+                &PredefinedMenuItem::hide(app, Some(&labels.hide.replace("{product}", product)))?,
+                // `hide_others` interpolates nothing, so it is left to the
+                // operating system — which spells it in the OS's language, and
+                // that is right for a standard item naming no application.
                 &PredefinedMenuItem::hide_others(app, None)?,
                 &PredefinedMenuItem::separator(app)?,
-                &PredefinedMenuItem::quit(app, None)?,
+                &PredefinedMenuItem::quit(app, Some(&labels.quit.replace("{product}", product)))?,
             ],
         )?;
 
@@ -138,6 +141,36 @@ pub struct Labels {
     pub docs: String,
     pub source: String,
     pub issues: String,
+    /// macOS's "Hide <app>", with `{product}` where the name goes.
+    ///
+    /// Given rather than left to Tauri, and this was measured rather than
+    /// assumed: `PredefinedMenuItem::hide(app, None)` fills the hole with the
+    /// **crate** name, so an application called StackVo offered "Hide
+    /// stackvo-desktop" — and `Quit stackvo-desktop` beside it. Read out of the
+    /// running application's accessibility tree, which is what a screen reader
+    /// reads and what the row this fixes said could not be looked at.
+    ///
+    /// The placeholder is filled in [`build`], which is the only place the
+    /// product name is known.
+    pub hide: String,
+    /// The same, for "Quit <app>".
+    pub quit: String,
+}
+
+/// What the About window is called, to the operating system.
+///
+/// It was `""`, and an empty string is not a neutral choice here. A window's
+/// title **is** its accessible name: it is what the window list announces, what
+/// the Window menu shows, and what a screen reader reads when focus lands in
+/// there. An untitled window is announced as nothing, and this one exists to
+/// say what version is installed — so somebody using a screen reader was being
+/// handed an unnamed box containing the answer.
+///
+/// The same words the menu item that opens it carries, from the same catalogue,
+/// so it is in the interface's language rather than in the build's. See
+/// `tray::menu_labels` for why the words come from the front end.
+fn about_title() -> String {
+    crate::tray::menu_labels().about
 }
 
 /// Open the About window, or focus it if it is already up.
@@ -147,6 +180,10 @@ pub struct Labels {
 /// checks a version.
 pub fn open_about<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     if let Some(window) = app.get_webview_window(ABOUT_LABEL) {
+        // Re-titled on the way back up, not only on the way in: the language
+        // may have changed while it sat hidden, and `relabel` cannot reach a
+        // window that did not exist when it ran.
+        let _ = window.set_title(&about_title());
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -158,7 +195,7 @@ pub fn open_about<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         ABOUT_LABEL,
         WebviewUrl::App("index.html#/about".into()),
     )
-    .title("")
+    .title(about_title())
     .inner_size(420.0, 560.0)
     .resizable(false)
     .minimizable(false)

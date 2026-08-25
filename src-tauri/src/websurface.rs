@@ -78,7 +78,7 @@ use serde::Serialize;
 /// `secrets::read` to compute that boolean, and a list named for what is
 /// proved rather than for what is suspected has to hold every path, including
 /// the ones that look harmless today. The fixpoint found it; nothing else had.
-pub const REACHES_THE_KEYSTORE: [&str; 19] = [
+pub const REACHES_THE_KEYSTORE: [&str; 20] = [
     "db_targets",
     "doctor",
     "generator_verify",
@@ -91,6 +91,10 @@ pub const REACHES_THE_KEYSTORE: [&str; 19] = [
     // this surface should not be answering over loopback either.
     "project_providers",
     "query_log",
+    // Statement text again, and by a longer route: it joins the query log
+    // to one recorded request, so everything `query_log` is on this list for
+    // reaches a caller through this one as well.
+    "request_explain",
     "request_timeline",
     "secrets_status",
     "service_connection",

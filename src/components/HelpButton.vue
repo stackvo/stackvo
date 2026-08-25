@@ -14,6 +14,23 @@ import { useHelp } from '@/composables/useHelp';
  */
 defineProps({
   topic: { type: String, required: true },
+  /**
+   * What this button is the help *for*, as a screen reader hears it.
+   *
+   * The card's own name, passed down by whichever wrapper drew the card. Not
+   * decoration: this button repeats on some forty cards, and before this every
+   * copy announced the same sentence. Measured — the Dashboard offered twelve
+   * controls under two distinct names, eleven of them this one, so a screen
+   * reader read "what this card is for" eleven times and there was no way to
+   * choose. Each one passed an automated name check, because each one had a
+   * name; the failure only exists across the page, which is why
+   * `tests/accessible-names.spec.js` is at page scale.
+   *
+   * Optional, and the label falls back to the bare sentence: a caller with no
+   * title to give is better off with the general name than with a colon and
+   * nothing after it.
+   */
+  subject: { type: String, default: '' },
 });
 
 const { t } = useI18n();
@@ -26,7 +43,7 @@ const { openHelp } = useHelp();
     size="small"
     variant="text"
     class="help-btn"
-    :aria-label="t('a11y.help')"
+    :aria-label="subject ? t('a11y.helpFor', { subject }) : t('a11y.help')"
     @click.stop="openHelp(topic)"
   >
     <v-icon size="18">mdi-help-circle-outline</v-icon>

@@ -106,6 +106,11 @@ export function trayLabels(t) {
 
     // Shared with the About window.
     menuAbout: t('tray.menuAbout'),
+    // `{product}` travels through untouched — `menu.rs` is the only place the
+    // application's own name is known. See `keeping` for why the placeholder
+    // has to be handed back its own name to survive vue-i18n.
+    menuHide: through('tray.menuHide', 'product'),
+    menuQuit: through('tray.menuQuit', 'product'),
     menuDocs: t('about.links.docs'),
     menuSource: t('about.links.source'),
     menuIssues: t('about.links.issues'),

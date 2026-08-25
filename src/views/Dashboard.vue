@@ -240,7 +240,11 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <HelpButton topic="page-dashboard-health" class="align-self-start" />
+                <HelpButton
+                  topic="page-dashboard-health"
+                  :subject="t('dashboard.health')"
+                  class="align-self-start"
+                />
               </div>
             </v-card-text>
           </v-card>
@@ -265,7 +269,11 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <HelpButton topic="page-dashboard-projects" class="align-self-start" />
+                <HelpButton
+                  topic="page-dashboard-projects"
+                  :subject="t('dashboard.projects')"
+                  class="align-self-start"
+                />
               </div>
             </v-card-text>
           </v-card>
@@ -290,7 +298,11 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <HelpButton topic="page-dashboard-services" class="align-self-start" />
+                <HelpButton
+                  topic="page-dashboard-services"
+                  :subject="t('dashboard.services')"
+                  class="align-self-start"
+                />
               </div>
             </v-card-text>
           </v-card>
@@ -314,7 +326,11 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <HelpButton topic="page-dashboard-images" class="align-self-start" />
+                <HelpButton
+                  topic="page-dashboard-images"
+                  :subject="t('dashboard.images')"
+                  class="align-self-start"
+                />
               </div>
             </v-card-text>
           </v-card>
@@ -338,7 +354,7 @@ onMounted(() => {
             <div class="d-flex align-center mb-2">
               <span class="text-subtitle-2 text-medium-emphasis">{{ t('dashboard.cpuLoad') }}</span>
               <v-spacer />
-              <HelpButton topic="page-dashboard-cpu" />
+              <HelpButton topic="page-dashboard-cpu" :subject="t('dashboard.cpuLoad')" />
             </div>
 
             <div v-if="loading" class="flex-grow-1 d-flex align-center justify-center">
@@ -399,7 +415,11 @@ onMounted(() => {
               }}</span>
               <v-spacer />
               <span class="text-h6">{{ percent(stats?.cpu.percent) }}</span>
-              <HelpButton topic="page-dashboard-cpu-history" class="ml-2" />
+              <HelpButton
+                topic="page-dashboard-cpu-history"
+                :subject="t('dashboard.cpuHistory')"
+                class="ml-2"
+              />
             </div>
 
             <div class="flex-grow-1 d-flex flex-column justify-center">
@@ -426,7 +446,7 @@ onMounted(() => {
             <div class="d-flex align-center mb-2">
               <span class="text-subtitle-2 text-medium-emphasis">{{ t('stats.memory') }}</span>
               <v-spacer />
-              <HelpButton topic="page-dashboard-memory" />
+              <HelpButton topic="page-dashboard-memory" :subject="t('stats.memory')" />
             </div>
             <div v-if="loading" class="flex-grow-1 d-flex align-center justify-center">
               <v-progress-circular indeterminate size="28" :aria-label="t('a11y.loading')" />
@@ -487,7 +507,7 @@ onMounted(() => {
             <div class="d-flex align-center mb-2">
               <span class="text-subtitle-2 text-medium-emphasis">{{ t('stats.storage') }}</span>
               <v-spacer />
-              <HelpButton topic="page-dashboard-storage" />
+              <HelpButton topic="page-dashboard-storage" :subject="t('stats.storage')" />
             </div>
             <div v-if="loading" class="flex-grow-1 d-flex align-center justify-center">
               <v-progress-circular indeterminate size="28" :aria-label="t('a11y.loading')" />
@@ -566,7 +586,11 @@ onMounted(() => {
                 </div>
               </div>
 
-              <HelpButton topic="page-dashboard-disk-io" class="align-self-start" />
+              <HelpButton
+                topic="page-dashboard-disk-io"
+                :subject="t('dashboard.diskIo')"
+                class="align-self-start"
+              />
             </div>
 
             <v-row class="mt-2">
@@ -622,7 +646,11 @@ onMounted(() => {
                 </div>
               </div>
 
-              <HelpButton topic="page-dashboard-network" class="align-self-start" />
+              <HelpButton
+                topic="page-dashboard-network"
+                :subject="t('dashboard.network')"
+                class="align-self-start"
+              />
             </div>
 
             <v-row class="mt-2">

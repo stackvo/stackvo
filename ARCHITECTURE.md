@@ -20,8 +20,8 @@ Three parts, in the order a request travels:
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | `src/`               | 38k lines               |
-| Back end — Rust, 109 modules        | `src-tauri/src/`     | 76k lines               |
-| The boundary between them           | `contracts/ipc.json` | 305 commands, 71 events |
+| Back end — Rust, 111 modules        | `src-tauri/src/`     | 76k lines               |
+| The boundary between them           | `contracts/ipc.json` | 306 commands, 71 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -71,7 +71,7 @@ document behind it:
 
 ### 3.1 Layers
 
-`src-tauri/src/` is flat — 109 modules, no subdirectories — but it is not
+`src-tauri/src/` is flat — 111 modules, no subdirectories — but it is not
 unstructured. There are four bands, and the dependency arrows only ever point
 downward:
 
@@ -79,10 +79,10 @@ downward:
   entry              1.8k   lib.rs, main.rs, menu, tray — plugins, state, the
       │                     handler list, the window
       ▼
-  commands.rs       12.8k   the IPC surface: 247 #[tauri::command] functions
+  commands.rs       12.8k   the IPC surface: 302 #[tauri::command] functions
       │                     argument validation, orchestration, nothing else
       ▼
-  domain            53.3k   109 modules: generator, manifest, certs, hosts,
+  domain            53.3k   111 modules: generator, manifest, certs, hosts,
       │                     mail, xdebug, profile, preset, migrate, worktree, …
       │                     one subject each; no Tauri types
       ▼
@@ -113,7 +113,7 @@ once.
 | Docker         | `engine`, `runner`, `inflight`                                                     | Talking to the daemon (bollard), running `docker compose` as a streamed operation, and refusing two at once on one subject                                                                           |
 | Networking     | `certs`, `hosts`, `elevate`, `tunnel`, `tunnelid`                                  | TLS via mkcert, `/etc/hosts`, the one privileged call, the nine-provider tunnel table, and the guard that puts a password and a kept address in front of one (B-7)                                    |
 | Services       | `db`, `worker`, `quickcmd`, `repl`, `release`, `stats`                             | The optional stack, the per-project sidecars, the command catalogue, the snippet workbench, and the production image                                                                                 |
-| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`                                | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — and their output                                                                      |
+| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`, `explain`                     | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — their output, and the join that puts a recording, the query log and the axis around one request (B-1) |
 | Node           | `devserver`                                                                        | The dev-server sidecar and the `allowedHosts` snippet                                                                                                                                                |
 | Mail           | `mail`                                                                             | The catcher, its search, and the HTML/link checks                                                                                                                                                    |
 | Branches       | `git`, `worktree`                                                                  | Cloning with the user's own git, and giving a branch its own directory, hostname, database and environment                                                                                           |
@@ -198,7 +198,7 @@ rejections".
 
 ## 5. The contract
 
-`contracts/ipc.json` is the specification of the boundary: 305 commands, 71
+`contracts/ipc.json` is the specification of the boundary: 306 commands, 71
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
@@ -301,7 +301,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (109 modules, 305 commands) come from
+covers `README.md`; the counts above (111 modules, 306 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 

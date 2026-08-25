@@ -7,6 +7,140 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A container can now say whether it could carry an editor (§3 R-3).** The
+  half of "run the editor inside the container" that has to be settled before
+  the button is worth building, and it is not one question. `editor.rs` answers
+  four.
+
+  The one it exists for is the source. A PHP project bind-mounts
+  `/var/www/html`, so an editor in there edits the repository. A `runtime: node`
+  project does not — its Dockerfile is `COPY . .`, and the container holds a
+  **snapshot** taken when the image was built. An editor opened against that
+  works perfectly, saves without complaint, and nothing written in it ever
+  reaches the host; the session is lost on the next rebuild, with nothing
+  anywhere saying so. That is a refusal here, not a warning.
+
+  It is read from the container's own mount table rather than from the
+  manifest, because the two come apart: turning the dev server on writes an
+  overlay, and the overlay does nothing until the container is recreated. A
+  bind mount at the wrong path does not count (`/var/log` is on every PHP
+  container), a *named volume* at the workdir does not count either (that is
+  `perf.rs`, which is precisely the case where the host copy is no longer what
+  the container reads), and a stopped container reports only that it is
+  stopped — reading a refusal out of an empty mount list is inventing one.
+
+  Persistence is a `docker-compose.editor.yml` overlay: one named volume per
+  project at `/root/.vscode-server`, so a rebuild does not throw away a hundred
+  megabytes that then download again. The mount goes in whether or not anybody
+  attaches, which is the argument `debugbridge` already makes for its three — a
+  volume is the part that needs the container recreated, so adding it on first
+  use would mean the button restarts the application it was asked to open.
+
+  libc is read from the image rather than from a table of runtimes, and
+  `node:X-alpine` now has one source (`generator::node_base_image`) instead of
+  two that would agree until node's tags changed. Alpine is recorded, not
+  refused: VS Code publishes a musl server, JetBrains does not, and that is §2
+  R-2's problem to state. The lang runtimes are excluded from the volume
+  entirely — they build with `COPY . .` and have no equivalent of the dev
+  server's overlay, so a volume for an editor that must be refused anyway is a
+  hundred megabytes of nothing.
+
+  `editor_claims.rs` holds the two assumptions this makes about files it does
+  not own: that no generated Dockerfile carries a `USER` directive (a perfectly
+  ordinary hardening change that would move the server out from under the
+  volume, and fail nothing — the download would simply repeat for ever), and
+  that PHP still mounts its source while the snapshot runtimes still do not.
+  Both were checked by making the change and watching them fail.
+
+- **`npm run updates:check` — the one command that asks the update endpoint.**
+  §3 #2 spent three rounds on a sentence that could not be improved: the keys
+  are in place, the workflow ran, and `latest.json` is still 404. Nothing in
+  this repository could say more, because nothing here had ever made the
+  request. The Rust tests check that the URL is spelled the way the workflow
+  publishes and that the flag writing the file is still set — both true today,
+  and both true while the endpoint answers 404.
+
+  The gap between those two claims is one HTTP request wide. This closes it: the
+  tool reads the manifest the updater will read and refuses to call it working
+  on a 200 alone — a missing platform (six jobs write that one file, and a
+  platform absent from it tells those users they are current for ever), an empty
+  signature (installable by hand, invisible to the updater — the failure that
+  most resembles success), a version that is not ahead of the running one. Its
+  judgement is exercised without a network in `tests/updater-manifest.spec.js`,
+  and the platforms it expects are derived from the release matrix so a seventh
+  target widens the check on its own.
+
+- **`npm run a11y:transcript` — what a screen reader announces, written down.**
+  Y-1 has said for a long time that a person has to decide whether a label makes
+  sense and that nobody had done it. The reason was never unwillingness: the
+  job, as it stood, meant installing a screen reader, learning its rotor, and
+  driving it blind across thirty screens in two languages — then repeating that
+  after every change.
+
+  A machine can do all of that except the deciding, so it does.
+  `docs/accessibility-transcript.md` lists every page's headings and controls in
+  the order the markup puts them, under the name a screen reader announces, in
+  Turkish and English, with a section at the top saying what to look for. The
+  remaining task is an hour of reading, and it needs no screen reader installed.
+
+  It found something on its first read, and it was the harness rather than the
+  application: a bare `createVuetify()` has no locale adapter, so every string
+  Vuetify names itself came out in English and the Turkish transcript reported
+  `Clear Proje ara...`. Both this and `accessible-names.spec.js` use the
+  application's own instance now. What survived the correction is one real gap,
+  recorded in the transcript rather than changed quietly: a search field's clear
+  button announces as "temizle" with nothing after it, because Vuetify builds
+  that name from the field's `label` prop alone and these fields carry a
+  placeholder instead — which is a visual decision, not an oversight.
+
+- **One screen for "why was this request slow" (B-1).** Three panes on the Debug
+  tab already answered a third of the question each — php-spx says where the
+  code's time went, the query log says what the database was asked, the axis
+  says what else happened — and putting them around *one* request meant opening
+  all three and comparing clocks by eye. No new measurement was needed; a common
+  key was.
+
+  **The key is a recording.** `spx::Report` is the only artefact here that names
+  a request, says when it started and says how long it took, so everything else
+  is placed against the stretch of wall clock it claims.
+
+  **The join is by time, and the screen keeps saying so.** `timeline.rs`'s
+  refusal to attribute a statement to a request is not reversed — a query moment
+  still carries no request. What replaces the reader's eye is a stated window
+  plus `overlaps`, which names any other recording claiming part of the same
+  stretch. Attributing a statement for certain needs the *application* to say
+  so, which is the thing this feature exists to avoid needing.
+
+  **The window is watched rather than worked out, wherever it can be.** The
+  arithmetic version rests on `exec_ts` being the start of the run, which is
+  php-spx's field and was reasoned rather than measured — and if it is the
+  moment the file was written instead, a window sits one whole duration late and
+  quietly. So a recording StackVo starts itself carries the host clock from both
+  sides of the request (`spx::record_observed`, kept beside the reports and
+  pruned against them), which brackets the run whatever the field means. That
+  covers the pane's own button and `stackvo spx-record`. The fallback is still
+  there for a recording made in a browser, and the pane says which of the two it
+  is showing. `cargo run --example explain_probe -- <project> <slow-path>` asks a
+  live container the remaining question and prints one of three answers.
+
+  **Two findings no single pane could make.** The N+1 is counted over *this
+  request's* slice rather than the whole session, at `querylog::N_PLUS_ONE` so
+  two panes cannot call three repeats an N+1 and four. And when statements land
+  in the window while the trace names no driver frame at all, the profile cannot
+  answer the question it appears to be answering — php-spx's `builtins` switch
+  is off and the wait is charged to whichever userland function called the
+  driver — which is reported rather than rendered as a fast-looking page.
+
+  The database share is the sum of the *exclusive* time of driver frames (`PDO`,
+  `mysqli`, `pg_*`, `SQLite3`, the Mongo driver), computed over the whole hotspot
+  list rather than a top-25: a request whose driver frames each sit below the cut
+  is exactly the one the split exists for. A framework's query layer counts as
+  PHP, because the wait happens underneath it.
+
+  24 unit tests, 19 screen tests, `request_explain` on the contract, and the
+  command is on `websurface::REACHES_THE_KEYSTORE` — it hands back statement
+  text, which for a development database is the data.
+
 - **A shared tunnel can ask for a password, and can keep its address (B-7).**
   The Share pane could hand out a public URL and then only *warn* that it was a
   public, unauthenticated door into an application running on this laptop; and
@@ -59,6 +193,208 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   the header directly instead.
 
 ### Fixed
+
+- **`agents` resolved the home directory differently on Windows, and the
+  difference was invisible from a Mac.** `dirs::home_dir()` reads `$HOME` on
+  Unix and ignores `%USERPROFILE%` on Windows, asking the shell for
+  `FOLDERID_Profile` instead — so this module honoured a relocated home on two
+  platforms out of three, and the third is the one nobody here runs. It
+  surfaced as the last failing test on Windows: `agent_install.rs` points both
+  variables at a scratch directory, which is the only way it can exercise the
+  write half without editing the profile of whoever is running it. Skipping the
+  test there was the other option and it is the trade §3 #35 already caught
+  once, when `runner.rs` looked thoroughly tested on Windows while having no
+  coverage at all.
+
+- **Six red release jobs were read as one Windows problem for three rounds,
+  because nobody opened the logs.** They had three different causes: the two
+  macOS rows failed on `key_ceremony`, the two Linux rows on `elevate_probe`,
+  the two Windows rows on §3 #35's platform assumptions. Three of the three
+  were fixed the same evening, in a commit that landed *after* the tag — so the
+  release sat waiting on Windows while two thirds of its failures were already
+  repaired. `src-tauri/tests/workflow_parity.rs` now holds the release job's
+  environment to at least CI's, and the release keeps its test output (below),
+  because a release log that exists only as six live browser tabs is a log
+  nobody reads.
+
+- **A green release run would still have left the endpoint at 404.** The
+  updater asks `releases/latest/download/latest.json`; the workflow creates the
+  release with `releaseDraft: true`. GitHub resolves `releases/latest` to the
+  latest *published* release and never to a draft, so the two settings
+  contradicted each other silently and the resulting 404 read as a failed build.
+  The draft stays — `fail-fast: false` makes a partial matrix ordinary, and a
+  `latest.json` naming four of six platforms tells the other two they are
+  current for ever — but the run now says on its own summary page that a person
+  still has to publish it, and `updater_endpoint.rs` fails if those two settings
+  ever drift apart again without that being said.
+
+- **A failed release left nothing behind to read.** What §3 #2 recorded after
+  the first real run was that how many failures remained had not been read from
+  the log, because reading six red targets meant opening six live logs in a
+  browser. The suite runs with `--no-fail-fast` so the log reaches the end
+  instead of stopping at the first crate, and the output is kept as an artifact
+  when the step fails. `PIPESTATUS` is what stops the pipe to `tee` from
+  reporting success on a failing suite.
+
+- **Two buttons on one page both announced as "Temizle" (Y-1).** On Logs and on
+  Dumps, the search field's clear icon and the button that empties the view were
+  read out identically, for two different actions — a listener could not choose
+  between them. Each says what it clears now: "Görünümü temizle" and "Dump
+  listesini temizle". Mail's search field, which carried a placeholder and no
+  name of its own, got one.
+
+  Found by reading `docs/accessibility-transcript.md` — which is the workflow
+  that transcript was added for, working on its first pass. The i18n suite then
+  caught the first attempt at fixing it: adding a `clearAria` key left
+  `logs.clear` and `dumps.clear` translated and unreachable. The button is an
+  icon, so those keys were only ever its accessible name; widening their values
+  is the fix, and it leaves nothing dead behind.
+
+  **Y-2 is folded into Y-1 and its row is gone.** What was left of both was one
+  task, and it is not a machine: nobody has used this application with a screen
+  reader. The transcript says what is announced; it does not say what using it
+  is like — whether a flow can be finished by ear, whether focus lands where it
+  should after a dialog closes, where it becomes tiring. The accessibility
+  statement does not claim otherwise.
+
+- **Eleven buttons on the Dashboard were all called "what this card is for"
+  (Y-1).** The help button repeats on some forty cards and announced the same
+  sentence on every one, so a screen reader user on the Dashboard heard it
+  eleven times with no way to choose. Each one had a name, so every automated
+  name check passed — the failure only exists at page scale, across controls
+  that are individually fine. It carries the name of the card it belongs to now,
+  from the wrapper that already knew it.
+
+  `tests/accessible-names.spec.js` mounts the six pages and keeps three things
+  no per-component check can see: no control announced by its role alone, no
+  control named with a word that says nothing on its own, and a floor under the
+  share of *distinct* names on a page. A threshold rather than "no duplicates":
+  a Delete button on every row of a table is fine, because the row names itself.
+
+  This was the last part of Y-1 that was written off as needing a person. It
+  was not — "is this label meaningful" has a mechanical floor and nothing was
+  standing on it. What genuinely needs a person is the top of that floor:
+  whether a particular word is the right word.
+
+- **A screen reader reached the template chooser after the form it decides the
+  meaning of (Y-1).** The new project drawer put the form first in the markup
+  and pulled the chooser above it with `order: -1` on a narrow window. The eye
+  saw chooser-then-form; the markup said form-then-chooser, so a screen reader
+  and a keyboard were handed the sequence backwards — you filled in fields whose
+  meaning depends on a template you had not been offered yet. The chooser is
+  first in the markup now and `order` moves the box rather than the sequence.
+
+  Y-1 listed three things as needing a human: whether a label makes sense,
+  whether an error says what to do, whether the reading order matches the visual
+  one. **Two of the three are not judgements.** Reading order against visual
+  order is a fact, and `tests/reading-order.spec.js` now keeps it — every
+  `order:`, every `*-reverse` and every positive `tabindex` in the tree, with
+  the rule being a sentence rather than a ban: re-ordering is legitimate, doing
+  it *silently* is not, because a divergence nobody wrote down is one no
+  reviewer can find. That is exactly how this one survived. Whether an error
+  says what to do is countable: 178 of 629 error constructions carry a
+  suggestion, which is a number the row never had.
+
+  What is left of Y-1 is the first question — whether a label *makes sense* —
+  and it is the same person Y-2 is waiting for. Two rows, one remaining task.
+
+- **The tray icon had no name until the first engine check landed (Y-2).** A
+  tooltip is a status item's accessible name on macOS, and it was only ever set
+  by `refresh` — so between the icon appearing and the first check returning, a
+  screen reader was handed an unnamed control in the menu bar, and a check that
+  hangs left it that way for good. It is set when the icon is built now, to the
+  product name alone: there is no summary yet at that moment, and a tooltip
+  claiming a state nothing has checked would be worse than a short one.
+
+  This is the third defect of the same family the accessibility probe found, and
+  the family is the point: a control nobody could see was unnamed, because
+  nothing on screen looks wrong when it is. The tray was also the surface the
+  row named as out of reach — macOS puts a status item on its own menu bar, and
+  the probe reads it there.
+
+  The probe then corrected its own author. Its first version asked for the
+  item's `name`, which is `AXTitle`, found it empty and reported the status item
+  as unnamed — while the tooltip was sitting in `AXHelp` the whole time. An
+  icon-only status item has no `AXTitle` on macOS by construction; giving it one
+  means visible text in the menu bar, which is a product decision and not an
+  accessibility fix. It reads all three name attributes now and prints which one
+  carries the name.
+
+- **The app menu offered "Quit stackvo-desktop" (Y-2).** Tauri's predefined
+  Hide and Quit items interpolate an application name, and a `None` label fills
+  that hole with the **crate** name. `menu.rs` had already rebuilt that submenu
+  once for exactly this reason — its own comment says `Menu::default` "titles it
+  with the crate name, so a `stackvo-desktop` sat in the menu bar of an app
+  called StackVo" — and fixed the submenu's title while leaving the two items
+  inside it. Both now take their text from the label catalogue with the product
+  name substituted, which also puts them in the interface's language.
+
+  It stayed there because it could not be seen from anywhere a test looked, and
+  a person reads a menu item by its verb. A screen reader says the whole string.
+
+  **The blocker on this row was named wrong, and that is what kept it
+  unstarted.** It said the native surfaces need `tauri-driver`, which does not
+  run on macOS — but **WebDriver does not reach a native menu on any platform**;
+  it drives the web view. A Linux runner with the driver installed could no more
+  enumerate a menu bar than this machine can, so the thing being waited for was
+  never going to answer the question. What answers it is the accessibility API,
+  the layer a screen reader itself reads.
+  `src-tauri/examples/native_ax_probe.rs` reads the running application's tree
+  through it — no new crate, no driver, no CI runner, just the app up and one
+  permission granted — and found both this and the unnamed About window on its
+  first run.
+
+  What is left of Y-2 is the judgement half, and it is Y-1's problem in the
+  native surfaces: whether the reading order makes sense, whether a label is
+  meaningful, whether the tray menu is usable under VoiceOver rather than merely
+  present. That needs a person.
+
+- **The window that says which version is installed had no name (Y-2).**
+  `menu::open_about` built the About window with `.title("")`, and a window's
+  title *is* its accessible name — what the window list announces, what the
+  Window menu shows, and what a screen reader reads when focus lands inside. So
+  the one window whose whole job is to answer a question was handing the answer
+  over unnamed. The title now comes from the same catalogue as the menu item
+  that opens it, which puts it in the interface's language rather than the
+  build's; `tray::relabel` renames it when the language changes, and
+  `open_about` renames it on the way back up as well — a window hidden across a
+  language change never saw `relabel` at all.
+
+  This was found by rejecting the reading that made Y-2 unstartable. The row
+  said the native window cannot be audited without `tauri-driver`, which does
+  not run on macOS, and that was taken to mean nothing about it is checkable. A
+  driver is needed to **operate** those surfaces; it is not needed to know
+  whether they have names. `src-tauri/tests/native_window_claims.rs` now keeps
+  six facts a driver was never required for — every declared window has a title,
+  no new window can be built without one, the About window's name comes from the
+  catalogue, both re-title paths exist, the main window can be resized to the
+  scale `docs/accessibility.md` offers as its reflow answer, and the statement
+  still says the audit is owed. The audit itself still is: keyboard operation of
+  the native chrome, focus order through it, and the tray menu under a screen
+  reader.
+
+- **The window said it was English whatever language it was speaking (Y-3).**
+  `index.html` ships `lang="en"` and nothing ever changed it, so a Turkish
+  interface announced itself as English for its whole life — WCAG 3.1.1, and the
+  criterion everything else about language rests on, because a screen reader
+  picks its voice and its pronunciation rules from that attribute.
+  `docs/accessibility.md` claimed the interface language "is announced on the
+  document"; the sentence was true about the attribute existing and false about
+  what it said. It is now set from the active locale beside `dir`, on the same
+  element and from the same value, including a locale pack's own tag.
+
+  **And passages in another language are marked (3.1.2).** Two kinds, and they
+  take different values. The message Rust wrote is the app's own English and is
+  marked `en`. Everything a container produced — a log line, a captured dump,
+  docker's output, a statement's literals — carries `lang=""`, HTML's
+  "undetermined": nothing here knows what language somebody else's application
+  writes in, and marking it `en` would be a guess stated as a fact, wrong for
+  exactly the projects this app's second language exists for.
+
+  `tests/language-of-parts.spec.js` holds both. The passages are scanned from
+  the sources rather than rendered, for the reason `a11y.spec.js` is: a mount
+  test asserts on text and roles and would pass with every attribute missing,
+  which is also how this regresses — an attribute is invisible on screen.
 
 - **Saving a project's settings no longer deletes the half of its manifest the
   form has no fields for.** Found while writing a test project that declares
