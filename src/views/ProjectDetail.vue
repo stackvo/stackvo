@@ -39,6 +39,7 @@ import WorkersPane from '@/components/project/WorkersPane.vue';
 import TerminalPane from '@/components/project/TerminalPane.vue';
 import ReplPane from '@/components/project/ReplPane.vue';
 import XdebugPane from '@/components/project/XdebugPane.vue';
+import EditorPane from '@/components/project/EditorPane.vue';
 import ReleasePane from '@/components/project/ReleasePane.vue';
 import DevcontainerPane from '@/components/project/DevcontainerPane.vue';
 import AgentPane from '@/components/project/AgentPane.vue';
@@ -948,6 +949,11 @@ onUnmounted(() => {
         <!-- CONTAINER ----------------------------------------------------- -->
         <template v-if="shows('container')">
           <ContainerPane :project="project" :details="details" :running="running" />
+          <!-- §2 R-1. Here rather than under Debug, because it is the same kind
+               of thing as the three panes below it: an address that reaches
+               this container. The difference is which way it points — those
+               let something outside in, and this one puts the editor inside. -->
+          <EditorPane :name="name" :running="running" @apply="applyToContainer" />
         </template>
         <!-- SHARE ---------------------------------------------------------- -->
         <template v-if="shows('container')">

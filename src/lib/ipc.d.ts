@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 157 named types, 299 wrappers, 5 field(s) the
+ * Measured at generation: 157 named types, 301 wrappers, 5 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -2833,6 +2833,14 @@ export interface StackvoApi {
    * The undo. A tool that writes into somebody's repository and cannot take it back out is one they do not press the first time.
    */
   ideDebugRemove(project: string, target: string): Promise<string>;
+  /**
+   * The question that had to be answered before §2 R-1's address was worth having: can this container carry an editor at all. Read from the container's own mount table rather than from the manifest, because the two can disagree — turning the dev server on writes an overlay and the overlay does nothing until the container is recreated, and when they disagree the container is the one that is right.
+   */
+  editorStatus(project: string): Promise<Record<string, unknown>>;
+  /**
+   * §2 R-1. ide_debug_* wires an IDE on the HOST to a debugger in the container; this opens the editor INSIDE it — language server, extensions, terminal, composer and artisan all in the image, with no PHP on the machine. VS Code has no attach-by-name command line, so the whole feature is an address: vscode-remote://attached-container+<hex>/<workdir>, where <hex> is the hex of {"containerName":"/stackvo-<project>"}. All three facts it is built from — the container name, the workdir and the bind mount — were already in this tree.
+   */
+  editorAttach(project: string): Promise<string>;
   /**
    * Every competitor exposes memory_limit and upload_max_filesize; StackVo could not, because .stackvo/php.ini was documented but never real — docs/*\/configuration/project.md lists it and the old web UI's DockerService.js:388 lists it, but `php.ini` appears NOWHERE in core/cli. No generator mounted it, so dropping the file in did nothing. The mount had to exist before a form was worth building.
    */
