@@ -1,8 +1,8 @@
 //! The two facts `editor.rs` reads out of files it does not own.
 //!
-//! §3 R-3 turns on a pair of claims about the generated Dockerfiles, and both
-//! are the kind that stay true until somebody makes a reasonable change
-//! somewhere else:
+//! Whether a container can carry one at all turns on a pair of claims about
+//! the generated Dockerfiles, and both are the kind that stay true until
+//! somebody makes a reasonable change somewhere else:
 //!
 //! * **Nothing runs as a named user.** `editor::SERVER_DIR` is `/root/...`
 //!   because `$HOME` is `/root` in every image this generator writes. Adding a
@@ -14,6 +14,12 @@
 //!   whole of the refusal in `editor.rs`, and it is a property of
 //!   `render_compose_service`, three hundred lines away, with no comment there
 //!   pointing here.
+//!
+//! §2 R-1 adds a third, and it is about where the **address** is allowed to be
+//! built. `vscode-remote://attached-container+<hex>/<path>` is derived from
+//! two facts — the container's name and the directory the source is mounted at
+//! — and a second derivation of it anywhere else is a copy that goes stale in
+//! silence: it would keep opening a window, just not onto this container.
 
 use std::path::{Path, PathBuf};
 
@@ -135,5 +141,117 @@ fn the_editor_overlay_is_layered_into_every_compose_command() {
          that changes what the container runs. Adding a mount onto a service \
          already switched into another mode is the ordering this chain has \
          avoided everywhere else."
+    );
+}
+
+/// The address is built in one place, and the front end is not it.
+///
+/// A pane that assembled `vscode-remote://attached-container+…` from a
+/// container name it had on screen would work perfectly on the day it was
+/// written. What it would not do is follow `editor.rs` — the leading slash
+/// Docker puts on a name, the workdir a node project in dev mode has, the
+/// refusal when the source is a snapshot — and the failure is a window that
+/// opens onto the wrong thing rather than an error anybody sees.
+#[test]
+fn only_the_rust_side_builds_the_address() {
+    let src = repo_root().join("src");
+    let mut offenders = Vec::new();
+
+    fn walk(dir: &Path, offenders: &mut Vec<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, offenders);
+                continue;
+            }
+            // `ipc.d.ts` is generated from `contracts/ipc.json` and carries
+            // the contract's own prose as doc comments — the scheme appears in
+            // it as a *description* of the boundary, which is the one place
+            // outside Rust it is supposed to appear.
+            if path.file_name().is_some_and(|n| n == "ipc.d.ts") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            if text.contains("attached-container") || text.contains("vscode-remote://") {
+                offenders.push(path.display().to_string());
+            }
+        }
+    }
+    walk(&src, &mut offenders);
+
+    assert!(
+        offenders.is_empty(),
+        "the address is derived on the front end as well as in editor.rs: {offenders:?}"
+    );
+}
+
+/// The name in the address is the name the engine gives the container.
+///
+/// `editor.rs` is handed a container name and hexes it, and the only thing
+/// that decides what that name *is* is `engine::container_name`. An
+/// `attach_authority` that spelled the prefix itself would be a second copy of
+/// it — and it would produce `stackvo-stackvo-shop` the first time somebody
+/// passed a name that already carried one, which is the exact case
+/// `container_name` is idempotent for.
+#[test]
+fn the_address_takes_its_container_name_from_the_engine() {
+    let path = repo_root().join("src-tauri/src/editor.rs");
+    let source = std::fs::read_to_string(&path).expect("editor.rs");
+    let body = without_comments(&source);
+
+    assert!(
+        body.contains("crate::engine::container_name("),
+        "editor::status no longer asks the engine what the container is called"
+    );
+
+    let at = body
+        .find("pub fn attach_authority(")
+        .expect("the address is still built by attach_authority");
+    let region = &body[at..];
+    let region = &region[..region.find("\npub fn ").unwrap_or(region.len())];
+
+    assert!(
+        !region.contains("stackvo"),
+        "attach_authority spells the container prefix itself. It is handed a \
+         name that engine::container_name has already built, and a second copy \
+         of the prefix here doubles it on any name that arrives with one:\n{region}"
+    );
+}
+
+/// The word the refusal turns on is the word the engine writes.
+///
+/// `editor.rs` decides "the source is really mounted" by comparing a mount's
+/// kind to `bind`. That string is produced three hundred lines away in
+/// `engine::inspect`, and for as long as it was produced with `format!("{:?}")`
+/// it arrived quoted — so the comparison was false for every container, and
+/// the pane refused every project with a sentence about a snapshot. It took a
+/// running daemon to see it (`examples/editor_attach_probe.rs`); no unit test
+/// could, because both sides of the comparison are written by hand in one.
+#[test]
+fn the_mount_kind_the_refusal_reads_is_the_one_the_engine_writes() {
+    assert_eq!(stackvo_desktop_lib::engine::mount_kind("bind"), "bind");
+
+    let path = repo_root().join("src-tauri/src/engine.rs");
+    let source = without_comments(&std::fs::read_to_string(&path).expect("engine.rs"));
+
+    let at = source
+        .find("mounts: info")
+        .expect("inspect still builds the mount table");
+    let region = &source[at..];
+    let region = &region[..region.find("            .collect(),").unwrap_or(region.len())];
+
+    assert!(
+        region.contains("mount_kind"),
+        "the mount table no longer goes through engine::mount_kind:\n{region}"
+    );
+    assert!(
+        !region.contains("{t:?}") && !region.contains("{:?}"),
+        "the mount kind is being Debug-formatted again. Debug on a string puts \
+         the quotes in, and editor.rs then refuses every container there is:\n{region}"
     );
 }

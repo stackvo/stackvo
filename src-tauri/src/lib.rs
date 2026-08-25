@@ -592,6 +592,8 @@ pub fn run() {
             commands::ide_debug_status,
             commands::ide_debug_apply,
             commands::ide_debug_remove,
+            commands::editor_status,
+            commands::editor_attach,
             commands::php_ini_status,
             commands::php_ini_set,
             commands::doctor_drop_extension,

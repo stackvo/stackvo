@@ -549,6 +549,26 @@
       "why": "The doctor's design rule is a repair next to every finding — hosts get the reviewed diff, stale output gets regenerate, disk gets prune. The extension check shipped without one, which left the panel naming a problem and offering nothing.",
       "notes": "**Removing the extension changes nothing about what runs, and that is the point.** The generator already drops one it cannot install — silently, which is the bug CONFLICTS.md C-06 records — so it is already absent from every built container. This does not remove a capability; it stops the manifest claiming one the container never had. No alternative is offered because the catalog leaves none: `imap` is `install: core` with `removedIn: 8.2` and no PECL package, so on 8.2+ there is nothing StackVo could install instead. If the project genuinely needs it the answer is an older PHP version, which is the project owner's decision and not a button. Writes through the paths the rest of the app uses — manifest::write for a project, env_writer for .env, which backs the file up and serialises against the other writers. Removing an extension that is already gone is a no-op rather than an error: the state the caller wanted is the state on disk."
     },
+    "editor_attach": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "project": "string (project directory name)"
+      },
+      "returns": "string (the address that was opened)",
+      "why": "§2 R-1. ide_debug_* wires an IDE on the HOST to a debugger in the container; this opens the editor INSIDE it — language server, extensions, terminal, composer and artisan all in the image, with no PHP on the machine. VS Code has no attach-by-name command line, so the whole feature is an address: vscode-remote://attached-container+<hex>/<workdir>, where <hex> is the hex of {\"containerName\":\"/stackvo-<project>\"}. All three facts it is built from — the container name, the workdir and the bind mount — were already in this tree.",
+      "notes": "Re-reads editor_status rather than trusting the screen: a container that stopped or lost its mount between the render and the click is refused with the reason, because a disabled button is not a check. NOT_FOUND when the container is not running or VS Code is not on this machine; UNSUPPORTED when the workdir is not a bind mount — an editor opened onto a snapshot saves happily and loses every line on the next rebuild, which is a refusal and not a warning. Two launch paths: `code --folder-uri` when the launcher is on PATH, and on macOS `open -a <bundle> vscode://vscode-remote/…` when only the application is installed — the URL handler is registered by the app itself, so it is the one that works on a machine where nobody ran Install 'code' command. Not audited: nothing is written, and the act is a window opening. See src-tauri/src/editor.rs."
+    },
+    "editor_status": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "project": "string (project directory name)"
+      },
+      "returns": "{ project: string, editorInstalled: boolean, readiness: { container: string, workdir: string, serverDir: string, libc: 'glibc' | 'musl', running: boolean, sourceLive: boolean, serverKept: boolean, blockers: Array<'notRunning' | 'sourceIsASnapshot'>, caveats: Array<'musl' | 'serverIsNotKept'>, attachable: boolean, folderUri: string, handlerUrl: string } }",
+      "why": "The question that had to be answered before §2 R-1's address was worth having: can this container carry an editor at all. Read from the container's own mount table rather than from the manifest, because the two can disagree — turning the dev server on writes an overlay and the overlay does nothing until the container is recreated, and when they disagree the container is the one that is right.",
+      "notes": "Reads only. `sourceLive` is the refusal: a bind mount AT the workdir, so neither the /var/log bind every PHP container carries nor a named volume at the workdir counts. A stopped container reports `notRunning` alone — deriving 'the source is a snapshot' from an empty mount list would be a refusal invented out of having asked nothing. `caveats` never refuse: `musl` is a note that this is an alpine image (VS Code publishes a musl server, JetBrains does not — §2 R-2), and `serverIsNotKept` means the container predates the editor overlay's named volume and will re-download the server after every rebuild. `folderUri` and `handlerUrl` are derived on every read and never stored, so a renamed project cannot leave a stale address behind. `editorInstalled` is about the machine, not the project. See src-tauri/src/editor.rs."
+    },
     "engine_start": {
       "new": true,
       "kind": "mutation",

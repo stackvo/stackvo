@@ -1474,6 +1474,29 @@ export default {
       'Note: `stackvo up` from the command line does not layer this, and will recreate the container in production mode.',
   },
 
+  containerEditor: {
+    title: 'Editor in the container',
+    explain:
+      'Opens VS Code on the running container itself — language server, extensions, terminal, composer and artisan all inside the image, with no PHP on this machine.',
+    open: 'Open in VS Code',
+    opens: 'Opens {container} at {workdir}.',
+    notRunning:
+      'The container is not running. Start the project first — the editor opens what is running, not what is configured.',
+    snapshot:
+      'This container carries a copy of the source at {workdir} rather than the source itself, so nothing written in the editor would reach your repository. A Node project can mount it by turning the dev server on and rebuilding; the other runtimes build the code in and cannot.',
+    noEditor:
+      'VS Code was not found on this machine. The address below opens the same container from VS Code’s own Open Folder dialog.',
+    serverNotKept:
+      'This container was created before the editor volume, so VS Code downloads its server again after every rebuild. Recreating the container keeps it.',
+    recreate: 'Recreate container',
+    musl: 'An Alpine image. VS Code publishes a server build for it; JetBrains does not.',
+    address: 'The address',
+    addressWhy:
+      'Derived from the container name and the directory the source is mounted at, and never stored — so a rebuilt or renamed container cannot leave a stale address behind.',
+    serverNote:
+      'The server unpacks itself into {dir}, which is a named volume — a rebuild does not throw away the hundred megabytes it downloaded.',
+  },
+
   phpIni: {
     title: 'PHP settings',
     explain:
@@ -2883,6 +2906,11 @@ export default {
     buildAndStartForWorker: 'Build and start the project first — the worker runs its image.',
     workersAreDetected: 'Workers are detected from artisan and composer.json.',
     startProjectForTunnel: 'Start the project first — the tunnel forwards to its container.',
+    startProjectForEditor:
+      'Start the project first — the editor opens the container that is running.',
+    editorNeedsLiveSource:
+      'This container carries a copy of the source, so nothing written in it would reach the repository. A Node project can mount the source by turning the dev server on and rebuilding; the other runtimes build it in and cannot.',
+    installVsCode: 'Install VS Code, or copy the address and open it there yourself.',
     worktreeIsDirty:
       'The worktree has uncommitted changes. Commit or stash them, or remove it with Force, which discards them.',
     databaseNameCharset:

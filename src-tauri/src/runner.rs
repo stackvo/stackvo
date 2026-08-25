@@ -404,7 +404,7 @@ pub fn compose_base_args(root: &Path) -> Vec<String> {
         args.push("-f".to_string());
         args.push(crate::debugbridge::overlay_path(root).display().to_string());
     }
-    // The editor server's volume (R-3). Independent of everything above it,
+    // The editor server's volume (`editor.rs`). Independent of everything above it,
     // and it only adds a mount — but it goes in before the dev server for the
     // reason the dev server is last: that one changes what the container is
     // running, and a `volumes:` key merged onto a service already in a

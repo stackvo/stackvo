@@ -1,4 +1,5 @@
-//! Whether a container can carry an editor at all — §3 R-3.
+//! Whether a container can carry an editor at all — the half of §2 R-1 that
+//! had to be answered before an address was worth having.
 //!
 //! [`crate::ide`] wires an IDE on the *host* to a debugger in the container.
 //! This is the other half of that idea and a much larger one: the editor itself
@@ -132,6 +133,10 @@ pub struct Readiness {
     pub caveats: Vec<Caveat>,
     /// The one field a caller needs. False whenever `blockers` is not empty.
     pub attachable: bool,
+    /// The address, for `code --folder-uri`. Derived, never stored.
+    pub folder_uri: String,
+    /// The same address as a URL the OS can hand to VS Code.
+    pub handler_url: String,
 }
 
 /// Where a runtime keeps the application inside its container.
@@ -199,6 +204,8 @@ pub fn readiness(
     }
 
     Readiness {
+        folder_uri: folder_uri(container, workdir),
+        handler_url: handler_url(container, workdir),
         container: container.to_string(),
         workdir: workdir.to_string(),
         server_dir: SERVER_DIR.to_string(),
@@ -209,6 +216,216 @@ pub fn readiness(
         attachable: blockers.is_empty(),
         blockers,
         caveats,
+    }
+}
+
+// ------------------------------------------------------------- the address
+
+/// The scheme VS Code opens a remote folder under.
+const REMOTE_SCHEME: &str = "vscode-remote";
+
+/// The authority prefix for a container that is already running.
+///
+/// Not `dev-container`, which is the other one and means something else: that
+/// authority names a `devcontainer.json` and *builds* from it — a second
+/// container beside this project's own. This one attaches to the container
+/// that is already there, which is the whole of R-1.
+const ATTACHED: &str = "attached-container";
+
+/// The launcher this module opens. VS Code, and only VS Code.
+///
+/// Cursor and the other forks carry the same scheme and would very likely
+/// work; none of them has been measured here, and an address that opens the
+/// wrong thing silently is worse than a button that says "VS Code".
+pub const VSCODE: &str = "code";
+
+/// `attached-container+<hex>` — the authority half of the address.
+///
+/// VS Code has no "attach to this container" command line. What it has is a
+/// remote authority, and an attached container's is the hex of the JSON object
+/// VS Code writes for itself: `{"containerName":"/stackvo-shop"}`, with the
+/// leading slash Docker's own inspect output carries on a name.
+///
+/// Derived rather than stored, and that is the point: the name comes from
+/// [`crate::engine::container_name`] and the path from [`workdir_of`], both
+/// already facts of this tree. Nothing is written down, so a renamed project
+/// or a recreated container cannot leave a stale address behind.
+pub fn attach_authority(container: &str) -> String {
+    // Docker reports names with a leading slash and this app passes them
+    // without one. Both are the same container, and both must produce the same
+    // authority — a second address for one container is a second window.
+    let name = container.trim_start_matches('/');
+    let json = serde_json::json!({ "containerName": format!("/{name}") }).to_string();
+
+    let mut hex = String::with_capacity(json.len() * 2);
+    for byte in json.as_bytes() {
+        hex.push_str(&format!("{byte:02x}"));
+    }
+    format!("{ATTACHED}+{hex}")
+}
+
+/// What `code --folder-uri` takes.
+pub fn folder_uri(container: &str, workdir: &str) -> String {
+    format!(
+        "{REMOTE_SCHEME}://{}{}",
+        attach_authority(container),
+        absolute(workdir)
+    )
+}
+
+/// The same address as something the OS can open.
+///
+/// The two are not interchangeable and both are needed. The `--folder-uri`
+/// form is an argument to a launcher that may not be installed — the `code`
+/// command on `PATH` is a thing somebody has to have run "Install 'code'
+/// command" for. VS Code's URL handler is registered by the application
+/// itself, so on a machine with the app and without the launcher this is the
+/// only one of the two that opens anything.
+pub fn handler_url(container: &str, workdir: &str) -> String {
+    format!(
+        "vscode://{REMOTE_SCHEME}/{}{}",
+        attach_authority(container),
+        absolute(workdir)
+    )
+}
+
+/// A path the address can carry: absolute, and with no trailing slash.
+fn absolute(workdir: &str) -> String {
+    let trimmed = workdir.trim_end_matches('/');
+    if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{trimmed}")
+    }
+}
+
+/// Whether this machine can open the address at all.
+///
+/// The same resolver `open_in_editor` uses, so a VS Code installed only as a
+/// macOS bundle counts — that is the machine where the launcher is missing and
+/// the application is right there.
+pub fn installed() -> bool {
+    crate::apps::resolve_editor(VSCODE).is_some()
+}
+
+// -------------------------------------------------------------- the button
+
+/// Open the editor on the container, or say why not.
+///
+/// Every refusal here is one the caller could already see in [`Readiness`] —
+/// this is the boundary saying it again rather than trusting a screen. A
+/// button that is disabled in the UI is not a check.
+pub fn open(readiness: &Readiness) -> crate::error::Result<String> {
+    use crate::error::{Code, Error};
+
+    match readiness.blockers.first() {
+        Some(Blocker::NotRunning) => {
+            return Err(Error::new(
+                Code::NotFound,
+                format!("{} is not running.", readiness.container),
+            )
+            .with_hint(crate::hints::START_PROJECT_FOR_EDITOR));
+        }
+        Some(Blocker::SourceIsASnapshot) => {
+            return Err(Error::new(
+                Code::Unsupported,
+                format!(
+                    "{} holds a copy of the source at {} rather than the source itself.",
+                    readiness.container, readiness.workdir
+                ),
+            )
+            .with_hint(crate::hints::EDITOR_NEEDS_LIVE_SOURCE));
+        }
+        None => {}
+    }
+
+    let Some(launch) = crate::apps::resolve_editor(VSCODE) else {
+        return Err(
+            Error::new(Code::NotFound, "VS Code was not found on this machine.")
+                .with_hint(crate::hints::INSTALL_VS_CODE),
+        );
+    };
+
+    let spawned = match launch {
+        crate::apps::Launch::Command(cmd) => std::process::Command::new(cmd)
+            .arg("--folder-uri")
+            .arg(&readiness.folder_uri)
+            .spawn(),
+        // `open -a <bundle> <url>` rather than `--args --folder-uri`: `--args`
+        // reaches an application that is being *started*, and VS Code is the
+        // kind of application that is already open. The URL handler is read
+        // either way.
+        crate::apps::Launch::Bundle(bundle) => std::process::Command::new("open")
+            .args(["-a", bundle])
+            .arg(&readiness.handler_url)
+            .spawn(),
+    };
+
+    spawned.map_err(|e| Error::io("opening VS Code", e))?;
+    Ok(readiness.folder_uri.clone())
+}
+
+// -------------------------------------------------------------- the reading
+
+/// What is true for one project, container included.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    pub project: String,
+    /// Is there a VS Code on this machine to open the address with?
+    pub editor_installed: bool,
+    pub readiness: Readiness,
+}
+
+/// Read the container and judge it.
+///
+/// The image is taken from the running container when there is one and from
+/// the manifest when there is not — a stopped node project reported as glibc
+/// would be an answer about the wrong image, and the caveat it carries is the
+/// one thing about a stopped container that can be said honestly.
+pub async fn status(root: &Path, name: &str) -> crate::error::Result<Status> {
+    let dir = crate::workspace::require_projects_root(root)?.join(name);
+    let manifest_file = dir.join("stackvo.json");
+    if !manifest_file.is_file() {
+        return Err(crate::error::Error::not_found(format!("project {name}")));
+    }
+    let manifest = crate::manifest::read(&manifest_file, name)?;
+
+    let details = crate::engine::inspect(name).await.ok();
+    let running = details.as_ref().is_some_and(|d| d.running);
+    let image = details
+        .as_ref()
+        .and_then(|d| d.image.clone())
+        .unwrap_or_else(|| declared_image(&manifest));
+    let mounts = details.map(|d| d.mounts).unwrap_or_default();
+
+    Ok(Status {
+        project: name.to_string(),
+        editor_installed: installed(),
+        readiness: readiness(
+            &crate::engine::container_name(name),
+            &manifest.runtime,
+            &image,
+            running,
+            &mounts,
+        ),
+    })
+}
+
+/// The image a project *would* run, for when nothing is running.
+///
+/// Only node has one worth deriving: its base is the one musl image this
+/// generator writes, and it is read from the generator rather than repeated
+/// here. Everything else falls through to glibc, which is what every other
+/// base this repository builds on is.
+fn declared_image(manifest: &crate::manifest::Manifest) -> String {
+    match manifest.runtime.as_str() {
+        "node" => manifest
+            .node
+            .as_ref()
+            .map(|n| crate::generator::node_base_image(&n.version))
+            .unwrap_or_default(),
+        _ => String::new(),
     }
 }
 
@@ -472,6 +689,163 @@ mod tests {
         );
 
         assert!(!r.source_live);
+    }
+
+    // ---------------------------------------------------------- the address
+
+    /// The one fact this whole feature is: the hex is VS Code's own, computed
+    /// here and written out by hand there.
+    ///
+    /// Held against a literal rather than against `attach_authority`'s own
+    /// arithmetic, because a test that hexes the string a second time would
+    /// pass on any encoding both halves agreed on — including one VS Code
+    /// cannot read. This is the byte sequence VS Code writes into its own
+    /// recently-opened list for a container called `stackvo-shop`.
+    #[test]
+    fn the_authority_is_the_hex_of_the_json_vs_code_writes_for_itself() {
+        assert_eq!(
+            attach_authority("stackvo-shop"),
+            "attached-container+7b22636f6e7461696e65724e616d65223a222f737461636b766f2d73686f70227d"
+        );
+
+        // And it decodes back to exactly that object — the leading slash
+        // included, which is the half a hand-written string loses.
+        let hex = attach_authority("stackvo-shop")
+            .split_once('+')
+            .map(|(_, hex)| hex.to_string())
+            .expect("the authority carries its payload after the +");
+        let bytes: Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("hex"))
+            .collect();
+        assert_eq!(
+            String::from_utf8(bytes).expect("utf-8"),
+            r#"{"containerName":"/stackvo-shop"}"#
+        );
+    }
+
+    /// Docker reports names with a leading slash and this app passes them
+    /// without one. Two spellings of one container must not be two addresses —
+    /// VS Code would open a second window with its own server in it.
+    #[test]
+    fn a_name_with_and_without_dockers_leading_slash_is_one_address() {
+        assert_eq!(
+            attach_authority("stackvo-shop"),
+            attach_authority("/stackvo-shop")
+        );
+    }
+
+    /// The name is the one `engine.rs` builds, not a second spelling of it.
+    #[test]
+    fn the_address_names_the_container_the_engine_would_name() {
+        let container = crate::engine::container_name("shop");
+        let uri = folder_uri(&container, PHP_WORKDIR);
+
+        assert_eq!(uri, folder_uri("stackvo-shop", PHP_WORKDIR), "{uri}");
+        assert!(uri.starts_with("vscode-remote://attached-container+"), "{uri}");
+        assert!(uri.ends_with(PHP_WORKDIR), "{uri}");
+    }
+
+    /// Both forms exist because both are needed, and they must agree.
+    ///
+    /// `--folder-uri` is an argument to a launcher that may not be installed;
+    /// the URL handler is registered by the application itself. A machine can
+    /// easily have the second and not the first.
+    #[test]
+    fn the_launcher_argument_and_the_url_handler_carry_the_same_address() {
+        let authority = attach_authority("stackvo-shop");
+
+        assert_eq!(
+            folder_uri("stackvo-shop", PHP_WORKDIR),
+            format!("vscode-remote://{authority}{PHP_WORKDIR}")
+        );
+        assert_eq!(
+            handler_url("stackvo-shop", PHP_WORKDIR),
+            format!("vscode://vscode-remote/{authority}{PHP_WORKDIR}")
+        );
+    }
+
+    /// The path is the container's, so it is absolute and has no trailing
+    /// slash — VS Code takes the last segment as the folder's name, and an
+    /// empty one is a window titled after nothing.
+    #[test]
+    fn the_path_is_absolute_and_carries_no_trailing_slash() {
+        assert!(folder_uri("stackvo-shop", "var/www/html").ends_with("/var/www/html"));
+        assert!(folder_uri("stackvo-shop", "/var/www/html/").ends_with("/var/www/html"));
+    }
+
+    /// The address on a readiness is the address for the workdir that same
+    /// readiness reported — a node project in dev mode opens `/app`, not the
+    /// PHP path.
+    #[test]
+    fn the_readiness_carries_the_address_for_its_own_workdir() {
+        let php = readiness(
+            "stackvo-shop",
+            "php",
+            "php:8.3-fpm",
+            true,
+            &[mount(PHP_WORKDIR, "bind"), mount(SERVER_DIR, "volume")],
+        );
+        assert_eq!(php.folder_uri, folder_uri("stackvo-shop", PHP_WORKDIR));
+
+        let node = readiness(
+            "stackvo-blog",
+            "node",
+            "node:22-alpine",
+            true,
+            &[mount(crate::devserver::CONTAINER_PATH, "bind")],
+        );
+        assert_eq!(
+            node.folder_uri,
+            folder_uri("stackvo-blog", crate::devserver::CONTAINER_PATH)
+        );
+        assert_ne!(node.folder_uri, php.folder_uri);
+    }
+
+    /// A refused container still has an address, and that is deliberate: the
+    /// string is what somebody pastes into a machine that has VS Code when
+    /// this one does not. What it must never be is empty, which would read on
+    /// screen as "there is no address for this project".
+    #[test]
+    fn a_refused_container_still_reports_the_address_it_would_have_used() {
+        let r = readiness("stackvo-shop", "php", "php:8.3-fpm", false, &[]);
+
+        assert!(!r.attachable);
+        assert!(!r.folder_uri.is_empty());
+        assert!(r.folder_uri.contains(&attach_authority("stackvo-shop")));
+    }
+
+    /// The refusals reach the caller as refusals, with the reason each carries.
+    #[test]
+    fn opening_a_container_that_is_not_ready_is_refused_with_the_reason() {
+        let stopped = readiness("stackvo-shop", "php", "php:8.3-fpm", false, &[]);
+        let err = open(&stopped).expect_err("a stopped container cannot be opened");
+        assert_eq!(err.code, crate::error::Code::NotFound);
+        assert_eq!(
+            err.hint_key,
+            Some(crate::hints::START_PROJECT_FOR_EDITOR.key)
+        );
+
+        let snapshot = readiness(
+            "stackvo-blog",
+            "node",
+            "node:22-alpine",
+            true,
+            &[mount(SERVER_DIR, "volume")],
+        );
+        let err = open(&snapshot).expect_err("a snapshot container cannot be opened");
+        assert_eq!(err.code, crate::error::Code::Unsupported);
+        assert_eq!(
+            err.hint_key,
+            Some(crate::hints::EDITOR_NEEDS_LIVE_SOURCE.key)
+        );
+        // The message names the path, because "the source is a copy" without
+        // one leaves the reader looking for which directory is meant.
+        assert!(
+            err.message.contains(crate::devserver::CONTAINER_PATH),
+            "{}",
+            err.message
+        );
     }
 
     #[test]
