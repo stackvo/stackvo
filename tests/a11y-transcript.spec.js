@@ -191,37 +191,56 @@ choice is a visual one, and it is recorded here rather than changed quietly:
 the field itself is named, its clear button is not.
 `;
 
+/**
+ * Twelve page mounts, and the default timeout is five seconds.
+ *
+ * That was enough everywhere except the one place it mattered: the coverage
+ * job instruments every module it loads, which turns a 2.3-second run into
+ * something past the limit — so `test:js` was green on the same commit where
+ * `test:js:coverage` died, the front-end report was never written, and the
+ * floors gate failed two steps later naming itself instead of this.
+ *
+ * A generous number rather than a tuned one. This is a generator, not a gate:
+ * the only thing a timeout here can catch is a mount that hangs, and there is
+ * no version of that which finishes in ninety seconds.
+ */
+const MOUNTING_TWELVE_PAGES = 90_000;
+
 describe('screen reader transcript', () => {
-  it('writes what every page announces, in both languages', async () => {
-    let out = HEADER;
-    let lines = 0;
+  it(
+    'writes what every page announces, in both languages',
+    async () => {
+      let out = HEADER;
+      let lines = 0;
 
-    for (const locale of LOCALES) {
-      i18n.global.locale.value = locale;
-      out += `\n---\n\n# ${locale === 'tr' ? 'Türkçe' : 'English'}\n`;
+      for (const locale of LOCALES) {
+        i18n.global.locale.value = locale;
+        out += `\n---\n\n# ${locale === 'tr' ? 'Türkçe' : 'English'}\n`;
 
-      for (const page of PAGES) {
-        const found = await readPage(page);
-        const distinct = new Set(found.map((f) => f.name)).size;
-        lines += found.length;
+        for (const page of PAGES) {
+          const found = await readPage(page);
+          const distinct = new Set(found.map((f) => f.name)).size;
+          lines += found.length;
 
-        out += `\n## ${page}\n\n`;
-        out += `${found.length} announced, ${distinct} distinct.\n\n`;
-        out += `| # | Role | Announced as |\n| --- | --- | --- |\n`;
-        found.forEach((f, i) => {
-          const name = f.name || '**(nothing — announced by its role alone)**';
-          out += `| ${i + 1} | ${f.role} | ${name.replace(/\|/g, '\\|')} |\n`;
-        });
+          out += `\n## ${page}\n\n`;
+          out += `${found.length} announced, ${distinct} distinct.\n\n`;
+          out += `| # | Role | Announced as |\n| --- | --- | --- |\n`;
+          found.forEach((f, i) => {
+            const name = f.name || '**(nothing — announced by its role alone)**';
+            out += `| ${i + 1} | ${f.role} | ${name.replace(/\|/g, '\\|')} |\n`;
+          });
+        }
       }
-    }
 
-    i18n.global.locale.value = 'en';
-    writeFileSync(OUT, out);
+      i18n.global.locale.value = 'en';
+      writeFileSync(OUT, out);
 
-    // The guard on the generator: an empty transcript is a mounting failure
-    // that would otherwise look like a clean page.
-    expect(lines, 'the transcript came out empty, which is the harness failing').toBeGreaterThan(
-      PAGES.length * LOCALES.length
-    );
-  });
+      // The guard on the generator: an empty transcript is a mounting failure
+      // that would otherwise look like a clean page.
+      expect(lines, 'the transcript came out empty, which is the harness failing').toBeGreaterThan(
+        PAGES.length * LOCALES.length
+      );
+    },
+    MOUNTING_TWELVE_PAGES
+  );
 });
