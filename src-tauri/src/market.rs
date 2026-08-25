@@ -130,7 +130,7 @@ pub struct VersionRow {
     pub support: String,
     #[serde(default)]
     pub eol_date: Option<String>,
-    /// Withdrawn by the publisher: the client-side half of a takedown (C).
+    /// Withdrawn by the publisher: the client-side half of a takedown (ADR 0014).
     ///
     /// A **marking**, never a deletion, and ADR 0014 is why: a version that
     /// disappeared from the index would leave every machine that installed it
@@ -1125,7 +1125,7 @@ pub fn install(
     })?;
 
     // The publisher's own withdrawal, before the organisation's list and before
-    // anything is fetched — the client half of a takedown (C).
+    // anything is fetched — the client half of a takedown (ADR 0014).
     //
     // Refused rather than merely marked on screen. ADR 0014 keeps a withdrawn
     // version *in* the index precisely so a machine can find out what happened
@@ -1929,7 +1929,8 @@ mod tests {
         }
     }
 
-    /// The client half of a takedown (C): a withdrawn version does not install.
+    /// The client half of a takedown (ADR 0014): a withdrawn version does not
+    /// install.
     ///
     /// Refused rather than warned about. ADR 0014 keeps a withdrawn version in
     /// the index so a machine can find out what happened to one it already

@@ -824,7 +824,7 @@ pub struct Doctor {
     pub extensions: Vec<ExtensionProblem>,
     /// Credentials in the keystore that the Bash CLI would misread.
     pub keystore: KeystoreCheck,
-    /// Installed package versions the publisher has since withdrawn (C).
+    /// Installed package versions the publisher has since withdrawn (ADR 0014).
     ///
     /// The other half of a takedown. `market::install` refuses a withdrawn
     /// version, which stops the *next* machine; this is what tells the ones
