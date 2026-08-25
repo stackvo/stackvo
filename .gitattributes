@@ -1,0 +1,20 @@
+# Line endings are LF in the working tree, on every platform.
+#
+# Not a style preference. Several tests in this repository read the
+# repository's own source and reason about its shape —
+# `src-tauri/tests/cfg_regions.rs` splits a file on a blank line to find which
+# attributes belong to which function, `architecture_claims.rs` and
+# `no_dangling_docs.rs` scan for text, `workflow_parity.rs` reads YAML as
+# lines. All of them are written against `\n`.
+#
+# Git for Windows ships with `core.autocrlf=true`, and the GitHub Actions
+# Windows runner inherits it, so without this file every one of those tests is
+# reading a file with `\r\n` in it that it has never seen on the machine it was
+# written on. The failure that found this: `cfg_regions` reported the keystore's
+# real and fake backends as carrying the same `cfg` gate, because `"\n\n"` does
+# not appear in `"\r\n\r\n"` and the search window silently reached back into
+# the function above.
+#
+# It hid behind another failure for a full round — `cargo test` stops at the
+# first test binary that fails, and `agent_install` comes first alphabetically.
+* text=auto eol=lf

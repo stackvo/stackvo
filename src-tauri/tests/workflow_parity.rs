@@ -217,3 +217,62 @@ fn the_release_runs_the_suite_from_the_pinned_toolchains_directory() {
          developer is running:\n{step}"
     );
 }
+
+/// The working tree is LF, and stays LF.
+///
+/// A third thing that only fails on a runner. Git for Windows ships with
+/// `core.autocrlf=true` and the Actions Windows runner inherits it, so without
+/// `.gitattributes` every test that reads this repository's own source reads a
+/// file with `\r\n` in it that it has never seen on the machine it was written
+/// on.
+///
+/// It is not hypothetical and it was not cheap: `cfg_regions.rs` finds which
+/// attributes belong to which function by splitting on a blank line, `"\n\n"`
+/// does not occur inside `"\r\n\r\n"`, and the search window silently reached
+/// back into the function above — so the keystore's real backend and its
+/// in-memory fake were reported as carrying the same `cfg` gate. That is a
+/// security-shaped assertion failing for a reason that has nothing to do with
+/// security.
+///
+/// Deleting `.gitattributes` is a one-line change that passes everywhere except
+/// there, which is exactly the shape of thing this file exists for.
+#[test]
+fn the_checkout_is_lf_on_every_platform() {
+    let path = repo_root().join(".gitattributes");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+
+    assert!(
+        text.contains("eol=lf"),
+        ".gitattributes does not pin `eol=lf`. Without it a Windows checkout \
+         is CRLF, and every test that reads this repository's own source is \
+         reading a file it has never seen — including the ones that split on a \
+         blank line to decide which attribute belongs to which function."
+    );
+}
+
+/// Both suites report everything they found, not the first thing.
+///
+/// `cargo test` stops at the first test BINARY that fails. On a runner that is
+/// the difference between one round and four: a Windows run reports the
+/// alphabetically-first broken file and stays silent about what is behind it,
+/// so nineteen failures were counted three times and were never nineteen —
+/// fixing `agent_install` uncovered a twentieth that had been sitting behind
+/// it, waiting its turn, for a full round.
+///
+/// The cost is the wall-clock of finishing a suite that is already failing. The
+/// cost of not paying it is a person watching a ten-minute job to be told one
+/// thing.
+#[test]
+fn both_workflows_run_the_suite_to_the_end() {
+    for file in [".github/workflows/ci.yml", ".github/workflows/release.yml"] {
+        let workflow = read(file);
+        let job = suite_job(&workflow);
+        assert!(
+            job.contains("cargo test --no-fail-fast"),
+            "{file} runs `cargo test` without `--no-fail-fast`, so it stops at \
+             the first test binary that fails and reports one failure however \
+             many there are. That is how this repository spent four rounds \
+             learning about nineteen Windows failures one at a time."
+        );
+    }
+}

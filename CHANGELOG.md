@@ -194,6 +194,29 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A Windows checkout was CRLF, and the tests that read this repository's own
+  source had never seen one.** Git for Windows ships with `core.autocrlf=true`
+  and the Actions runner inherits it, so `cfg_regions.rs` — which finds out
+  which attribute belongs to which function by splitting on a blank line —
+  searched for `"\n\n"` in a file that only had `"\r\n\r\n"`, never split, and
+  read the window back into the function above. It reported the keystore's real
+  backend and its in-memory fake as carrying the same `cfg` gate: a
+  security-shaped assertion failing for a reason with nothing to do with
+  security. `.gitattributes` pins `eol=lf` and closes the whole class;
+  `workflow_parity.rs` fails if it is deleted.
+
+  It had been hiding behind another failure for a full round. `cargo test`
+  stops at the first test binary that fails and `agent_install` sorts first, so
+  fixing that one is what let this one be seen — which is also why "nineteen
+  failures" was never a finished count.
+
+- **The screen-reader transcript timed out under coverage and took the floors
+  gate down with it.** Twelve page mounts against a five-second default is fine
+  until the coverage job instruments every module it loads, and then `test:js`
+  is green on the same commit where `test:js:coverage` dies, no front-end report
+  is written, and the gate two steps later fails naming itself. The generator
+  gets a timeout that matches what it does.
+
 - **`agents` resolved the home directory differently on Windows, and the
   difference was invisible from a Mac.** `dirs::home_dir()` reads `$HOME` on
   Unix and ignores `%USERPROFILE%` on Windows, asking the shell for
