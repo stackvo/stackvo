@@ -110,6 +110,16 @@ hints! {
     START_PROJECT_FOR_TUNNEL = "startProjectForTunnel",
         "Start the project first — the tunnel forwards to its container.";
 
+    // ------------------------------------------------ the editor in the container (R-1)
+    START_PROJECT_FOR_EDITOR = "startProjectForEditor",
+        "Start the project first — the editor opens the container that is running.";
+    EDITOR_NEEDS_LIVE_SOURCE = "editorNeedsLiveSource",
+        "This container carries a copy of the source, so nothing written in it would reach \
+         the repository. A Node project can mount the source by turning the dev server on \
+         and rebuilding; the other runtimes build it in and cannot.";
+    INSTALL_VS_CODE = "installVsCode",
+        "Install VS Code, or copy the address and open it there yourself.";
+
     // ------------------------------------------------ worktrees (N)
     //
     // Three, not ten. Every refusal in `plan_worktree` is a whole sentence that

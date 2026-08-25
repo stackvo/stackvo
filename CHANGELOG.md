@@ -7,6 +7,61 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The editor itself, inside the container (§2 R-1, and §2 R-3 with it).**
+  `ide.rs` wired an IDE on the *host* to a debugger in the container. This is
+  the other half: VS Code running **in** the image — language server,
+  extensions, terminal, `composer` and `artisan` all in there, and no PHP on
+  the machine at all.
+
+  The whole feature is an address. VS Code has no attach-by-name command line;
+  it opens a running container through a remote authority, and that authority
+  is derivable from three facts this tree already had — the container's name
+  (`engine::container_name`), the directory the source sits at
+  (`editor::workdir_of`), and the bind mount itself. `editor::attach_authority`
+  builds `attached-container+<hex>`, where `<hex>` is
+  `{"containerName":"/stackvo-shop"}` in hex, and two forms come out of it
+  because two are needed: `folder_uri` for `code --folder-uri`, and
+  `handler_url` for the OS. A machine can easily have VS Code and not its
+  `code` launcher — the application registers its own URL handler, so that is
+  the form that opens anything there.
+
+  **The hex is held against a hand-written constant**, not against a second
+  run of the same arithmetic. A test that hexed the string again would agree
+  with any encoding both halves shared, including one VS Code cannot read. The
+  spelling was then checked against the Dev Containers extension's own
+  construction, which builds the same string from Docker's `Name` — the one
+  that carries a leading slash, which is why `shop` and `/shop` here produce
+  one address and not two.
+
+  Nothing is stored. The address is re-derived on every read, so a recreated
+  container or a renamed project cannot leave a stale one behind, and
+  `editor_claims.rs` now fails if anything outside Rust assembles it.
+
+  The screen is `EditorPane.vue`, on the Container tab beside the tunnel and
+  the LAN name — the same kind of thing as those, an address that reaches this
+  container, pointing inward instead of out. Both refusals are named
+  separately, because "cannot open an editor" over a stopped container and
+  over a container holding a *copy* of the source are two sentences with two
+  different answers. And the address is on screen even when the button cannot
+  be pressed: it is a string that works on a machine this one is not, so
+  hiding it would turn a missing launcher into a missing feature.
+
+- **A refusal that was wrong for every container there has ever been.**
+  `editor.rs`'s judgement — is the workdir really a bind mount — compares a
+  mount's `kind` to `bind`. `engine::inspect` produced that field with
+  `format!("{t:?}")`, and `MountPointType` is a **String** in bollard, not an
+  enum: `Debug` on a string puts the quotes in. Every container reported
+  `"\"bind\""`, so the comparison was false everywhere, and a PHP project
+  with its source mounted was refused with a sentence about a snapshot.
+
+  A refusal that is always wrong is indistinguishable from a refusal that is
+  working, which is why thirteen unit tests did not see it: both sides of the
+  comparison are written by hand in a test. `examples/editor_attach_probe.rs`
+  asked a live daemon instead, and the mount table answered in quotes.
+  `engine::mount_kind` is the fix, two tests hold the word, and
+  `editor_claims.rs` fails if the mapping goes back to `Debug`. Against the
+  same running container afterwards: `source live true`, `ATTACHABLE true`.
+
 - **§2 C is closed and its row is gone.** Third-party package distribution had
   three things left, and the last round called all three process. Measuring
   them said otherwise, and the last of them was a hole this repository had just

@@ -21,7 +21,7 @@ Three parts, in the order a request travels:
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | `src/`               | 38k lines               |
 | Back end — Rust, 111 modules        | `src-tauri/src/`     | 76k lines               |
-| The boundary between them           | `contracts/ipc.json` | 306 commands, 71 events |
+| The boundary between them           | `contracts/ipc.json` | 308 commands, 71 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -79,7 +79,7 @@ downward:
   entry              1.8k   lib.rs, main.rs, menu, tray — plugins, state, the
       │                     handler list, the window
       ▼
-  commands.rs       12.8k   the IPC surface: 302 #[tauri::command] functions
+  commands.rs       12.8k   the IPC surface: 304 #[tauri::command] functions
       │                     argument validation, orchestration, nothing else
       ▼
   domain            53.3k   111 modules: generator, manifest, certs, hosts,
@@ -198,7 +198,7 @@ rejections".
 
 ## 5. The contract
 
-`contracts/ipc.json` is the specification of the boundary: 306 commands, 71
+`contracts/ipc.json` is the specification of the boundary: 308 commands, 71
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
@@ -301,7 +301,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (111 modules, 306 commands) come from
+covers `README.md`; the counts above (111 modules, 308 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 

@@ -51,6 +51,7 @@ export const HELP_TOPICS = [
   'project-devcontainer',
   'project-dockerfile',
   'project-dumps',
+  'project-editor',
   'project-hooks',
   'project-indicator-composition',
   'project-indicator-cpu-activity',

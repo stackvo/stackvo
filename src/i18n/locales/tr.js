@@ -1453,6 +1453,29 @@ export default {
       'Not: komut satırından `stackvo up` bunu katmanlamaz ve konteyneri üretim kipinde yeniden oluşturur.',
   },
 
+  containerEditor: {
+    title: 'Konteynerin içinde düzenleyici',
+    explain:
+      "VS Code'u doğrudan çalışan konteynerin üstünde açar — dil sunucusu, uzantılar, terminal, composer ve artisan hepsi imajın içinde, bu makinede hiç PHP olmadan.",
+    open: "VS Code'da aç",
+    opens: '{container} konteynerini {workdir} dizininde açar.',
+    notRunning:
+      'Konteyner çalışmıyor. Önce projeyi başlatın — düzenleyici, yapılandırılanı değil çalışanı açar.',
+    snapshot:
+      'Bu konteyner {workdir} altında kaynağın kendisini değil bir kopyasını taşıyor; düzenleyicide yazılan hiçbir şey deponuza ulaşmaz. Node projesi dev sunucusunu açıp yeniden derleyerek kaynağı bağlayabilir; öteki çalışma zamanları kodu imaja gömer ve bağlayamaz.',
+    noEditor:
+      "Bu makinede VS Code bulunamadı. Aşağıdaki adres, aynı konteyneri VS Code'un kendi Klasör Aç penceresinden açar.",
+    serverNotKept:
+      'Bu konteyner düzenleyici volume’undan önce oluşturulmuş; VS Code her yeniden derlemeden sonra sunucusunu yeniden indirir. Konteyneri yeniden oluşturmak onu korur.',
+    recreate: 'Konteyneri yeniden oluştur',
+    musl: "Alpine imajı. VS Code'un musl derlemesi var; JetBrains'in yok.",
+    address: 'Adres',
+    addressWhy:
+      'Konteyner adından ve kaynağın bağlandığı dizinden türetilir, hiçbir yere yazılmaz — yeniden oluşturulan ya da adı değişen bir konteyner geride eski bir adres bırakamaz.',
+    serverNote:
+      'Sunucu kendini {dir} altına açar; orası adlandırılmış bir volume — yeniden derleme, indirilen yüz megabaytı çöpe atmaz.',
+  },
+
   phpIni: {
     title: 'PHP ayarları',
     explain:
@@ -2854,6 +2877,10 @@ export default {
     buildAndStartForWorker: 'Önce projeyi derleyip başlatın — worker onun imajıyla çalışır.',
     workersAreDetected: "Worker'lar artisan ve composer.json üzerinden tespit edilir.",
     startProjectForTunnel: "Önce projeyi başlatın — tünel onun container'ına yönlendirir.",
+    startProjectForEditor: "Önce projeyi başlatın — düzenleyici, çalışan container'ı açar.",
+    editorNeedsLiveSource:
+      'Bu container kaynağın bir kopyasını taşıyor; içinde yazılan hiçbir şey depoya ulaşmaz. Node projesi dev sunucusunu açıp yeniden derleyerek kaynağı bağlayabilir; öteki çalışma zamanları kaynağı imaja gömer ve bağlayamaz.',
+    installVsCode: "VS Code'u kurun ya da adresi kopyalayıp orada kendiniz açın.",
     worktreeIsDirty:
       'Worktree’de commit edilmemiş değişiklikler var. Bunları commit ya da stash edin; ya da onları atan Zorla seçeneğiyle kaldırın.',
     databaseNameCharset:
