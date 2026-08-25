@@ -28,6 +28,7 @@ import RequirementsPane from '@/components/project/RequirementsPane.vue';
 import OverviewPane from '@/components/project/OverviewPane.vue';
 import ProfilerPane from '@/components/project/ProfilerPane.vue';
 import SpxPane from '@/components/project/SpxPane.vue';
+import WhySlowPane from '@/components/project/WhySlowPane.vue';
 import TunnelPane from '@/components/project/TunnelPane.vue';
 import OAuthPane from '@/components/project/OAuthPane.vue';
 import StripePane from '@/components/project/StripePane.vue';
@@ -823,6 +824,18 @@ onUnmounted(() => {
             @settings="showSettings = true"
             @fix-hosts="showHostsFix = true"
           />
+        </template>
+
+        <!-- WHY WAS THIS REQUEST SLOW ---------------------------------------- -->
+        <!-- B-1, and first on the tab rather than last. Everything below it is
+             an instrument; this is the question the instruments were bought to
+             answer, and a reader who arrives with a slow page should not have
+             to know which three panes to open and how to line their clocks up.
+             It leads with an empty state until something has been recorded,
+             which is the honest order: the recording is made in the php-spx
+             card underneath. -->
+        <template v-if="shows('debug')">
+          <WhySlowPane :name="name" :runtime="project?.runtime" />
         </template>
 
         <!-- XDEBUG --------------------------------------------------------- -->

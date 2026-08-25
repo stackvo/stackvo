@@ -41,7 +41,7 @@ defineProps({
     </div>
     <v-spacer />
     <slot name="append" />
-    <HelpButton v-if="help" :topic="help" />
+    <HelpButton v-if="help" :topic="help" :subject="title" />
   </div>
 </template>
 

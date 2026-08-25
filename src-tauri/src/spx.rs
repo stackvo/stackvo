@@ -63,6 +63,7 @@
 
 use crate::error::{Code, Error, Result};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Where the built extension and the web UI assets are mounted, read-only.
@@ -702,6 +703,108 @@ pub fn clear(root: &Path, project: &str) -> Result<(usize, u64)> {
         remove(root, project, &report.key)?;
     }
     Ok((count, bytes))
+}
+
+// -------------------------------------------------------- the observed window
+//
+// What `exec_ts` means, replaced by what this app watched happen.
+//
+// [`crate::explain`] joins a query log and a set of dumps to one request by the
+// stretch of wall clock that request claims, and it builds that stretch out of
+// `exec_ts` plus the run's own wall time. That rests on a premise nothing in
+// this tree could settle: that `exec_ts` is the moment the run **started**
+// rather than the moment php-spx wrote the file, during the request's shutdown.
+// Reasoning about somebody else's C is not a measurement, and the failure mode
+// is the quiet one — the pane renders, the numbers are plausible, and the
+// window sits one whole duration late.
+//
+// For a recording **this app started**, the premise is unnecessary. The app
+// holds the clock on both sides of the request: it knows when it sent one, and
+// it knows when the report appeared. That pair brackets the request by
+// construction, whatever `exec_ts` turns out to mean, and it is what these
+// functions keep.
+//
+// It is deliberately not stored in [`data_dir`]: that directory is php-spx's,
+// it is mounted into the container, and a file of this app's own in there is
+// something a container can see and a `list` has to be tolerant of. It sits
+// beside it instead.
+
+/// Where the observed windows for one project live.
+pub fn observed_path(root: &Path, project: &str) -> PathBuf {
+    root.join("logs")
+        .join("projects")
+        .join(project)
+        .join("spx-observed.json")
+}
+
+/// The stretch of host clock one recording was watched across.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Observed {
+    /// Seconds since the epoch, host clock, before the request was sent.
+    pub from: f64,
+    /// Seconds since the epoch, host clock, once the report was on disk.
+    pub to: f64,
+}
+
+/// Every window this app watched, by report key.
+///
+/// Missing, unreadable and malformed are one answer — an empty map. This is a
+/// convenience that makes a window exact; a file that will not parse is a
+/// reason to fall back to the arithmetic, never a reason to fail a read of
+/// somebody's profile.
+pub fn read_observed(root: &Path, project: &str) -> HashMap<String, Observed> {
+    std::fs::read_to_string(observed_path(root, project))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+/// Keep the window one recording was watched across.
+///
+/// Prunes on the way through: an entry whose report is gone is dropped, so this
+/// file follows `remove` and `clear` without either of them having to know it
+/// exists. That is the difference between a cache and a second thing to
+/// maintain — and the reports are the authority, so anything here that they do
+/// not name is not evidence of anything.
+///
+/// Failure is silent by design. The observation makes a window exact; not
+/// having it costs the fallback and nothing else, and a profiler that refused
+/// to record because a convenience file could not be written would be trading
+/// the feature for the improvement.
+pub fn record_observed(root: &Path, project: &str, key: &str, observed: Observed) {
+    if check_key(key).is_err() {
+        return;
+    }
+    // A window has to be a forward interval on a clock that read. A machine
+    // whose clock would not read gives zero at both ends, and storing that
+    // would pin the request to 1970 — where nothing falls inside it, and the
+    // screen shows an empty list for a request that asked plenty. Refusing it
+    // here falls back to the arithmetic, which is wrong at worst and never
+    // empty by construction.
+    if !(observed.from.is_finite() && observed.to.is_finite())
+        || observed.from <= 0.0
+        || observed.to <= observed.from
+    {
+        return;
+    }
+
+    let live: std::collections::HashSet<String> =
+        list(root, project).into_iter().map(|r| r.key).collect();
+
+    let mut all = read_observed(root, project);
+    all.retain(|existing, _| live.contains(existing));
+    all.insert(key.to_string(), observed);
+
+    let path = observed_path(root, project);
+    if let Some(parent) = path.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+    if let Ok(text) = serde_json::to_string(&all) {
+        let _ = crate::atomic::write(&path, &text);
+    }
 }
 
 // ------------------------------------------------------------------ the trace
@@ -1917,5 +2020,155 @@ App::slow
             "{}",
             path.display()
         );
+    }
+
+    // ------------------------------------------------- the observed window
+
+    /// A workspace with one report on disk, so `record_observed`'s pruning has
+    /// something to prune against.
+    fn workspace_with_reports(tag: &str, keys: &[&str]) -> std::path::PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("stackvo-spx-observed-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = data_dir(&root, "shop");
+        std::fs::create_dir_all(&dir).unwrap();
+        for key in keys {
+            std::fs::write(
+                dir.join(format!("{key}.json")),
+                format!(
+                    r#"{{"key":"{key}","exec_ts":1,"cli":0,"wall_time_ms":1,
+                         "peak_memory_usage":1,"call_count":1}}"#
+                ),
+            )
+            .unwrap();
+        }
+        root
+    }
+
+    #[test]
+    fn an_observed_window_reads_back_as_it_was_written() {
+        let root = workspace_with_reports("roundtrip", &["k1"]);
+        record_observed(
+            &root,
+            "shop",
+            "k1",
+            Observed {
+                from: 1_000.25,
+                to: 1_002.75,
+            },
+        );
+
+        let all = read_observed(&root, "shop");
+        assert_eq!(all.len(), 1);
+        assert_eq!(all["k1"].from, 1_000.25);
+        assert_eq!(all["k1"].to, 1_002.75);
+    }
+
+    /// The reports are the authority. An entry naming one that has been deleted
+    /// — by `remove`, or by the pane's "clear" — is not evidence of anything,
+    /// and pruning here is what stops this file needing either of them to know
+    /// it exists.
+    #[test]
+    fn writing_prunes_entries_whose_report_is_gone() {
+        let root = workspace_with_reports("prune", &["k1"]);
+        let path = observed_path(&root, "shop");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"k1":{"from":1.0,"to":2.0},"deleted":{"from":3.0,"to":4.0}}"#,
+        )
+        .unwrap();
+
+        record_observed(
+            &root,
+            "shop",
+            "k1",
+            Observed {
+                from: 9.0,
+                to: 10.0,
+            },
+        );
+
+        let all = read_observed(&root, "shop");
+        assert!(all.contains_key("k1"));
+        assert!(
+            !all.contains_key("deleted"),
+            "an entry for a report that no longer exists was kept"
+        );
+    }
+
+    /// A clock that will not read gives zero at both ends. Storing that pins
+    /// the request to 1970, where nothing falls inside the window and a request
+    /// that asked four hundred statements shows an empty list. Refusing it
+    /// falls back to the arithmetic, which is wrong at worst and never empty by
+    /// construction.
+    #[test]
+    fn a_window_that_is_not_a_forward_interval_is_refused() {
+        let root = workspace_with_reports("refuse", &["k1"]);
+
+        for bad in [
+            Observed { from: 0.0, to: 0.0 },
+            Observed {
+                from: 100.0,
+                to: 100.0,
+            },
+            Observed {
+                from: 100.0,
+                to: 90.0,
+            },
+            Observed {
+                from: f64::NAN,
+                to: 100.0,
+            },
+        ] {
+            record_observed(&root, "shop", "k1", bad);
+            assert!(
+                read_observed(&root, "shop").is_empty(),
+                "{bad:?} was stored as a window"
+            );
+        }
+    }
+
+    /// A key comes back from a screen and ends up as a map key beside a path.
+    /// The same guard every other reader of a report key goes through.
+    #[test]
+    fn a_key_that_is_not_a_report_key_is_never_stored() {
+        let root = workspace_with_reports("badkey", &["k1"]);
+        record_observed(
+            &root,
+            "shop",
+            "../../etc/passwd",
+            Observed { from: 1.0, to: 2.0 },
+        );
+        assert!(read_observed(&root, "shop").is_empty());
+    }
+
+    /// Missing, unreadable and malformed are one answer, because this is a
+    /// convenience: the fallback is arithmetic that always works.
+    #[test]
+    fn an_unreadable_file_is_an_empty_map_rather_than_a_failure() {
+        let root = workspace_with_reports("garbage", &["k1"]);
+        assert!(read_observed(&root, "shop").is_empty(), "missing");
+
+        let path = observed_path(&root, "shop");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{ this is not json").unwrap();
+        assert!(read_observed(&root, "shop").is_empty(), "malformed");
+    }
+
+    /// It must not land in the directory php-spx owns: that one is mounted into
+    /// the container, and `list` reads every `.json` in it as a report.
+    #[test]
+    fn it_is_kept_beside_the_reports_and_not_among_them() {
+        let root = std::path::Path::new("/tmp/ws");
+        let observed = observed_path(root, "shop");
+        let reports = data_dir(root, "shop");
+
+        assert!(
+            !observed.starts_with(&reports),
+            "{} is inside the mounted report directory",
+            observed.display()
+        );
+        assert_eq!(observed.parent(), reports.parent());
     }
 }
