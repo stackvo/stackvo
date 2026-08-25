@@ -2250,6 +2250,18 @@
       "why": "F-5, and §5.5 held it as a decision rather than a task: quickcmd refused an in-app REPL in writing — \"a second, worse REPL next to the one they already have configured\" — and reversing a refusal is not something a commit does quietly. The refusal stands for a LINE repl and this is not one. A snippet is twenty lines you edit: write a query, run it, change line three, run it again. In tinker that is retyping. `tinker` still opens the user's own terminal, and the two are split by what the person is doing rather than ranked.",
       "notes": "Offered from the same Fingerprint the quick commands use. Two tiers, and each row says which it is: `booted` means the application is loaded (artisan tinker, wp eval, manage.py shell, bin/rails runner), and false means the language on its own (php -r, node -e) — a pane that showed them alike would let somebody debug for ten minutes before finding out their models were never loaded. Laravel is offered only where composer.json also declares laravel/tinker, because --execute is Tinker's flag and a --no-dev install does not have it. See src-tauri/src/repl.rs."
     },
+    "request_explain": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "project": "string",
+        "key": "string (SPX report key — the request this is about)",
+        "service": "string? (database service id; omit and the database half is absent rather than empty)"
+      },
+      "returns": "RequestExplanation",
+      "why": "B-1. The three instruments already existed and each was its own pane: SPX says where the code's time went, the query log says what the database was asked, the timeline says what else happened. Reading them about ONE request meant opening three panes and comparing clocks by eye. No new measurement was needed — a common request key was, and a recording is one.",
+      "notes": "The key is a php-spx REPORT: the only artefact here that names a request (`GET /checkout`), says when it started and says how long it took. Everything else is joined to it BY TIME, and the payload never pretends otherwise — timeline's refusal to attribute a statement to a request still stands and TimelineMoment.request is still null on every query moment. What replaces the reader's eye is a STATED window plus `overlaps`, which names every other recording claiming part of the same wall clock. The window has two bases and the payload says which. For a recording THIS APP started, it is `observed`: the host clock on both sides of the request, kept by spx_record_request and spx_record_command, which needs no premise about what `exec_ts` means. Otherwise it is `derived` — `exec_ts ± 1s + wallTimeUs`, where php-spx files exec_ts as WHOLE SECONDS and the tolerance is that truncation rather than an allowance for clock drift. The derived half rests on `exec_ts` being the START of the run, which is REASONED AND NOT MEASURED; `examples/explain_probe.rs` asks a live container. `wallTimeUs` is MICROSECONDS despite php-spx naming the field `wall_time_ms` (measured — see spx_report); reading it as milliseconds opens a window a thousand times too wide and attributes the whole session to one page load. IMPLEMENTORS: compute the split over the WHOLE hotspot list, not a top-N — a request whose driver frames each sit below the cut is exactly the one the split exists for, and a trimmed list reports it as pure PHP. Three absences are survived and each is reported as its own finding rather than as an empty list: no trace half (`traceRead: false`), a log that was not recording (`queriesUnrecorded`) and a recording log with nothing in the window (`queriesOutsideWindow`). A key that names no report IS an error — answering it with an empty explanation would present \"nothing is known\" as an answer about the request. See src-tauri/src/explain.rs."
+    },
     "request_timeline": {
       "new": true,
       "kind": "query",
@@ -4000,6 +4012,27 @@
       "socketPath": "string?",
       "error": "string?"
     },
+    "ExplainFinding": {
+      "kind": "'nPlusOne' | 'databaseBound' | 'hotspot' | 'noDriverFrames' | 'queriesUnrecorded' | 'queriesOutsideWindow' | 'overlaps' | 'traceMissing' | 'truncated'",
+      "subject": "string?",
+      "count": "number?",
+      "percent": "number?",
+      "note": "A kind and its numbers, never a sentence: the surfaces render these in their own words and two of them render in two languages, so a sentence built in Rust would be English in a Turkish window. Ordered most useful first — the ones that name a fix above the ones that qualify them. Thresholds: `nPlusOne` at 3 repeats (the same constant the query log pane uses, so one screen cannot call three an N+1 while another calls it four), `databaseBound` at 30% of the run in driver frames, `hotspot` at 20% of the run in one function's own body. `noDriverFrames` is the cross-check no single pane can make: statements landed in the window and the trace names no driver frame at all, which usually means php-spx's `builtins` switch is off and the wait is charged to whichever userland function called the driver."
+    },
+    "ExplainSplit": {
+      "databaseUs": "number",
+      "databasePercent": "number",
+      "phpUs": "number",
+      "phpPercent": "number",
+      "drivers": "SpxHotspot[]",
+      "note": "The sum of the EXCLUSIVE time of every frame that is a database driver — `PDO::`, `PDOStatement::`, `mysqli`, `pg_*`, `SQLite3*`, `MongoDB\\\\Driver\\\\`. Exclusive rather than inclusive because inclusive would count a nested driver frame twice, and because the question is how long PHP spent waiting, which is time in the driver's own body. Framework layers (Illuminate\\\\Database\\\\Connection::run) are deliberately NOT counted — their own body is bookkeeping and counting them double-counts the driver frame beneath. Caches and queues are not counted either: they are not what the query log records, so their time could not be checked against anything on the same screen. `drivers` is the decomposition, so the share is auditable rather than asserted."
+    },
+    "ExplainWindow": {
+      "from": "number",
+      "to": "number",
+      "basis": "'observed' | 'derived'",
+      "note": "Seconds since the epoch. `observed` is the stretch THIS APP watched the request across — the host clock before it sent the request, and the host clock once php-spx's report was on disk — which brackets the run by construction whatever `exec_ts` turns out to mean. It is kept per report key in `logs/projects/<project>/spx-observed.json`, written by spx_record_request and spx_record_command, and pruned against the reports that still exist. `derived` is the fallback for a recording made in a browser: `exec_ts - 1` to `exec_ts + wallTimeUs/1e6 + 1`, where the second at each end is exec_ts's own truncation and NOT an allowance for drift. The fallback carries one premise this repository has not measured — that `exec_ts` is the START of the run rather than the moment the file was written during shutdown; if it is the end, a derived window sits one whole duration late and quietly. `examples/explain_probe.rs` asks a live container. A screen MUST say which basis it is showing, because the two are not equally trustworthy."
+    },
     "FanoutStream": {
       "streamId": "string",
       "followed": "number",
@@ -4694,6 +4727,31 @@
       "code": "string",
       "note": "The code, never the output — see repl_history."
     },
+    "RequestExplanation": {
+      "key": "string",
+      "request": "string | null",
+      "command": "string | null",
+      "cli": "bool",
+      "recordedAt": "number",
+      "wallTimeUs": "number",
+      "window": "ExplainWindow",
+      "traceRead": "bool",
+      "truncated": "bool",
+      "functions": "number",
+      "split": "ExplainSplit | null",
+      "hotspots": "SpxHotspot[]",
+      "queries": "QueryEntry[]",
+      "queryCount": "number",
+      "repeats": "QueryRepeat[]",
+      "queriesRecording": "bool",
+      "queriesElsewhere": "number",
+      "moments": "TimelineMoment[]",
+      "requests": "string[]",
+      "overlaps": "string[]",
+      "builtins": "bool",
+      "findings": "ExplainFinding[]",
+      "note": "One request, and everything three instruments recorded across it. `queries`, `hotspots` and the lists are capped at 25; `queryCount` and `functions` are the counts BEFORE the cap, so a screen can say what it is not showing. `queriesElsewhere` is the denominator that makes an empty `queries` readable — none in the window out of none recorded is a quiet session, none out of four hundred is a request that asked nothing. `requests` comes from the dumps, which DO carry the request they happened in; where it disagrees with `request` above, two requests were in flight. `builtins` is the profiler's CURRENT setting and describes now rather than the moment of the recording — it is context for the `noDriverFrames` finding and never a claim about this trace."
+    },
     "SchedulerView": {
       "jobs": "CronJobStatus[]",
       "running": "bool",
@@ -4751,6 +4809,15 @@
       "goesBackwards": "boolean — this index is older than the one already here, which market_refresh refuses (T-6, replay)",
       "error": "string | null",
       "hintKey": "string | null"
+    },
+    "SpxHotspot": {
+      "function": "string",
+      "calls": "number",
+      "exclusiveUs": "number",
+      "exclusivePercent": "number",
+      "inclusiveUs": "number",
+      "inclusivePercent": "number",
+      "note": "One function in a recording. Exclusive is time in its own body, inclusive is it and everything it called. Absolute times are derived from the metadata's own total by share, so they cannot drift from the figure shown beside the recording in the list."
     },
     "StatSample": {
       "t": "u64",

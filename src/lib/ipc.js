@@ -362,6 +362,18 @@ export const api = {
    */
   requestTimeline: (project, service = null) => call('request_timeline', { project, service }),
   /**
+   * B-1: the three instruments around one recorded request.
+   *
+   * `key` is a php-spx report — the only artefact that names a request, says
+   * when it started and says how long it took, which is what makes it the key
+   * everything else is joined to. The join is by time and the payload says so:
+   * `window` is stated, and `overlaps` names anything else recorded across the
+   * same stretch. `service` is optional; without it the database half is
+   * reported absent rather than shown as empty.
+   */
+  requestExplain: (project, key, service = null) =>
+    call('request_explain', { project, key, service }),
+  /**
    * F-3: the same profile as a call tree, for the flame view.
    *
    * Separate from `profilerRead` because the tree is thousands of nodes and the

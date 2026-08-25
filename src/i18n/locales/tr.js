@@ -76,6 +76,8 @@ export default {
     more: '+{count} proje daha…',
     runningSummary: '{running}/{total} proje çalışıyor',
     menuAbout: 'StackVo Hakkında',
+    menuHide: '{product} uygulamasını gizle',
+    menuQuit: '{product} uygulamasından çık',
     // Her projenin kendi alt menüsündeki ilk satır. Başlat/durdur sözcükleri
     // `projectsView.menu`'den geliyor — aynı iki eylem, aynı seçimle: o an
     // yapılabilen hangisiyse yalnızca o görünüyor.
@@ -1235,7 +1237,7 @@ export default {
       'dump() ve dd() çıktılarını yanıttan alıp burada gösterir. Biçimlendirmeyi, projenizin konteyneri içinde çalışan Symfony’nin kendi dump sunucusu yapar.',
     needsRecreate:
       'Çalışan konteynerde dump ayarları henüz yok. Bunlar konteyner oluşturulurken sabitlenir, o yüzden yeniden başlatmak yetmez — konteyneri yeniden oluşturmak gerekir.',
-    clear: 'Temizle',
+    clear: 'Dump listesini temizle',
     waiting: 'Bir dump bekleniyor… uygulamada herhangi bir yerde dump() çağırın.',
     ddEndsTheRequest:
       'dump() isteği sürdürür. dd() ise dökümü alıp isteği bitirir ve Symfony bunu 500 olarak işaretler — tarayıcıda hata görürken dökümün burada belirmesi normaldir.',
@@ -2064,6 +2066,7 @@ export default {
     loading: 'Yükleniyor',
     close: 'Kapat',
     help: 'Bu kart ne işe yarar',
+    helpFor: 'Bu kart ne işe yarar: {subject}',
     primaryNav: 'Ana gezinme',
   },
   actions: {
@@ -2112,7 +2115,7 @@ export default {
     pause: 'Duraklat',
     resume: 'Devam et',
     resumeHint: 'Devam et — {n} satır bekliyor',
-    clear: 'Temizle',
+    clear: 'Görünümü temizle',
     clearHint: 'Görünümü temizle — diskten hiçbir şey silinmez',
     containerStream: 'Konteyner çıktısı',
     allDescription:
@@ -2465,6 +2468,66 @@ export default {
     nothingYet: 'Henüz kayıt yok — baktığınız sayfayı yeniden yükleyin.',
     example: 'örneğin',
     statements: 'İfadeler ({count})',
+  },
+
+  /**
+   * B-1 — üç ölçüm aleti tek bir istek etrafında.
+   *
+   * Bulgular sınırın arkasında değil burada cümleye dönüşüyor: yük yalnız bir
+   * tür ve sayılarını taşıyor, tam da bu pencere onları okuyanın kendi dilinde
+   * söyleyebilsin diye.
+   */
+  whySlow: {
+    title: 'Bu istek neden yavaştı',
+    explain:
+      'Kaydedilmiş tek bir istek, ve etrafında profil, sorgu günlüğü ve zaman çizelgesi. Profil kodun zamanının nereye gittiğini, günlük veritabanına ne sorulduğunu, çizelge de o sürerken başka ne olduğunu söylüyor.',
+    nothingRecorded:
+      'Bu proje için henüz hiçbir şey kaydedilmedi. Aşağıdaki php-spx kartından bir istek kaydedin — uzantıyı açın, sonra incelediğiniz sayfayı ondan isteyin — ve burada görünür.',
+    recording: 'Kayıt',
+    database: 'Veritabanı',
+    cli: 'komut satırı',
+    httpRequest: 'HTTP isteği',
+    took: '{took} sürdü',
+    window:
+      'Aşağıdaki her şey, duvar saatinin bu diliminde olanlardır. İfadelerin ve postaların kendi istekleri yok, o yüzden buna zamanla bağlanıyorlar — site o sırada başka ne yapıyorduysa o da burada.',
+    windowObserved:
+      'Bu dilim izlendi: isteği StackVo’nun kendisi gönderdi ve saati iki yanında da tuttu.',
+    windowDerived:
+      'Bu dilim php-spx’in kaydettiğinden hesaplandı, ve bu onun zaman damgasının koşunun başı olduğunu varsayar. Kaydı buradaki düğmeden alırsanız pencere çıkarılmak yerine izlenir.',
+    findings: 'Kanıt ne diyor',
+    nothingToSay:
+      'Öne çıkan bir şey yok. Hiçbir şekil üç kez tekrarlanmadı, tek bir fonksiyon koşunun beşte birini tutmadı, ve veritabanı büyük yarı değildi.',
+    finding: {
+      nPlusOne:
+        'Tek bir sorgu şekli bu isteğin içinde {count} kez koştu — döngü veritabanına satır başına bir kez soruyor.',
+      databaseBound:
+        'Bu isteğin yüzde {percent} kadarı veritabanı sürücüsünün içinde, beklemekle geçti. Sıradaki iyileştirme etrafındaki kod değil, bir sorgu.',
+      hotspot: 'Koşunun yüzde {percent} kadarı tek bir fonksiyonun kendi gövdesindeydi.',
+      noDriverFrames:
+        'Veritabanına {count} kez soruldu ve profil hiçbir sürücü çağrısı adlandırmıyor — yani bu kayıt beklemenin neye mal olduğunu söyleyemez. php-spx kartındaki “PHP’nin kendi fonksiyonlarını da profille” anahtarını açıp yeniden kaydedin.',
+      queriesUnrecorded:
+        'Sorgu günlüğü kayıtta değildi, yani bu isteğin veritabanı yarısı boş değil, yok.',
+      queriesOutsideWindow:
+        'Günlükte {count} ifade var ve hiçbiri bu isteğin içine düşmüyor — ya hiçbir veritabanına dokunmadı, ya da kayıt başlamadan önce koştu.',
+      overlaps:
+        'Saatin aynı diliminin bir kısmını {count} kayıt daha iddia ediyor, yani aşağıda zamanla bağlanan her şey onlarla paylaşılıyor.',
+      traceMissing:
+        'Bu kaydın iz yarısı okunamadı, yani kodun zamanının nereye gittiği hakkında söylenecek bir şey yok.',
+      truncated:
+        'İz, bu uygulamanın okuduğundan uzundu; yani paylar koşunun tamamını değil başını anlatıyor.',
+    },
+    split: 'Zaman nereye gitti',
+    splitLabel: 'yüzde {database} veritabanında, yüzde {php} PHP’de',
+    inDatabase: 'Veritabanında',
+    inPhp: 'PHP’de',
+    splitHint:
+      'Veritabanı yarısı, sürücünün kendi gövdesinde geçen zamandır — PDO, mysqli, pg_*, SQLite3, Mongo sürücüsü. Bir çatının sorgu katmanı PHP sayılıyor, çünkü bekleme onun altında oluyor.',
+    hotspots: 'Fonksiyonlar (izde {n} tane)',
+    statements: 'İfadeler ({n})',
+    axis: 'Tek eksende ({n})',
+    notRecording: 'Bu istek koşarken sorgu günlüğü kapalıydı.',
+    noneInWindow: 'Günlüğün tuttuğu {n} ifadenin hiçbiri bu isteğin içine düşmüyor.',
+    noneAtAll: 'Günlük kayıttaydı ve hiçbir şey tutmuyor.',
   },
 
   stripe: {

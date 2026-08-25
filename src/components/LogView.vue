@@ -641,8 +641,16 @@ onUnmounted(close);
             <div v-if="i === liveFrom" class="log-boundary">
               <span>{{ tc('logs.liveFrom') }}</span>
             </div>
+            <!-- WCAG 3.1.2, and `lang=""` rather than `lang="en"` on purpose:
+                 this is somebody's application writing to stdout and nothing
+                 here knows what language it chose. The empty value is HTML's
+                 "undetermined", which stops a screen reader reading a log line
+                 with the interface's phonetics without claiming a language the
+                 app cannot know. Marking it `en` would be a guess stated as a
+                 fact. -->
             <pre
               class="log-line"
+              lang=""
               :class="[
                 { 'log-stderr': line.stream === 'stderr', 'log-historic': line.historic },
                 line.level ? `level-${line.level}` : null,

@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 152 named types, 298 wrappers, 5 field(s) the
+ * Measured at generation: 157 named types, 299 wrappers, 5 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -651,6 +651,41 @@ export interface EngineStatus {
     socketPath?: string;
     /** string? */
     error?: string;
+}
+
+export interface ExplainFinding {
+    /**
+     * 'nPlusOne' | 'databaseBound' | 'hotspot' | 'noDriverFrames' | 'queriesUnrecorded' | 'queriesOutsideWindow' | 'overlaps' | 'traceMissing' | 'truncated'
+     */
+    kind: 'nPlusOne' | 'databaseBound' | 'hotspot' | 'noDriverFrames' | 'queriesUnrecorded' | 'queriesOutsideWindow' | 'overlaps' | 'traceMissing' | 'truncated';
+    /** string? */
+    subject?: string;
+    /** number? */
+    count?: number;
+    /** number? */
+    percent?: number;
+}
+
+export interface ExplainSplit {
+    /** number */
+    databaseUs: number;
+    /** number */
+    databasePercent: number;
+    /** number */
+    phpUs: number;
+    /** number */
+    phpPercent: number;
+    /** SpxHotspot[] */
+    drivers: SpxHotspot[];
+}
+
+export interface ExplainWindow {
+    /** number */
+    from: number;
+    /** number */
+    to: number;
+    /** 'observed' | 'derived' */
+    basis: 'observed' | 'derived';
 }
 
 export interface FanoutStream {
@@ -1786,6 +1821,53 @@ export interface ReplSnippet {
     code: string;
 }
 
+export interface RequestExplanation {
+    /** string */
+    key: string;
+    /** string | null */
+    request: string | null;
+    /** string | null */
+    command: string | null;
+    /** bool */
+    cli: boolean;
+    /** number */
+    recordedAt: number;
+    /** number */
+    wallTimeUs: number;
+    /** ExplainWindow */
+    window: ExplainWindow;
+    /** bool */
+    traceRead: boolean;
+    /** bool */
+    truncated: boolean;
+    /** number */
+    functions: number;
+    /** ExplainSplit | null */
+    split: ExplainSplit | null;
+    /** SpxHotspot[] */
+    hotspots: SpxHotspot[];
+    /** QueryEntry[] */
+    queries: QueryEntry[];
+    /** number */
+    queryCount: number;
+    /** QueryRepeat[] */
+    repeats: QueryRepeat[];
+    /** bool */
+    queriesRecording: boolean;
+    /** number */
+    queriesElsewhere: number;
+    /** TimelineMoment[] */
+    moments: TimelineMoment[];
+    /** string[] */
+    requests: string[];
+    /** string[] */
+    overlaps: string[];
+    /** bool */
+    builtins: boolean;
+    /** ExplainFinding[] */
+    findings: ExplainFinding[];
+}
+
 export interface SchedulerView {
     /** CronJobStatus[] */
     jobs: CronJobStatus[];
@@ -1904,6 +1986,21 @@ export interface SourceProbe {
     error: string | null;
     /** string | null */
     hintKey: string | null;
+}
+
+export interface SpxHotspot {
+    /** string */
+    function: string;
+    /** number */
+    calls: number;
+    /** number */
+    exclusiveUs: number;
+    /** number */
+    exclusivePercent: number;
+    /** number */
+    inclusiveUs: number;
+    /** number */
+    inclusivePercent: number;
 }
 
 export interface StatSample {
@@ -2620,6 +2717,10 @@ export interface StackvoApi {
    * F-2, whose note read 'dump/mail/log three separate screens, no correlation'. What the code thought it had (dd()) and what it actually asked the database for are two halves of one question, and reading them meant comparing clocks by eye across two panes.
    */
   requestTimeline(project: string, service?: string): Promise<Timeline>;
+  /**
+   * B-1. The three instruments already existed and each was its own pane: SPX says where the code's time went, the query log says what the database was asked, the timeline says what else happened. Reading them about ONE request meant opening three panes and comparing clocks by eye. No new measurement was needed — a common request key was, and a recording is one.
+   */
+  requestExplain(project: string, key: string, service?: string): Promise<RequestExplanation>;
   /**
    * F-3. `profiler_read` answers where the time went — a table of the costliest functions — and cannot answer what called that, which is the question a flame view exists for. The parser was already reading caller→callee edges to attribute inclusive cost and was discarding the caller.
    */

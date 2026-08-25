@@ -27,11 +27,13 @@ pub mod devserver;
 pub mod diagnostics;
 pub mod dns;
 pub mod doctor;
+pub mod editor;
 pub mod elevate;
 pub mod engine;
 pub mod env_writer;
 pub mod error;
 pub mod events;
+pub mod explain;
 pub mod generator;
 pub mod git;
 pub mod handover;
@@ -569,6 +571,7 @@ pub fn run() {
             commands::lan_status,
             commands::project_lan_share,
             commands::request_timeline,
+            commands::request_explain,
             commands::query_log,
             commands::query_log_record,
             commands::query_log_clear,

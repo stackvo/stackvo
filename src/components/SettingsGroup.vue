@@ -34,7 +34,7 @@ defineProps({
       </div>
       <v-spacer />
       <slot name="append" />
-      <HelpButton v-if="help" :topic="help" />
+      <HelpButton v-if="help" :topic="help" :subject="title" />
     </div>
 
     <!-- Named as well as spaced: a page that wants the group to fill a column

@@ -140,12 +140,21 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The list is `ci.yml`'s, and `workflow_parity.rs` holds the two together.
+      #
+      # `libdbus-1-dev` was named in CI and not here, and it is added rather
+      # than argued about: it arrives anyway, as a dependency of
+      # `libappindicator3-dev`, so the difference was never a broken build. It
+      # was a list that no longer said what it needs, in the one job nobody can
+      # run locally — and the next package to go missing would not have been so
+      # lucky. Declared, so the release environment is at least the one CI
+      # proves green on every push, and gated so it stays that way.
       - name: Install Linux dependencies
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -174,7 +183,32 @@ jobs:
         # that day, which is how a release was gated by a toolchain no developer
         # was running.
         working-directory: src-tauri
-        run: cargo test
+        # `bash` on every runner, so one line works on all six. `--no-fail-fast`
+        # so the log lists every failing test binary rather than stopping at the
+        # first: the previous run of this step failed on all six targets and
+        # what §3 #2 recorded afterwards was "how many failures remain was not
+        # read from the log", because the log ends at the first crate to stop.
+        #
+        # `PIPESTATUS[0]` because a pipe reports the exit code of `tee`, which
+        # always succeeds. Without it this step goes green on a failing suite,
+        # which is worse than the failure it was added to describe.
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --no-fail-fast 2>&1 | tee "../test-${{ matrix.target }}.log"
+
+      # A red release job used to leave nothing behind. Six targets fail, the
+      # run page shows six red ticks, and reading them means opening six live
+      # logs in a browser and scrolling — which is how a release stayed broken
+      # across three rounds with nobody able to say what broke.
+      - name: Keep the test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-${{ matrix.target }}
+          path: test-${{ matrix.target }}.log
+          if-no-files-found: error
+          retention-days: 7
 
       # Windows Authenticode. Tauri reads the certificate thumbprint from
       # tauri.conf.json, so the .pfx has to be imported into the runner's store
@@ -320,6 +354,49 @@ jobs:
           # tauri-action writes latest.json alongside the artifacts; the
           # endpoint in tauri.conf.json has to point at wherever it is served.
           includeUpdaterJson: true
+
+      # ------------------------------------------------------- the last step
+      #
+      # `releaseDraft: true` above and the updater endpoint in tauri.conf.json
+      # contradict each other, and the contradiction is silent.
+      #
+      # The endpoint is `releases/latest/download/latest.json`. GitHub resolves
+      # `releases/latest` to the latest **published**, non-prerelease release
+      # and never to a draft, so a run in which all six targets go green still
+      # leaves that URL answering 404. §3 #2 read that 404 as a failed build for
+      # three rounds; it is a release nobody pressed Publish on.
+      #
+      # The draft stays, and stays deliberately: `fail-fast: false` means a
+      # partial matrix is a normal outcome, and publishing a `latest.json` that
+      # names four of six platforms tells the other two they are current for
+      # ever. Somebody looking at the draft before it goes out is the check that
+      # catches that. What was wrong was never the draft — it was that nothing
+      # anywhere said the step existed.
+      #
+      # One row, like the SBOM, rather than the same paragraph six times.
+      - name: Say that the release is a draft, and what that means for the updater
+        if: ${{ !inputs.rehearsal && matrix.target == 'x86_64-unknown-linux-gnu' }}
+        shell: bash
+        run: |
+          echo "::warning::This release is a DRAFT. The updater endpoint answers 404 until it is published."
+          {
+            echo "## The release is a draft"
+            echo
+            echo "Nothing reaches a user yet, and \`npm run updates:check\` still answers **404**."
+            echo "\`releases/latest/download/\` resolves to the latest *published* release; a draft has no such URL."
+            echo
+            echo "Before publishing, on the draft's own asset URL:"
+            echo
+            echo '```sh'
+            echo "npm run updates:check -- --url <the latest.json asset on the draft>"
+            echo '```'
+            echo
+            echo "That reads the manifest the updater will read: the version, and an entry"
+            echo "with a URL and a non-empty signature for each of the six platforms. Six jobs"
+            echo "write that one file, so a platform missing from it is the failure to look for."
+            echo
+            echo "After publishing, the same command with no arguments."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # What a rehearsal is for: the bundle each target actually produced,
       # downloadable from the run page. The two ARM rows are the reason — a

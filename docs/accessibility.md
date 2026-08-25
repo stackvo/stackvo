@@ -102,28 +102,81 @@ indicator on what the keyboard reaches.
 
 Stated plainly, because a statement without them is a marketing page.
 
-Each of these is also **tracked as work** in `docs/durum.md` §2 (Y-1, Y-2, Y-3), which is this repository's single backlog. This document states what is true today; that one says what is going to be done about it.
+Each of these is also **tracked as work** in `docs/durum.md` §2 (Y-1), which is this repository's single backlog. This document states what is true today; that one says what is going to be done about it.
 
 * **No screen-reader audit.** Nothing here has been driven with VoiceOver, NVDA
   or Orca by a person. Automated tooling decides roughly a third of WCAG's
   success criteria; the rest — whether a label *makes sense*, whether an error
   message says what to do, whether the reading order matches the visual one —
   needs a human, and no human has done it.
+
+  None of those three is wholly a judgement, and measuring them found two real
+  defects. **Reading order against
+  visual order is a fact**, and measuring it found one real defect — the
+  template chooser in the new project drawer was pulled above the form it
+  decides the meaning of, so a screen reader read the whole form first — now
+  fixed, with `tests/reading-order.spec.js` requiring every re-ordering to say
+  which of the two sequences is the meaningful one. **Whether an error says what
+  to do is countable**: 178 of this application's 629 error constructions carry
+  a suggestion. **Whether a label makes sense has a mechanical floor**, and this
+  application was not standing on it: the Dashboard offered twelve controls
+  under two distinct names, eleven of them "what this card is for". Every one
+  had a name and every automated check passed — the failure only exists at page
+  scale, which is where `tests/accessible-names.spec.js` now looks. Each help
+  button carries the name of the card it belongs to.
+
+  The wording pass has since been done from that transcript and its findings
+  fixed — two buttons on one page announced as "Temizle" for different actions,
+  and a search field with no name of its own. The reason it had not been done
+  before was never unwillingness. It was that the job meant installing a screen reader, learning
+  its rotor and driving it blind across thirty screens in two languages, then
+  repeating that after every change. `npm run a11y:transcript` writes
+  `docs/accessibility-transcript.md`: every page's headings and controls, in the
+  order the markup puts them, under the name a screen reader announces, in both
+  languages. What is left after it is narrower and cannot be closed from here:
+  **nobody has used this application with a screen reader.** A transcript says
+  what is announced; it does not say what using it is like — whether a flow can
+  be completed by ear, whether focus lands where it should after a dialog, where
+  it becomes tiring. This statement does not claim otherwise.
 * **No audit of the native window.** The measurement drives the front end in a
   browser engine. The window chrome, the menu bar and the tray menu are the
   operating system's, reached through Tauri, and are not covered.
   `tauri-driver`, which would cover them, does not run on macOS — Tauri's own
   documentation says so — and this application is developed on macOS. That is
   item #12 in `docs/durum.md`.
+
+  `tauri-driver` was named as the blocker and that was wrong in a way worth
+  writing down, because it kept this unstarted: **WebDriver does not reach a
+  native menu on any platform.** It drives the web view. What does reach one is
+  the accessibility API — the layer a screen reader itself reads — and macOS
+  exposes it to any granted process. `src-tauri/examples/native_ax_probe.rs`
+  reads the running application's tree and reports what a screen reader would be
+  handed. It found two defects on its first run, both now fixed and both in §5.
+
+  So what is covered is: every window this application builds carries a title —
+  the window's accessible name to the operating system and to a screen reader —
+  every menu item is named from the same catalogue the interface is, in the
+  interface's language rather than the build's, and all of it is re-labelled
+  when the language changes. `src-tauri/tests/native_window_claims.rs` fails the
+  build otherwise.
+
+  The tray is not out of reach either: macOS puts a status item on its own menu
+  bar and the probe reads it there. Its tooltip — the only name it carries, in
+  the `AXHelp` attribute rather than `AXTitle`, which an icon-only status item
+  does not have — is now set when the icon is created rather than when the first
+  engine check lands.
+
+  What is still owed is the judgement half, and it is the same gap as the
+  screen-reader audit above rather than a second one: the reading order is now
+  a list the probe prints and the presence of every name is a build failure, so
+  what is left is whether that text is *good*. That needs a person, and it is
+  the same person Y-1 needs.
 * **Dialogs and drawers are measured as they load.** The axe pass opens each
   route and measures what is on it. A dialog somebody opens by clicking is in
   the overlay container and therefore in scope, but only if something opened it
   during the run.
 * **No conformance claim for third-party content.** The Market lists packages
   whose descriptions come from a catalogue this application does not write.
-* **Language attributes.** The interface language is announced on the document.
-  A view mixing two languages — a Turkish interface showing an English log line
-  — does not mark the change per passage.
 
 ## 5. What was fixed to make this statement true
 
@@ -133,6 +186,13 @@ WCAG failure rather than a piece of advice:
 | What | Where it was | Criterion |
 | --- | --- | --- |
 | Closed tooltips exposed as unnamed `role="tooltip"` nodes | every page that has built one | 4.1.2 Name, Role, Value |
+| `<html lang>` fixed at `en`, so a Turkish window announced itself as English | the whole application | 3.1.1 Language of Page |
+| The About window built with an empty title, so the window that says which version is installed had no accessible name | the About window | 2.4.2 Page Titled, 4.1.2 Name, Role, Value |
+| `Hide stackvo-desktop` and `Quit stackvo-desktop` in the app menu — Tauri's default label interpolates the crate name, not the product | the macOS menu bar | 4.1.2 Name, Role, Value |
+| The tray icon created with no tooltip, so the status item carried no name at all until the first engine check landed — and none if it never did | the menu-bar status item | 4.1.2 Name, Role, Value |
+| No marking on a passage in another language — a log line, a captured dump, docker's output, the message Rust wrote | Logs, Dumps, the operation console, every error alert | 3.1.2 Language of Parts |
+| Eleven help buttons on one page all announced as "what this card is for", so a screen reader could not tell them apart | Dashboard, and every card that carries help | 2.4.6 Headings and Labels |
+| The new project drawer read the form before the template chooser that decides what its fields mean | the new project drawer, under 720px | 1.3.2 Meaningful Sequence |
 | Three `<nav>` landmarks, none of them named | the whole application shell | 1.3.1 Info and Relationships |
 | No `<h1>` on any page | every page | 1.3.1, 2.4.6 Headings and Labels |
 | A table column header with no text | Projects | 1.3.1 |

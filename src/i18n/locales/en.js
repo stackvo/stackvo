@@ -80,6 +80,8 @@ export default {
     more: '+{count} more…',
     runningSummary: '{running}/{total} projects running',
     menuAbout: 'About StackVo',
+    menuHide: 'Hide {product}',
+    menuQuit: 'Quit {product}',
     // The first row of a project's own submenu. Start and stop come from
     // `projectsView.menu` — the same two actions, chosen the same way: only the one
     // that can be done right now is shown.
@@ -1254,7 +1256,7 @@ export default {
       'Catches dump() and dd() out of the response and shows them here instead. Symfony’s own dump server does the rendering, inside your project’s container.',
     needsRecreate:
       'The running container does not have the dump settings yet. They are fixed when a container is created, so restarting is not enough — the container has to be recreated.',
-    clear: 'Clear',
+    clear: 'Clear the dump list',
     waiting: 'Waiting for a dump… call dump() anywhere in the app.',
     ddEndsTheRequest:
       'dump() lets the request continue. dd() takes the dump and ends it, and Symfony marks that as a 500 — so a dump appearing here while the browser shows an error is expected.',
@@ -2080,6 +2082,7 @@ export default {
   },
   a11y: {
     help: 'What this card is for',
+    helpFor: 'What this card is for: {subject}',
     copy: 'Copy to clipboard',
     moreActions: 'More actions',
     followOutput: 'Follow output',
@@ -2139,7 +2142,7 @@ export default {
     pause: 'Pause',
     resume: 'Resume',
     resumeHint: 'Resume — {n} line(s) held',
-    clear: 'Clear',
+    clear: 'Clear the view',
     clearHint: 'Clear the view — nothing is deleted from disk',
     containerStream: 'Container output',
     // The cross-project tail. Live only, so an empty pane is its opening state
@@ -2497,6 +2500,66 @@ export default {
     nothingYet: 'Nothing recorded yet — reload the page you are looking at.',
     example: 'for example',
     statements: 'Statements ({count})',
+  },
+
+  /**
+   * B-1 — the three instruments on one request.
+   *
+   * The findings are sentences built here rather than behind the boundary: the
+   * payload carries a kind and its numbers precisely so this window can say
+   * them in the reader's own language.
+   */
+  whySlow: {
+    title: 'Why was this request slow',
+    explain:
+      'One recorded request, with the profile, the query log and the axis around it. The profile says where the code’s time went, the log says what the database was asked, and the axis says what else happened while it ran.',
+    nothingRecorded:
+      'Nothing has been recorded for this project yet. Record a request in the php-spx card below — switch the extension on, then ask it for the page you are investigating — and it appears here.',
+    recording: 'Recording',
+    database: 'Database',
+    cli: 'command line',
+    httpRequest: 'HTTP request',
+    took: 'took {took}',
+    window:
+      'Everything below is what this stretch of wall clock held. Statements and mail carry no request of their own, so they are joined to this one by time — anything else the site was doing while it ran is in here too.',
+    windowObserved:
+      'This stretch was watched: StackVo sent the request itself and held the clock on both sides of it.',
+    windowDerived:
+      'This stretch was worked out from what php-spx recorded, which assumes its timestamp is the start of the run. Record from the button here and the window is watched instead of inferred.',
+    findings: 'What the evidence says',
+    nothingToSay:
+      'Nothing stood out. No shape repeated three times, no single function held a fifth of the run, and the database was not the larger half.',
+    finding: {
+      nPlusOne:
+        'One query shape ran {count} times inside this request — the loop is asking the database once per row.',
+      databaseBound:
+        '{percent}% of this request was spent inside the database driver, waiting. The next improvement is a query, not the code around it.',
+      hotspot: '{percent}% of the run was in one function’s own body.',
+      noDriverFrames:
+        'The database was asked {count} times and the profile names no driver call at all — so this recording cannot say what the wait cost. Switch on “Profile PHP’s own functions” in the php-spx card and record again.',
+      queriesUnrecorded:
+        'The query log was not recording, so the database half of this request is absent rather than empty.',
+      queriesOutsideWindow:
+        'The log holds {count} statements and none of them fall inside this request — either it touched no database, or it ran before recording started.',
+      overlaps:
+        '{count} other recording(s) claim part of the same stretch of clock, so anything joined by time below is shared between them.',
+      traceMissing:
+        'The trace half of this recording could not be read, so there is nothing to say about where the code’s time went.',
+      truncated:
+        'The trace was longer than this app reads, so the shares describe the beginning of the run rather than all of it.',
+    },
+    split: 'Where the time went',
+    splitLabel: '{database}% in the database, {php}% in PHP',
+    inDatabase: 'In the database',
+    inPhp: 'In PHP',
+    splitHint:
+      'The database half is time inside the driver’s own body — PDO, mysqli, pg_*, SQLite3, the Mongo driver. A framework’s query layer is counted as PHP, because the wait happens underneath it.',
+    hotspots: 'Functions ({n} in the trace)',
+    statements: 'Statements ({n})',
+    axis: 'On one axis ({n})',
+    notRecording: 'The query log was off while this request ran.',
+    noneInWindow: 'None of the {n} statements the log holds fall inside this request.',
+    noneAtAll: 'The log was recording and holds nothing.',
   },
 
   stripe: {

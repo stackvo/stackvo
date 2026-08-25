@@ -78,7 +78,7 @@ defineProps({
              offer the cards below carry, at the level above them. -->
         <template v-if="$slots['top-append'] || help" #append>
           <slot name="top-append" />
-          <HelpButton v-if="help" :topic="help" class="page-help" />
+          <HelpButton v-if="help" :topic="help" :subject="topTitle" class="page-help" />
         </template>
       </v-toolbar>
 

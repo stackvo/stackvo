@@ -87,18 +87,23 @@ pub struct Timeline {
 /// still shows it.
 pub const WINDOW: f64 = 300.0;
 
-/// Build one axis out of the two sources.
+/// Every moment the three sources hold, oldest first and unwindowed.
 ///
-/// Pure, and takes what it needs rather than reading it: the two producers live
-/// behind a filesystem and a database respectively, and a function that reached
-/// for both would be untestable in the way that matters — the ordering, the
-/// window and the grouping are the logic, and none of them need either.
-pub fn build(
+/// Split out of [`build`] rather than inlined in it because a second reader
+/// arrived with its own window: [`crate::explain`] places one *recorded
+/// request* on this axis, and that window is the request's own duration, not
+/// the five minutes this module trims to. The ordering, the summaries and the
+/// refusal to attribute a query to a request are the same in both — so they
+/// live here once, and each caller trims what it asked for.
+///
+/// Pure, and takes what it needs rather than reading it: the three producers
+/// live behind a filesystem, a database and an HTTP API respectively, and a
+/// function that reached for them would be untestable in the way that matters.
+pub fn collect(
     dumps: &[crate::debugbridge::Event],
     queries: &[crate::querylog::Entry],
     mail: &[crate::mail::MailMessage],
-    queries_recording: bool,
-) -> Timeline {
+) -> Vec<Moment> {
     let mut moments: Vec<Moment> = Vec::new();
 
     for event in dumps {
@@ -142,6 +147,39 @@ pub fn build(
     // reaching here from a malformed file would panic the sort, and a timeline
     // is not worth a crash.
     moments.sort_by(|a, b| a.at.total_cmp(&b.at));
+    moments
+}
+
+/// The requests the dumps named, in the order they first appear.
+///
+/// Shared with [`crate::explain`] for the same reason [`collect`] is: a request
+/// list built two ways would drift in the one case that matters, which is a
+/// page load that produced several dumps.
+pub fn requests_of(moments: &[Moment]) -> Vec<String> {
+    let mut requests: Vec<String> = Vec::new();
+    for moment in moments {
+        if let Some(request) = &moment.request {
+            if !requests.contains(request) {
+                requests.push(request.clone());
+            }
+        }
+    }
+    requests
+}
+
+/// Build one axis out of the two sources.
+///
+/// Pure, and takes what it needs rather than reading it: the two producers live
+/// behind a filesystem and a database respectively, and a function that reached
+/// for both would be untestable in the way that matters — the ordering, the
+/// window and the grouping are the logic, and none of them need either.
+pub fn build(
+    dumps: &[crate::debugbridge::Event],
+    queries: &[crate::querylog::Entry],
+    mail: &[crate::mail::MailMessage],
+    queries_recording: bool,
+) -> Timeline {
+    let mut moments = collect(dumps, queries, mail);
 
     // The window, measured from the newest thing there is — not from now.
     // Reading a timeline is something somebody does after the request, and a
@@ -151,14 +189,7 @@ pub fn build(
         moments.retain(|m| m.at >= floor);
     }
 
-    let mut requests: Vec<String> = Vec::new();
-    for moment in &moments {
-        if let Some(request) = &moment.request {
-            if !requests.contains(request) {
-                requests.push(request.clone());
-            }
-        }
-    }
+    let requests = requests_of(&moments);
 
     Timeline {
         moments,

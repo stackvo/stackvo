@@ -162,3 +162,76 @@ fn the_updater_carries_a_public_key_and_the_workflow_names_its_private_half() {
         "the private half is no longer read from a repository secret"
     );
 }
+
+/// A draft release has no `releases/latest`, and the workflow has to say so.
+///
+/// The two halves of §3 #2's last round are in two files that do not mention
+/// each other. `tauri.conf.json` asks for
+/// `releases/latest/download/latest.json`; `release.yml` creates the release
+/// with `releaseDraft: true`. GitHub resolves `releases/latest` to the latest
+/// **published**, non-prerelease release and never to a draft — so a run in
+/// which all six targets go green leaves that URL answering 404, exactly as it
+/// does today, and looks identical to a run in which the build failed.
+///
+/// That is how the row read "the endpoint is 404, the remaining work is one
+/// more tag" for three rounds. The tag was never the whole of it.
+///
+/// The draft stays. `fail-fast: false` means a partial matrix is an ordinary
+/// outcome, and publishing a `latest.json` naming four of six platforms tells
+/// the other two they are current for ever; a person looking at the draft is
+/// the check that catches it. What is not allowed is the step being **silent**,
+/// so this test binds the two: an endpoint that reads `releases/latest` and a
+/// workflow that drafts must come with the run saying what is still owed.
+#[test]
+fn a_drafted_release_says_that_the_endpoint_is_404_until_it_is_published() {
+    let endpoint = endpoints().into_iter().next().expect("an endpoint");
+    let workflow = read(".github/workflows/release.yml");
+
+    if !endpoint.contains("releases/latest/download") || !workflow.contains("releaseDraft: true") {
+        return; // publishing straight from the tag; there is no second step to name
+    }
+
+    assert!(
+        workflow.contains("::warning::This release is a DRAFT"),
+        "the release is created as a draft and the updater endpoint reads \
+         `releases/latest`, which never resolves to one — so the run finishes \
+         green with the endpoint still answering 404, and nothing on the run \
+         page says a person still has to press Publish.\n\n\
+         Either publish from the tag (`releaseDraft: false`) or have the run \
+         say what it did not do."
+    );
+    assert!(
+        workflow.contains("updates:check"),
+        "the run tells somebody to publish the draft and does not tell them how \
+         to check the result. `npm run updates:check` reads the manifest the \
+         updater will read; without it the next verdict on this endpoint is \
+         somebody's browser, which is what the last three rounds used"
+    );
+}
+
+/// The endpoint can be **asked**, by a command, from a checkout.
+///
+/// Everything else in this file is about spelling: that the URL is the one the
+/// workflow publishes to, and that the flag writing the file is still set. Both
+/// have been true for three rounds while the endpoint answered 404, because
+/// nothing here has ever made the request. A repository whose only evidence
+/// about a live endpoint is a browser tab has no evidence.
+#[test]
+fn there_is_a_command_that_asks_the_endpoint_whether_it_works() {
+    let package: serde_json::Value =
+        serde_json::from_str(&read("package.json")).expect("package.json parses");
+
+    let script = package["scripts"]["updates:check"]
+        .as_str()
+        .expect("package.json offers `updates:check` — the one command that asks the endpoint");
+
+    let tool = script
+        .split_whitespace()
+        .find(|word| word.ends_with(".mjs"))
+        .expect("`updates:check` runs a script file");
+
+    assert!(
+        repo_root().join(tool).exists(),
+        "`npm run updates:check` runs {tool}, which is not in the tree"
+    );
+}
