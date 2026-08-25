@@ -601,6 +601,7 @@ export default {
     available: 'Yayında olanlar',
     availableDesc: 'Kaynağın yayımladıkları, ve bu makinede hangi sürümler var',
     showOlder: 'Desteği bitmiş sürümleri göster',
+    maintainer: '{who} tarafından yayımlanıyor',
     multiVersion: 'Birden çok sürüm çalıştırır',
     versionCount: '{n} sürüm',
     hiddenCount: '{n} desteği bitmiş',
@@ -3001,6 +3002,8 @@ export default {
       'Bir yöneticinin politikası, bu makinede yayınlanan paket dosyalarının çalışacağını söylüyor.',
     bundleNeedsAnEmptyDirectory:
       'Henüz var olmayan bir dizin seçin, ya da boş bir tane — başkasının dosyalarının üstüne yazılmış bir paket, kimsenin içeriğinden emin olamayacağı bir pakettir.',
+    sourceStoppedSigning:
+      'Bu kaynak daha önce bu makine için bir indeks imzalamıştı. Kaybolan bir imza ya bir yayın hatasıdır ya da sizinle kaynak arasında biri vardır; kullanmadan önce yayıncıya sorun.',
     registryWentBackwards:
       'Bu kaynağın sunduğu katalog, burada olandan daha eski. Kullanmadan önce kaynağı kontrol edin.',
     registryUnreachable:
@@ -3008,7 +3011,7 @@ export default {
     registryAddressIsADirectory:
       'Adres, registry.json’ı barındıran dizin olmalı — onun üstündeki sayfa değil. GitHub depo adresi otomatik çevrilir; diğer her adres verildiği gibi kullanılır.',
     registryMustBeHttps:
-      'Katalog adresi https:// ile başlamak zorunda. Henüz hiçbir şey imza doğrulamıyor, yani korumanın tamamı taşıma katmanı.',
+      'Katalog adresi https:// ile başlamak zorunda. Hiç imzalamamış bir yayıncıya yalnız taşıma katmanı sayesinde güveniliyor, yani http:// hiçbir koruma olmazdı.',
     removeTheInstanceFirst: 'Bu paketi hâlâ bir örnek kullanıyor. Önce onu kaldırın, sonra paketi.',
     serviceIsSingleInstance:
       'Bu servis aynı anda tek sürüm çalıştırır. Önce elinizdeki örneği kaldırın.',

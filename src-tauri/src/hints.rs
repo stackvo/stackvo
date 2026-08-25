@@ -363,9 +363,13 @@ hints! {
     REGISTRY_ADDRESS_IS_A_DIRECTORY = "registryAddressIsADirectory",
         "The address has to be the directory holding registry.json, not the page above it. \
          A GitHub repository URL is translated automatically; anything else is taken as given.";
+    SOURCE_STOPPED_SIGNING = "sourceStoppedSigning",
+        "This source signed an index for this machine before. A signature that disappears is \
+         either a publishing mistake or somebody between you and the source; ask the \
+         publisher before using it.";
     REGISTRY_MUST_BE_HTTPS = "registryMustBeHttps",
-        "A catalogue address has to start with https://. Nothing verifies a signature yet, \
-         so the transport is the whole of the protection.";
+        "A catalogue address has to start with https://. A publisher who has never signed is \
+         trusted on the transport alone, so http:// would be no protection at all.";
     REMOVE_THE_INSTANCE_FIRST = "removeTheInstanceFirst",
         "An instance is still using this package. Remove it, then uninstall.";
     SERVICE_IS_SINGLE_INSTANCE = "serviceIsSingleInstance",

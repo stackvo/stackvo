@@ -188,11 +188,22 @@ An unrecognised flag is an **error**, not a shrug — a tool that ignores
 
 **Where packages come from, and how you know.** The index is checked before it
 is parsed — a minisign signature over `registry.json`, against keys the machine
-already trusts, then a sha256 per manifest, then a sha256 per file. No official
-key is pinned yet (the ceremony is an open decision), so a stock build says so
-rather than pretending; an organisation running its own mirror signs its own
-index and pins its own key with `policy.market.additionalKeys`, and gets the
-whole chain today. Keys rotate through a `known-keys.json` signed by a key
+already trusts, then a sha256 per manifest, then a sha256 per file. The official
+registry key is pinned — its own key pair, never the updater's, so a leak of
+either forges one thing and not both — and the published index is signed with
+its private half, so the chain runs end to end.
+
+Which signatures get checked is the publisher's decision rather than a setting
+you have to find. A signature that is there is checked, and a check that fails
+is a refusal — never a quiet fall-through to "unsigned, then". A signature that
+is *not* there is accepted only from a source that has never given one: once
+this machine has taken a verified index from a source, that source going back
+to unsigned is refused, because anyone who can serve a tampered index can also
+serve a 404 for its signature. The official catalogue is known to sign, so that
+holds on a first refresh too, before this machine has learned anything. `policy.market.requireSignature` still only
+tightens — it refuses a missing signature too. An organisation running its own
+mirror never waited on any of this: it signs its own index and pins its own key
+with `policy.market.additionalKeys`. Keys rotate through a `known-keys.json` signed by a key
 already trusted, and a key retired by a build cannot be brought back by any
 document. A version its publisher has withdrawn is refused at install, and
 `stackvo doctor` lists withdrawn versions this machine already has.

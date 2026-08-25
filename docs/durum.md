@@ -52,7 +52,7 @@ Yapılanlar burada durmuyor — `CHANGELOG.md` her teslimatın ne olduğunu ve n
 
 | #   | Madde | Durum | Ne eksik, ve nasıl bakıldı |
 | --- | --- | :-: | --- |
-| C | Üçüncü taraf paket **dağıtımı** | ⛔ | **Kod tarafı kapandı** (ADR 0021): imza doğrulayıcı `signing.rs`'te, `refresh` onu indeksi ayrıştırmadan **önce** koşuyor, anahtar rotasyonu (`known-keys.json`) ve emeklilik var, geri çekilmiş sürüm kuruluma reddediliyor, kurulu olanı `doctor` bildiriyor. Kurumsal ayna bugün çalışıyor. **Anahtar töreni yapıldı** (`tools/keys.sh`, ADR 0033): resmî içerik anahtarı üretildi ve `signing::PINNED` artık onu taşıyor — updater'ınkinden ayrı bir anahtar, ve `key_ceremony.rs` ikisinin aynı olduğu bir derlemeyi reddediyor. **Ama pinlenmiş bir anahtar hiçbir şey imzalamaz**: paket deposunun `registry.json`'ı özel yarıyla, elle imzalanıp yayınlanana kadar zincirin ikinci ucu açık. Kalan üçü: **imzalı indeksin yayınlanması** (paket deposunda, bir komut — `tools/keys.sh sign`), moderasyon süreci ve yayıncı kimliği kaydı. Son ikisi kod değil. **Anahtar töreninin yapıldığı ölçüldü**: `v0.1.0` etiketi Release #1'in `preflight` işini geçirdi, ki o iş `TAURI_SIGNING_PRIVATE_KEY` yoksa on saniyede düşüyor |
+| C | Üçüncü taraf paket **dağıtımı** | 🟡 | **Zincir uçtan uca kapandı ve canlı ölçüldü.** `curl` ile karşı uçtan çekilen `registry.json` (44638 bayt) ve `registry.json.minisig` (400 bayt), `signing::PINNED`'in taşıdığı `256219FF1F9A0F1B` ile **doğrulanıyor** — pinlenmiş anahtar → indeks → manifest → dosya. Kod tarafı bitti (ADR 0021, 0033, 0034; kaydı `CHANGELOG.md`'de): doğrulayıcı, ayrıştırmadan önce koşan imza kontrolü, rotasyon ve emeklilik, geri çekilmiş sürümün reddi, kendini kanıtlamadan yayımlamayan `tools/keys.sh sign`, ve olguyu ayardan değil yayıncıdan alan `Trust::WhenSigned`. **"Kalan ikisi de kod değil" yanlıştı, ve ölçüm düzeltti**: `maintainer` alanı `package.schema.json`'da vardı, 31 paketin **31'i** dolduruyordu, ve indeks hepsini **düşürüyordu** — `grep` ile bakıldı, hiçbir ekran okumuyordu. Yani yayıncı kimliği veri olarak vardı ve kimseye ulaşmıyordu; `keywords`'ün başına gelenin aynısı ve daha keskin hâli, çünkü üçüncü taraf paket taşımaya niyetlenen bir katalog, birinden **başkasının** compose parçasını çalıştırmasını istiyor ve evet demeden önce tarttığı tek olgu odur. Zincir kuruldu: `registry.schema.json` → `build-registry.mjs` → `PackageRow` → `MarketPackage` → Market kartının ⓘ olguları, iki dilde. **Kalan tek şey gerçekten kod değil**: gönderilen bir paketi **kimin, neye bakarak** kabul ettiğinin yazılı olmaması — bir moderasyon süreci, ve o kimliğin *doğrulanmış* sayılmasının kuralı. Bugün var olan doğrulanabilir **birinci taraf** dağıtımı, artık yayıncısını da söyleyerek. Bir de bir sayfa (bkz. *Taranabilir paket dizini*). **Kalıcı bir işletme kuralı doğdu ve kapısıyla birlikte kondu**: `registry.json` üretiliyor (`tools/build-registry.mjs`), yani her yeniden üretimden sonra yeniden imzalanmalı — eskiyen bir imza sessiz bir düşüş değil, sert bir ret. Paket deposunun CI'ı artık indeksin üstündeki imzayı **doğruluyor** (`tools/verify-signature.mjs`, sıfır bağımlılık, ağsız, `gates` işinde), yani unutmak build'i kırıyor. **Ve ilk tazeleme de kapandı**: `WhenSigned` hafızayı `source.json`'dan okuyor, hiç tazelememiş bir makinenin ise hafızası yok — yani yolda biri **ilk** tazelemede imzayı sıyırıp geçebiliyordu, ki yeni bir makinenin ne kuracağına karar veren tazeleme tam olarak odur. `market::known_to_sign` resmî adresin imzaladığını derlemeye gömüyor; yalnız o adres, ve ancak bugün yazılabilirdi çünkü ancak bugün doğru |
 | W | **Windows'ta testlerin koşması** | 🟢 | **Koşuyor, ve koştuğu için düzeltilebildi.** İlk gerçek koşu **on dokuz** hata verdi ve asıl iş onları ayırmaktı: **ikisi üründü**, kalanı yazıldığı platformu iddia eden testler. `dns.rs` `/etc/resolver` yollarını `PathBuf::join` ile kuruyordu — `join` **host'un** ayracını kullanır, yani Windows'ta `/etc/resolver\\test` üretiyordu ve ondan kurulan her komut hiçbir yerde var olamayacak bir dosyayı adlandırıyordu. `runner.rs`'in testleri `sh -c` çağırıyordu, yani **`docker compose`'u başlatan modülün Windows'ta sıfır kapsamı vardı** — dosya kapsamlı test edilmiş görünürken. Artık `node` ile koşuyor; `cmd` ne çıplak satır başı yazabiliyor ne de son satırsonunu atlayabiliyor, ki bu testlerin var olma sebebi tam o iki durum. Kalanı ayraç iddiasıydı (`imports` JSON'a kaçırmadan yol gömüyordu, `agents` POSIX sabiti karşılaştırıyordu, `stats` ürünün kendi toleransından katıydı). `cfg_regions.rs` `runner.rs`'in testlerinde kabuk görürse reddediyor. **Log okundu, ve on dokuzdan bir tanesi kalmıştı.** `agent_install::the_whole_round_trip_against_a_real_home_directory`: test `HOME` ve `USERPROFILE`'ı kendi dizinine çeviriyor — koşucunun gerçek profilini düzenlemeden yazma yarısını denemenin tek yolu bu — ama `dirs::home_dir()` Windows'ta `%USERPROFILE%`'ı okumuyor, kabuğa `FOLDERID_Profile` diye soruyor. Yani kusur testin platform iddiası değil, **ürünün üç platformun ikisinde taşınmış eve uyup üçüncüsünde uymamasıydı**; `agents::home()` artık ortamı her platformda önce soruyor. Testi Windows'ta atlamak öteki seçenekti ve bu satır o takası bir kez yakalamıştı: `runner.rs` orada kapsamlı test edilmiş görünürken sıfır kapsamı vardı. **Ve on dokuz hiç bitmiş bir sayı değilmiş:** `cargo test` düşen ilk test ikilisinde duruyor, `agent_install` de alfabetik olarak önde — o düzelince arkasından **yirmincisi** çıktı. Sebebi de aynı aileden: **CRLF.** Git for Windows `core.autocrlf=true` ile geliyor, Actions koşucusu onu devralıyor, ve deponun kendi kaynağını okuyan her test `\r\n` taşıyan bir dosya okuyor. `cfg_regions.rs` hangi özniteliğin hangi fonksiyona ait olduğunu boş satırdan bölerek buluyor; `"\n\n"` `"\r\n\r\n"`'in içinde geçmiyor, pencere sessizce bir üstteki fonksiyona uzanıyor, ve keystore'un gerçek arka ucu ile bellek içi sahtesi aynı `cfg` gate'ini taşıyor gibi görünüyor — güvenlik biçimli bir iddia, güvenlikle ilgisi olmayan bir sebeple düşüyor. `.gitattributes` (`* text=auto eol=lf`) sınıfın tamamını kökten kapatıyor; yerel olarak CRLF'e çevirip aynı hata birebir üretildi, ve `workflow_parity.rs` dosyanın silinmesini engelliyor. **`--no-fail-fast` ilk koşusunda kendini ödedi:** tek bir Windows işi kalan **dört** hatayı birden listeledi — öncesinde bir tanesini gösterirdi. Üçü yine yazıldığı platformu iddia eden testlerdi. `independence.rs` beklentisini ham host yolundan kuruyordu, oysa compose dosyası `/c/Users/...` diyor çünkü `paths::to_docker_mount` bu işi zaten yapıyor — doğru bir mount "kaynak mount'u proje ağacını takip etmedi" diye düşüyordu. `worktree_flow.rs` kendi git deposunu kuruyor ve makinenin `core.autocrlf`'ini devralıyordu; `git worktree add` `\r\n` taşıyan bir manifest geri veriyordu ve "dalın commit'lenmiş manifest'i el değmemiş" iddiası bu uygulamayı hiç açmadığı bir dosyayı yeniden yazmakla suçluyordu. `foreign_import.rs` symlink kurulumunu Unix'e kapatmış, iddialarını kapatmamıştı — Windows'ta kurulumun sessizce olmadığı bir ağacı ölçüp okuyucuyu bozuk ilan ediyordu; bir Valet sitesi **symlink'tir** (`imports::linked` `read_link` kullanıyor), o yüzden bağ her platformda gerçek olmalı, ve Windows'ta bunun istediği Developer Mode ya da yükseltme bu testin talep edeceği bir şey değil — reddedilirse **sesli** atlıyor. **Dördüncüsü üründü:** üretilen dosya etiketleri yarısı bir yol geleneği yarısı öteki oluyordu (`configs/mysql-8-0\my.cnf.tpl`); etiket bir tanımlayıcıdır — listede görünür, aranır, karşılaştırılır — platform başına bir tane olamaz. `paths::to_label`, ve `applog.rs` aynı sonuca kendi başına varmış olan satırını artık tekrarlamak yerine çağırıyor. **Kalan: koşunun yeşile dönmesi** |
 | Y-1 | **Ekran okuyucu denetimi** | 🟡 | `docs/accessibility.md` §4. **Y-2 buraya katıldı ve kendi satırı kaldırıldı** — ikisinin kalanı tek ve aynı işti. Satırın saydığı üç sorunun hiçbiri tümüyle yargı değilmiş, ve ölçmek **sekiz kusur** çıkardı: About penceresinin boş başlığı, menü çubuğundaki `Hide/Quit stackvo-desktop`, adsız doğan tepsi ikonu, hiç güncellenmeyen `<html lang>`, geçiş başına dil işareti, yeni proje çekmecesinin ters okuma sırası, tek sayfada on bir kez "Bu kart ne işe yarar", ve Logs/Dumps'ta kulakta ayırt edilemeyen iki ayrı "Temizle". Hepsi düzeltildi. **Mekanik taban artık build'i kırıyor:** `accessible-names.spec.js` (adsız kontrol yok, tek başına bir şey söylemeyen kelime yok, sayfanın belirgin ad oranı eşiğin altına düşemez), `reading-order.spec.js` (her yeniden sıralama hangi sıranın anlamlı olduğunu söylemek zorunda), `language-of-parts.spec.js`, `native_window_claims.rs` (8 test), ve `examples/native_ax_probe.rs` yerel ağacı canlı okuyor. **Metin gözden geçirmesi de yapıldı:** `npm run a11y:transcript` altı sayfanın duyurduğu her şeyi iki dilde yazıyor (`docs/accessibility-transcript.md`), liste okundu, bulguları düzeltildi; geriye kaydedilmiş tek sınır kaldı — arama alanının temizle düğmesini Vuetify yalnız `label` prop'undan adlandırıyor, bu alanlar ise bilerek placeholder taşıyor. **Kalan tek şey ve tam tanımı:** hiç kimse bu uygulamayı **gerçekten bir ekran okuyucuyla kullanmadı.** Transcript ne duyurulduğunu söyler, kullanmanın nasıl bir şey olduğunu söylemez — ve EN 301 549 beyanı bu farkı iddia edemez. Kod değil, erişim: bir kişi, VoiceOver ya da NVDA ile bir oturum |
 | R-1 | **Editörün kendisi konteynerin içinde — VS Code** | ⬜ | `ide.rs` bugün yalnız **hata ayıklayıcıyı** bağlıyor: `.vscode/launch.json`'a bir `Listen for StackVo` girdisi, PhpStorm'a yapıştırılacak XML. Editörün *kendisinin* konteynerde koşması — dil sunucusu, uzantılar, terminal, `composer` ve `artisan` hepsi imajın içinde, host'ta hiçbir PHP olmadan — hiçbir yerde yok. Gereken üç olgunun üçü de bu ağaçta **zaten duruyor**: konteyner adı `stackvo-<proje>` (`engine::container_name`), çalışma dizini `/var/www/html` (`generator.rs`), ve PHP tarafında kaynak zaten bind mount (`render_compose_service`). Eksik olan tek şey bir **adres**: VS Code çalışan bir konteynere `vscode-remote://attached-container+<hex>/<yol>` ile bağlanıyor, `<hex>` de `{"containerName":"/stackvo-shop"}` JSON'ının onaltılığı — yani bu üç olgudan **türetilebilen** bir dize, ve `pty::open_external`'ın harici terminali açtığı yerden açılabilir. Ölçüldü: `grep -rn 'attached-container\|folder-uri' src-tauri/src src contracts` → **0** |
@@ -75,7 +75,8 @@ sayfa ya da bir başlık.
   değiştirme" diyor. İkisi de **değiştirme**; buradaki **birlikte çalıştırma**,
   yani güçlü olan taraf ve isimsiz olan taraf aynı.
 * **Taranabilir paket dizini** — DDEV'in `addons.ddev.com`'u gibi. Mekanizma
-  bitti (C satırı); eksik olan resmî anahtar töreni ve bir sayfa. 30 paketi bir
+  bitti, anahtar töreni yapıldı ve indeks imzalı yayımlandı (C satırı); eksik
+  olan bir sayfa ve üçüncü tarafların gönderebilmesi. 30 paketi bir
   *ekosisteme* çeviren şey bu.
 
 ### Savunulacak alan
@@ -791,10 +792,13 @@ dürüst sınır bu, ve `ENV` ile fixture artık bir çift.
   töreni yapacak araç (`minisign -G`) var — kendi aracını gerektiren bir şema,
   töreni hiç yapılmayan şemadır.
 
-  **Resmî anahtar gömülmedi.** `PINNED` boş ve bir test onu boş tutuyor. Sahte
-  bir anahtar koymak boşluktan kötü olurdu: sonraki her okuyucu zincirin
-  kapandığına inanırdı. Anahtarsız bir derlemede imzalı tazeleme **reddediliyor**
-  ve eksik olanın hangi yarı olduğunu söylüyor.
+  **Resmî anahtar bu turda gömülmedi ve gömülmemesi kararın kendisiydi.** `PINNED`
+  boş bırakıldı, bir test onu boş tuttu, ve sahte bir anahtar koymak boşluktan
+  kötü olurdu: sonraki her okuyucu zincirin kapandığına inanırdı. Anahtarsız bir
+  derlemede imzalı tazeleme **reddediliyor** ve eksik olanın hangi yarı olduğunu
+  söylüyor. Tören sonradan yapıldı (ADR 0033) ve o testin kendisi tersine döndü:
+  bugün boşluğu değil, ayrıştırılamayan bir anahtarı ve sessizce büyüyen bir
+  listeyi reddediyor.
 
   **Kurumsal ayna beklemiyor.** Kendi indeksini imzalar, kendi anahtarını
   `policy.market.additionalKeys` ile pinler — o alan tam bunun için yazılmıştı
@@ -1240,7 +1244,7 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   yapmamış olmasının sebebi, **yapılacak bir tören olmamasıydı**: updater
   anahtarının bir workflow yorumunda tek cümlesi vardı, içerik anahtarının
   (ADR 0015) hiçbir şeyi yoktu, ve ikisine iki ayrı araçla gidiliyordu.
-- **Decision:** `tools/keys.sh` — `generate`, `check`, `sign`. Bir sayfa değil
+- **Decision:** `tools/keys.sh` — `generate`, `check`, `sign`, `verify`. Bir sayfa değil
   bir **betik**, ve gerekçe bu deponun bir tasarım dokümanını silme gerekçesiyle
   aynı: düzyazı kayar, ve *anahtarlar* hakkında bayatlamış bir düzyazı, biri
   çoktan bir anahtar üretip bir yere koyduktan sonra fark edilir. Bir betik
@@ -1270,6 +1274,22 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   geri gidiyor — ve başarı vakası olmayan bir zincirin ilk başarısı birinin ilk
   sürümü olur. `tests/signed_refresh.rs` o vaka.
 
+  **İmzalamak yayınlamak değildir, ve betik ikisini bir sayıyordu.** `sign` bir
+  imza üretip "yayınla" diyordu; o cümleyle kullanıcının makinesi arasında,
+  *gönderilen bir derleme bunu kabul ediyor mu* sorusunu soran hiçbir şey yoktu.
+  İki anahtar tek dizinde ve adları tek kelime farklı — yanlış olanla imzalanan
+  indeks temiz yükleniyor ve kurulu her kopya tarafından aynı anda reddediliyor,
+  yayıncı tarafında hiçbir kanıt bırakmadan. İmza artık yayımlanan adı ancak
+  uygulama kabul ettikten sonra alıyor, ve soruyu **uygulamanın kendisi**
+  cevaplıyor (`examples/verify_index.rs` → `signing::Keys::pinned()`): burada bir
+  `minisign -V` ya da kabukta bir anahtar karşılaştırması ikinci bir görüş olurdu,
+  ve iki görüşün ayrıştığı tur, betiğin herkesin reddettiği bir dosyaya tik
+  bastığı turdur. Aynı gerekçe `check`'e de bir satır ekledi: elde tutulan içerik
+  anahtarının `PINNED`'in eşi olup olmadığı — updater'a baştan beri sorulan,
+  içerik anahtarına hiç sorulmamış soru. Ayna işleten kurum `--key` ile kendi
+  anahtarını adlandırıyor, çünkü onun sorusu "bu derleme güveniyor mu" değil
+  "benim makinelerim güvenecek mi".
+
   **`market_status.signed` kazara doğruydu.** Sabit `false` yazıyordu ve
   "anahtar yok" olduğu sürece doğru görünüyordu. Artık `market/source.json`'dan
   okunuyor: *bu makinedeki indeks doğrulandı mı*, *bu derleme doğrulayabilir mi*
@@ -1283,6 +1303,52 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   deposunun kendi `registry.json`'ını özel yarıyla imzalayıp yayınlaması — hâlâ
   açık, ve içerik anahtarının bilerek bir CI secret'ı olmamasının sebebi bu:
   her workflow'un erişebildiği bir içerik anahtarı, içerik anahtarı değildir.
+
+### 0034 — İmzayı ayar değil yayıncı belirler, ve geri dönüş yok
+
+- **Status:** accepted
+- **Context:** Zincirin üç halkası da yazıldı, anahtar pinlendi, doğrulayıcının
+  on beş testi vardı — **ve stok bir makinede hiçbiri koşmuyordu.**
+  `market_refresh` `Trust::Unsigned` geçiyordu; imza yalnız
+  `policy.market.requireSignature` yazan kurumsal makinede isteniyordu. Yani
+  imzalı indeks yayımlansa bile hiçbir kullanıcı bir şey doğrulamayacaktı:
+  zincir vardı, üstünde yürüyen yoktu.
+
+  `Unsigned`/`Signed` ikilisi bir **bayrak günü** tarif ediyor — imzadan önce
+  her şey imzasız, sonra her şey imzalı zorunlu — ve arada henüz haberi olmayan
+  her makinenin kırıldığı bir an var. Varsayılanın `Unsigned`'da kalmasının
+  sebebi tam olarak buydu, ve o sebep doğruydu.
+- **Decision:** Üçüncü bir cevap: `Trust::WhenSigned`. Olguyu bir ayardan değil
+  **yayıncıdan** alıyor.
+
+  * İmza **varsa** kontrol ediliyor, ve düşen bir kontrol rettir — asla
+    "öyleyse imzasız sayalım" değil. Hiçbir şeye doğrulanmayan bir imza, bir
+    tazelemenin üretebileceği en yüksek sesli kanıttır; onu okuyup başka yöne
+    bakmak, hiç bakmamaktan kötüdür.
+  * İmza **yoksa**, yalnız hiç imza vermemiş bir kaynaktan kabul ediliyor.
+    Hafıza zaten diskteydi: `SourceRef.verified_by` önbellekteki indeksi hangi
+    anahtarın doğruladığını tutuyor. Bu yarı olmadan mod bir dosya silmekle
+    kapanır — sahte indeks servis edebilen, imzası için 404 da servis eder.
+
+  İndeks sıra numarasının geri gidememesiyle **aynı biçim**, ve aynı gerekçe:
+  bu makine bir şey gördü, ve görmeden önceye dönmek o şeyin anlamını bitirir.
+- **Consequences:** İmzanın yayımlandığı gün her makine bir sonraki tazelemede
+  doğrulamaya başlıyor, kimse hiçbir şey düzenlemeden; ve bir gün öncesinde
+  hiçbir makine kırılmıyor. Bayrak günü ortadan kalkıyor.
+
+  ADR 0009 bozulmuyor: `requireSignature` hâlâ yalnız **sıkıştırıyor** — hiç
+  imzalamamış bir yayıncı için de eksik imzayı ret yapıyor. Politikanın var olan
+  bir imzayı isteğe bağlı hâle getirebileceği bir yol yok.
+
+  Bedeli de gerçek ve kabul edildi: pinlenmemiş bir anahtarla imzalanmış bir
+  aynayı yerel dizinden okuyan biri, dün çalışan bir tazelemede bugün ret
+  görüyor. Doğru olan bu — doğrulanamayan bir imza bir uyarı değil bir işarettir
+  — ve ret `policy.market.additionalKeys`'i adlandıran ipucuyla geliyor.
+
+  Ret cümleleri ayrı, çünkü olaylar ayrı: "hiç imza yok" ile "dün imzalıyordu,
+  bugün yok" aynı şey değil. İkincisi `sourceStoppedSigning` ipucunu taşıyor —
+  "dosya bulunamadı" demek, yolda birinin yapacağı tek şeyi bir dosyalama
+  hatası gibi okutmaktı.
 
 ---
 
@@ -1299,7 +1365,7 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
 | `ipc.js` sarmalayıcısı | **299** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **111 modül, 110.498 satır** | `src-tauri/src/*.rs` |
+| Rust kaynağı | **111 modül, 110.786 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 

@@ -35,10 +35,13 @@
 //!
 //! * A build can verify an index signed by the official registry, and
 //!   `Trust::Signed` is a check rather than a refusal.
-//! * **A signed index still has to be published.** This half of the chain being
-//!   closed does not sign anything; the packages repository signs its own
+//! * **The index is signed and published.** This half of the chain being closed
+//!   signs nothing on its own; the packages repository signs its own
 //!   `registry.json` with the private half, by hand, on the machine that holds
-//!   it — which is why that key is deliberately not a CI secret.
+//!   it — which is why that key is deliberately not a CI secret. That happened,
+//!   and the published signature verifies against [`PINNED`]. The index is
+//!   generated, so each regeneration needs signing again; a signature that no
+//!   longer matches is a refusal, not a downgrade.
 //! * An organisation running its own mirror pins **its own** key through
 //!   `policy.market.additionalKeys`, and that is added to this list rather than
 //!   replacing it: a machine that forgot the official key while trusting a

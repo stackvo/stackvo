@@ -610,6 +610,7 @@ export default {
     available: 'Available',
     availableDesc: 'What the source publishes, and which versions are on this machine',
     showOlder: 'Show end-of-life versions',
+    maintainer: 'Published by {who}',
     multiVersion: 'Runs several versions',
     versionCount: '{n} version(s)',
     hiddenCount: '{n} end-of-life',
@@ -3023,6 +3024,8 @@ export default {
       "An administrator's policy says the published package files are the ones that run on this machine.",
     bundleNeedsAnEmptyDirectory:
       'Choose a directory that does not exist yet, or an empty one — a bundle written over other files is one nobody can account for.',
+    sourceStoppedSigning:
+      'This source signed an index for this machine before. A signature that disappears is either a publishing mistake or somebody between you and the source; ask the publisher before using it.',
     registryWentBackwards:
       'The catalogue this source serves is older than the one already here. Check the source before using it.',
     registryUnreachable:
@@ -3030,7 +3033,7 @@ export default {
     registryAddressIsADirectory:
       'The address has to be the directory holding registry.json, not the page above it. A GitHub repository URL is translated automatically; anything else is taken as given.',
     registryMustBeHttps:
-      'A catalogue address has to start with https://. Nothing verifies a signature yet, so the transport is the whole of the protection.',
+      'A catalogue address has to start with https://. A publisher who has never signed is trusted on the transport alone, so http:// would be no protection at all.',
     removeTheInstanceFirst: 'An instance is still using this package. Remove it, then uninstall.',
     serviceIsSingleInstance:
       'This service runs one version at a time. Remove the instance you have first.',
