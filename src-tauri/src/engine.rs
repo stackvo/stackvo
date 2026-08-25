@@ -1052,6 +1052,25 @@ pub struct ContainerDetails {
     pub image_size: Option<u64>,
 }
 
+/// Docker's own word for what a mount is: `bind`, `volume`, `tmpfs`.
+///
+/// One line, and it is the fix for a bug a probe found rather than a test.
+/// `MountPointType` is a **String** in bollard, not an enum, so the
+/// `format!("{t:?}")` this used to be was `Debug` on a string — and `Debug` on
+/// a string puts the quotes in. Every container reported its mounts as
+/// `"\"bind\""`.
+///
+/// Nothing showed it. The only reader of `kind` is [`crate::editor`], which
+/// compares it to `bind` to decide whether the source is really mounted, so
+/// the answer was "no" for every container there has ever been — and a refusal
+/// that is always wrong looks exactly like a refusal that is working.
+///
+/// The state and restart-policy fields beside it are genuine enums and print
+/// unquoted, which is why the idiom looked right in all three places.
+pub fn mount_kind(typ: &str) -> String {
+    typ.to_ascii_lowercase()
+}
+
 pub async fn inspect(id: &str) -> Result<ContainerDetails> {
     use bollard::query_parameters::InspectContainerOptions;
     let name = container_name(id);
@@ -1138,7 +1157,7 @@ pub async fn inspect(id: &str) -> Result<ContainerDetails> {
                 Some(Mount {
                     source: m.source.filter(|s| !s.is_empty()),
                     destination: m.destination?,
-                    kind: m.typ.map(|t| format!("{t:?}").to_lowercase()),
+                    kind: m.typ.as_deref().map(mount_kind),
                 })
             })
             .collect(),
@@ -1473,6 +1492,22 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What the mount table says, and what `editor.rs` compares it against.
+    ///
+    /// The two must be the same word. They were not: `Debug` on a string
+    /// quotes it, so `bind` arrived as `"bind"` and the one check that reads
+    /// this field said "the source is not mounted" about a container with the
+    /// source mounted. Found by `examples/editor_attach_probe.rs` against a
+    /// running daemon, which is the only place it was visible.
+    #[test]
+    fn a_mount_kind_is_dockers_word_and_carries_no_quotes() {
+        assert_eq!(mount_kind("bind"), "bind");
+        assert_eq!(mount_kind("volume"), "volume");
+        // Docker has sent these capitalised in older API versions.
+        assert_eq!(mount_kind("BIND"), "bind");
+        assert!(!mount_kind("bind").contains('"'));
+    }
 
     #[test]
     fn container_name_is_idempotent() {

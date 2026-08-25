@@ -485,6 +485,19 @@ export const api = {
   /** Take it back out; every other configuration in the file stays. */
   ideDebugRemove: (project, target) => call('ide_debug_remove', { project, target }),
 
+  /**
+   * The editor inside the container — R-1's read half.
+   *
+   * Whether this project's container can carry one at all, read from the
+   * container's own mount table, plus the address that opens it. The manifest
+   * is not asked: turning the dev server on writes an overlay that does
+   * nothing until the container is recreated, and when the two disagree the
+   * container is the one that is right.
+   */
+  editorStatus: (project) => call('editor_status', { project }),
+  /** Open VS Code on the container; resolves with the address it opened. */
+  editorAttach: (project) => call('editor_attach', { project }),
+
   // The project's PHP overrides. `.stackvo/php.ini` was documented for years
   // and mounted by nothing; the mount is a compose overlay this app layers.
   phpIniStatus: (name) => call('php_ini_status', { name }),

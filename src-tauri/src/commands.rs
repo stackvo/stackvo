@@ -3930,6 +3930,36 @@ pub fn ide_debug_remove(
     crate::ide::remove(&root, &project, &target)
 }
 
+// ------------------------------------- the editor inside the container (R-1)
+
+/// Whether this project's container can carry an editor, and the address.
+///
+/// Read-only, and every field of it is derived: the container name, the
+/// workdir and the mount table are read at the moment of asking, so a project
+/// that was rebuilt into another shape a second ago answers for the shape it
+/// has now. See src-tauri/src/editor.rs.
+#[tauri::command]
+pub async fn editor_status(
+    state: State<'_, AppState>,
+    project: String,
+) -> Result<crate::editor::Status> {
+    let root = state.root()?;
+    crate::editor::status(&root, &project).await
+}
+
+/// Open VS Code *on the container*, and answer with the address it opened.
+///
+/// The judgement is made here rather than trusted from the screen: the same
+/// `status` the pane rendered is read again, and a container that has stopped
+/// or lost its mount in between is refused with the reason. A disabled button
+/// is not a check.
+#[tauri::command]
+pub async fn editor_attach(state: State<'_, AppState>, project: String) -> Result<String> {
+    let root = state.root()?;
+    let status = crate::editor::status(&root, &project).await?;
+    crate::editor::open(&status.readiness)
+}
+
 // ------------------------------------------------------------------- php-spx
 
 /// Whether SPX is switched on, built, mounted, and what it has recorded.
