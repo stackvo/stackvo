@@ -228,6 +228,18 @@ function countFacts(item) {
   if (item.entry.multiple) {
     facts.push({ icon: 'mdi-layers-triple-outline', text: t('marketView.multiVersion') });
   }
+  // Whose package this is. The index has carried the field for as long as the
+  // manifest had it and every published package fills it in, but nothing read
+  // it — the same loss `keywords` had, and with a sharper edge: a catalogue
+  // that means to carry third-party packages is asking somebody to run
+  // somebody else's compose fragment, and who wrote it is the one fact they
+  // weigh before saying yes.
+  if (item.entry.maintainer) {
+    facts.push({
+      icon: 'mdi-account-outline',
+      text: t('marketView.maintainer', { who: item.entry.maintainer }),
+    });
+  }
   return facts;
 }
 

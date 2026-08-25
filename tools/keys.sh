@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # The signing ceremony — both keys, one procedure.
 #
-#   tools/keys.sh generate     # make both key pairs, print what goes where
-#   tools/keys.sh check        # what this repository can prove about them today
-#   tools/keys.sh sign <file>  # sign a registry index with the content key
+#   tools/keys.sh generate      # make both key pairs, print what goes where
+#   tools/keys.sh check         # what this repository can prove about them today
+#   tools/keys.sh sign <file>   # sign a registry index, and verify before publishing
+#   tools/keys.sh verify <file> # ask the app whether it accepts a signature
 #
 # ## Why this is a script and not a page in a document
 #
@@ -65,6 +66,17 @@ pubkey_line() {
 
 conf_pubkey() {
   node -p "require('$repo/src-tauri/tauri.conf.json').plugins?.updater?.pubkey ?? ''" 2>/dev/null
+}
+
+# The key lines inside `pub const PINNED`, one per line.
+#
+# Read from that block and not from the file, because `signing.rs` carries real
+# minisign keys in its tests as well — a grep over the whole file would compare
+# the key somebody holds against a test vector and call the answer either way.
+pinned_keys() {
+  awk '/pub const PINNED/{inside=1} inside && /\];/{exit} inside' \
+    "$repo/src-tauri/src/signing.rs" |
+    grep -o '"RW[A-Za-z0-9+/=]*"' | tr -d '"'
 }
 
 # ------------------------------------------------------------------ generate
@@ -170,15 +182,36 @@ check() {
   fi
 
   head_ "The content key"
-  local pinned
-  pinned="$(grep -c '^\s*"RW' "$repo/src-tauri/src/signing.rs" || true)"
-  if [ "$pinned" = "0" ]; then
+  local registry_pinned count
+  registry_pinned="$(pinned_keys)"
+  count="$( [ -n "$registry_pinned" ] && printf '%s\n' "$registry_pinned" | wc -l | tr -d ' ' || printf '0' )"
+  if [ "$count" = "0" ]; then
     warn "signing::PINNED is empty — a signed refresh is refused, which is the honest state and not the finished one"
   else
-    ok "signing::PINNED carries $pinned key(s)"
+    ok "signing::PINNED carries $count key(s)"
   fi
   if [ -f "$keydir/registry.key" ]; then
     ok "a content key exists at $keydir/registry.key"
+    # The same question the updater key is asked six lines up, and it went
+    # unasked here for a round: does the private half on this machine belong to
+    # the public half a shipped build pins? The updater's version of getting
+    # this wrong is caught by the release job; the content key's version is
+    # caught by nobody — an index signed with a key `PINNED` does not carry
+    # uploads cleanly, looks finished, and is refused by every installed copy of
+    # the app at once. There is no key ceremony left to blame for that, only a
+    # comparison nothing was making.
+    local held
+    held="$(pubkey_line "$keydir/registry.key.pub")"
+    if [ -z "$held" ]; then
+      warn "no readable $keydir/registry.key.pub — cannot tell whether it is the key this build pins"
+    elif [ -z "$registry_pinned" ]; then
+      : # nothing pinned; the line above already says so
+    elif printf '%s\n' "$registry_pinned" | grep -qxF "$held"; then
+      ok "and it is the private half of a key signing::PINNED carries"
+    else
+      bad "but it is NOT a key signing::PINNED carries — an index signed with it is refused by every shipped build"
+      problems=$((problems + 1))
+    fi
   else
     warn "no $keydir/registry.key — run: tools/keys.sh generate"
   fi
@@ -186,7 +219,7 @@ check() {
   head_ "The two are not the same key"
   local updater_line registry_line
   updater_line="$( [ -n "$conf_pub" ] && printf '%s' "$conf_pub" | base64 -d 2>/dev/null | sed -n '2p' | tr -d '\r\n' )"
-  registry_line="$(grep -o '"RW[A-Za-z0-9+/=]*"' "$repo/src-tauri/src/signing.rs" | head -1 | tr -d '"')"
+  registry_line="$(printf '%s\n' "$registry_pinned" | head -1)"
   if [ -n "$updater_line" ] && [ -n "$registry_line" ] && [ "$updater_line" = "$registry_line" ]; then
     bad "the updater and the registry are pinned to ONE key — a single leak forges both a binary and a package (ADR 0015)"
     problems=$((problems + 1))
@@ -239,25 +272,121 @@ check() {
   printf '%sNothing wrong.%s Anything marked ! is a step nobody has taken yet.\n' "$green" "$off"
 }
 
-# ---------------------------------------------------------------------- sign
+# -------------------------------------------------------------- sign, verify
 
-sign() {
-  local file="${1:-}"
-  if [ -z "$file" ] || [ ! -f "$file" ]; then
-    bad "usage: tools/keys.sh sign <registry.json>"
+# The app's own verifier, asked about a file on disk.
+#
+# `cargo run --example verify_index`, and the "own" is the load-bearing word: it
+# links `signing::Keys::pinned()` and `verify`, the set and the function a
+# release actually judges an index with. A second implementation here — a
+# `minisign -V`, a key comparison in shell — would be a second opinion, and the
+# round where the two disagree is the round where this prints a tick for a file
+# every installed copy of the app refuses.
+verifier() {
+  if ! command -v cargo >/dev/null 2>&1; then
+    bad "no cargo here, so the app's verifier cannot be asked whether this signature is one it accepts"
+    say "  ${dim}This step is not decoration: it is the only thing between a signature made"
+    say "  with the wrong key and every machine that refreshes. Sign from a checkout.${off}"
     return 1
   fi
+  ( cd "$repo/src-tauri" && cargo run --quiet --example verify_index -- "$@" )
+}
+
+# A path as the caller meant it, from anywhere.
+#
+# Both helpers above run somewhere else — `tauri()` in the repository root,
+# `verifier()` in `src-tauri`, each because the tool it calls needs to be there
+# — so a relative path handed on unchanged is resolved against a directory the
+# person who typed it has never seen. And relative is how it will be typed: the
+# whole ceremony is `cd` into the packages repository and name the index sitting
+# in front of you. Measured, not guessed — `keys.sh verify registry.json` from
+# that directory answered `reading registry.json: No such file or directory`,
+# which is a true sentence about the wrong directory.
+absolute() {
+  case "$1" in
+    /*) printf '%s' "$1" ;;
+    *)  printf '%s/%s' "$PWD" "${1#./}" ;;
+  esac
+}
+
+verify() {
+  local file="${1:-}"
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    bad "usage: tools/keys.sh verify <registry.json> [<registry.json.minisig>]"
+    return 1
+  fi
+  shift
+  local signature=""
+  if [ $# -gt 0 ] && [ -f "${1:-}" ]; then
+    signature="$(absolute "$1")"
+    shift
+  fi
+  verifier "$(absolute "$file")" ${signature:+"$signature"} "$@"
+}
+
+sign() {
+  local file="" trusts=()
+  # `--key` is the mirror operator's case, and leaving it out would have made
+  # the check below a wall for exactly the people ADR 0021 says are not waiting
+  # on the official ceremony: an organisation signs its own index with its own
+  # key and names it in `policy.market.additionalKeys`, so "does a shipped build
+  # trust this" is the wrong question to hold them to — the right one is whether
+  # *their* machines will, and only they can say which keys those carry.
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --key) trusts+=(--key "${2:-}"); shift 2 || return 1 ;;
+      *)     file="$1"; shift ;;
+    esac
+  done
+
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    bad "usage: tools/keys.sh sign <registry.json> [--key <public key line>]…"
+    return 1
+  fi
+  # Before anything is handed to a tool that runs somewhere else. `tauri()` cds
+  # to the repository root, so even the signing step read the wrong file.
+  file="$(absolute "$file")"
   if [ ! -f "$keydir/registry.key" ]; then
     bad "no content key at $keydir/registry.key — run: tools/keys.sh generate"
     return 1
   fi
 
-  # Written next to the file as `.minisig`, which is the name `market::refresh`
-  # fetches. `tauri signer` names its output `.sig`, so it is moved rather than
-  # left for somebody to rename correctly under time pressure.
+  # `tauri signer` names its output `.sig`; the app fetches `.minisig`. The
+  # rename is here rather than left to a person under time pressure.
   tauri signer sign -f "$keydir/registry.key" "$file" >/dev/null || return 1
+
+  # And it is checked **where it lands**, before it takes the published name.
+  #
+  # The failure this closes is quiet and total. The content key and the updater
+  # key sit in one directory and their file names differ by one word; an index
+  # signed with the wrong one, or with a key this build has rotated away from,
+  # is a file that signs without complaint, uploads cleanly, and is refused by
+  # every installed copy of the app the moment somebody presses refresh. Nothing
+  # on the publishing side would have said so — the private half never checks
+  # itself, and `PINNED` is the only place the answer lives.
+  #
+  # So the signature is moved into place only once the app has accepted it,
+  # which is the same shape `market::install` uses for a package: verified
+  # whole, then moved, because a half-right artefact under the right name is the
+  # one failure the far end cannot recover from on its own.
+  say "  ${dim}asking the app's own verifier (this builds the example the first time)${off}"
+  if ! verifier "$file" "$file.sig" "${trusts[@]+"${trusts[@]}"}"; then
+    bad "signed, and the app REFUSES it — not published"
+    say "  ${dim}The rejected signature is left at $file.sig. Any $file.minisig already"
+    say "  beside it is untouched, so nothing that was working has been replaced."
+    say "  Most likely the key that signed is not the one signing::PINNED carries:"
+    say "  run \`tools/keys.sh check\`, which now compares the two."
+    say "  Signing a mirror's own index? Name the key its machines pin:"
+    say "  tools/keys.sh sign $file --key <the line from your .pub>${off}"
+    return 1
+  fi
+
   mv "$file.sig" "$file.minisig"
-  ok "signed → $file.minisig"
+  if [ ${#trusts[@]} -eq 0 ]; then
+    ok "signed, and the app accepts it against signing::PINNED → $file.minisig"
+  else
+    ok "signed, and the app accepts it against the key(s) you named → $file.minisig"
+  fi
   say "  ${dim}Publish it beside registry.json. The app fetches both and checks the"
   say "  signature before it parses a single field of the index.${off}"
 }
@@ -266,12 +395,15 @@ case "${1:-}" in
   generate) generate ;;
   check)    check ;;
   sign)     shift; sign "$@" ;;
+  verify)   shift; verify "$@" ;;
   *)
-    say "usage: tools/keys.sh {generate|check|sign <file>}"
+    say "usage: tools/keys.sh {generate|check|sign <file>|verify <file>}"
     say ""
     say "  generate  both key pairs, and what to do with each half"
     say "  check     what this repository can prove about them today"
-    say "  sign      sign a registry index with the content key"
+    say "  sign      sign a registry index with the content key, and publish the"
+    say "            signature only once the app itself accepts it"
+    say "  verify    ask the app whether it accepts a signature already made"
     exit 1
     ;;
 esac

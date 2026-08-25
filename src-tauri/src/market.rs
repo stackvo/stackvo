@@ -33,11 +33,17 @@
 //! been worse than the gap — every later reader would have believed the chain
 //! was closed.
 //!
-//! **What a pinned key does not do is sign anything.** An index is signed by
-//! the private half, by hand, on the machine that holds it; until a signed
-//! `registry.json` is published, [`refresh`] under `Trust::Signed` gets past
-//! the key check and is refused for the *signature* it cannot find — which is
-//! a different sentence and the honest one.
+//! **And the index is signed now.** The other end was the long half: a pinned
+//! key signs nothing, and until somebody signed `registry.json` with the
+//! private half — by hand, on the machine that holds it — a signed refresh got
+//! past the key check and was refused for the *signature* it could not find.
+//! The official index carries one as of ADR 0034's round, so the chain runs end
+//! to end: pinned key → index → manifest → file.
+//!
+//! What that costs is an operational rule, and it is load-bearing: the index is
+//! **generated**, so every regeneration needs a new signature beside it. A
+//! stale signature is not a downgrade here, it is a refusal — which is the
+//! correct behaviour and is why the rule has to be kept rather than remembered.
 //!
 //! An organisation running its own mirror never waited on any of that. It signs
 //! its own index and names its own key in `policy.market.additionalKeys`, which
@@ -153,6 +159,20 @@ pub struct PackageRow {
     pub capabilities: Vec<String>,
     #[serde(default)]
     pub instancing: Option<Instancing>,
+    /// Who publishes this package.
+    ///
+    /// The index has carried the field since the package manifest had it, and
+    /// every published package fills it in — it was simply never read, which is
+    /// the same shape of loss `keywords` had: data that is published, dropped
+    /// on the way to the screen, and therefore indistinguishable from data that
+    /// was never there. For a catalogue that means to carry third-party
+    /// packages it is the one fact a person weighs before installing somebody
+    /// else's compose fragment.
+    ///
+    /// `Option`, because an index built before the field was carried is a
+    /// perfectly good index and says nothing about who published a thing.
+    #[serde(default)]
+    pub maintainer: Option<String>,
     #[serde(default)]
     pub legacy_env_prefix: Option<String>,
     pub versions: Vec<VersionRow>,
@@ -618,9 +638,21 @@ fn checked_relative(path: &str) -> Result<()> {
 
 /// How much of the chain of trust a refresh is asked to check.
 ///
-/// One variant today, and the enum exists so the call sites that will need the
-/// other one are already written against something. See the module comment:
-/// there is no published key, and ADR 0015's ceremony is an open decision.
+/// ## Why there are three and not two
+///
+/// The pair `Unsigned`/`Signed` describes a flag day. Everything is unsigned
+/// until a publisher signs, everything must be signed after — and between the
+/// two there is a moment where every machine that has not yet been told breaks,
+/// which is why the default stayed on `Unsigned` and why the whole verifier sat
+/// there **used by nobody**: the chain was built, the key was pinned, and a
+/// stock refresh never asked for a signature at all.
+///
+/// [`Trust::WhenSigned`] is the third answer and it is the default now. It
+/// takes the fact from the publisher rather than from a setting: a signature
+/// that is there is checked, and a signature that is not there is only accepted
+/// from a source that has never produced one. So the day the index is signed,
+/// every machine starts verifying on its next refresh with nobody editing
+/// anything — and no machine breaks on the day before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trust {
     /// Accept an index on the strength of where it came from.
@@ -638,6 +670,90 @@ pub enum Trust {
     /// rather than quietly downgrading, because a security check that silently
     /// does nothing is worse than one that is absent.
     Signed,
+    /// Check the signature the publisher published, and refuse to go back.
+    ///
+    /// Two rules, and the second is the one that makes the first worth having:
+    ///
+    /// * A signature that is **present** is checked, and a check that fails is
+    ///   a refusal — never a fall-through to "well, treat it as unsigned then".
+    ///   A signature that verifies against nothing is the loudest evidence a
+    ///   refresh can produce, and discarding it would be reading the evidence
+    ///   and looking away.
+    /// * A signature that is **absent** is accepted only from a source that has
+    ///   never given one. `seen_signed` is that memory, and it is already on
+    ///   disk: [`SourceRef::verified_by`] records the key that verified the
+    ///   cached index. Without this half the whole mode is defeated by deleting
+    ///   a file — anyone who can serve a tampered index can also serve a 404
+    ///   for its signature, and a machine with no memory would take it.
+    ///
+    /// It is the same shape as the sequence rule four screens down, and for the
+    /// same reason: this machine has seen something, and going back to before
+    /// it saw that is how a withdrawal stops meaning anything.
+    WhenSigned {
+        /// Has this machine ever taken a verified index from this source?
+        seen_signed: bool,
+    },
+}
+
+/// What a refresh should check, given the policy and what this machine has seen.
+///
+/// Its own function so the default is a thing with a test rather than a branch
+/// inside a Tauri command, which is where it was and where nothing could reach
+/// it. The one asymmetry is deliberate and is ADR 0009's: policy may only
+/// tighten. `requireSignature` turns a missing signature into a refusal even
+/// for a publisher who has never signed; nothing in policy can turn a *present*
+/// signature into something optional.
+/// The raw base the official catalogue is served from.
+///
+/// Written as the resolved form because that is what a comparison can be exact
+/// about: [`resolve_location`] turns every spelling somebody pastes — the web
+/// page, a trailing slash, the clone URL, `www.` — into this one string, so one
+/// equality covers all of them and none of them is matched by a prefix.
+const OFFICIAL_RAW: &str =
+    "https://raw.githubusercontent.com/stackvo/stackvo-service-packages/HEAD";
+
+/// Does this build know that this source signs its index?
+///
+/// One entry, and it earns being compiled in rather than learned: without it
+/// there is a hole exactly one refresh wide. `WhenSigned` remembers that a
+/// source has signed before, and a machine that has never refreshed remembers
+/// nothing — so on a **first** refresh, somebody who can serve a tampered index
+/// can also serve a 404 for its signature and be believed. Every later refresh
+/// is protected and the first one is not, which is the one that decides what a
+/// new machine installs.
+///
+/// This could only be written once it was true. The official index is signed
+/// and published now (`tools/keys.sh sign`, and the signature verifies against
+/// [`crate::signing::PINNED`]); before that, a build claiming to know this
+/// source signs would have refused the catalogue outright.
+///
+/// The cost is real and is the reason it is stated here rather than assumed:
+/// the index is generated, so a regeneration published without a fresh
+/// signature is now refused by every machine on its first refresh as well as
+/// its hundredth. That rule is held where it can be held — the packages
+/// repository's own CI verifies the signature over the index it ships.
+pub fn known_to_sign(location: &str) -> bool {
+    resolve_location(location) == OFFICIAL_RAW
+}
+
+/// Is a missing signature a refusal?
+///
+/// Yes when one was demanded, and yes when this source has produced one before
+/// — the second being the half that stops the mode from being switched off by
+/// whoever can serve a 404.
+fn must_verify(trust: Trust) -> bool {
+    matches!(
+        trust,
+        Trust::Signed | Trust::WhenSigned { seen_signed: true }
+    )
+}
+
+pub fn trust_for(require_signature: bool, seen_signed: bool) -> Trust {
+    if require_signature {
+        Trust::Signed
+    } else {
+        Trust::WhenSigned { seen_signed }
+    }
 }
 
 /// Which source this workspace last fetched from.
@@ -771,7 +887,7 @@ pub fn refresh(
     // before a manifest is parsed. A document is parsed by code that trusts
     // its shape, and the cheapest way to keep that trust honest is to settle
     // where the bytes came from first.
-    if trust == Trust::Signed {
+    if trust != Trust::Unsigned {
         let keys = crate::signing::Keys::pinned()
             .with_policy(&crate::policy::current().market().additional_keys);
 
@@ -781,7 +897,7 @@ pub fn refresh(
         // sends somebody to the publisher to ask for a signature that would
         // not have helped, when the missing half is on this side. Found by a
         // test written to assert the order rather than by reading.
-        if keys.is_empty() {
+        if keys.is_empty() && must_verify(trust) {
             return Err(Error::new(
                 Code::Unsupported,
                 "a signed index was asked for and no registry key is pinned in this build",
@@ -789,11 +905,47 @@ pub fn refresh(
             .with_hint(crate::hints::NO_REGISTRY_KEY));
         }
 
-        let signature =
-            String::from_utf8_lossy(&source.fetch("registry.json.minisig")?).to_string();
-        let by = keys.verify(&bytes, &signature)?;
-        tracing::info!(source = %source.describe(), key = %by.id(), "index signature verified");
-        verified_by = Some(by.id());
+        // Absent is a different answer from wrong, and only one of them is
+        // allowed to be survivable. A publisher who has never signed is a state
+        // (ADR 0011); a publisher who signed yesterday and serves no signature
+        // today is either a mistake worth stopping for or somebody on the path
+        // who deleted a file, and this machine cannot tell which — which is
+        // exactly when it should not guess.
+        match source.fetch("registry.json.minisig") {
+            Ok(raw) => {
+                let signature = String::from_utf8_lossy(&raw).to_string();
+                let by = keys.verify(&bytes, &signature)?;
+                tracing::info!(
+                    source = %source.describe(),
+                    key = %by.id(),
+                    "index signature verified"
+                );
+                verified_by = Some(by.id());
+            }
+            // Demanded and absent: the publisher's omission, said plainly.
+            Err(missing) if trust == Trust::Signed => return Err(missing),
+            // Seen before and absent now: a different sentence, because it is a
+            // different event. "No such file" would send somebody to the
+            // publisher to ask for a signature — right half the time, and the
+            // other half it is the one thing an attacker on the path would
+            // arrange, said as a filing error.
+            Err(_) if must_verify(trust) => {
+                return Err(Error::new(
+                    Code::PermissionDenied,
+                    format!(
+                        "{} signed an index for this machine before and is serving none now",
+                        source.describe()
+                    ),
+                )
+                .with_hint(crate::hints::SOURCE_STOPPED_SIGNING))
+            }
+            Err(_) => {
+                tracing::info!(
+                    source = %source.describe(),
+                    "no signature published for this index; taking it unsigned"
+                );
+            }
+        }
     }
 
     let registry: Registry = serde_json::from_slice(&bytes).map_err(|e| {
@@ -1675,6 +1827,106 @@ mod tests {
             !registry_path(&root).is_file(),
             "an index that failed verification was cached anyway"
         );
+    }
+
+    /// Who published a package survives the trip from the index.
+    ///
+    /// It did not, for as long as the field existed. Every published package
+    /// names a maintainer and `PackageRow` had nowhere to put it, so a
+    /// catalogue meaning to carry third-party packages could not say whose a
+    /// package was — the same loss `keywords` had, where a field that is
+    /// published but never read is indistinguishable from one nobody fills in.
+    #[test]
+    fn a_package_row_carries_who_published_it() {
+        let row: PackageRow = serde_json::from_str(
+            r#"{"service":"mysql","category":"databases","name":{"en":"MySQL"},
+                "maintainer":"stackvo","versions":[]}"#,
+        )
+        .expect("a row with a maintainer");
+        assert_eq!(row.maintainer.as_deref(), Some("stackvo"));
+
+        // And an index built before the field was carried is still an index.
+        // Inventing a publisher for one would be worse than the gap: a name
+        // shown on a card reads as something somebody checked.
+        let older: PackageRow = serde_json::from_str(
+            r#"{"service":"redis","category":"cache","name":{"en":"Redis"},"versions":[]}"#,
+        )
+        .expect("a row from before the field");
+        assert_eq!(older.maintainer, None);
+    }
+
+    /// The hole that is exactly one refresh wide, closed.
+    ///
+    /// `WhenSigned` learns from `source.json`, and a machine that has never
+    /// refreshed has no `source.json` — so the first refresh, the one that
+    /// decides what a new machine installs, was the one nobody was protecting.
+    #[test]
+    fn the_official_catalogue_is_known_to_sign_however_it_is_spelled() {
+        for spelling in [
+            "https://github.com/stackvo/stackvo-service-packages",
+            "https://github.com/stackvo/stackvo-service-packages/",
+            "https://github.com/stackvo/stackvo-service-packages.git",
+            "https://www.github.com/stackvo/stackvo-service-packages",
+            "https://raw.githubusercontent.com/stackvo/stackvo-service-packages/HEAD",
+        ] {
+            assert!(
+                known_to_sign(spelling),
+                "{spelling} is the official catalogue and this build does not know it signs"
+            );
+        }
+    }
+
+    /// And nothing else is, which is the half that keeps it a fact rather than
+    /// a pattern. A mirror is somebody else's decision to sign or not, and
+    /// claiming it signs would refuse a catalogue that was never wrong.
+    #[test]
+    fn nothing_else_is_assumed_to_sign() {
+        for other in [
+            "https://packages.example.com/stackvo",
+            "https://raw.githubusercontent.com/someone/stackvo-service-packages/HEAD",
+            "https://github.com/stackvo/stackvo",
+            "/opt/stackvo/packages",
+            "",
+        ] {
+            assert!(!known_to_sign(other), "{other} was assumed to sign");
+        }
+    }
+
+    /// The default, as a thing with a test.
+    ///
+    /// It was a branch inside a Tauri command, which is where nothing could
+    /// reach it — and what it said was `Trust::Unsigned`, so the verifier below
+    /// it had no caller on any stock machine. A default that decides whether a
+    /// security check runs at all is worth being able to state.
+    #[test]
+    fn the_default_checks_a_signature_when_one_is_published() {
+        assert_eq!(
+            trust_for(false, false),
+            Trust::WhenSigned { seen_signed: false },
+            "a stock machine has to at least look for a signature, or publishing \
+             one changes nothing anybody can see"
+        );
+        assert_eq!(
+            trust_for(false, true),
+            Trust::WhenSigned { seen_signed: true },
+            "a machine that has verified this source before must remember it"
+        );
+    }
+
+    /// ADR 0009: policy tightens and never loosens.
+    #[test]
+    fn policy_can_demand_a_signature_and_cannot_wave_one_through() {
+        assert_eq!(trust_for(true, false), Trust::Signed);
+        assert_eq!(trust_for(true, true), Trust::Signed);
+        // And there is no argument to this function that produces `Unsigned`.
+        // That variant is for a caller who has decided — `market_probe`, which
+        // is answering "is my address right" and must not turn a typo into a
+        // security refusal — not for a policy file.
+        for require in [true, false] {
+            for seen in [true, false] {
+                assert_ne!(trust_for(require, seen), Trust::Unsigned);
+            }
+        }
     }
 
     /// The client half of a takedown (C): a withdrawn version does not install.

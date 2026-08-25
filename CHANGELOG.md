@@ -7,6 +7,174 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The catalogue can say whose a package is (§2 C).** `maintainer` has been in
+  `package.schema.json` all along and every one of the 31 published packages
+  fills it in — and the index dropped every one of them. `grep` found no screen
+  reading it. So publisher identity existed as data and reached nobody, which
+  is indistinguishable from a field nobody ever filled in.
+
+  It is exactly what happened to `keywords`, with a sharper edge. A catalogue
+  that means to carry third-party packages is asking somebody to run somebody
+  else's compose fragment, and who wrote it is the one fact they weigh before
+  saying yes. Leaving it out was not a missing nicety; it was the catalogue
+  being unable to answer the question third-party distribution is *about*.
+
+  The whole chain, because a field is only carried if every link carries it:
+  `registry.schema.json` → `build-registry.mjs` → `market::PackageRow` →
+  `MarketPackage` → the ⓘ facts on the service row, in both locales. It sits
+  with the other facts rather than on a badge of its own — a row with two
+  information buttons invites the question of which one holds the information.
+
+  Optional at every link. An index built before the field was carried is a
+  perfectly good index, and inventing a publisher for one would be worse than
+  the gap: a name on a card reads as something somebody checked.
+
+  This is also the correction to a claim made two entries above — that what
+  remained for §2 C was entirely process. Half of it was code, and it was
+  measurable in one `grep`.
+
+- **The hole exactly one refresh wide, closed — and the rule that makes it safe,
+  held by a build.** `Trust::WhenSigned` learns that a source signs from
+  `market/source.json`, and a machine that has never refreshed has no
+  `source.json`. So every refresh was protected except the **first** — the one
+  that decides what a new machine installs, and the one somebody on the path
+  would target by serving a 404 for the signature.
+
+  `market::known_to_sign` compiles in the fact that the official catalogue
+  signs. One address, compared against `resolve_location`'s output so every
+  spelling of it — web page, trailing slash, clone URL, `www.` — is one
+  equality and nothing else is matched by a prefix. It could only be written
+  once it was true: before the index was signed, a build claiming this would
+  have refused the catalogue outright.
+
+  What that costs is that a regeneration published without a fresh signature is
+  now refused on a first refresh as well as a hundredth. So the rule is held
+  where it can be held rather than remembered: the packages repository's CI
+  verifies the signature over the index it ships (`tools/verify-signature.mjs`,
+  zero dependencies, no network, in the `gates` job). Ed25519 and BLAKE2b are
+  in Node; `minisign` is not on a runner, and an apt install in the one job
+  whose purpose is to be trustworthy is a poor trade.
+
+- **The chain is closed, and it was measured from outside.** The last link was
+  never code: a pinned key signs nothing, and `registry.json` had to be signed
+  with the private half by hand, on the machine that holds it. That happened.
+  `raw.githubusercontent.com/stackvo/stackvo-service-packages/HEAD/registry.json`
+  (44638 bytes) and its `registry.json.minisig` (400 bytes) were fetched and
+  verified against `signing::PINNED`'s `256219FF1F9A0F1B`. Pinned key → index →
+  manifest → file, end to end, against the address the app suggests.
+
+  What that leaves for §2 C is not engineering. A moderation process and a
+  publisher identity registry are two faces of one thing — a third party being
+  able to *submit* — and what exists today is verifiable **first-party**
+  distribution. The gap is not a missing mechanism; it is that nobody has
+  written down who accepts a submitted package, and on what grounds.
+
+  It also creates a standing operational rule, and it is load-bearing: the index
+  is generated, so every regeneration needs signing again. A stale signature is
+  a refusal rather than a downgrade — correct, and the reason the rule cannot be
+  left to memory. The gate that would make forgetting impossible belongs in the
+  packages repository's CI and does not exist yet.
+
+- **The ceremony reads the file you named, from the directory you are standing
+  in.** `tools/keys.sh sign` and `verify` handed their path straight on to two
+  helpers that deliberately run somewhere else — `tauri()` in the repository
+  root, `verifier()` in `src-tauri` — so a relative path was resolved against a
+  directory the person had never seen.
+
+  Relative is not an edge case here: the whole ceremony is `cd` into the
+  packages repository and name the index in front of you. `keys.sh verify
+  registry.json` from there answered `reading registry.json: No such file or
+  directory`, which is a true sentence about the wrong directory, at the one
+  moment somebody is closing the chain for the first time. Signing had the same
+  fault and predates the verifier.
+
+  The regression test runs the script with a `cargo` on `PATH` that only prints
+  its arguments, and asserts which path came out. The real tool would mean a
+  nested cargo inside `cargo test`, which deadlocks on the build lock; what is
+  under test is the path, and a stub settles it.
+
+- **The signature is checked because the publisher signed, not because someone
+  found a setting (§2 C, ADR 0034).** The chain had three links, a pinned key
+  and fifteen tests, and on a stock machine **none of it ran**: `market_refresh`
+  passed `Trust::Unsigned` unless an administrator had written
+  `requireSignature`. Publishing a signed index would have changed nothing any
+  user could see.
+
+  `Unsigned`/`Signed` describes a flag day — everything unsigned until the
+  publisher signs, everything mandatory after — and in between is the moment
+  every machine that has not been told breaks. That is exactly why the default
+  stayed where it was, and the reason was sound.
+
+  `Trust::WhenSigned` is the third answer and is now the default. A signature
+  that is present is checked, and a check that fails is a refusal — never a
+  fall-through to "unsigned, then", because a signature that verifies against
+  nothing is the loudest evidence a refresh can produce. A signature that is
+  absent is accepted only from a source that has never given one; the memory
+  was already on disk (`SourceRef.verified_by`). Without that second half the
+  mode is defeated by deleting a file: anyone who can serve a tampered index
+  can serve a 404 for its signature. It is the same shape as the rule that an
+  index may not go backwards, for the same reason.
+
+  So there is no flag day. The day the index is signed, every machine starts
+  verifying on its next refresh with nobody editing anything, and no machine
+  breaks the day before. ADR 0009 is intact — `requireSignature` still only
+  tightens, refusing a missing signature too.
+
+  The two refusals are worded apart because they are different events: "no
+  signature here" and "this source signed for you before and is serving none
+  now". The second carries its own hint, since "no such file" reads the one
+  thing an attacker on the path would arrange as a filing error.
+
+  Four integration tests and two unit tests, each shown to bite by breaking
+  what it guards: the strip attack, a bad signature read as no signature, and
+  the default reverted.
+
+- **The ceremony now proves its own signature before publishing it (§2 C).**
+  `tools/keys.sh sign` produced a `registry.json.minisig` and said "publish it",
+  and between that sentence and a user's machine nothing ever asked the question
+  that decides it: is this a signature a shipped build accepts?
+
+  The failure that leaves is quiet and total. The content key and the updater
+  key live in one directory and their file names differ by one word; an index
+  signed with the wrong one — or with a key `PINNED` has since rotated away
+  from — signs without complaint, uploads cleanly, and is refused by every
+  installed copy of the app at once, with the publishing side holding no
+  evidence at all.
+
+  So the signature takes the published name only after the app has accepted it,
+  which is the shape `market::install` already uses for a package: verified
+  whole, then moved. A rejected signature stays `.sig` and is named; whatever
+  `.minisig` was already beside it is untouched, so nothing that was working is
+  replaced by something that is not. The judge is the app itself —
+  `examples/verify_index.rs` links `signing::Keys::pinned()` and `verify`, the
+  set and the function a release actually uses. A `minisign -V` here would have
+  been a second opinion, and the round the two disagree is the round this prints
+  a tick for a file every machine refuses. An organisation signing its own
+  mirror names its key with `--key`, because its question is not whether *this*
+  build trusts the index but whether the machines it configured will.
+
+  `keys.sh check` gained the same question for the content key that the updater
+  key has been asked since the script existed: is the private half on this
+  machine the pair of what the build pins? Getting the updater pair wrong is
+  caught by a release that will not sign; getting the content pair wrong was
+  caught by nobody. Measured on the ceremony machine: it is the private half of
+  `256219FF1F9A0F1B`, so both ends of the chain now look at one key.
+
+  Four gates, each shown to bite by breaking the thing it guards.
+  `key_ceremony.rs` runs the script against a fixture key directory rather than
+  grepping it for a sentence — an inverted comparison passes a grep — and runs
+  `verify_index` for real, because `sign` decides whether to publish from one
+  exit status. `signed_refresh.rs` gained the one that was missing: `refresh`
+  checks the signature **before** it parses, four lines apart, and swapping them
+  broke no test. Bytes that are neither an index nor signed by anything now have
+  to be refused for the *key*, which only one ordering can produce.
+
+  And the stale claim was closed as a class, not as two edits. Filling `PINNED`
+  turned honest prose about an empty list into confident, specific, wrong
+  claims, and two files were still telling readers the chain's first link was
+  open. No `.rs` file may now describe the other state of `PINNED`, in either
+  direction — so a future retirement fails the same way round.
+
 - **A container can now say whether it could carry an editor (§3 R-3).** The
   half of "run the editor inside the container" that has to be settled before
   the button is worth building, and it is not one question. `editor.rs` answers

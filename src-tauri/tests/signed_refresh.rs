@@ -24,9 +24,13 @@
 //! repository made with its own idea of minisign, it is one the **documented
 //! procedure** produced. If the ceremony stops working, this stops passing.
 //!
-//! The key here is *not* the official one. `signing::PINNED` is still empty and
-//! `docs/durum.md` §3 #2 is still open; what this settles is that the code
-//! behind that row works, so the row is about a ceremony and not about a bug.
+//! The key here is *not* the official one, and it stays that way now that there
+//! is one. `PINNED` carries the registry's real key (ADR 0033) and its private
+//! half is on one machine, deliberately not in CI — so a test that wanted a
+//! signature from it could only get one by putting the key somewhere a test
+//! runner can reach, which is the arrangement the ceremony exists to avoid.
+//! What a fixture key settles is the code, and the code is the same either way:
+//! `verify` does not know which key it was handed.
 
 use stackvo_desktop_lib::market::{self, LocalSource, Trust};
 
@@ -58,7 +62,7 @@ fn scratch(name: &str) -> std::path::PathBuf {
 /// `market.additionalKeys` rather than a patched `PINNED`, and that is the
 /// honest spelling twice over: it is the field an organisation running its own
 /// mirror uses, so this exercises the path somebody is on **today**, and it
-/// leaves `PINNED` empty, which is what the build actually ships.
+/// leaves the shipped key list exactly as a release carries it.
 fn trust_the_fixture_key(root: &std::path::Path) {
     let policy = root.join("policy.json");
     std::fs::write(
@@ -172,5 +176,169 @@ fn the_unsigned_mode_still_takes_an_index_with_no_signature() {
     assert_eq!(
         done.verified_by, None,
         "an unsigned refresh claimed a key verified it"
+    );
+}
+
+/// The order, stated as a refusal only one ordering can produce.
+///
+/// `refresh` checks the signature before it parses, for the same reason it
+/// checks `manifestSha256` before it reads a manifest: a document is parsed by
+/// code that trusts its shape, and settling where the bytes came from first is
+/// the cheapest way to keep that trust honest. Nothing held it. The comment in
+/// `market.rs` said so, the two statements sit four lines apart, and swapping
+/// them would have broken no test — a parse error for an untrusted document is
+/// a verifier that ran second, and second is not a verifier.
+///
+/// So the fixture is bytes that are **both** wrong: not an index at all, and
+/// not signed by anything. Exactly one ordering can produce a refusal that
+/// talks about the key, and that is the one asserted.
+#[test]
+fn bytes_are_verified_before_they_are_parsed() {
+    let root = scratch("ordering");
+    trust_the_fixture_key(&root);
+
+    let source = root.join("source");
+    publish(&source, "this was never an index\n", Some(FIXTURE_SIG));
+
+    let err = market::refresh(&root, &LocalSource::new(&source), Trust::Signed, None)
+        .expect_err("bytes that are not an index refreshed");
+    assert!(
+        !err.message.contains("unreadable"),
+        "the parser reached bytes no trusted key had signed — the signature is \
+         checked second: {}",
+        err.message
+    );
+    assert!(
+        err.message.contains("none of the"),
+        "the refusal is not the signature's: {}",
+        err.message
+    );
+    assert!(
+        !market::registry_path(&root).is_file(),
+        "a refused index was cached anyway"
+    );
+}
+
+// ------------------------------------------------- the day the index is signed
+
+/// The mode that made the chain reachable, and the reason it had to exist.
+///
+/// Everything above this line tests a `Trust` somebody had to ask for. Nothing
+/// asked: `market_refresh` passed `Trust::Unsigned` unless an administrator had
+/// written `requireSignature`, so on a stock machine the verifier, the pinned
+/// key and the whole first link were **code nobody ran**. Publishing a signed
+/// index would have changed nothing a user could see.
+///
+/// `Trust::WhenSigned` takes the fact from the publisher instead of from a
+/// setting, and these four are the four things it must do.
+#[test]
+fn a_publisher_who_starts_signing_is_verified_with_nobody_changing_a_setting() {
+    let root = scratch("when-signed");
+    trust_the_fixture_key(&root);
+
+    let source = root.join("source");
+    publish(&source, INDEX, Some(FIXTURE_SIG));
+
+    let done = market::refresh(
+        &root,
+        &LocalSource::new(&source),
+        Trust::WhenSigned { seen_signed: false },
+        None,
+    )
+    .expect("a signed index under the default mode");
+    assert!(
+        done.verified_by.is_some(),
+        "the signature was published and nothing checked it — which is the \
+         state this mode exists to end"
+    );
+}
+
+/// And the day before, nothing breaks.
+#[test]
+fn a_publisher_who_has_never_signed_is_still_taken() {
+    let root = scratch("when-unsigned");
+    trust_the_fixture_key(&root);
+
+    let source = root.join("source");
+    publish(&source, INDEX, None);
+
+    let done = market::refresh(
+        &root,
+        &LocalSource::new(&source),
+        Trust::WhenSigned { seen_signed: false },
+        None,
+    )
+    .expect("an unsigned index from a publisher who has never signed");
+    assert_eq!(done.registry.sequence, 7);
+    assert_eq!(
+        done.verified_by, None,
+        "an unsigned refresh claimed a key verified it"
+    );
+}
+
+/// The half that stops the mode being switched off by deleting a file.
+///
+/// Anyone who can serve a tampered index can serve a 404 for its signature.
+/// Without this the whole mode is a suggestion: strip the `.minisig`, and a
+/// machine with no memory takes the index unsigned and says so quietly on a
+/// screen nobody is looking at.
+#[test]
+fn a_source_that_has_stopped_signing_is_refused() {
+    let root = scratch("stripped");
+    trust_the_fixture_key(&root);
+
+    let source = root.join("source");
+    publish(&source, INDEX, None);
+
+    let err = market::refresh(
+        &root,
+        &LocalSource::new(&source),
+        Trust::WhenSigned { seen_signed: true },
+        None,
+    )
+    .expect_err("a source that stopped signing was taken anyway");
+    assert!(
+        err.message
+            .contains("signed an index for this machine before"),
+        "the refusal reads as a missing file rather than as a signature that \
+         disappeared: {}",
+        err.message
+    );
+    assert!(
+        !market::registry_path(&root).is_file(),
+        "a refused index was cached anyway"
+    );
+}
+
+/// Absent and wrong are different answers, and only one of them survives.
+///
+/// The tempting shape of this mode is "try to verify, and carry on if it does
+/// not work out" — which would accept a *tampered* index from a publisher who
+/// has never signed, because a failed check and a missing file would arrive at
+/// the same `else`. A signature that verifies against nothing is the loudest
+/// evidence a refresh can produce.
+#[test]
+fn a_signature_that_fails_is_never_read_as_no_signature() {
+    let root = scratch("bad-not-absent");
+    trust_the_fixture_key(&root);
+
+    let source = root.join("source");
+    publish(
+        &source,
+        &INDEX.replace("\"sequence\": 7", "\"sequence\": 9"),
+        Some(FIXTURE_SIG),
+    );
+
+    let err = market::refresh(
+        &root,
+        &LocalSource::new(&source),
+        Trust::WhenSigned { seen_signed: false },
+        None,
+    )
+    .expect_err("an index that failed its own signature was taken as unsigned");
+    assert!(
+        err.message.contains("none of the"),
+        "the refusal is not the signature's: {}",
+        err.message
     );
 }
