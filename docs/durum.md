@@ -52,7 +52,6 @@ Yapılanlar burada durmuyor — `CHANGELOG.md` her teslimatın ne olduğunu ve n
 
 | #   | Madde | Durum | Ne eksik, ve nasıl bakıldı |
 | --- | --- | :-: | --- |
-| C | Üçüncü taraf paket **dağıtımı** | 🟡 | **Zincir uçtan uca kapandı ve canlı ölçüldü.** `curl` ile karşı uçtan çekilen `registry.json` (44638 bayt) ve `registry.json.minisig` (400 bayt), `signing::PINNED`'in taşıdığı `256219FF1F9A0F1B` ile **doğrulanıyor** — pinlenmiş anahtar → indeks → manifest → dosya. Kod tarafı bitti (ADR 0021, 0033, 0034; kaydı `CHANGELOG.md`'de): doğrulayıcı, ayrıştırmadan önce koşan imza kontrolü, rotasyon ve emeklilik, geri çekilmiş sürümün reddi, kendini kanıtlamadan yayımlamayan `tools/keys.sh sign`, ve olguyu ayardan değil yayıncıdan alan `Trust::WhenSigned`. **"Kalan ikisi de kod değil" yanlıştı, ve ölçüm düzeltti**: `maintainer` alanı `package.schema.json`'da vardı, 31 paketin **31'i** dolduruyordu, ve indeks hepsini **düşürüyordu** — `grep` ile bakıldı, hiçbir ekran okumuyordu. Yani yayıncı kimliği veri olarak vardı ve kimseye ulaşmıyordu; `keywords`'ün başına gelenin aynısı ve daha keskin hâli, çünkü üçüncü taraf paket taşımaya niyetlenen bir katalog, birinden **başkasının** compose parçasını çalıştırmasını istiyor ve evet demeden önce tarttığı tek olgu odur. Zincir kuruldu: `registry.schema.json` → `build-registry.mjs` → `PackageRow` → `MarketPackage` → Market kartının ⓘ olguları, iki dilde. **Kalan tek şey gerçekten kod değil**: gönderilen bir paketi **kimin, neye bakarak** kabul ettiğinin yazılı olmaması — bir moderasyon süreci, ve o kimliğin *doğrulanmış* sayılmasının kuralı. Bugün var olan doğrulanabilir **birinci taraf** dağıtımı, artık yayıncısını da söyleyerek. Bir de bir sayfa (bkz. *Taranabilir paket dizini*). **Kalıcı bir işletme kuralı doğdu ve kapısıyla birlikte kondu**: `registry.json` üretiliyor (`tools/build-registry.mjs`), yani her yeniden üretimden sonra yeniden imzalanmalı — eskiyen bir imza sessiz bir düşüş değil, sert bir ret. Paket deposunun CI'ı artık indeksin üstündeki imzayı **doğruluyor** (`tools/verify-signature.mjs`, sıfır bağımlılık, ağsız, `gates` işinde), yani unutmak build'i kırıyor. **Ve ilk tazeleme de kapandı**: `WhenSigned` hafızayı `source.json`'dan okuyor, hiç tazelememiş bir makinenin ise hafızası yok — yani yolda biri **ilk** tazelemede imzayı sıyırıp geçebiliyordu, ki yeni bir makinenin ne kuracağına karar veren tazeleme tam olarak odur. `market::known_to_sign` resmî adresin imzaladığını derlemeye gömüyor; yalnız o adres, ve ancak bugün yazılabilirdi çünkü ancak bugün doğru |
 | W | **Windows'ta testlerin koşması** | 🟢 | **Koşuyor, ve koştuğu için düzeltilebildi.** İlk gerçek koşu **on dokuz** hata verdi ve asıl iş onları ayırmaktı: **ikisi üründü**, kalanı yazıldığı platformu iddia eden testler. `dns.rs` `/etc/resolver` yollarını `PathBuf::join` ile kuruyordu — `join` **host'un** ayracını kullanır, yani Windows'ta `/etc/resolver\\test` üretiyordu ve ondan kurulan her komut hiçbir yerde var olamayacak bir dosyayı adlandırıyordu. `runner.rs`'in testleri `sh -c` çağırıyordu, yani **`docker compose`'u başlatan modülün Windows'ta sıfır kapsamı vardı** — dosya kapsamlı test edilmiş görünürken. Artık `node` ile koşuyor; `cmd` ne çıplak satır başı yazabiliyor ne de son satırsonunu atlayabiliyor, ki bu testlerin var olma sebebi tam o iki durum. Kalanı ayraç iddiasıydı (`imports` JSON'a kaçırmadan yol gömüyordu, `agents` POSIX sabiti karşılaştırıyordu, `stats` ürünün kendi toleransından katıydı). `cfg_regions.rs` `runner.rs`'in testlerinde kabuk görürse reddediyor. **Log okundu, ve on dokuzdan bir tanesi kalmıştı.** `agent_install::the_whole_round_trip_against_a_real_home_directory`: test `HOME` ve `USERPROFILE`'ı kendi dizinine çeviriyor — koşucunun gerçek profilini düzenlemeden yazma yarısını denemenin tek yolu bu — ama `dirs::home_dir()` Windows'ta `%USERPROFILE%`'ı okumuyor, kabuğa `FOLDERID_Profile` diye soruyor. Yani kusur testin platform iddiası değil, **ürünün üç platformun ikisinde taşınmış eve uyup üçüncüsünde uymamasıydı**; `agents::home()` artık ortamı her platformda önce soruyor. Testi Windows'ta atlamak öteki seçenekti ve bu satır o takası bir kez yakalamıştı: `runner.rs` orada kapsamlı test edilmiş görünürken sıfır kapsamı vardı. **Ve on dokuz hiç bitmiş bir sayı değilmiş:** `cargo test` düşen ilk test ikilisinde duruyor, `agent_install` de alfabetik olarak önde — o düzelince arkasından **yirmincisi** çıktı. Sebebi de aynı aileden: **CRLF.** Git for Windows `core.autocrlf=true` ile geliyor, Actions koşucusu onu devralıyor, ve deponun kendi kaynağını okuyan her test `\r\n` taşıyan bir dosya okuyor. `cfg_regions.rs` hangi özniteliğin hangi fonksiyona ait olduğunu boş satırdan bölerek buluyor; `"\n\n"` `"\r\n\r\n"`'in içinde geçmiyor, pencere sessizce bir üstteki fonksiyona uzanıyor, ve keystore'un gerçek arka ucu ile bellek içi sahtesi aynı `cfg` gate'ini taşıyor gibi görünüyor — güvenlik biçimli bir iddia, güvenlikle ilgisi olmayan bir sebeple düşüyor. `.gitattributes` (`* text=auto eol=lf`) sınıfın tamamını kökten kapatıyor; yerel olarak CRLF'e çevirip aynı hata birebir üretildi, ve `workflow_parity.rs` dosyanın silinmesini engelliyor. **`--no-fail-fast` ilk koşusunda kendini ödedi:** tek bir Windows işi kalan **dört** hatayı birden listeledi — öncesinde bir tanesini gösterirdi. Üçü yine yazıldığı platformu iddia eden testlerdi. `independence.rs` beklentisini ham host yolundan kuruyordu, oysa compose dosyası `/c/Users/...` diyor çünkü `paths::to_docker_mount` bu işi zaten yapıyor — doğru bir mount "kaynak mount'u proje ağacını takip etmedi" diye düşüyordu. `worktree_flow.rs` kendi git deposunu kuruyor ve makinenin `core.autocrlf`'ini devralıyordu; `git worktree add` `\r\n` taşıyan bir manifest geri veriyordu ve "dalın commit'lenmiş manifest'i el değmemiş" iddiası bu uygulamayı hiç açmadığı bir dosyayı yeniden yazmakla suçluyordu. `foreign_import.rs` symlink kurulumunu Unix'e kapatmış, iddialarını kapatmamıştı — Windows'ta kurulumun sessizce olmadığı bir ağacı ölçüp okuyucuyu bozuk ilan ediyordu; bir Valet sitesi **symlink'tir** (`imports::linked` `read_link` kullanıyor), o yüzden bağ her platformda gerçek olmalı, ve Windows'ta bunun istediği Developer Mode ya da yükseltme bu testin talep edeceği bir şey değil — reddedilirse **sesli** atlıyor. **Dördüncüsü üründü:** üretilen dosya etiketleri yarısı bir yol geleneği yarısı öteki oluyordu (`configs/mysql-8-0\my.cnf.tpl`); etiket bir tanımlayıcıdır — listede görünür, aranır, karşılaştırılır — platform başına bir tane olamaz. `paths::to_label`, ve `applog.rs` aynı sonuca kendi başına varmış olan satırını artık tekrarlamak yerine çağırıyor. **Kalan: koşunun yeşile dönmesi** |
 | Y-1 | **Ekran okuyucu denetimi** | 🟡 | `docs/accessibility.md` §4. **Y-2 buraya katıldı ve kendi satırı kaldırıldı** — ikisinin kalanı tek ve aynı işti. Satırın saydığı üç sorunun hiçbiri tümüyle yargı değilmiş, ve ölçmek **sekiz kusur** çıkardı: About penceresinin boş başlığı, menü çubuğundaki `Hide/Quit stackvo-desktop`, adsız doğan tepsi ikonu, hiç güncellenmeyen `<html lang>`, geçiş başına dil işareti, yeni proje çekmecesinin ters okuma sırası, tek sayfada on bir kez "Bu kart ne işe yarar", ve Logs/Dumps'ta kulakta ayırt edilemeyen iki ayrı "Temizle". Hepsi düzeltildi. **Mekanik taban artık build'i kırıyor:** `accessible-names.spec.js` (adsız kontrol yok, tek başına bir şey söylemeyen kelime yok, sayfanın belirgin ad oranı eşiğin altına düşemez), `reading-order.spec.js` (her yeniden sıralama hangi sıranın anlamlı olduğunu söylemek zorunda), `language-of-parts.spec.js`, `native_window_claims.rs` (8 test), ve `examples/native_ax_probe.rs` yerel ağacı canlı okuyor. **Metin gözden geçirmesi de yapıldı:** `npm run a11y:transcript` altı sayfanın duyurduğu her şeyi iki dilde yazıyor (`docs/accessibility-transcript.md`), liste okundu, bulguları düzeltildi; geriye kaydedilmiş tek sınır kaldı — arama alanının temizle düğmesini Vuetify yalnız `label` prop'undan adlandırıyor, bu alanlar ise bilerek placeholder taşıyor. **Kalan tek şey ve tam tanımı:** hiç kimse bu uygulamayı **gerçekten bir ekran okuyucuyla kullanmadı.** Transcript ne duyurulduğunu söyler, kullanmanın nasıl bir şey olduğunu söylemez — ve EN 301 549 beyanı bu farkı iddia edemez. Kod değil, erişim: bir kişi, VoiceOver ya da NVDA ile bir oturum |
 | R-1 | **Editörün kendisi konteynerin içinde — VS Code** | ⬜ | `ide.rs` bugün yalnız **hata ayıklayıcıyı** bağlıyor: `.vscode/launch.json`'a bir `Listen for StackVo` girdisi, PhpStorm'a yapıştırılacak XML. Editörün *kendisinin* konteynerde koşması — dil sunucusu, uzantılar, terminal, `composer` ve `artisan` hepsi imajın içinde, host'ta hiçbir PHP olmadan — hiçbir yerde yok. Gereken üç olgunun üçü de bu ağaçta **zaten duruyor**: konteyner adı `stackvo-<proje>` (`engine::container_name`), çalışma dizini `/var/www/html` (`generator.rs`), ve PHP tarafında kaynak zaten bind mount (`render_compose_service`). Eksik olan tek şey bir **adres**: VS Code çalışan bir konteynere `vscode-remote://attached-container+<hex>/<yol>` ile bağlanıyor, `<hex>` de `{"containerName":"/stackvo-shop"}` JSON'ının onaltılığı — yani bu üç olgudan **türetilebilen** bir dize, ve `pty::open_external`'ın harici terminali açtığı yerden açılabilir. Ölçüldü: `grep -rn 'attached-container\|folder-uri' src-tauri/src src contracts` → **0** |
@@ -75,8 +74,9 @@ sayfa ya da bir başlık.
   değiştirme" diyor. İkisi de **değiştirme**; buradaki **birlikte çalıştırma**,
   yani güçlü olan taraf ve isimsiz olan taraf aynı.
 * **Taranabilir paket dizini** — DDEV'in `addons.ddev.com`'u gibi. Mekanizma
-  bitti, anahtar töreni yapıldı ve indeks imzalı yayımlandı (C satırı); eksik
-  olan bir sayfa ve üçüncü tarafların gönderebilmesi. 30 paketi bir
+  bitti, anahtar töreni yapıldı, indeks imzalı yayımlandı ve üçüncü tarafın
+  gönderme yolu yazıldı (§6, kararlar 0021/0033/0034/0035); eksik olan bir
+  sayfa. 30 paketi bir
   *ekosisteme* çeviren şey bu.
 
 ### Savunulacak alan
@@ -220,9 +220,8 @@ kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
   altısı yeşile dönse bile endpoint 404 kalırdı: sürüm **taslak** açılıyor ve
   `releases/latest` taslağa çözülmez. Kalan **iki** eylem: bir etiket, sonra
   taslağı yayımlamak — ardından `npm run updates:check` cevabı söylüyor. Bu
-  ikisi #22'nin kalan yarısını, #21'i ve §2 C'nin önünü birlikte açıyor.
+  ikisi #22'nin kalan yarısını ve #21'i birlikte açıyor.
 * **#36** — 0.4.0'da silmek; kapı o gün build'i kırıyor.
-* **§2 C** — moderasyon süreci ve yayıncı kimliği kaydı; kod değil.
 * **§2 "Anlatılmayan güçler"** — dördü de bir sayfa ya da bir başlık; hiçbiri
   mühendislik değil.
 
@@ -267,7 +266,7 @@ oldu; beşincisi sorulduğunda **zaten kapatılmış** olduğu görüldü. Altı
   `fahrettinaksoy/…`) ve **mekanizma yanlıştı** (hiçbir şey o dosyayı `main`'e
   yazmıyor). `dialog: false` olduğu için ikisi de sessiz: updater 404 alıyor ve
   hiçbir şey söylemiyor. `updater_endpoint.rs` adresi `.git/config`'ten türetip
-  karşılaştırıyor. Bu cevap **#21'i ve §2 C'nin anahtar törenini de** açtı.
+  karşılaştırıyor. Bu cevap **#21'i ve paket kayıt defterinin anahtar törenini de** açtı (§6, karar 0033).
 * *Bir web yüzeyine kim bağlanabilir (#34)?* — ADR 0026. **Yalnız loopback, bir
   token, ve salt-okunur.** `websurface.rs` kararı çalıştırılabilir hâle
   getiriyor; taşıma katmanı **yok** ve bu eksiklik değil, sıralama: §5'in
@@ -1000,8 +999,8 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
 - **Status:** accepted
 - **Context:** §3 #2 "endpoint 404 veriyor" diyordu ve bir mühendislik maddesi
   gibi duruyordu. Değildi: `latest.json`'ın nerede yayınlanacağı ve özel
-  anahtarın kimde duracağı bir karardı, ve **#21 (sürüm kanalları) ile §2 C'nin
-  anahtar töreni de** o kararın arkasında bekliyordu.
+  anahtarın kimde duracağı bir karardı, ve **#21 (sürüm kanalları) ile paket
+  kayıt defterinin anahtar töreni de** o kararın arkasında bekliyordu.
 - **Decision:** `latest.json` bu deponun kendi GitHub Releases'inde yayınlanır;
   endpoint `https://github.com/<owner>/<repo>/releases/latest/download/latest.json`
   olur. Özel anahtar `TAURI_SIGNING_PRIVATE_KEY` repository secret'ı olarak
@@ -1350,6 +1349,43 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   "dosya bulunamadı" demek, yolda birinin yapacağı tek şeyi bir dosyalama
   hatası gibi okutmaktı.
 
+### 0035 — Kimin yayınladığı, indeks imzalanmadan önce kontrol edilir
+
+- **Status:** accepted
+- **Context:** `maintainer` şemada **serbest bir dize**, ve uygulama onu artık
+  market kartında **gösteriyor**. Bu iki olgu yan yana, aralarında hiçbir şey
+  olmayan bir kimliğe bürünme deliğidir: bir pull request herhangi bir şeyin
+  yayıncısı olarak `stackvo` yazabilir ve her kullanıcı **kimsenin bakmadığı**
+  bir isim okur. Kartta görünen bir isim, birinin baktığı bir şey diye okunur.
+
+  Delik alanı göstermeye başlayınca doğmadı — alan hep serbestti; görünür hâle
+  gelince **maliyeti** doğdu, ve o yüzden aynı turda kapatıldı.
+- **Decision:** `publishers.json` paket deposunda, ve `tools/validate.mjs` her
+  paketin `maintainer`'ının o listede olmasını şart koşuyor. Adı olmayan paket
+  de reddediliyor: adsız bir yayıncı, kimsenin cevap veremediği bir pakettir.
+
+  Şema `required` yapılmadı, çünkü şema **her yerdeki** bir paketi tarif ediyor
+  — bir kurumun kendisi için işlettiği aynayı da. Dizenin ne diyebileceğine onu
+  yayınlayan katalog karar verir; resmî katalogda o karar bu dosyadır.
+
+  **Yayıncı eklemek, paket kabul etmekten ayrı bir pull request.** Bir arada
+  olsalardı, asıl önemli karar — bu kişiye kefil oluyor muyuz — YAML hakkındaki
+  bir diff'in içinde bir satır olarak gelirdi, ve öyle bir satırın hak ettiği
+  dikkati görürdü.
+- **Consequences:** Kontrol istemcide değil **kaynakta** duruyor, ve bütün güven
+  savı bu: indeks, bu kapılar koştuktan **sonra** kayıt defteri anahtarıyla
+  imzalanıyor, yani imzanın taşıdığı cümle *kayıt defteri buna kefil* ve
+  `maintainer` dizeleri o cümlenin kapsamında. Bir istemci bir kimlik iddiasını
+  kendi başına doğrulayamaz; yalnızca o iddiayı kayıt defterinin yaptığını
+  doğrulayabilir.
+
+  Süreç de yazıldı (`CONTRIBUTING.md`) ve çoğu yargı değil: kapılar bir
+  gözden geçirenin fark etmesine güvenilecek şeylerin çoğuna zaten karar
+  veriyor, hep aynı biçimde. İnsana kalan üç şey adlandırıldı — bir yayıncıya
+  kefil olmak, servisin katalogda yeri olup olmadığı, ve imajın bir yabancının
+  daemon'una verilecek imaj olup olmadığı. Yazılmamış kuralları olan bir gözden
+  geçirme, onu yapana göre değişen bir gözden geçirmedir.
+
 ---
 
 ## 7. Ölçüm
@@ -1365,7 +1401,7 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
 | `ipc.js` sarmalayıcısı | **299** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **111 modül, 110.786 satır** | `src-tauri/src/*.rs` |
+| Rust kaynağı | **111 modül, 110.798 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 
