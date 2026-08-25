@@ -13101,6 +13101,15 @@ pub struct MarketPackage {
     /// Whether two versions may run at once, so a card can say so before
     /// anything is downloaded.
     pub multiple: bool,
+    /// Who publishes it, when the index says.
+    ///
+    /// Dropped here for as long as the field existed, which is exactly what
+    /// happened to `keywords` above and has the same consequence: every
+    /// published package names a maintainer, and no screen has ever shown one.
+    /// A catalogue that means to carry third-party packages cannot leave that
+    /// out — it is the fact a person weighs before installing somebody else's
+    /// compose fragment.
+    pub maintainer: Option<String>,
     pub versions: Vec<MarketVersion>,
 }
 
@@ -13213,6 +13222,26 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
         .or_else(|| market.registry_url.clone())
         .unwrap_or(location);
 
+    // Has this machine ever taken a *verified* index from this same source?
+    // Read before the reference is rebuilt, because the reference about to be
+    // written carries `verified_by: None` until the refresh fills it in — and a
+    // memory that the refresh overwrites before consulting is no memory.
+    //
+    // Location-scoped on purpose. Pointing the app at a different catalogue is
+    // a decision somebody made; carrying "that other source used to sign" over
+    // to it would refuse a perfectly ordinary first refresh from a directory.
+    // Or a source this build already knows signs. Without that second clause
+    // there is a hole exactly one refresh wide: a machine that has never
+    // refreshed remembers nothing, so the *first* refresh — the one that
+    // decides what a new machine installs — would take an unsigned index from
+    // the official catalogue, which is precisely what somebody on the path
+    // would arrange by serving a 404 for the signature.
+    let seen_signed = crate::market::known_to_sign(&location)
+        || crate::market::remembered(&root)?
+            .filter(|remembered| remembered.location == location)
+            .and_then(|remembered| remembered.verified_by)
+            .is_some();
+
     let mut reference = crate::market::SourceRef {
         kind: crate::market::kind_of(&location).to_string(),
         location,
@@ -13224,15 +13253,14 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
     };
     let previous = crate::market::cached(&root)?;
 
-    // The one policy key that is a lock rather than a note (ADR 0009): it can
-    // only turn verification *on*. `Trust::Signed` refuses today rather than
-    // downgrading, so a machine that sets this gets an honest failure instead
-    // of an unsigned index under a name that promises otherwise.
-    let trust = if market.require_signature {
-        crate::market::Trust::Signed
-    } else {
-        crate::market::Trust::Unsigned
-    };
+    // `Trust::Unsigned` used to be the other half of this, and it is what made
+    // the whole verifier unreachable: a stock machine never asked for a
+    // signature, so publishing one would have changed nothing anybody could
+    // see. The default is now `WhenSigned` — check what the publisher published,
+    // and never go back to unsigned once they have. `requireSignature` is still
+    // the one policy key that is a lock rather than a note (ADR 0009), and it
+    // still only tightens: it turns a *missing* signature into a refusal too.
+    let trust = crate::market::trust_for(market.require_signature, seen_signed);
 
     // Off the runtime thread, and this is a requirement rather than a courtesy.
     // `Source::fetch` is synchronous — the trait is read by `pkg` and `render`,
@@ -13396,6 +13424,7 @@ pub fn market_catalog(state: State<'_, AppState>) -> Result<Vec<MarketPackage>> 
             capabilities: package.capabilities.clone(),
             keywords: package.keywords.clone(),
             multiple: package.instancing.map(|i| i.multiple).unwrap_or(false),
+            maintainer: package.maintainer.clone(),
             versions: package
                 .versions
                 .iter()

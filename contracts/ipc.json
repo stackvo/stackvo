@@ -1210,7 +1210,7 @@
         "location": "string — an https:// address or a directory path; which one it is comes from the string"
       },
       "returns": "MarketStatus",
-      "why": "Read a catalogue from a directory the user chose — an offline bundle, or a checkout of the packages repository. The only source this build has; HTTPS waits on the key ceremony.",
+      "why": "Read a catalogue from wherever this machine gets one — an https:// address, an offline bundle, or a directory the user picked. Which one comes from the string. The signature is checked before the index is parsed when a signature is asked for; a signature the publisher published is checked without anybody asking, a source that stops signing is refused, and policy.market.requireSignature only tightens further (ADR 0034).",
       "notes": "`location` is input, not configuration: the source is remembered, not obeyed, and both sources refuse a path that walks out of them. Precedence is policy.market.offlineBundle, then policy.market.registryUrl, then what the user gave — a machine handed a bundle was not expected to reach anything. http:// is refused outright: nothing verifies a signature yet (ADR 0015), so TLS is the whole of the protection. policy.market.requireSignature raises Trust to Signed, which refuses rather than downgrading — the one policy key that can only tighten (ADR 0009). The index is fetched with If-None-Match; a 304 keeps the cached copy. Any single file over 8 MiB is abandoned mid-stream, counted on bytes received rather than on Content-Length, which the sender chooses (T-8). Runs on a blocking thread: the Source trait is synchronous so pkg and render need not know what a runtime is, and the HTTPS source blocks on the runtime handle."
     },
     "market_status": {
@@ -4313,6 +4313,7 @@
       "capabilities": "string[]",
       "keywords": "string[] — search terms the index publishes, so mysql is findable by typing 'database' and by typing 'mariadb'",
       "multiple": "boolean — whether two versions may run at once",
+      "maintainer": "string? — who publishes it. Every package names one and no screen showed it; a catalogue meaning to carry third-party packages has to say whose a package is",
       "versions": "MarketVersion[]"
     },
     "MarketStatus": {

@@ -95,6 +95,9 @@ const CATALOG = [
     keywords: ['database', 'sql', 'mariadb'],
     capabilities: ['sql'],
     multiple: true,
+    // Same story as `keywords` one line up, and it lasted longer: every
+    // published package names a maintainer and the index dropped all of them.
+    maintainer: 'stackvo',
     versions: [
       {
         version: '9.4',
@@ -781,6 +784,39 @@ describe('the market page', () => {
     // page — the same reason the test above reads the body rather than the
     // wrapper.
   });
+  /**
+   * Whose package this is, which the catalogue could not say.
+   *
+   * The exact shape of the `keywords` loss below, and it lasted longer: every
+   * published package names a maintainer, the index dropped all of them, and a
+   * field that is published but never reaches a screen is indistinguishable
+   * from a field nobody ever filled in. It matters more here than search does
+   * — a catalogue that means to carry third-party packages is asking somebody
+   * to run somebody else's compose fragment, and who wrote it is the one fact
+   * they weigh before saying yes.
+   */
+  it('says who publishes a package', async () => {
+    const page = mountPage();
+    await flushPromises();
+
+    expect(labels(page).join(' · ')).toContain('Published by stackvo');
+  });
+
+  /**
+   * And says nothing when the index does not.
+   *
+   * An index built before the field was carried is a perfectly good index, and
+   * inventing a publisher for it would be worse than the gap — a name on a card
+   * is read as something somebody checked.
+   */
+  it('says nothing about a publisher the index does not name', async () => {
+    api.marketCatalog.mockResolvedValue([{ ...CATALOG[0], maintainer: undefined }]);
+    const page = mountPage();
+    await flushPromises();
+
+    expect(labels(page).join(' · ')).not.toContain('Published by');
+  });
+
   /**
    * The catalogue had no search: twenty-five services and a hundred versions
    * behind eight collapsed categories, and finding Valkey meant knowing it is
