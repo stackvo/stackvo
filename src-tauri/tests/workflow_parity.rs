@@ -192,6 +192,24 @@ fn a_failed_release_run_keeps_the_test_output() {
         "nothing uploads the test log when the release suite fails, so reading \
          six red targets means opening six live logs in a browser"
     );
+
+    // And it has to be keyed on the suite rather than on the job. A rehearsal
+    // runs the suite with `continue-on-error`, so that a red suite still lets
+    // the run answer §3 #22's question about the bundler — and while that is
+    // true the job status is not `failure()`. An upload written `if: failure()`
+    // would skip on exactly the run whose log is hardest to reach: the one
+    // where the job goes on for another fifteen minutes afterwards.
+    let at = workflow
+        .find("- name: Keep the test output")
+        .expect("checked above");
+    let step = &workflow[at..];
+    let step = &step[..step.find("\n      - ").unwrap_or(step.len())];
+    assert!(
+        step.contains("steps.suite.outcome == 'failure'"),
+        "the test log is uploaded on the job's status rather than the suite \
+         step's. In a rehearsal the suite is `continue-on-error`, so the job is \
+         not failing when this runs and `failure()` skips it:\n{step}"
+    );
 }
 
 /// The suite runs where the toolchain pin is.

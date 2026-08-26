@@ -198,7 +198,35 @@ for (const group of Object.values(envSchema.groups)) {
 
 // ================================================================ SUITE A — manifests
 
-const projectsDir = join(STACKVO_ROOT, 'projects');
+/**
+ * Where the projects actually are, resolved the way the app resolves them.
+ *
+ * `<root>/projects` was a default for about an hour and `workspace.rs` removed
+ * it on purpose — a hidden directory nobody chose would satisfy the one
+ * requirement the setup gate exists to hold, so the app would come up "ready"
+ * pointing at an empty folder inside its own state directory. The tree now
+ * lives wherever `projects.path` says, which is very often outside the app root
+ * entirely, and this file kept looking in the place the product stopped
+ * defaulting to. Suite A could therefore report `NO_MANIFESTS` against a
+ * workspace with a dozen projects in it.
+ *
+ * Same order as `workspace::projects_root`: the pointer, then the environment
+ * override. `<root>/projects` stays as the last resort rather than the first,
+ * because it is still the shape of the pinned fixture and of any tree written
+ * before the pointer existed.
+ */
+function resolveProjectsDir(root) {
+  const pointer = join(root, 'projects.path');
+  if (existsSync(pointer)) {
+    const named = readFileSync(pointer, 'utf8').trim();
+    if (named) return resolve(root, named);
+  }
+  const fromEnv = (process.env.STACKVO_PROJECTS || '').trim();
+  if (fromEnv) return resolve(fromEnv);
+  return join(root, 'projects');
+}
+
+const projectsDir = resolveProjectsDir(STACKVO_ROOT);
 const projectDirs = existsSync(projectsDir)
   ? readdirSync(projectsDir).filter(
       (d) => !d.startsWith('.') && statSync(join(projectsDir, d)).isDirectory()
@@ -795,11 +823,7 @@ if (existsSync(jsApiPath)) {
  * `src-tauri/tests/package_contract.rs`, because it needs the Rust type.
  */
 {
-  const SCHEMAS = [
-    'package.schema.json',
-    'package-version.schema.json',
-    'registry.schema.json',
-  ];
+  const SCHEMAS = ['package.schema.json', 'package-version.schema.json', 'registry.schema.json'];
 
   for (const name of SCHEMAS) {
     const file = join(CONTRACTS, name);
@@ -845,8 +869,7 @@ if (existsSync(jsApiPath)) {
         for (const [key, value] of Object.entries(node.properties)) {
           // `$ref` borrows a description along with everything else, and a
           // const or an enum is its own explanation.
-          const described =
-            value?.description || value?.$ref || value?.const || value?.enum;
+          const described = value?.description || value?.$ref || value?.const || value?.enum;
           // A node whose children are described needs no description of its
           // own: `ports` means what its `name`, `container` and `preferred`
           // mean. Warning on containers too produced 39 lines nobody would
