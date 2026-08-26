@@ -1,4 +1,4 @@
-//! The address, against a container that is actually running — §2 R-1.
+//! The address, against a container that is actually running.
 //!
 //! `editor.rs`'s own tests settle the derivation: the hex is held against a
 //! literal, the two spellings of a container name produce one address, and the
@@ -15,6 +15,11 @@
 //!
 //! With no arguments it probes every running `stackvo-` container, which is
 //! the honest default: the interesting answers are the ones nobody chose.
+//!
+//! `STACKVO_ROOT=<dir>` also prints the PhpStorm half — the `devcontainer.json`
+//! this app would write for that project — because that file names this
+//! workspace's own compose files and there is no way to read it out of a pure
+//! function.
 use stackvo_desktop_lib::editor::{self, Readiness};
 use stackvo_desktop_lib::engine;
 
@@ -70,6 +75,21 @@ fn main() {
         return;
     }
 
+    // The other editor's half, when a workspace was named. Printed rather than
+    // written: this is a probe, and writing into somebody's workspace to show
+    // them what would be written is the one thing a probe must not do.
+    if let Ok(root) = std::env::var("STACKVO_ROOT") {
+        let root = std::path::PathBuf::from(root);
+        for name in &names {
+            let workdir = editor::PHP_WORKDIR;
+            println!(
+                "\nPhpStorm — {}\n{}",
+                editor::jetbrains_path(&root, name).display(),
+                editor::jetbrains_json(name, workdir, &compose_list(&root))
+            );
+        }
+    }
+
     for name in names {
         let container = engine::container_name(&name);
         match runtime.block_on(engine::inspect(&name)) {
@@ -103,4 +123,12 @@ fn main() {
             Err(e) => println!("\n{container}\n  could not be inspected: {}", e.message),
         }
     }
+}
+
+/// The compose files a devcontainer would name, without re-rendering anything.
+fn compose_list(root: &std::path::Path) -> Vec<String> {
+    stackvo_desktop_lib::runner::compose_file_list(root, false)
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect()
 }

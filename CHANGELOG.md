@@ -7,6 +7,63 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **PhpStorm opens the same container, not a second one (§2 R-2, decision
+  0036).** The question this closes had three answers and all three cost
+  something: **sshd** wants a host port that ADR 0023 does not give side
+  containers — and this time the thing listening is a shell; a **join link**
+  asks who puts a gigabyte of JetBrains backend inside the project image; and
+  **Dev Containers** builds a second container beside the one already running.
+
+  What closed it was not a preference but a measurement, and it was taken from
+  the IDE rather than from a page. PhpStorm 2026.2 bundles
+  `clouds-docker-gateway`, and the devcontainer schema inside that plugin
+  carries `dockerComposeFile`, `service`, `runServices`, `workspaceFolder`,
+  `shutdownAction` and `overrideCommand`. So "Dev Containers builds a second
+  container" is true only of the **image/Dockerfile** flavour. In the compose
+  flavour, what the dev container *is* is decided by whoever writes the file.
+
+  StackVo writes it: the compose files are this workspace's own — read out of
+  `runner::compose_base_args`, so overlays included and no second list to go
+  stale — and the service is the project's. The container it opens is the one
+  already running. No sshd, no host port (ADR 0023 untouched), no foreign
+  binary in the project image: JetBrains' own plugin downloads its backend,
+  which is its job.
+
+  Three fields each turn off a default that would have been wrong here, and
+  each of them fails silently rather than loudly: `shutdownAction: "none"` (the
+  compose default takes the workspace down when the IDE closes),
+  `overrideCommand: false` (the default replaces the service's command, which
+  in a PHP project is the thing serving the site) and `runServices: [service]`
+  (unspecified means every service in every file listed).
+
+  The file goes under `generated/devcontainer/<project>/`, never into the
+  repository — it names absolute paths under this user's home, so a committed
+  copy resolves to nothing on anybody else's machine. `devcontainer.rs` still
+  writes the one that *is* meant to be committed, and it answers the opposite
+  question: how a machine **without** StackVo runs this project.
+
+  Two things are said on screen rather than discovered: attaching recreates the
+  project's container (the plugin's own setting says the main service always
+  is), and an Alpine image has no JetBrains backend at all — VS Code publishes
+  a musl server and JetBrains does not, so the one fact that was a footnote in
+  the VS Code half is a wall in this one.
+
+  And one measured property carries the whole design: the generated compose
+  files interpolate nothing (`${` appears zero times), which is what makes
+  handing them to a tool that runs compose without this app's `--env-file`
+  honest. `editor_claims.rs` now fails if that ever stops being true.
+
+  **The claim was then run rather than argued.** The command the plugin itself
+  would issue was put to the live daemon with `--dry-run`, against the six
+  files the written file names: `docker compose -f … up -d --no-recreate
+  parser.ajans` → `Container stackvo-parser.ajans Running`. So the container it
+  opens is the one already up, and it resolves with no `--env-file`. The same
+  run closed a question nobody had asked yet: every generated project service
+  sits behind a compose **profile**, and a profile activates only when
+  something names it or names its service — which is the second job
+  `runServices` is doing, and why an empty list there would send the IDE
+  looking for a service compose does not consider to exist.
+
 - **The editor itself, inside the container (§2 R-1, and §2 R-3 with it).**
   `ide.rs` wired an IDE on the *host* to a debugger in the container. This is
   the other half: VS Code running **in** the image — language server,
@@ -36,6 +93,14 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   Nothing is stored. The address is re-derived on every read, so a recreated
   container or a renamed project cannot leave a stale one behind, and
   `editor_claims.rs` now fails if anything outside Rust assembles it.
+
+  **It was then opened, and that is the half a test cannot make.** Against a
+  running project on a developer's machine: `/root/.vscode-server` appeared in
+  the container — 956 MB, `bin/<commit>`, its own extension host — eleven
+  server processes came up inside it, and the git extension's log there says
+  `Opened repository (path): /var/www/html`. The address reached the right
+  folder in the right container, from a string this app derived and never
+  wrote down.
 
   The screen is `EditorPane.vue`, on the Container tab beside the tunnel and
   the LAN name — the same kind of thing as those, an address that reaches this

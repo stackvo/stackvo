@@ -949,7 +949,8 @@ onUnmounted(() => {
         <!-- CONTAINER ----------------------------------------------------- -->
         <template v-if="shows('container')">
           <ContainerPane :project="project" :details="details" :running="running" />
-          <!-- §2 R-1. Here rather than under Debug, because it is the same kind
+          <!-- The editor inside the container. Here rather than under Debug,
+               because it is the same kind
                of thing as the three panes below it: an address that reaches
                this container. The difference is which way it points — those
                let something outside in, and this one puts the editor inside. -->

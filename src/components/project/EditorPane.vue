@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * The editor itself, inside the container — §2 R-1.
+ * The editor itself, inside the container.
  *
  * `XdebugPane` wires an IDE on *this machine* to a debugger in the container.
  * This is the other half of that idea: the editor running in the image, with
@@ -53,6 +53,16 @@ const busy = ref(false);
 const error = ref(null);
 
 const readiness = computed(() => status.value?.readiness ?? null);
+/**
+ * The other editor, which needs a file rather than an address.
+ *
+ * PhpStorm has no attach-to-a-running-container connection type. What it has
+ * is Dev Containers, and a dev container that names StackVo's own compose
+ * files and this project's service is not a second container — it is the one
+ * already running. So this half is a file StackVo writes and a path the user
+ * points the IDE at.
+ */
+const jetbrains = computed(() => status.value?.jetbrains ?? null);
 /** One reason, not a list: the first is the one to act on. */
 const blocker = computed(() => readiness.value?.blockers?.[0] ?? null);
 const caveats = computed(() => readiness.value?.caveats ?? []);
@@ -91,6 +101,20 @@ async function attach() {
     // Re-read either way. A refusal here means the container changed under the
     // render, and the pane should now be showing what it changed to — with the
     // refusal still on screen, which is what `keepError` is for.
+    busy.value = false;
+    await load({ keepError: Boolean(error.value) });
+  }
+}
+
+/** Write (or refresh) the file PhpStorm is pointed at. */
+async function writeJetbrains() {
+  busy.value = true;
+  error.value = null;
+  try {
+    await api.editorJetbrainsWrite(props.name);
+  } catch (e) {
+    error.value = e;
+  } finally {
     busy.value = false;
     await load({ keepError: Boolean(error.value) });
   }
@@ -200,6 +224,94 @@ watch(
       <div class="text-caption text-medium-emphasis mt-4">
         {{ t('containerEditor.serverNote', { dir: readiness.serverDir }) }}
       </div>
+
+      <!-- The other editor. Not the same act and not the same shape: VS Code
+           is handed an address, PhpStorm is handed a file — because JetBrains
+           has no connection type that attaches to a container that is already
+           running, and its Dev Containers are pointed at a compose service
+           instead. -->
+      <template v-if="jetbrains">
+        <div class="section-head mt-6 mb-1">
+          <v-icon size="18" class="mr-2">mdi-alpha-p-box-outline</v-icon>
+          {{ t('containerEditor.jbTitle') }}
+        </div>
+        <p class="text-caption text-medium-emphasis mb-2">{{ t('containerEditor.jbWhy') }}</p>
+
+        <!-- Alpine: for VS Code a note, here the end of the road. Stated
+             before the file, because a file that is correct and a door that
+             cannot open are two different things to be told. -->
+        <v-alert
+          v-if="jetbrains.musl"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          <div class="text-caption">{{ t('containerEditor.jbMusl') }}</div>
+        </v-alert>
+
+        <v-alert
+          v-if="!jetbrains.installed"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          <div class="text-caption">{{ t('containerEditor.jbNotInstalled') }}</div>
+        </v-alert>
+
+        <!-- A file naming an older list of compose files is worse than no file:
+             it opens a container assembled from fewer overlays than the one
+             StackVo starts. -->
+        <v-alert
+          v-else-if="jetbrains.exists && !jetbrains.current"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          <div class="text-caption">{{ t('containerEditor.jbStale') }}</div>
+        </v-alert>
+
+        <div class="d-flex align-center ga-3 flex-wrap">
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-file-document-edit-outline"
+            :loading="busy"
+            :disabled="busy"
+            @click="writeJetbrains"
+          >
+            {{ jetbrains.exists ? t('containerEditor.jbRewrite') : t('containerEditor.jbWrite') }}
+          </v-btn>
+          <span class="text-caption text-medium-emphasis">
+            {{ t('containerEditor.jbService', { service: jetbrains.service }) }}
+          </span>
+        </div>
+
+        <template v-if="jetbrains.exists">
+          <div class="d-flex align-start ga-2 mt-3">
+            <pre class="snippet flex-grow-1">{{ jetbrains.path }}</pre>
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              :aria-label="t('a11y.copy')"
+              @click="copy(jetbrains.path, 'editorJetbrains')"
+            >
+              <v-icon>{{ copied === 'editorJetbrains' ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
+              <v-tooltip activator="parent">{{ t('a11y.copy') }}</v-tooltip>
+            </v-btn>
+          </div>
+          <div class="text-caption text-medium-emphasis mt-2">
+            {{ t('containerEditor.jbSteps') }}
+          </div>
+        </template>
+
+        <!-- The cost this half cannot design away, so it says it. -->
+        <div v-if="jetbrains.recreates" class="text-caption text-medium-emphasis mt-2">
+          {{ t('containerEditor.jbRecreates') }}
+        </div>
+      </template>
     </template>
   </v-card>
 </template>
