@@ -164,12 +164,25 @@ jobs:
       # run locally — and the next package to go missing would not have been so
       # lucky. Declared, so the release environment is at least the one CI
       # proves green on every push, and gated so it stays that way.
+      #
+      # `xdg-utils` is not CI's and is not a compile-time header: it is the
+      # AppImage bundler's, and it was found the only way it could be. The
+      # bundler copies `/usr/bin/xdg-open` into the AppDir when the app can open
+      # a link — this one can, through `tauri-plugin-opener` — and it copies it
+      # from the **build machine**. `ubuntu-latest` ships `xdg-utils` and
+      # `ubuntu-24.04-arm` does not, so the same commit produced an AppImage on
+      # one and `xdg-open binary not found` on the other, after the `.deb` and
+      # the `.rpm` had already been written.
+      #
+      # This is §3 #22's whole shape in one line: not "does ARM compile" but
+      # "are the two runner images the same machine", and the answer was no in a
+      # place nothing could have predicted.
       - name: Install Linux dependencies
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev libdbus-1-dev
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev xdg-utils
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -500,11 +513,17 @@ jobs:
       # x86 installer. Every bundler writes the architecture into the file name,
       # so that is checkable, and `tools/check-installers.mjs` checks it.
       #
-      # `!cancelled()` rather than success(): if the suite failed in a rehearsal
-      # this is the step that says whether the packaging half is nonetheless
-      # sound, which is the whole point of separating them.
+      # `!cancelled()` and nothing else — in particular *not* gated on the
+      # bundler having succeeded, which is the version this file shipped first
+      # and which the first rehearsal disproved. On `ubuntu-24.04-arm` the
+      # bundler wrote `StackVo_0.1.0_arm64.deb` and
+      # `StackVo-0.1.0-1.aarch64.rpm`, then failed on the AppImage — the two
+      # packages §3 #22 had been waiting three rounds to see existed on disk,
+      # named for the right architecture, and this step skipped itself and said
+      # nothing about them. A check that runs only when nothing went wrong is a
+      # check that never speaks when it matters.
       - name: What the bundler produced
-        if: ${{ !cancelled() && steps.tauri.outcome == 'success' }}
+        if: ${{ !cancelled() }}
         shell: bash
         # `|| status=$?` rather than a bare call: Actions runs `bash -eo
         # pipefail`, so a failing check would abort this script before it wrote
