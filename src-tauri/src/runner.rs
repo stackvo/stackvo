@@ -347,82 +347,92 @@ pub fn compose_base_args(root: &Path) -> Vec<String> {
         args.push("--env-file".to_string());
         args.push(env_file.display().to_string());
     }
-    for file in compose_files(root) {
+    for file in compose_file_list(root, true) {
         args.push("-f".to_string());
         args.push(file.display().to_string());
     }
 
-    // Layered last so their `environment:` and `volumes:` merge onto the
-    // generated service rather than being merged over. Two files rather than
-    // one: the overlays are independent — Xdebug adds environment, php.ini adds
-    // a mount — and a fault in either must not take the other's projects down.
-    if crate::xdebug::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::xdebug::overlay_path(root).display().to_string());
-    }
-    if crate::phpini::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::phpini::overlay_path(root).display().to_string());
-    }
-    // The performance layer (I-1): named volumes over the directories a bind
-    // mount is slowest at. Third and last for the same reason as the other two
-    // — its `volumes:` merge onto the generated service rather than over it —
-    // and independent of them, so a fault here cannot take Xdebug's projects
-    // down with it.
-    if crate::perf::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::perf::overlay_path(root).display().to_string());
-    }
-    // php-spx: the built extension, its web UI and the report directory. Fourth
-    // and independent for the same reason as the three above it — a project
-    // that has never asked for it renders no entry, and a fault here must not
-    // stop anybody else's container starting.
-    if crate::spx::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::spx::overlay_path(root).display().to_string());
-    }
-    // Per-project environment variables and the SSH agent (M-5, M-10). Fifth
-    // and independent for the same reason as the four above it.
-    if crate::site::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::site::overlay_path(root).display().to_string());
-    }
-    // The mail relay (M-2): the catcher's own environment, so one caught
-    // message can be released to a real address. Fifth and independent — a
-    // fault here must not stop a project starting, and a workspace that has
-    // never configured a relay renders no file at all.
-    if crate::mailrelay::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::mailrelay::overlay_path(root).display().to_string());
-    }
-    // Three mounts, for every PHP project, whether or not anyone has switched
-    // capture on. That is the point of it: the mounts are the part that needs a
-    // container, so they go in once and the switch afterwards is a file
-    // appearing in a directory that is already mounted. A project nobody
-    // debugs pays one `is_file` per request.
-    if crate::debugbridge::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::debugbridge::overlay_path(root).display().to_string());
-    }
-    // The editor server's volume (`editor.rs`). Independent of everything above it,
-    // and it only adds a mount — but it goes in before the dev server for the
-    // reason the dev server is last: that one changes what the container is
-    // running, and a `volumes:` key merged onto a service already in a
-    // different mode is a harder thing to reason about than one merged before.
-    if crate::editor::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::editor::overlay_path(root).display().to_string());
-    }
-    // Last of the three, and it is the only one that overrides rather than
-    // adds: it replaces the container's `command` with the dev server. Anything
-    // layered after it would be merging onto a service already in a different
-    // mode, so this is where the chain ends.
-    if crate::devserver::sync(root) {
-        args.push("-f".to_string());
-        args.push(crate::devserver::overlay_path(root).display().to_string());
+    args
+}
+
+/// Every file a compose command layers, base files first, in order.
+///
+/// Split out of [`compose_base_args`] because one caller is not about to spawn
+/// compose: [`crate::editor`] writes a `devcontainer.json` naming these files,
+/// and its *read* half asks the same question on every render of a pane.
+///
+/// `refresh` is that difference, and it is not a performance knob. Re-rendering
+/// the overlays reaches the OS keystore — `mailrelay`'s render carries the
+/// relay password — and a query that reaches the keystore is one the loopback
+/// surface may not serve (`websurface_claims.rs`). A status read that quietly
+/// rewrote seven files and touched the keychain would also be doing something
+/// nobody asked it to do.
+pub fn compose_file_list(root: &Path, refresh: bool) -> Vec<PathBuf> {
+    let mut files = compose_files(root);
+    files.extend(overlay_files(root, refresh));
+    files
+}
+
+/// The overlays, in the order they must be layered.
+///
+/// The order is the whole content of this function and every step of it is
+/// argued: the first five only *add* — an environment, a mount, a volume — so
+/// they are independent of each other and a fault in one must not take the
+/// others' projects down. The editor's volume goes in before the dev server's
+/// because that last one is the only overlay that **overrides** rather than
+/// adds: it replaces the container's command. Anything layered after it would
+/// be merging onto a service already in a different mode, so the chain ends
+/// there.
+///
+/// With `refresh`, each is re-derived rather than merely appended if it happens
+/// to exist. That is the important half for anything about to run compose: an
+/// overlay is a pure function of the manifests, and the failure mode of letting
+/// it persist as state is total — an overlay naming a deleted project declares
+/// a service with neither an image nor a build context, and compose then
+/// refuses every command, including the `down` that would have cleared it.
+pub fn overlay_files(root: &Path, refresh: bool) -> Vec<PathBuf> {
+    // Re-render when asked; otherwise take the file as it lies. Never both:
+    // the point of `refresh: false` is that nothing is written and nothing is
+    // read out of the keystore.
+    macro_rules! layer {
+        ($sync:path, $path:path) => {{
+            let path = $path(root);
+            let present = if refresh { $sync(root) } else { path.is_file() };
+            present.then_some(path)
+        }};
     }
 
-    args
+    [
+        // Xdebug adds environment; php.ini adds a mount. Two files rather than
+        // one because they are independent.
+        layer!(crate::xdebug::sync, crate::xdebug::overlay_path),
+        layer!(crate::phpini::sync, crate::phpini::overlay_path),
+        // The performance layer (I-1): named volumes over the directories a
+        // bind mount is slowest at.
+        layer!(crate::perf::sync, crate::perf::overlay_path),
+        // php-spx: the built extension, its web UI and the report directory. A
+        // project that has never asked for it renders no entry.
+        layer!(crate::spx::sync, crate::spx::overlay_path),
+        // Per-project environment variables and the SSH agent (M-5, M-10).
+        layer!(crate::site::sync, crate::site::overlay_path),
+        // The mail relay (M-2): the catcher's own environment, so one caught
+        // message can be released to a real address. This is the render that
+        // reads the keystore, and therefore the reason `refresh` exists.
+        layer!(crate::mailrelay::sync, crate::mailrelay::overlay_path),
+        // Three mounts, for every PHP project, whether or not anyone has
+        // switched capture on: the mounts are the part that needs a container,
+        // so they go in once and the switch afterwards is a file appearing in a
+        // directory that is already mounted.
+        layer!(crate::debugbridge::sync, crate::debugbridge::overlay_path),
+        // The editor server's volume (`editor.rs`). Before the dev server, for
+        // the reason the dev server is last.
+        layer!(crate::editor::sync, crate::editor::overlay_path),
+        // The only one that overrides rather than adds.
+        layer!(crate::devserver::sync, crate::devserver::overlay_path),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// Compose profile arguments for a start mode, mirroring `stackvo up`.
