@@ -575,20 +575,34 @@ pub struct MailStatus {
 /// Which catcher this checkout has, if any.
 ///
 /// Mailpit first: on a checkout that somehow has both, the maintained one wins.
+///
+/// ## Where the fallback answer comes from, and why it moved
+///
+/// The *enabled* one wins. With neither enabled the pane still names the
+/// catcher it would be enabling, and that second question — "is this a service
+/// this app knows about at all" — used to be answered by asking whether
+/// `SERVICE_MAILPIT_ENABLE` was **present** in the merged `.env`. On an
+/// untouched workspace there is no `.env`, so the only thing making it present
+/// was `config::LEGACY_SERVICES`, the constant §3 #36 exists to delete.
+///
+/// That made a panel's behaviour depend on a table whose stated purpose was
+/// migrating old workspaces, and it was the last thing holding the catalogue
+/// half of that constant up. The question is a vocabulary question and ADR 0016
+/// already named the vocabulary: `env.schema.json`'s service catalogue. Asking
+/// it directly is both the correct source and one fewer reason for the constant
+/// to exist — the deletion is a consequence of the answer, not the point of it.
 fn detect(env: &crate::config::Env) -> Option<Kind> {
     const ORDER: [Kind; 2] = [Kind::Mailpit, Kind::Mailhog];
-    // The *enabled* one wins — both catchers now ship keys, so mere key
-    // presence stopped being a signal. Mailpit first on a tie (both enabled
-    // cannot actually run: they fight over port 8025). With neither enabled,
-    // fall back to whichever is declared, so the status pane can still name
-    // the catcher it would be enabling.
+    // Mailpit first on a tie: both enabled cannot actually run, they fight over
+    // port 8025.
     ORDER
         .into_iter()
         .find(|kind| env.bool(&format!("{}_ENABLE", kind.prefix())))
         .or_else(|| {
+            let catalogue = crate::contracts::env_schema();
             ORDER
                 .into_iter()
-                .find(|kind| env.get(&format!("{}_ENABLE", kind.prefix())).is_some())
+                .find(|kind| catalogue.knows_service(kind.service()))
         })
 }
 
@@ -933,6 +947,62 @@ pub async fn delete(root: &Path, id: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Env;
+
+    /// Which catcher a workspace has, and where that answer comes from.
+    ///
+    /// `detect` had no test at all, and it is the function every other thing in
+    /// this module hangs off: `status` returns an empty panel without it and
+    /// `open` refuses. It was written when the answer came from the `.env`
+    /// somebody's workspace shipped, and it now answers on a workspace with no
+    /// `.env` at all — because `SERVICE_MAILHOG_ENABLE` and
+    /// `SERVICE_MAILPIT_ENABLE` are embedded defaults, so *presence* is
+    /// supplied by the binary even when nobody has enabled anything.
+    ///
+    /// That was load-bearing rather than incidental, and writing it down is
+    /// what showed it: those two keys were in `config::LEGACY_SERVICES`, the
+    /// half whose stated reason was "only for the migration" — and nothing
+    /// about this is migration. ADR 0037 moved the question to the catalogue,
+    /// where ADR 0016 had already put the vocabulary, and the keys left with
+    /// seventy others.
+    ///
+    /// The assertions did not change, and that is the point of keeping them:
+    /// the answers are the same, the source is not. Without this test the move
+    /// would have been a refactor nobody could tell from a regression, because
+    /// the failure it prevents has no red of its own — the panel would simply
+    /// stop naming a catcher on every workspace that has not enabled one.
+    #[test]
+    fn the_catcher_is_named_even_when_nobody_has_enabled_one() {
+        // Enabled wins, in both directions.
+        assert_eq!(
+            super::detect(&Env::parse("SERVICE_MAILHOG_ENABLE=true\n")),
+            Some(super::Kind::Mailhog)
+        );
+        assert_eq!(
+            super::detect(&Env::parse("SERVICE_MAILPIT_ENABLE=true\n")),
+            Some(super::Kind::Mailpit)
+        );
+
+        // Both enabled cannot both run — they fight over 8025 — so the
+        // maintained one is named rather than the first one found.
+        assert_eq!(
+            super::detect(&Env::parse(
+                "SERVICE_MAILHOG_ENABLE=true\nSERVICE_MAILPIT_ENABLE=true\n"
+            )),
+            Some(super::Kind::Mailpit)
+        );
+
+        // And the case the embedded defaults answer: nothing enabled, nothing
+        // written, and the panel still names the catcher it would be enabling.
+        assert_eq!(
+            super::detect(&Env::parse("")),
+            Some(super::Kind::Mailpit),
+            "an untouched workspace stopped naming a catcher — if \
+             `SERVICE_MAILPIT_ENABLE` has left `config::EMBEDDED`, the mail \
+             panel now shows nothing on a fresh install"
+        );
+    }
+
     /// Both catchers, and neither guessed at.
     ///
     /// Mailpit answers RFC 3339 — measured, `2026-08-15T13:53:36.807Z` — and

@@ -7,6 +7,145 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A rehearsal can now answer the question it was added for (§3 #22).** The two
+  ARM rows — `aarch64-unknown-linux-gnu` on `ubuntu-24.04-arm`,
+  `aarch64-pc-windows-msvc` on `windows-11-arm` — had one open half: whether the
+  bundler produces a package there. The line said the remaining work was another
+  run, and this time it would reach the packaging step. It would not have, for
+  two reasons, and both were measurable without a runner.
+
+  **The packaging step sat behind the suite.** The first real run died at
+  `cargo test` on all six targets, so eighteen minutes on `windows-11-arm`
+  taught #22 nothing about the only thing it asks. The two questions are
+  independent — does the suite pass there, can a package be produced there — and
+  a rehearsal publishes nothing, so a red suite has no release to protect. The
+  suite step is `continue-on-error` in a rehearsal and the bundle steps run
+  anyway; the last step in the job reads that step's outcome and fails on it, so
+  the run still ends red. `continue-on-error` alone would finish green, which is
+  a worse thing to own than an unanswered question.
+
+  **And the rehearsal would have died at the end of packaging, having packaged.**
+  `bundle.createUpdaterArtifacts` is true and `plugins.updater.pubkey` is set,
+  so `tauri build` signs the updater-enabled bundles unconditionally, from
+  `TAURI_SIGNING_PRIVATE_KEY`. A repository that has not decided where a private
+  key lives does not get tauri's clean *"a public key has been found, but no
+  private key"* — Actions sets an absent secret to the **empty string**, which
+  is set, so the guard passes and the run dies decoding a zero-length key. That
+  happens in `sign_updaters`, which runs after `bundle_project`: every installer
+  is already on disk. And the artifact upload was `if: ${{ inputs.rehearsal }}`,
+  which carries an implied `success()` — so the rehearsal would have built
+  exactly what #22 asks about and kept none of it. It now builds with
+  `--no-sign`, and the upload runs on `always()`.
+
+- **`npm run installers:check` gives the answer a verdict instead of a zip
+  file.** "The bundle directory exists" is not what #22 asks. `bundle.targets`
+  is `"all"`, so Linux owes a `.deb`, an `.rpm` **and** an `.AppImage` from three
+  separate bundlers — one of which downloads `linuxdeploy-aarch64.AppImage` and
+  executes it, the step with no equivalent on the x86 rows — and Windows owes a
+  `.msi` and an NSIS `-setup.exe`. The checker demands each of them, and then
+  demands the harder thing: that what came out is named for **this** target's
+  architecture. Every bundler writes the architecture into the file name and
+  each writes it in its own vocabulary (`arm64` to dpkg, `aarch64` to rpm and
+  AppImage, `arm64` to WiX and NSIS, `aarch64` to the dmg); the table is read
+  out of `tauri-bundler` rather than guessed, because collapsing it into one
+  word would fail every real ARM release. A green ARM job holding an x86
+  installer is the failure an artifact listing cannot show, and it is now the
+  one this catches. Judgement half tested without a bundler in
+  `tests/installer-formats.spec.js` (15 tests); that the workflow runs it, in
+  `src-tauri/tests/release_rehearsal.rs` (8 tests).
+
+- **The matrix target reaches the toolchain that actually builds.**
+  `dtolnay/rust-toolchain@stable` installs the target into `stable`, and nothing
+  in the release job builds with stable: `src-tauri/rust-toolchain.toml` pins
+  1.96.1 and rustup resolves that pin from the working directory.
+  `stable-<host>` and `1.96.1-<host>` are separate installations even on the day
+  they are the same compiler. Free on the four rows where the target is the
+  host; the whole build on `x86_64-apple-darwin`, which cross-compiles from an
+  arm64 runner. The sidecar steps moved into `src-tauri` for the same reason —
+  started at the repository root they built the **shipped** sidecars with
+  whatever `stable` meant that morning, a different compiler from the one that
+  builds the application they are bundled into.
+
+- **A workspace's service vocabulary is read from the catalogue, and seventy-two
+  keys left with the answer (ADR 0037).** ADR 0016 moved services into packages
+  and made `env.schema.json`'s `services` a vocabulary. A second answer stayed
+  behind: whether a key was *present* in `.env`. The only place the two met was
+  small, which is exactly why nobody had looked — `mail.rs`'s `detect` decided
+  which catcher a workspace knows about by asking whether
+  `SERVICE_MAILPIT_ENABLE` was declared, and on an untouched workspace the only
+  thing declaring it was `config::LEGACY_SERVICES`, a table named for the
+  migration.
+
+  `detect` now asks `contracts::env_schema().knows_service(...)`. `.env` answers
+  what is *enabled*; it no longer answers what *exists*.
+
+  The deletion is a consequence rather than a tidy-up: with the vocabulary
+  coming from the catalogue, the catalogue's shadow in `.env` has no reader.
+  Every `SERVICE_*_ENABLE`, `_VERSION` and `_VERSIONS` — **72 keys** — is gone.
+  `LEGACY_SERVICES` 150 → 78, `EMBEDDED` 186 → 114. Nothing was lost with them:
+  all twenty-five enables defaulted to `"false"` and `Env::bool` reads a missing
+  key as false, so as values they were the identity, and `handover::plan`
+  already asks the catalogue for a version the `.env` does not state.
+
+  One test broke, for a reason unrelated to its subject:
+  `an_unlisted_version_is_folded_into_the_options` borrowed its fixture from
+  `SERVICE_MONGO_VERSIONS`, so a test about what `service_versions` does with a
+  list never said what the list was. It says so now.
+
+  What this does **not** close, stated correctly on the second attempt. The
+  first answer split the remaining 78 into "live" and "migration" and that was
+  wrong: all 78 are the same old `.env` family, and the package manifest took
+  over every one of their jobs — `url` for `_URL`, `ports` for `_HOST_PORT`,
+  `settings` for the passwords. The schema says it outright: a setting's `key`
+  is "the bare key, without the `SERVICE_<ID>_` prefix the old .env family
+  carried". Every reader is a correctly gated pre-migration branch.
+
+  What actually keeps them alive is one line in `db.rs`. `Value::or_env`
+  resolves `stored → .env → manifest default`, with `.env` in the middle on
+  purpose — a handover leaves the real password there while the manifest
+  declares a placeholder, so preferring the manifest would hand a dump the
+  wrong password with no readable error. But the `.env` it consults is a merged
+  `Env`, and `Env::parse` lays these defaults **under** the file. On a
+  workspace installed from packages, with no `.env` at all,
+  `SERVICE_MYSQL_ROOT_PASSWORD` answers `"root"` out of the binary and beats
+  what the package declares — the reverse of ADR 0016.
+
+  So the fix was one change to `Env`, and it is in: `Env::stated` answers only
+  what the file wrote, and `db.rs`'s middle slot reads that instead of `get`. A
+  workspace installed from packages now takes its password from the package.
+  `parse` already kept this distinction for the alias chain — the comment there
+  records what learning it cost, a checkout asking for Apache quietly served
+  nginx — so this is that distinction kept rather than discarded at the end.
+
+  With it, `config::LEGACY_SERVICES` is what its name says for the first time:
+  every reader is the migration or a pre-migration branch, and the only thing
+  left is deleting it at the cutoff.
+
+- **`db.rs`'s three-source resolution order had no test.** It is described
+  carefully and relied on by every dump, restore and connection string, and
+  nothing asserted it — the same state `mail::detect` was in.
+  `stored_beats_env_beats_the_packages_default` pins all three, including the
+  case that is not a preference but a defect: whatever reaches the middle slot
+  outranks the package, and today `config::EMBEDDED` can reach it. The
+  assertion carries the sentence saying what a change to it would mean.
+
+- **`mail::detect` had no test, and it is the function the rest of that module
+  hangs off.** `status` returns an empty panel without it and `open` refuses. It
+  has one now — written because the deletion rehearsal went looking for what was
+  holding the constant up, and pinning today's answers before the source of
+  those answers moved. The assertions did not change across ADR 0037; only where
+  the answer comes from did. Without it that move would have been
+  indistinguishable from a regression, because the failure has no red of its
+  own: the panel would just stop naming a catcher.
+
+- **`npm run legacy:rehearse`** performs the deletion §3 #36 is waiting for,
+  runs the suite, restores the tree, and compares the damage against a written
+  list of sites and the sentence saying why each is on it. It reports a row that
+  stops failing as loudly as one that starts — which is how two rows were caught
+  going stale on the commit that made them stale.
+
+### Added
+
 - **PhpStorm opens the same container, not a second one (§2 R-2, decision
   0036).** The question this closes had three answers and all three cost
   something: **sshd** wants a host port that ADR 0023 does not give side
@@ -516,6 +655,106 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   the header directly instead.
 
 ### Fixed
+
+- **§3 #36 said "only for the migration" for three rounds, and the migration
+  was never what was holding it up.** The way to find out was to do the
+  deletion: `npm run legacy:rehearse` empties `config::LEGACY_SERVICES`, runs
+  the suite, and puts the tree back. With the whole legacy half gone,
+  `handover_equivalence.rs` passes **13 of 13** — every image, port and volume
+  preserved, every refusal still refusing. Eight tests fail and not one of them
+  is the migration.
+
+  It never needed a default, because it does not read one as a default:
+  `handover::plan` takes what the `.env` states, and where it states no version
+  it asks the catalogue (`catalogue.recommended`). That is what ADR 0016 made
+  services dynamic for, and the row was still describing the world before it.
+
+  What actually holds the constant up, measured rather than assumed:
+  **presence, not value** — all twenty-five `_ENABLE` defaults are `"false"`
+  and `Env::bool` reads a missing key as false, so as values they are the
+  identity; as keys they are not, because `mail.rs`'s `detect` names the
+  catcher a workspace would enable by asking which one is *declared*, and on an
+  untouched workspace the only thing declaring it is this constant. **Live
+  credentials** — `db.rs` reads the passwords below for instances that have
+  already migrated, and `skeleton.rs` scans them to keep a real credential out
+  of the binary. **An invariant** — `ENABLE`, `VERSION` and `VERSIONS` travel
+  together per service, so removing the forty-seven version-shaped keys while
+  the enables stay is not available; it was tried, measured and reverted.
+
+  `mail::detect` had no test at all, and it is the function every other thing
+  in that module hangs off. It has one now, written because the rehearsal went
+  looking — pinning that an untouched workspace still names Mailpit, and saying
+  in its failure message what a silence there would mean.
+
+  Two more sentences in the constant's own doc comment were false and had
+  survived because nothing read them: that without a `VERSION` default there is
+  no tag to migrate, and that credentials are deliberately absent — they start
+  at `SERVICE_MYSQL_ROOT_PASSWORD`, ten of them.
+
+  The date stays at 0.4.0 and now forces the right question. What deletes the
+  constant is not the end of migration support; it is the app answering "which
+  services does this workspace know about" from the catalogue rather than from
+  `.env` presence, which is a product decision and is now §5's rather than an
+  assumption inside a comment.
+
+- **Deleting the constant opened with a compile error rather than a red test.**
+  `config::tests::the_merge_keeps_every_entry_and_invents_none` asserted
+  `EMBEDDED[SETTINGS.len()] == LEGACY_SERVICES[0]`, and `deny(unconditional_panic)`
+  rejects a constant index into an empty array — so emptying the legacy half
+  stopped the crate's tests from building instead of failing one of them. The
+  test now lays the two halves end to end and compares elementwise, which
+  checks every entry rather than four corners and survives one half going away.
+
+- **`npm run contracts:check` reported an error about a directory the product
+  stopped having.** The script passed `--root ../stackvo`, a sibling-checkout
+  layout that no longer exists; run from inside the repository it resolves to
+  the repository, which is the mistake the validator's own comment calls "one
+  keystroke away". It now runs the way CI runs it.
+
+  Suite A was looking in a stale place besides. `workspace.rs` removed
+  `<root>/projects` as a default on purpose — a hidden directory nobody chose
+  would satisfy the very requirement the setup gate exists to hold — and the
+  tree now lives wherever `projects.path` points. The validator resolves it the
+  same way the app does: the pointer, then `STACKVO_PROJECTS`, then the old
+  layout as a last resort, so a real workspace with a dozen projects in it no
+  longer reports `NO_MANIFESTS`.
+
+- **The gate on §3 #36 was green while missing a third of what it counts.**
+  `legacy_env_claims.rs` is the checklist for the day
+  `config::LEGACY_SERVICES` is deleted: it names every module that reads a
+  `SERVICE_*` default, and it fails in both directions so the list cannot
+  drift. It recognised exactly one spelling of "reads one" — a call to one of
+  seven `Env` accessors — and two modules never use it.
+
+  `db.rs` keeps the key names in its own per-engine table
+  (`password: "SERVICE_MYSQL_ROOT_PASSWORD"`) and hands them to `Env::get` and
+  `Env::bool`, because the handover deliberately leaves a migrated instance's
+  credentials in `.env`. `mail.rs` builds `SERVICE_MAILPIT_ENABLE` out of a
+  prefix constant and a suffix, which is how `detect` decides which of the two
+  catchers an unmigrated workspace has. Both read a legacy default on every
+  call. The checklist said four modules, the tree held six, and the document
+  repeated the four — a third of the deletion missing from the plan for it,
+  with a passing test on top.
+
+  Naming the key is now the second spelling, and it is the one that cannot be
+  avoided: a module that reads a `SERVICE_*` default has to say which one
+  somewhere. Only the bare family prefix `"SERVICE_"` is excluded, because it
+  names no service — counting it would make a reader of `template.rs`, whose
+  `PREFIXES` list decides which *variable names* the renderer substitutes. The
+  walk also became recursive, so `src/bin/` counts; the CLI and the MCP server
+  read nothing today, and that is now established rather than assumed.
+
+- **The deletion date was a gate in one file and prose in another, with
+  nothing between them.** §3 #36 argues that 0.4.0 is "not prose but a gate",
+  and the gate — `LEGACY_SERVICES_GO_AT` — was a constant no document was held
+  against. Moving it to `(0, 9)` left §3, §4 and §5 all saying 0.4.0 and every
+  test green: the deletion would have stopped being due, silently, which is
+  the one outcome naming a version was meant to make impossible. The three
+  places and the constant are now one fact.
+
+  The count in §3's row is held the same way. §8's rule stands — a *status* in
+  §2–§4 cannot be gated, because "not done" is not a property of the code —
+  but a number in a row is, and this one had already gone stale.
 
 - **`--no-fail-fast` paid for itself on its first run.** With it, one Windows
   job listed four remaining failures at once instead of the one it would have

@@ -135,6 +135,21 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # The line above adds the target to **stable**, and nothing in this job
+      # builds with stable: `src-tauri/rust-toolchain.toml` pins 1.96.1, and
+      # rustup resolves that pin from the working directory. `stable-<host>` and
+      # `1.96.1-<host>` are separate installations even on the day they are the
+      # same compiler, so a target added to one is absent from the other.
+      #
+      # It costs nothing on the four rows where the target *is* the host — a
+      # host's own std is always installed — and it is the whole build on
+      # `x86_64-apple-darwin`, which cross-compiles from an arm64 runner.
+      # Declared here rather than in `rust-toolchain.toml` because the target is
+      # the matrix's, and a pin file cannot see the matrix.
+      - name: The pinned toolchain needs the matrix target, not just `stable`
+        working-directory: src-tauri
+        run: rustup target add ${{ matrix.target }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -169,15 +184,42 @@ jobs:
       # cosmetic: the check reads the **host** triple, while the bundle needs
       # the **matrix** one, and on the `x86_64-apple-darwin` row those differ
       # because that build is a cross-compile from an arm64 runner.
+      #
+      # Both run from `src-tauri`, for the reason `Verify the contract surface`
+      # does below: rustup reads the pin from the working directory, and started
+      # at the repository root these two build the shipped sidecars with
+      # whatever `stable` meant on the runner that morning — a different
+      # compiler from the one that builds the application they are bundled into.
+      # `tools/sidecars.mjs` resolves its own paths from `import.meta.url`, so
+      # the directory it is started in changes nothing but the toolchain.
       - name: Placeholder sidecars for the host, so `cargo test` can build
-        run: node tools/sidecars.mjs --stubs
+        working-directory: src-tauri
+        run: node ../tools/sidecars.mjs --stubs
 
       - name: Build the sidecars that ship
-        run: node tools/sidecars.mjs --release --target ${{ matrix.target }}
+        working-directory: src-tauri
+        run: node ../tools/sidecars.mjs --release --target ${{ matrix.target }}
 
       # The contract is compiled into the binary, so a release must not ship
       # one that disagrees with the code.
       - name: Verify the contract surface
+        id: suite
+        # A rehearsal exists to answer one question — does the bundler produce a
+        # package on `ubuntu-24.04-arm` and `windows-11-arm` — and until now that
+        # question sat behind this step. The first real run died here on all six
+        # targets and reached no bundler at all, so §3 #22 learned nothing from a
+        # run that took eighteen minutes on the machine it was about.
+        #
+        # The two questions are independent and are now asked independently: a
+        # rehearsal publishes nothing, so a red suite has no release to protect,
+        # and letting the bundle steps run anyway costs a few minutes and buys
+        # the answer. The job still ends red — the last step in this file sees
+        # this step's outcome and fails on it. `continue-on-error` alone would
+        # turn a failing suite green, which is the trade this must not make.
+        #
+        # On a tag `inputs.rehearsal` is empty, so this is `false` and a failing
+        # suite stops the job before anything is built.
+        continue-on-error: ${{ inputs.rehearsal == true }}
         # From inside `src-tauri`, so rustup applies the 1.96.1 pin. Started at
         # the repository root this took whatever `stable` meant on the runner
         # that day, which is how a release was gated by a toolchain no developer
@@ -202,7 +244,11 @@ jobs:
       # logs in a browser and scrolling — which is how a release stayed broken
       # across three rounds with nobody able to say what broke.
       - name: Keep the test output
-        if: failure()
+        # Named against the step rather than the job's status: in a rehearsal
+        # the suite is `continue-on-error`, so the job is not failing yet and
+        # `if: failure()` would skip the upload on exactly the run whose log is
+        # hardest to reach.
+        if: ${{ !cancelled() && steps.suite.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: test-${{ matrix.target }}
@@ -338,7 +384,24 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          args: --target ${{ matrix.target }}
+          # `--no-sign` in a rehearsal, and it is the difference between a
+          # rehearsal that answers §3 #22 and one that cannot.
+          #
+          # `bundle.createUpdaterArtifacts` is true and `plugins.updater.pubkey`
+          # is set, so tauri signs the updater-enabled bundles after building
+          # them — and it does that unconditionally, from a key it takes out of
+          # `TAURI_SIGNING_PRIVATE_KEY`. A repository without that secret does
+          # not get the clean "no private key" error: Actions sets the variable
+          # to the **empty string**, which is set as far as tauri is concerned,
+          # so it gets past that guard and dies decoding a zero-length key.
+          #
+          # The place it dies is what matters. Every bundle is already on disk
+          # by then — `sign_updaters` runs after `bundle_project` — and the step
+          # fails, which used to skip the upload below and leave a run page with
+          # nothing on it. The two ARM rows would have failed at the packaging
+          # step for a reason that has nothing to do with packaging, having
+          # packaged successfully.
+          args: --target ${{ matrix.target }} ${{ inputs.rehearsal && '--no-sign' || '' }}
           # Empty in a rehearsal, and an empty `tagName` is what makes
           # `tauri-action` build without touching a release — the bundle is
           # produced, nothing is uploaded, no tag is created.
@@ -402,14 +465,64 @@ jobs:
       # downloadable from the run page. The two ARM rows are the reason — a
       # `.deb` and an `.msi` that exist are the only proof that the runner
       # label resolved and the bundler ran there.
+      #
+      # `always()`, and it is not tidiness. The interesting rehearsal is the one
+      # that went wrong somewhere: the suite is `continue-on-error` above, and
+      # the check below is allowed to fail this job. Both of those are states in
+      # which the bundles exist and are exactly what somebody wants to look at,
+      # and both of which a bare `if: ${{ inputs.rehearsal }}` — success() is
+      # implied — would have quietly skipped.
+      #
+      # `warn` rather than `error` for the same reason: when the build died
+      # before the bundler, the failure worth reading is that one, not a second
+      # red tick from an upload with nothing to upload.
       - name: Keep the rehearsal bundles
-        if: ${{ inputs.rehearsal }}
+        if: ${{ always() && inputs.rehearsal }}
         uses: actions/upload-artifact@v4
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
+
+      # ------------------------------------------------- what §3 #22 asked for
+      #
+      # The rehearsal used to end at the upload above, which makes the answer to
+      # "is the bundler happy on ARM" a zip file somebody downloads once and
+      # reads with their eyes. That is not a check — it is not repeated, it has
+      # no verdict, and what it is looking for is subtle: `bundle.targets` is
+      # `"all"`, so Linux owes a `.deb`, an `.rpm` **and** an `.AppImage`, and
+      # each is a different bundler with different native tools. The AppImage
+      # one downloads `linuxdeploy-aarch64.AppImage` and executes it, which is
+      # the step with no equivalent on the x86 rows.
+      #
+      # And the failure that would be hardest to see: a green ARM job holding an
+      # x86 installer. Every bundler writes the architecture into the file name,
+      # so that is checkable, and `tools/check-installers.mjs` checks it.
+      #
+      # `!cancelled()` rather than success(): if the suite failed in a rehearsal
+      # this is the step that says whether the packaging half is nonetheless
+      # sound, which is the whole point of separating them.
+      - name: What the bundler produced
+        if: ${{ !cancelled() && steps.tauri.outcome == 'success' }}
+        shell: bash
+        # `|| status=$?` rather than a bare call: Actions runs `bash -eo
+        # pipefail`, so a failing check would abort this script before it wrote
+        # the summary — and the summary is where the failure is legible. The
+        # exit code is carried to the last line by hand instead.
+        run: |
+          status=0
+          node tools/check-installers.mjs \
+            --target ${{ matrix.target }} \
+            ${{ inputs.rehearsal && '--unsigned' || '' }} 2>&1 | tee installers.txt || status=$?
+          {
+            echo "### ${{ matrix.target }}"
+            echo
+            echo '```'
+            cat installers.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       # ---------------------------------------------------------------- trust
       #
@@ -453,3 +566,21 @@ jobs:
           name: checksums-${{ matrix.target }}
           path: checksums/
           if-no-files-found: error
+
+      # ------------------------------------------- the suite still has the vote
+      #
+      # `continue-on-error` on `Verify the contract surface` lets a rehearsal
+      # reach its bundler with a red suite, which is the point of it — the two
+      # questions are independent and #22's is the one nobody could answer. What
+      # `continue-on-error` does on its own is finish the job **green**, and a
+      # green tick over a failing suite is a worse thing to own than an
+      # unanswered question.
+      #
+      # So the vote is cast here instead, at the end, after everything worth
+      # learning from the run has been uploaded. On a tag this step never fires:
+      # `continue-on-error` was false there and the job stopped at the suite.
+      - name: A rehearsal whose suite failed is a failed run
+        if: ${{ !cancelled() && inputs.rehearsal && steps.suite.outcome == 'failure' }}
+        run: |
+          echo "::error::The suite failed on ${{ matrix.target }}. The bundle steps ran anyway, deliberately — see the artifacts and the summary above for whether the packaging half is sound."
+          exit 1
