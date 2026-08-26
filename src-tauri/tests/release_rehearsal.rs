@@ -346,6 +346,99 @@ fn the_run_says_what_the_bundler_produced() {
          rehearsal whose suite failed — the run where 'did the packaging half \
          work anyway' is the only question left:\n{step}"
     );
+    assert!(
+        !step.contains("steps.tauri.outcome == 'success'"),
+        "the check runs only when the bundler succeeded, and the first \
+         rehearsal is what disproved that gate: `ubuntu-24.04-arm` wrote \
+         StackVo_0.1.0_arm64.deb and StackVo-0.1.0-1.aarch64.rpm and then \
+         failed on the AppImage — the two packages #22 was waiting to see were \
+         on disk, and this step skipped itself:\n{step}"
+    );
+}
+
+/// Every platform's bundler is given an icon in the format it demands.
+///
+/// The first rehearsal's Windows rows — **both** of them, x86_64 and ARM — died
+/// on `Couldn't find a .ico icon`, and the two files were on disk the whole
+/// time: `icons/icon.ico` and `icons/icon.icns` are in the repository.
+/// `bundle.icon` named only `icons/icon.png`, so the bundler was never told
+/// about them.
+///
+/// It stayed invisible because the failure is asymmetric. macOS *generates* an
+/// `.icns` from a PNG when it has to, so two of the three platforms were fine
+/// and the third was a hard error — and the third is the one nobody runs. Read
+/// off the run, `windows-11-arm` looked like an ARM problem; it had nothing to
+/// do with ARM, and `windows-latest` was failing exactly the same way.
+///
+/// Both halves are checked. A list that names `icon.ico` and does not ship it
+/// fails the same build, one step later.
+#[test]
+fn each_platform_gets_an_icon_in_the_format_its_bundler_demands() {
+    let conf: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(repo_root().join("src-tauri/tauri.conf.json"))
+            .expect("tauri.conf.json is readable"),
+    )
+    .expect("tauri.conf.json is JSON");
+
+    let icons: Vec<String> = conf["bundle"]["icon"]
+        .as_array()
+        .expect("bundle.icon is a list")
+        .iter()
+        .map(|v| v.as_str().expect("an icon path is a string").to_string())
+        .collect();
+
+    for (extension, platform, consequence) in [
+        (
+            ".ico",
+            "Windows",
+            "the MSI and NSIS bundlers stop with `Couldn't find a .ico icon`,              after the application has finished compiling",
+        ),
+        (
+            ".icns",
+            "macOS",
+            "the bundler generates one from a PNG, so this is the platform              where the omission does NOT fail — which is how it stayed hidden",
+        ),
+    ] {
+        assert!(
+            icons.iter().any(|i| i.ends_with(extension)),
+            "bundle.icon names no `{extension}`, so {platform} is bundled              without one: {consequence}.\n\nbundle.icon is {icons:?}"
+        );
+    }
+
+    for icon in &icons {
+        let path = repo_root().join("src-tauri").join(icon);
+        assert!(
+            path.exists(),
+            "bundle.icon names {icon} and there is no such file. The bundler              reads this list, so a name without a file fails the build one step              after a list with no name at all."
+        );
+    }
+}
+
+/// The AppImage bundler copies a binary off the build machine, and it has to be
+/// there.
+///
+/// Found the only way it could be found. `tauri-bundler` copies
+/// `/usr/bin/xdg-open` into the AppDir when the application can open a link —
+/// this one can, through `tauri-plugin-opener` — and it copies it from the
+/// runner. `ubuntu-latest` ships `xdg-utils`; `ubuntu-24.04-arm` does not. The
+/// same commit produced an AppImage on one and `xdg-open binary not found` on
+/// the other, *after* the `.deb` and the `.rpm` were already written.
+///
+/// Guarded because of how it will look to whoever reads the list next: it is
+/// not a `-dev` header and nothing else in the file needs it, so it reads like
+/// something that wandered in. It is the only reason the two Linux rows are the
+/// same machine.
+#[test]
+fn the_appimage_bundler_gets_the_binary_it_copies_off_the_runner() {
+    let text = workflow();
+    assert!(
+        text.contains("xdg-utils"),
+        "release.yml does not install `xdg-utils`. The AppImage bundler copies \
+         /usr/bin/xdg-open out of the build machine, `ubuntu-24.04-arm` does \
+         not ship it, and the failure lands after the .deb and the .rpm are \
+         already written — so it reads as an ARM bundler problem and is a \
+         runner image problem."
+    );
 }
 
 /// The matrix target reaches the toolchain that actually builds.

@@ -895,7 +895,10 @@ mod tests {
         let uri = folder_uri(&container, PHP_WORKDIR);
 
         assert_eq!(uri, folder_uri("stackvo-shop", PHP_WORKDIR), "{uri}");
-        assert!(uri.starts_with("vscode-remote://attached-container+"), "{uri}");
+        assert!(
+            uri.starts_with("vscode-remote://attached-container+"),
+            "{uri}"
+        );
         assert!(uri.ends_with(PHP_WORKDIR), "{uri}");
     }
 

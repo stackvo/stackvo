@@ -84,6 +84,23 @@ if [ "$all" -eq 1 ]; then
   step "linux · probes"     tools/linux/run.sh
   step "linux · driver"     tools/linux/run.sh --driver
   step "windows · check"    tools/linux/run.sh --windows
+  # The fourth thing CI asks that this file did not, and the most expensive one
+  # to have learned elsewhere. `ci.yml` compiles and tests; `release.yml`
+  # BUNDLES, and the bundler is a different program — it runs `linuxdeploy`, it
+  # shells out to `dpkg-deb`, it copies files off the build machine. None of the
+  # three lines above ever produced an installer, so the only place one was ever
+  # produced was a release run, which is how a screenshot of a log became the
+  # way this repository learned that `ubuntu-24.04-arm` has no `xdg-utils`.
+  #
+  # On an Apple Silicon machine the container is `aarch64-unknown-linux-gnu` —
+  # the row that failed. It was always reproducible here.
+  #
+  # NSIS and not MSI on the Windows line, and that is `tauri-bundler`'s division
+  # rather than this file's: its `msi` module is `#[cfg(target_os = "windows")]`.
+  # NSIS is the half worth having anyway — the updater downloads the
+  # `-setup.exe`, never the `.msi`.
+  step "linux · bundle"     tools/linux/run.sh --bundle
+  step "windows · bundle"   tools/linux/run.sh --windows-bundle
 else
   printf '\n\033[33m▸ linux and windows skipped — run with --all\033[0m\n'
 fi

@@ -57,6 +57,7 @@
  *   node tools/sidecars.mjs --release --target aarch64-apple-darwin
  *   node tools/sidecars.mjs --stubs            placeholders only, for `cargo test`
  *   node tools/sidecars.mjs --verify           refuse to bundle a placeholder
+ *   node tools/sidecars.mjs --release --target aarch64-pc-windows-msvc --runner cargo-xwin
  */
 
 import { execFileSync } from 'node:child_process';
@@ -67,6 +68,17 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST = join(ROOT, 'src-tauri', 'Cargo.toml');
 const OUT_DIR = join(ROOT, 'src-tauri', 'binaries');
+
+/**
+ * Where cargo writes, which is not always `src-tauri/target`.
+ *
+ * `tools/linux/run.sh` sets `CARGO_TARGET_DIR` to `target-linux/` on purpose —
+ * so a Linux object file never lands in the macOS target directory and
+ * invalidates it. Hard-coding `target/` here meant cargo succeeded and the copy
+ * below failed on a path nobody had chosen, with "cargo reported success but
+ * ... does not exist": the one error message this file was written to avoid.
+ */
+const TARGET_DIR = process.env.CARGO_TARGET_DIR ?? join(ROOT, 'src-tauri', 'target');
 
 /**
  * The two binaries, named once.
@@ -168,18 +180,19 @@ function build({ release }) {
   if (explicit) args.push('--target', explicit);
   for (const name of SIDECARS) args.push('--bin', name);
 
-  console.log(`sidecars: cargo ${args.join(' ')}`);
-  execFileSync('cargo', args, { stdio: 'inherit' });
+  // `--runner`, and it is `tauri build`'s own flag by the same name and for the
+  // same reason. Cross-building these two to `*-pc-windows-msvc` from Linux
+  // needs `cargo-xwin`, which carries Microsoft's SDK headers and import
+  // libraries — plain cargo has no CRT to link against and stops at 101 with
+  // nothing readable. `tools/linux/run.sh --windows-bundle` passes the runner
+  // to `tauri build` already; without it here, the sidecars fail first and the
+  // bundler is never reached.
+  const runner = valueOf('--runner') ?? 'cargo';
+  console.log(`sidecars: ${runner} ${args.join(' ')}`);
+  execFileSync(runner, args, { stdio: 'inherit' });
 
   for (const name of SIDECARS) {
-    const from = join(
-      ROOT,
-      'src-tauri',
-      'target',
-      ...(explicit ? [explicit] : []),
-      profile,
-      `${name}${exe}`
-    );
+    const from = join(TARGET_DIR, ...(explicit ? [explicit] : []), profile, `${name}${exe}`);
     if (!existsSync(from)) {
       // cargo exited 0 and the file is not there: a renamed `[[bin]]`, a
       // profile that writes elsewhere. Saying so here is the difference between
