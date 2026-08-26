@@ -115,6 +115,53 @@ describe('what an ARM row owes', () => {
   });
 });
 
+describe('a run that asked for less', () => {
+  /**
+   * `--windows-bundle` asks tauri for `--bundles nsis`, because the MSI bundler
+   * is `#[cfg(target_os = "windows")]` and cannot run off Windows at all.
+   * Without `--only`, this file failed that run for not producing something
+   * nobody had asked it to — which is a checker reporting its own wiring as a
+   * defect in the build.
+   */
+  it('owes only what the run asked for', () => {
+    const files = ['nsis/StackVo_0.1.0_x64-setup.exe'];
+    expect(
+      inspect(files, { triple: 'x86_64-pc-windows-msvc', signed: false, only: ['nsis'] })
+    ).toEqual([]);
+  });
+
+  it('still refuses a narrowed run that did not produce even that', () => {
+    expect(
+      inspect([], { triple: 'x86_64-pc-windows-msvc', signed: false, only: ['nsis'] })
+    ).toHaveLength(1);
+  });
+
+  /**
+   * A restriction that matches nothing would pass everything, which is the one
+   * way this flag could make the check weaker than no flag at all.
+   */
+  it('refuses a format this platform does not have', () => {
+    expect(() =>
+      inspect([], { triple: 'x86_64-pc-windows-msvc', only: ['appimage'] })
+    ).toThrow(/has no such format/);
+  });
+
+  /**
+   * The updater's artifact on Windows is the NSIS installer, and on macOS it is
+   * a tarball the `--only dmg` caller never asked for. Demanding it in a
+   * narrowed run says something false about the release rather than about the
+   * run.
+   */
+  it('does not ask for the updater artifact in a narrowed run', () => {
+    expect(
+      inspect(['dmg/StackVo_0.1.0_aarch64.dmg'], {
+        triple: 'aarch64-apple-darwin',
+        only: ['dmg'],
+      })
+    ).toEqual([]);
+  });
+});
+
 describe('the signature the updater needs', () => {
   it('refuses an AppImage with no signature beside it', () => {
     const files = linuxArm().filter((file) => !file.endsWith('.AppImage.sig'));

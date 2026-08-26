@@ -254,7 +254,9 @@ fn the_mount_kind_the_refusal_reads_is_the_one_the_engine_writes() {
         .find("mounts: info")
         .expect("inspect still builds the mount table");
     let region = &source[at..];
-    let region = &region[..region.find("            .collect(),").unwrap_or(region.len())];
+    let region = &region[..region
+        .find("            .collect(),")
+        .unwrap_or(region.len())];
 
     assert!(
         region.contains("mount_kind"),

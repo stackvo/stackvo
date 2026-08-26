@@ -165,6 +165,89 @@ fn the_release_installs_every_linux_package_ci_installs() {
     );
 }
 
+/// The container is at least the machine the release job bundles on.
+///
+/// This is the check whose absence turned a release run into a test
+/// environment, and it cost exactly one run to learn.
+///
+/// `tools/linux/Dockerfile` said it was kept identical to `ci.yml`'s package
+/// list, and it was. But `ci.yml` compiles and tests; it never **bundles**, and
+/// the bundler is a different program with different needs — it runs
+/// `linuxdeploy`, it shells out to `dpkg-deb`, and it copies `/usr/bin/xdg-open`
+/// off the build machine. So the one list the image was not being held against
+/// was the only list that describes the job it exists to rehearse.
+///
+/// The direction is the same one this file already argues for CI and the
+/// release, one link further along: **the container must be at least the
+/// release environment.** More is fine — the image carries `xvfb`, a driver and
+/// `cargo-xwin`, none of which a runner needs.
+#[test]
+fn the_local_container_installs_every_linux_package_the_release_installs() {
+    let release = apt_packages(&suite_job(&read(".github/workflows/release.yml")));
+    let image = apt_packages(&read("tools/linux/Dockerfile"));
+
+    assert!(
+        release.len() > 3,
+        "the scan found {} packages in release.yml's build job, so it stopped \
+         reading `apt-get install` lines rather than that the release stopped \
+         needing them",
+        release.len()
+    );
+
+    let missing: Vec<&String> = release.difference(&image).collect();
+    assert!(
+        missing.is_empty(),
+        "release.yml installs {missing:?} and tools/linux/Dockerfile does not.\n\n\
+         That image is where `tools/linux/run.sh --bundle` answers what the \
+         release job answers, and a package present there and absent here means \
+         the local run is a rehearsal of a different machine. It has happened: \
+         `xdg-utils` was in neither, the AppImage bundler copies \
+         /usr/bin/xdg-open out of the build machine, and the failure was found \
+         on a runner after the .deb and the .rpm were already written.\n\n\
+         The container must be a superset of the release environment, never less."
+    );
+}
+
+/// The bundling half is answerable without a runner.
+///
+/// §3 #22 spent a round using a release run as a test environment, and the
+/// reason was narrow: every mode in `tools/linux/run.sh` compiled or tested,
+/// none of them bundled. On an Apple Silicon machine that container **is**
+/// `aarch64-unknown-linux-gnu` — the row that failed — so the failure was
+/// always reproducible locally and no command existed to reproduce it.
+///
+/// `before-push.sh` claims in its first line to ask everything CI asks. That
+/// claim is the thing being guarded: it has been false twice, and the file's own
+/// comment says why that is worse than absent — people stop reading the runs.
+#[test]
+fn the_bundle_can_be_built_and_judged_without_a_runner() {
+    let runner = read("tools/linux/run.sh");
+    for mode in ["--bundle", "--windows-bundle"] {
+        assert!(
+            runner.contains(&format!("\"${{1:-}}\" = \"{mode}\"")),
+            "tools/linux/run.sh has no `{mode}` mode. Then the only place the \
+             bundler is ever exercised is a release run, and a release run is \
+             not a test environment: it costs twenty minutes on six machines \
+             and reports through a screenshot."
+        );
+    }
+    assert!(
+        runner.contains("check-installers.mjs"),
+        "the local bundle is built and never judged. Then it answers 'it did \
+         not crash', and what #22 asks is which formats came out and whether \
+         they are named for this architecture."
+    );
+
+    let before_push = read("tools/before-push.sh");
+    assert!(
+        before_push.contains("--bundle"),
+        "`tools/before-push.sh --all` does not build a bundle. Its first line \
+         says everything CI will ask is asked here first, and the release job \
+         asks for a bundle — a claim that is false is worse than absent, which \
+         is that file's own argument for existing."
+    );
+}
+
 /// A failed release leaves its failures behind, in a file.
 ///
 /// What §3 #2 actually recorded after the first real run was "how many failures
