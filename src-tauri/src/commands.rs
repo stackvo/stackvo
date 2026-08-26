@@ -3967,10 +3967,7 @@ pub async fn editor_attach(state: State<'_, AppState>, project: String) -> Resul
 /// never into the project, and re-derived rather than kept. Answers with the
 /// path, because pointing PhpStorm at it is the user's next act.
 #[tauri::command]
-pub async fn editor_jetbrains_write(
-    state: State<'_, AppState>,
-    project: String,
-) -> Result<String> {
+pub async fn editor_jetbrains_write(state: State<'_, AppState>, project: String) -> Result<String> {
     let root = state.root()?;
     let status = crate::editor::status(&root, &project).await?;
     crate::editor::write_jetbrains(&root, &project, &status.readiness.workdir)

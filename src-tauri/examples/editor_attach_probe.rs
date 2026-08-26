@@ -100,7 +100,11 @@ fn main() {
                 // measured, so the guess is stated and the answer is printed
                 // beside the mount table it was judged against.
                 let image = details.image.clone().unwrap_or_default();
-                let guessed = if image.contains("node") { "node" } else { "php" };
+                let guessed = if image.contains("node") {
+                    "node"
+                } else {
+                    "php"
+                };
 
                 for mount in &details.mounts {
                     println!(

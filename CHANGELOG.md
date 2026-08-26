@@ -7,6 +7,130 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Every platform's bundler is given an icon in the format it demands (§3 #22).**
+  Both Windows rows of the first rehearsal — x86_64 and ARM64 — died on
+  `Couldn't find a .ico icon`, after the application had finished compiling.
+  `icons/icon.ico` and `icons/icon.icns` were in the repository the whole time;
+  `bundle.icon` named only `icons/icon.png`, so the bundler was never told about
+  them.
+
+  It stayed invisible because the failure is asymmetric: macOS *generates* an
+  `.icns` from a PNG when it has to and Linux uses the PNG directly, so two
+  platforms were quietly fine and the third was a hard error — and the third is
+  the one nobody runs. Read off the run page, `windows-11-arm` looked like an
+  ARM problem. It had nothing to do with ARM, and `windows-latest` was failing
+  in exactly the same place. A test holds both halves now: the list must name a
+  `.ico` and an `.icns`, and every name in it must be a file — a list naming an
+  icon it does not ship fails the same build one step later.
+
+- **The bundler is answerable on this machine, and a release run stops being a
+  test environment (§3 #22).** Proven on its first day: two rounds of
+  `tools/linux/run.sh --bundle` took down two walls in a row and the second was
+  one no workflow could have declared. `xdg-utils` was the runner's find;
+  `appimagetool` then asked for `file`, which is in no workflow and does not
+  need to be, because a GitHub runner image ships it. So the image has to be a
+  superset in two directions at once — every package the release declares, plus
+  everything the runner gives the release for free. The run ends with
+  `aarch64-unknown-linux-gnu: deb, rpm, appimage — each present and named for
+  aarch64`: all three formats, right architecture, no runner spent. The reason a screenshot of a log became the way
+  this repository learned about `xdg-utils` was narrow and entirely fixable:
+  every mode in `tools/linux/run.sh` compiled or tested, and **none of them
+  bundled**. `ci.yml` never bundles either, and the container was mirroring
+  `ci.yml` — so the one list nothing held the image against was the only list
+  describing the job it exists to rehearse.
+
+  Three things follow. `tools/linux/run.sh --bundle` builds the installers the
+  container's own architecture ships and runs `check-installers.mjs` over them —
+  and on an Apple Silicon machine that container **is**
+  `aarch64-unknown-linux-gnu`, the row that failed, so that failure was always
+  reproducible here and no command existed to reproduce it.
+  `--windows-bundle` cross-builds the NSIS installer through `cargo-xwin`, for
+  `x86_64-pc-windows-msvc` or `aarch64-pc-windows-msvc`; the MSI cannot be built
+  off Windows and that is `tauri-bundler`'s own division — its `msi` module is
+  `#[cfg(target_os = "windows")]` while its `nsis` module says outright that it
+  builds on Linux and macOS. NSIS is the half worth having anyway: the updater
+  downloads the `-setup.exe`, never the `.msi`. Both are wired into
+  `tools/before-push.sh --all`, whose first line claims everything CI asks is
+  asked here first — a claim that is false is worse than absent, which is that
+  file's own argument for existing.
+
+  And the rule that keeps it true: `workflow_parity.rs` now holds
+  `tools/linux/Dockerfile` against **release.yml**'s package list rather than
+  CI's. The direction is the one that file already argues, one link further
+  along — the container must be at least the release environment, never less.
+
+- **Cross-building to Windows works here, and the one row that cannot was
+  measured rather than assumed.** `--windows-bundle` produces the NSIS installer
+  through `cargo-xwin`, and two missing *names* stood in the way: Debian ships
+  clang's cl-compatible driver and not the name `clang-cl` — the driver picks
+  its mode from `argv[0]`, so a symlink is the whole fix — and `llvm-ml`, which
+  reads the MASM assembly `ring` and `aws-lc-sys` ship on x86_64. Without them
+  `cc-rs` falls back to plain `clang` and every C file dies on
+  `no such file or directory: '/imsvc'`, an error that names a flag as if it
+  were a path. The MSVC CRT `cargo-xwin` downloads now lives in a volume instead
+  of being fetched on every run.
+
+  The last name in the way was NSIS itself: on Windows the bundler downloads its
+  own and runs `<toolset>/makensis.exe`, everywhere else it runs plain
+  `makensis` off the PATH and does not carry it. The error still says
+  `makensis.exe`, so an `apt-get install` away reads like a cross-compilation
+  dead end. With it, `x86_64-pc-windows-msvc` produces
+  `StackVo_0.1.0_x64-setup.exe` here. Five findings of one shape in a day —
+  `xdg-utils`, `file`, `clang-cl`, `llvm-ml`, `nsis` — all of them the
+  *bundler's* dependencies rather than the compiler's, and none of them in any
+  workflow, because a runner image gives them to the release for free.
+
+  `check-installers.mjs` gained `--only` for the same run: it asks tauri for
+  `--bundles nsis`, and without it the checker failed the build for not
+  producing an `.msi` nobody had asked for. It narrows and never widens — a name
+  that is not a format of that platform is refused rather than ignored — and a
+  narrowed run says out loud what it did not check, so it can never read as a
+  full one.
+
+  `aarch64-pc-windows-msvc` cannot be built here, and that is upstream rather
+  than unconfigured: `ring` compiles its ARM64 Windows assembly with plain
+  `clang` because MSVC's assembler cannot read that syntax, and plain `clang`
+  cannot compile Microsoft's ARM64 headers — `winnt.h` stops at
+  `#define __MACHINEARM_ARM64 __MACHINE`, which `clang-cl` handles without
+  complaint. Both requirements live in one `cc::Build`, and there is no flag
+  that satisfies both: measured on this machine, `clang` accepts only
+  `-isystem` and `clang-cl` only `-imsvc`/`/imsvc`. That mode now says so in a
+  second instead of failing after ten minutes of compiling.
+
+- **`tools/sidecars.mjs` honours `CARGO_TARGET_DIR`, and takes a `--runner`.**
+  The runner is `tauri build`'s own flag by the same name and for the same
+  reason: cross-building the two sidecars to `*-pc-windows-msvc` needs
+  `cargo-xwin`, and without it they fail before the bundler is ever reached.
+
+  It also composed the path `src-tauri/target/<triple>/<profile>` by hand and
+  ignored `CARGO_TARGET_DIR`, so inside the container — which
+  sets the variable to `target-linux/` on purpose, to keep a Linux object file
+  out of the macOS target directory — cargo succeeded and the copy failed on a
+  path nobody had chosen, with "cargo reported success but ... does not exist".
+  That is the one message this file was written to prevent.
+
+- **The AppImage bundler is given the binary it copies off the runner (§3 #22).**
+  The first rehearsal put `StackVo_0.1.0_arm64.deb` and
+  `StackVo-0.1.0-1.aarch64.rpm` on disk from `ubuntu-24.04-arm` — the two
+  packages this item had been waiting three rounds to see, named for the right
+  architecture, built natively rather than cross-compiled — and then failed on
+  the third format with `xdg-open binary not found /usr/bin/xdg-open`.
+
+  `tauri-bundler` copies `/usr/bin/xdg-open` into the AppDir when the
+  application can open a link, and this one can, through `tauri-plugin-opener`.
+  It copies it from the **build machine**. `ubuntu-latest` ships `xdg-utils`;
+  `ubuntu-24.04-arm` does not. So the same commit produced an AppImage on one
+  Linux runner and not the other, and the question was never "does ARM compile"
+  but "are these two images the same machine". `xdg-utils` is on the apt line,
+  and a test holds it there — it is not a `-dev` header and nothing else needs
+  it, so it reads like something that wandered in.
+
+- **The check on what was bundled no longer waits for the bundler to succeed.**
+  It was gated on `steps.tauri.outcome == 'success'`, and the run above is what
+  disproved that: two correct ARM packages were on disk and the step skipped
+  itself and said nothing about them. A check that speaks only when nothing went
+  wrong is a check that is silent exactly when it matters.
+
 - **A rehearsal can now answer the question it was added for (§3 #22).** The two
   ARM rows — `aarch64-unknown-linux-gnu` on `ubuntu-24.04-arm`,
   `aarch64-pc-windows-msvc` on `windows-11-arm` — had one open half: whether the

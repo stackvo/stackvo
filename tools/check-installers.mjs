@@ -4,6 +4,7 @@
  * ```sh
  * npm run installers:check -- --target aarch64-unknown-linux-gnu
  * npm run installers:check -- --target aarch64-pc-windows-msvc --unsigned
+ * npm run installers:check -- --target x86_64-pc-windows-msvc --only nsis
  * ```
  *
  * ## Why this exists
@@ -133,12 +134,31 @@ export function collect(dir) {
  * `--no-fail-fast`: a run that reports the first missing format and stops is a
  * run somebody has to spend again to learn the second.
  */
-export function inspect(files, { triple, signed = true }) {
+export function inspect(files, { triple, signed = true, only = null }) {
   const os = osOf(triple);
   const arch = archOf(triple);
   const problems = [];
 
-  const owed = Object.entries(FORMATS).filter(([, format]) => format.os === os);
+  // `only` narrows what is owed, and it exists because a caller can narrow what
+  // was *built*. `tools/linux/run.sh --windows-bundle` asks tauri for `--bundles
+  // nsis`, because the MSI bundler is `#[cfg(target_os = "windows")]` and cannot
+  // run off Windows at all — so demanding an `.msi` there is this file failing a
+  // run for not producing something nobody asked it to.
+  //
+  // It narrows and never widens: a name that is not a format of this platform is
+  // refused rather than ignored, because the way a restriction goes wrong is by
+  // silently matching nothing and passing everything.
+  const platform = Object.entries(FORMATS).filter(([, format]) => format.os === os);
+  if (only) {
+    const unknown = only.filter((name) => !platform.some(([format]) => format === name));
+    if (unknown.length) {
+      throw new Error(
+        `--only ${unknown.join(', ')}: ${triple} has no such format. It owes ` +
+          `${platform.map(([name]) => name).join(', ')}.`
+      );
+    }
+  }
+  const owed = only ? platform.filter(([name]) => only.includes(name)) : platform;
   for (const [name, format] of owed) {
     // The updater's copies live in their own folders (`nsis-updater`, and the
     // WiX one beside it) and carry the same extension. They are not the
@@ -167,7 +187,10 @@ export function inspect(files, { triple, signed = true }) {
     }
   }
 
-  if (signed) {
+  // Skipped for a narrowed run: the updater's artifact may simply be one of the
+  // formats this run did not ask for, and reporting it missing would say
+  // something false about the release rather than about the run.
+  if (signed && !only) {
     const updated = UPDATED[os];
     const artifacts = files.filter((file) => file.endsWith(updated));
     if (artifacts.length === 0) {
@@ -209,6 +232,7 @@ function main() {
   const dir = valueOf('--dir') ?? `src-tauri/target/${triple}/release/bundle`;
   const files = collect(dir);
   const signed = !process.argv.includes('--unsigned');
+  const only = valueOf('--only')?.split(',').filter(Boolean) ?? null;
 
   console.log(`reading ${dir}`);
   if (files.length === 0) {
@@ -220,17 +244,24 @@ function main() {
   }
   for (const file of files) console.log(`  ${file}`);
 
-  const problems = inspect(files, { triple, signed });
+  const problems = inspect(files, { triple, signed, only });
   if (problems.length) {
     console.error(`\n${triple} did not produce what it owes:\n`);
     for (const problem of problems) console.error(`  · ${problem}\n`);
     process.exit(1);
   }
 
-  const owed = Object.entries(FORMATS)
+  const platform = Object.entries(FORMATS)
     .filter(([, format]) => format.os === osOf(triple))
     .map(([name]) => name);
+  const owed = only ? platform.filter((name) => only.includes(name)) : platform;
   console.log(`\n${triple}: ${owed.join(', ')} — each present and named for ${archOf(triple)}.`);
+  // Said out loud, every time. A narrowed run that reads like a full one is the
+  // way this check would come to mean less than it says.
+  const skipped = platform.filter((name) => !owed.includes(name));
+  if (skipped.length) {
+    console.log(`${skipped.join(', ')} was not asked for by this run and was not checked.`);
+  }
   if (!signed) console.log('Signatures were not checked: this run was told it is unsigned.');
 }
 
