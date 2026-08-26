@@ -437,13 +437,13 @@ fn settings_for_instance(root: &Path, id: &str) -> Result<Settings> {
     let keys = settings.kind.keys();
     let (user, password, database) = declared_for(root, instance);
 
-    if let Some(user) = user.or_env(keys.user.and_then(|k| env.get(k))) {
+    if let Some(user) = user.or_env(keys.user.and_then(|k| env.stated(k))) {
         settings.user = user;
     }
-    if let Some(password) = password.or_env(env.get(keys.password)) {
+    if let Some(password) = password.or_env(env.stated(keys.password)) {
         settings.password = Some(password);
     }
-    if let Some(database) = database.or_env(keys.database.and_then(|k| env.get(k))) {
+    if let Some(database) = database.or_env(keys.database.and_then(|k| env.stated(k))) {
         settings.database = Some(database);
     }
     Ok(settings)
@@ -589,10 +589,10 @@ fn settings(root: &Path, service: &str) -> Result<Settings> {
         kind,
         container: container_of(root, service),
         user: user
-            .or_env(keys.user.and_then(|k| env.get(k)))
+            .or_env(keys.user.and_then(|k| env.stated(k)))
             .unwrap_or_else(|| default_user(kind).to_string()),
-        password: password.or_env(env.get(keys.password)),
-        database: database.or_env(keys.database.and_then(|k| env.get(k))),
+        password: password.or_env(env.stated(keys.password)),
+        database: database.or_env(keys.database.and_then(|k| env.stated(k))),
     })
 }
 
@@ -1315,6 +1315,98 @@ where
 
 #[cfg(test)]
 mod tests {
+    /// The order the three sources resolve in, and what puts a fourth one in
+    /// the middle slot by accident.
+    ///
+    /// `stored → .env → manifest default` is the rule, and the doc on
+    /// [`super::Value::or_env`] says why `.env` cannot be last: a handover
+    /// leaves the real password in `.env` while the manifest declares a
+    /// placeholder, so preferring the manifest would hand a dump the wrong
+    /// password with no readable error. Nothing pinned that rule, which is the
+    /// same state `mail::detect` was in before ADR 0037 went looking.
+    ///
+    /// Writing it down is what showed the defect. `env` used to be read with
+    /// `Env::get`, which lays `config::EMBEDDED` under the file — so on a
+    /// workspace installed from packages, with no `.env` at all,
+    /// `SERVICE_MYSQL_ROOT_PASSWORD` answered `"root"` out of the binary and by
+    /// this order **outranked what the package declared**, the reverse of ADR
+    /// 0016. The middle slot now reads [`crate::config::Env::stated`], which
+    /// answers only what the file wrote, so a default can no longer reach it.
+    ///
+    /// This test still asserts the order rather than the fix, because the order
+    /// is the thing every dump and connection string depends on and it had
+    /// nothing holding it. The fix is asserted next door, in
+    /// `config::tests::stated_is_what_the_file_wrote_and_get_is_that_plus_the_defaults`.
+    #[test]
+    fn stored_beats_env_beats_the_packages_default() {
+        let value = || super::Value {
+            stored: Some("typed-for-this-instance".into()),
+            default: Some("from-the-manifest".into()),
+        };
+
+        assert_eq!(
+            value().or_env(Some("from-dot-env")).as_deref(),
+            Some("typed-for-this-instance")
+        );
+        assert_eq!(
+            super::Value {
+                stored: None,
+                default: Some("from-the-manifest".into()),
+            }
+            .or_env(Some("from-dot-env"))
+            .as_deref(),
+            Some("from-dot-env"),
+            "the manifest won over `.env`, which hands a migrated workspace's \
+             dump a placeholder password instead of the real one"
+        );
+        assert_eq!(
+            super::Value {
+                stored: None,
+                default: Some("from-the-manifest".into()),
+            }
+            .or_env(None)
+            .as_deref(),
+            Some("from-the-manifest")
+        );
+
+        // Empty is absent, in both of the two slots that can carry one: an
+        // `.env` line somebody blanked is not an answer, and neither is a
+        // manifest default declared as "".
+        assert_eq!(
+            super::Value {
+                stored: None,
+                default: Some("from-the-manifest".into()),
+            }
+            .or_env(Some(""))
+            .as_deref(),
+            Some("from-the-manifest")
+        );
+        assert_eq!(
+            super::Value {
+                stored: None,
+                default: Some(String::new()),
+            }
+            .or_env(None),
+            None
+        );
+
+        // Whatever reaches the middle slot beats the package. That is correct
+        // for a migrated workspace, whose real password is in `.env`; it was a
+        // defect only while an embedded default could get in there too.
+        assert_eq!(
+            super::Value {
+                stored: None,
+                default: Some("from-the-manifest".into()),
+            }
+            .or_env(Some("root"))
+            .as_deref(),
+            Some("root"),
+            "a value the file stated no longer beats the package default — a \
+             migrated workspace's dump would use the placeholder instead of the \
+             password the handover left in `.env`"
+        );
+    }
+
     use super::*;
 
     /// N. The port a container reaches the engine on inside the network, which
