@@ -110,7 +110,7 @@ hints! {
     START_PROJECT_FOR_TUNNEL = "startProjectForTunnel",
         "Start the project first — the tunnel forwards to its container.";
 
-    // ------------------------------------------------ the editor in the container (R-1)
+    // ------------------------------------------------ the editor in the container
     START_PROJECT_FOR_EDITOR = "startProjectForEditor",
         "Start the project first — the editor opens the container that is running.";
     EDITOR_NEEDS_LIVE_SOURCE = "editorNeedsLiveSource",

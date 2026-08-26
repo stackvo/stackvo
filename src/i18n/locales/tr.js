@@ -1474,6 +1474,22 @@ export default {
       'Konteyner adından ve kaynağın bağlandığı dizinden türetilir, hiçbir yere yazılmaz — yeniden oluşturulan ya da adı değişen bir konteyner geride eski bir adres bırakamaz.',
     serverNote:
       'Sunucu kendini {dir} altına açar; orası adlandırılmış bir volume — yeniden derleme, indirilen yüz megabaytı çöpe atmaz.',
+    jbTitle: 'PhpStorm',
+    jbWhy:
+      "JetBrains'in “çalışan bir konteynere bağlan” diye bir bağlantı tipi yok. Olan şey Dev Containers — ve StackVo'nun kendi compose dosyalarını ve bu projenin servisini adlandıran bir dev container ikinci bir konteyner değildir, zaten çalışan konteynerin ta kendisidir. O dosyayı StackVo yazar; PhpStorm'u ona siz yöneltirsiniz.",
+    jbNotInstalled:
+      "Bu makinede PhpStorm bulunamadı. Dosyayı yazmak yine de anlamlı — PhpStorm'un olduğu makinede IDE'yi ona yönelteceksiniz.",
+    jbStale:
+      "Diskteki dosya başka bir compose dosya kümesi için yazılmış. Yeniden yazın; yoksa PhpStorm, StackVo'nun başlattığından daha az örtüyle kurulmuş bir konteyner açar.",
+    jbMusl:
+      'Bu bir Alpine imajı. VS Code onun için bir sunucu derlemesi yayımlıyor; JetBrains yayımlamıyor — yani arka uç bu konteynerde hiç başlayamaz. Aşağıdaki dosya yine de doğru; yol, imajı değiştirmekten geçiyor.',
+    jbWrite: 'Dosyayı yaz',
+    jbRewrite: 'Dosyayı yeniden yaz',
+    jbService: 'Bu çalışma alanının compose dosyalarındaki {service} servisini gösterir.',
+    jbSteps:
+      "PhpStorm'da: Remote Development → Dev Containers → From Local Project → Specify Path, ve yukarıdaki yolu verin.",
+    jbRecreates:
+      "Bağlanmak bu projenin konteynerini yeniden oluşturur — bu JetBrains'in kendi davranışı, StackVo'nun seçimi değil. Site onunla birlikte geri gelir; konteynerin içinde kaydedilmemiş ne varsa gelmez.",
   },
 
   phpIni: {

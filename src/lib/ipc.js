@@ -486,7 +486,7 @@ export const api = {
   ideDebugRemove: (project, target) => call('ide_debug_remove', { project, target }),
 
   /**
-   * The editor inside the container — R-1's read half.
+   * The editor inside the container — the read half.
    *
    * Whether this project's container can carry one at all, read from the
    * container's own mount table, plus the address that opens it. The manifest
@@ -497,6 +497,14 @@ export const api = {
   editorStatus: (project) => call('editor_status', { project }),
   /** Open VS Code on the container; resolves with the address it opened. */
   editorAttach: (project) => call('editor_attach', { project }),
+  /**
+   * The other editor's half, which is a file rather than an address.
+   *
+   * PhpStorm cannot attach to a running container; its Dev Containers can be
+   * pointed at StackVo's own compose service, which is the same container
+   * rather than a second one. Resolves with the path to point it at.
+   */
+  editorJetbrainsWrite: (project) => call('editor_jetbrains_write', { project }),
 
   // The project's PHP overrides. `.stackvo/php.ini` was documented for years
   // and mounted by nothing; the mount is a compose overlay this app layers.

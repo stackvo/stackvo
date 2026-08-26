@@ -3930,7 +3930,7 @@ pub fn ide_debug_remove(
     crate::ide::remove(&root, &project, &target)
 }
 
-// ------------------------------------- the editor inside the container (R-1)
+// ---------------------------------- the editor inside the container itself
 
 /// Whether this project's container can carry an editor, and the address.
 ///
@@ -3958,6 +3958,22 @@ pub async fn editor_attach(state: State<'_, AppState>, project: String) -> Resul
     let root = state.root()?;
     let status = crate::editor::status(&root, &project).await?;
     crate::editor::open(&status.readiness)
+}
+
+/// Write the file PhpStorm opens the running container with.
+///
+/// The other editor needs a file rather than an address, and the file names
+/// this machine's own compose files — so it is written under `generated/`,
+/// never into the project, and re-derived rather than kept. Answers with the
+/// path, because pointing PhpStorm at it is the user's next act.
+#[tauri::command]
+pub async fn editor_jetbrains_write(
+    state: State<'_, AppState>,
+    project: String,
+) -> Result<String> {
+    let root = state.root()?;
+    let status = crate::editor::status(&root, &project).await?;
+    crate::editor::write_jetbrains(&root, &project, &status.readiness.workdir)
 }
 
 // ------------------------------------------------------------------- php-spx

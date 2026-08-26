@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 157 named types, 301 wrappers, 5 field(s) the
+ * Measured at generation: 157 named types, 302 wrappers, 5 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -2834,13 +2834,17 @@ export interface StackvoApi {
    */
   ideDebugRemove(project: string, target: string): Promise<string>;
   /**
-   * The question that had to be answered before §2 R-1's address was worth having: can this container carry an editor at all. Read from the container's own mount table rather than from the manifest, because the two can disagree — turning the dev server on writes an overlay and the overlay does nothing until the container is recreated, and when they disagree the container is the one that is right.
+   * The question that had to be answered before the attach address was worth having: can this container carry an editor at all. Read from the container's own mount table rather than from the manifest, because the two can disagree — turning the dev server on writes an overlay and the overlay does nothing until the container is recreated, and when they disagree the container is the one that is right.
    */
   editorStatus(project: string): Promise<Record<string, unknown>>;
   /**
-   * §2 R-1. ide_debug_* wires an IDE on the HOST to a debugger in the container; this opens the editor INSIDE it — language server, extensions, terminal, composer and artisan all in the image, with no PHP on the machine. VS Code has no attach-by-name command line, so the whole feature is an address: vscode-remote://attached-container+<hex>/<workdir>, where <hex> is the hex of {"containerName":"/stackvo-<project>"}. All three facts it is built from — the container name, the workdir and the bind mount — were already in this tree.
+   * The other half of ide_debug_*, which wires an IDE on the HOST to a debugger in the container; this opens the editor INSIDE it — language server, extensions, terminal, composer and artisan all in the image, with no PHP on the machine. VS Code has no attach-by-name command line, so the whole feature is an address: vscode-remote://attached-container+<hex>/<workdir>, where <hex> is the hex of {"containerName":"/stackvo-<project>"}. All three facts it is built from — the container name, the workdir and the bind mount — were already in this tree.
    */
   editorAttach(project: string): Promise<string>;
+  /**
+   * The PhpStorm half (decision 0036). JetBrains has no attach-to-a-running-container connection type — Gateway offers SSH, WSL, Dev Containers and the cloud plugins, and that is not one of them. What PhpStorm does have, measured in the IDE rather than read off a page (PhpStorm 2026.2 bundles clouds-docker-gateway, whose own devcontainer schema carries the keys), is Dev Containers in the COMPOSE flavour. A dev container built from an image or a Dockerfile is a second container beside this project's; one that names StackVo's own compose files and this project's service IS the container already running.
+   */
+  editorJetbrainsWrite(project: string): Promise<string>;
   /**
    * Every competitor exposes memory_limit and upload_max_filesize; StackVo could not, because .stackvo/php.ini was documented but never real — docs/*\/configuration/project.md lists it and the old web UI's DockerService.js:388 lists it, but `php.ini` appears NOWHERE in core/cli. No generator mounted it, so dropping the file in did nothing. The mount had to exist before a form was worth building.
    */
