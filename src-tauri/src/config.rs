@@ -6,7 +6,7 @@
 //! line means, which is the drift this contract exists to prevent.
 
 use crate::error::{Error, Result};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// What a secret looks like once it has crossed the IPC boundary.
@@ -21,6 +21,21 @@ pub const MASK: &str = "••••••••";
 #[derive(Debug, Clone, Default)]
 pub struct Env {
     vars: BTreeMap<String, String>,
+    /// The keys the **file** set, as opposed to the ones [`EMBEDDED`] supplied.
+    ///
+    /// [`Self::get`] answers from the merged map, which is right for almost
+    /// every caller: a default the app knows is a perfectly good answer. It is
+    /// wrong for exactly one shape of question — "did somebody *choose* this" —
+    /// and `db.rs` asks it, because its resolution order puts `.env` ahead of
+    /// what the package declares. See [`Self::stated`].
+    ///
+    /// `parse` already had to keep this apart for the alias chain, and the
+    /// comment there records what it cost to learn: while both spellings could
+    /// only come from the file, resolving against the merged map worked, and
+    /// the day the current name shipped as an embedded default a checkout
+    /// asking for Apache was quietly served nginx. This is the same distinction
+    /// kept rather than thrown away at the end of `parse`.
+    stated: BTreeSet<String>,
     /// Keys whose `.env` value pointed at the keystore and got no answer.
     ///
     /// Carried rather than logged because the one caller that must not proceed
@@ -103,36 +118,89 @@ pub const SETTINGS: [(&str, &str); 36] = [
     ),
 ];
 
-/// The service half, kept alive by the migration and by nothing else.
+/// The service half. Seventy-eight keys, and not all of them are legacy.
 ///
 /// ADR 0016 deleted the `.env` branch of the renderer: services come from the
 /// instance table and packages now, and `skeleton/core/templates/services/`
-/// left the binary with it. What could not leave is this — [`crate::handover`]
-/// reads a pre-market `.env` to decide what each switched-on service becomes,
-/// and a `.env` that predates the market says `SERVICE_MYSQL_ENABLE=true` and
-/// nothing else. Without a default for `VERSION` beside it there is no tag to
-/// migrate, and the plan would have to guess at a datadir.
+/// left the binary with it. This constant stayed behind, and the sentence that
+/// kept it said [`crate::handover`] needs it — a `.env` that predates the market
+/// says `SERVICE_MYSQL_ENABLE=true` and nothing else, so without a `VERSION`
+/// default beside it there would be no tag to migrate.
 ///
-/// So these are **legacy inputs**, not settings. Nothing here is a decision
-/// this app would like a user to make today; a new service arriving as a
-/// package must not gain a key here, because gaining one would mean the app
-/// had an opinion about a service it does not ship (`env.schema.json`'s
-/// `services` is a vocabulary now, not a catalogue).
+/// ## That sentence was not true, and the way to find out was to try it
 ///
-/// ## What deletes it
+/// `npm run legacy:rehearse` empties this constant, runs the suite and puts the
+/// tree back. With the whole half gone, `handover_equivalence.rs` passes **13 of
+/// 13**: every image, port and volume preserved, every refusal still refusing.
+/// The migration never needed a default, because [`crate::handover::plan`] does
+/// not read one — where the `.env` states no version it asks the catalogue
+/// (`catalogue.recommended`), which is the whole point of services being
+/// dynamic. Not one failing test was the migration.
 ///
-/// The day no supported workspace still needs migrating. That is a release
-/// decision rather than an engineering one, so what is arranged here is the
-/// part that *is* engineering: the keys are one constant instead of 150 lines
-/// mixed into 36 others, the split is held by a test
-/// (`config::tests::the_two_halves_partition_the_defaults`), and every module
-/// that reads one is named and held by `legacy_env_claims.rs`. When the day
-/// comes, this constant and the readers that test lists are the whole change.
+/// What was actually holding it up was [`crate::mail`]: `detect` decided which
+/// catcher a workspace knows about by asking whether a key was **present**, and
+/// on an untouched workspace the only thing making `SERVICE_MAILPIT_ENABLE`
+/// present was this table. A panel's behaviour hanging off a constant named for
+/// migration. ADR 0037 pointed that question at the catalogue, where ADR 0016
+/// had already put the vocabulary, and **seventy-two keys left with it** — every
+/// `_ENABLE`, `_VERSION` and `_VERSIONS`, which were the `.env` shadow of a
+/// catalogue that had moved into packages. 150 became 78.
 ///
-/// Credentials are deliberately absent. A database password is the one value a
-/// user should choose rather than inherit, and leaving it visible in `.env` is
-/// how somebody notices it still says `root`.
-pub const LEGACY_SERVICES: [(&str, &str); 150] = [
+/// Nothing was lost with them. All twenty-five `_ENABLE` defaults were `"false"`
+/// and [`Env::bool`] reads a missing key as false, so as *values* they were the
+/// identity; their only job was to be present, and that job is the catalogue's.
+///
+/// ## What is left, and why it is not inert
+///
+/// All seventy-eight are the same old `.env` family, and the package manifest
+/// took over every one of their jobs: `url` for `_URL`, `ports` for
+/// `_HOST_PORT`, `settings` for the passwords and panel options.
+/// `package-version.schema.json` says so in as many words — a setting's `key`
+/// is "the bare key, without the `SERVICE_<ID>_` prefix the old .env family
+/// carried". Every reader is a correctly gated pre-migration branch:
+/// `commands.rs` tries `instance_domains` (the table, plus `manifest.url`)
+/// first, [`crate::db`] tries the manifest's `connection` block first.
+///
+/// So they *look* like migration residue. One thing stops them being it, and
+/// it is not in this file. [`crate::db`]'s `Value::or_env` resolves
+/// `stored → .env → manifest default`, and `.env` is in the middle on purpose:
+/// a handover leaves the real password there while the manifest declares a
+/// placeholder, so preferring the manifest would hand a dump the wrong password
+/// with no readable error. But the `.env` it consults is a merged [`Env`], and
+/// [`Env::parse`] lays these defaults **under** the file. On a workspace
+/// installed from packages, with no `.env` at all,
+/// `SERVICE_MYSQL_ROOT_PASSWORD` still answers `"root"` out of the binary — and
+/// by that order it beats what the package declares, which is the reverse of
+/// ADR 0016.
+///
+/// Pinned by `db::tests::stored_beats_env_beats_the_packages_default`, in the
+/// state `mail::detect` was in before ADR 0037: described, relied upon, and
+/// asserted nowhere.
+///
+/// A new service arriving as a package must still not gain a key here — gaining
+/// one would mean the app had an opinion about a service it does not ship.
+///
+/// ## What deletes the rest
+///
+/// The migration cutoff, and for the first time that is all of it. The last
+/// non-migration reader closed when [`Env::stated`] arrived: `db.rs`'s middle
+/// slot now takes only what the file wrote, so an embedded default cannot reach
+/// it and a workspace installed from packages takes its password from the
+/// package. Every remaining reader is the migration or a branch that runs only
+/// before it.
+///
+/// The engineering around it is arranged: the keys are one constant rather than
+/// lines mixed into 36 others, the split is held by
+/// `config::tests::the_two_halves_partition_the_defaults`, every module that
+/// reads one is named by `legacy_env_claims.rs`, and every site that *fails*
+/// without one is named by the rehearsal — which is the half a grep cannot
+/// produce, because a test can lean on a default without naming a key.
+///
+/// Credentials are **not** absent, and the paragraph here used to say they
+/// were. They start at `SERVICE_MYSQL_ROOT_PASSWORD` below, with the comment
+/// explaining why placeholders every install shares are not secrets. The claim
+/// survived because nothing read it.
+pub const LEGACY_SERVICES: [(&str, &str); 78] = [
     ("SERVICE_RABBITMQ_URL", "rabbitmq"),
     ("SERVICE_KIBANA_URL", "kibana"),
     ("SERVICE_GRAFANA_URL", "grafana"),
@@ -169,202 +237,55 @@ pub const LEGACY_SERVICES: [(&str, &str); 150] = [
     // to `.env` when one is changed — so a fresh workspace ships no service
     // configuration at all, and a line in that file means a decision.
     //
-    // Credentials are deliberately NOT here. A database password is the one
-    // value a user should choose rather than inherit, and leaving it visible
-    // in `.env` is how somebody notices it still says `root`.
-    ("SERVICE_ADMINER_ENABLE", "false"),
+    // Credentials ARE here, further down, and this comment used to say they
+    // were deliberately not. They start at `SERVICE_MYSQL_ROOT_PASSWORD` with
+    // the note explaining why placeholders every install shares are not
+    // secrets. Nothing read the claim, so nothing caught it.
     ("SERVICE_ADMINER_HOST_PORT", "8082"),
-    ("SERVICE_ADMINER_VERSION", "latest"),
-    // The `_VERSIONS` beside each `_VERSION` is the list the settings sheet
-    // offers, on the same terms as `SUPPORTED_LANGUAGES_PHP_VERSIONS`: a
-    // catalog that travels with the binary, overridable from `.env`, newest
-    // first, with the shipped default always among its entries.
-    //
-    // It is an offer, not a constraint. The field stays free text underneath,
-    // because the list is a handful of series and a registry has thousands of
-    // tags — somebody pinning `8.0.28` or a digest is doing something ordinary,
-    // and a closed dropdown would make it impossible instead of merely unlisted.
-    //
-    // What each list contains is a judgement rather than "the newest N tags".
-    // The newest N is wrong for a local development stack in a specific
-    // direction: the reason to run MySQL here is often a project that needs
-    // 5.7, and a list that stops at 9.4 answers a question nobody asked. So
-    // each one carries the current series, the maintained ones behind it, and
-    // the legacy series still worth reaching for.
-    //
-    // Every tag was checked against the registry the template pulls from —
-    // including RabbitMQ's, whose image is `{{ VERSION }}-management`, and
-    // Elasticsearch's, which comes from docker.elastic.co and not the Hub.
-    // `examples/service_tags.rs` is how to check them again.
-    ("SERVICE_ADMINER_VERSIONS", "latest,5.5.1,5.4.2,4.8.1"),
-    ("SERVICE_BLACKFIRE_ENABLE", "false"),
-    ("SERVICE_BLACKFIRE_VERSION", "2"),
-    ("SERVICE_BLACKFIRE_VERSIONS", "2,2026.8.0,2.30.3"),
-    ("SERVICE_CASSANDRA_ENABLE", "false"),
-    ("SERVICE_CASSANDRA_VERSION", "latest"),
-    ("SERVICE_CASSANDRA_VERSIONS", "latest,5.0,4.1,4.0,3.11"),
-    ("SERVICE_ELASTICSEARCH_ENABLE", "false"),
-    ("SERVICE_ELASTICSEARCH_VERSION", "8.11.3"),
-    // Kibana's list is deliberately the same one. They are a matched pair —
-    // Kibana refuses to start against an Elasticsearch of a different minor —
-    // and offering two lists that can drift is offering a broken combination.
     (
         "SERVICE_ELASTICSEARCH_VERSIONS",
         "9.4.4,9.3.8,8.19.19,8.11.3,7.17.28",
     ),
     ("SERVICE_GRAFANA_ADMIN_USER", "admin"),
-    ("SERVICE_GRAFANA_ENABLE", "false"),
-    ("SERVICE_GRAFANA_VERSION", "latest"),
-    // 10.4.19 rather than 10.4: Grafana stopped publishing the bare minor tag
-    // for that series, and an offer of `10.4` is an offer of a 404.
-    ("SERVICE_GRAFANA_VERSIONS", "latest,13.1,12.4,11.6,10.4.19"),
-    ("SERVICE_KAFBAT_ENABLE", "false"),
     ("SERVICE_KAFBAT_HOST_PORT", "8080"),
-    ("SERVICE_KAFBAT_VERSION", "latest"),
-    // Kafbat's registry is mostly seven-digit build numbers. Those are real
-    // tags and useless to choose between, so the list is the released ones.
-    ("SERVICE_KAFBAT_VERSIONS", "latest,v1.5.0,v1.4.2,v1.3.0"),
-    ("SERVICE_KAFKA_ENABLE", "false"),
-    ("SERVICE_KAFKA_VERSION", "7.5.0"),
-    // Confluent Platform numbering, not Apache Kafka's — the image is
-    // `confluentinc/cp-kafka`, where 7.5.0 is Kafka 3.5.
-    ("SERVICE_KAFKA_VERSIONS", "8.3.1,7.9.9,7.5.0,6.2.15"),
-    ("SERVICE_KIBANA_ENABLE", "false"),
-    ("SERVICE_KIBANA_VERSION", "8.11.3"),
     (
         "SERVICE_KIBANA_VERSIONS",
         "9.4.4,9.3.8,8.19.19,8.11.3,7.17.28",
     ),
-    ("SERVICE_MAILHOG_ENABLE", "false"),
-    ("SERVICE_MAILHOG_VERSION", "latest"),
-    // Three tags exist in total. MailHog has been unmaintained since 2020 and
-    // the short list is the honest signal — mailpit beside it is the successor.
-    ("SERVICE_MAILHOG_VERSIONS", "latest,v1.0.1,v1.0.0"),
-    ("SERVICE_MAILPIT_ENABLE", "false"),
-    ("SERVICE_MAILPIT_VERSION", "latest"),
-    ("SERVICE_MAILPIT_VERSIONS", "latest,v1.30,v1.29,v1.28"),
     ("SERVICE_MARIADB_DATABASE", "stackvo"),
-    // Every service ships switched off, this one included.
-    //
-    // MySQL, Redis, phpMyAdmin and RabbitMQ used to default on, inherited from
-    // the `.env.example` of the project this replaced. Nothing on disk said so
-    // — the value is compiled in — so deleting the workspace and every Docker
-    // resource still produced a Services page with four entries marked
-    // enabled, and no file to point at.
-    //
-    // It is also the rule mailpit was already following, for a reason worth
-    // generalising: a stack that arrives with things already on never reaches
-    // the offer to turn them on, and the feature that makes the offer looks
-    // like it does nothing. And "enabled" is not "running", so four rows read
-    // ENABLED beside a header counting `0 / 21` — a distinction nobody should
-    // have to learn from a contradiction.
-    ("SERVICE_MYSQL_ENABLE", "false"),
-    ("SERVICE_REDIS_ENABLE", "false"),
-    ("SERVICE_MARIADB_ENABLE", "false"),
-    ("SERVICE_MARIADB_VERSION", "10.6"),
-    // The LTS lines, not the newest four. MariaDB releases a short-term series
-    // roughly quarterly, so a newest-first list would be 12.3, 12.2, 12.1, 12.0
-    // — four names for the same year and nothing a legacy project can use.
-    ("SERVICE_MARIADB_VERSIONS", "12.3,11.8,11.4,10.11,10.6,10.5"),
-    ("SERVICE_MEILISEARCH_ENABLE", "false"),
     ("SERVICE_MEILISEARCH_HOST_PORT", "7700"),
-    ("SERVICE_MEILISEARCH_VERSION", "v1.11"),
-    ("SERVICE_MEILISEARCH_VERSIONS", "latest,v1.53,v1.52,v1.11"),
-    ("SERVICE_MEMCACHED_ENABLE", "false"),
-    ("SERVICE_MEMCACHED_VERSION", "1.6"),
-    ("SERVICE_MEMCACHED_VERSIONS", "1.6,1.5,1.4"),
     // Two published ports, and both are named: the S3 API is what an SDK
     // connects to and the console is what a browser opens. One key for "the
     // MinIO port" would silently be the wrong one half the time.
     ("SERVICE_MINIO_CONSOLE_HOST_PORT", "9001"),
-    ("SERVICE_MINIO_ENABLE", "false"),
     ("SERVICE_MINIO_HOST_PORT", "9000"),
-    ("SERVICE_MINIO_VERSION", "RELEASE.2025-09-07T16-13-09Z"),
-    // Four dates, and the note that stood here argued the opposite: MinIO
-    // publishes `RELEASE.2025-…Z` and nothing that reads as a version, so
-    // listing a handful would freeze four dates into the binary while the
-    // field is free text anyway.
-    //
-    // That was the right trade while the tag was only a default. ADR 0014 ends
-    // it: a moving tag has no fixed digest and so cannot be a service package
-    // version, and `latest` was the whole of this list — MinIO was the one
-    // service in the catalog with nothing to package at all. It also meant the
-    // version picker offered exactly one entry, which is a picker that answers
-    // no question.
-    //
-    // Measured against Docker Hub on 11 August 2026 rather than remembered:
-    // all four tags resolve, and there is no 2026 release.
     (
         "SERVICE_MINIO_VERSIONS",
         "RELEASE.2025-09-07T16-13-09Z,RELEASE.2025-07-23T15-54-02Z,\
          RELEASE.2025-06-13T11-33-47Z,RELEASE.2025-04-22T22-12-26Z",
     ),
-    ("SERVICE_MONGO_ENABLE", "false"),
     ("SERVICE_MONGO_EXPRESS_ADMIN_USERNAME", "root"),
     ("SERVICE_MONGO_EXPRESS_BASICAUTH_USERNAME", "admin"),
-    ("SERVICE_MONGO_EXPRESS_ENABLE", "false"),
     ("SERVICE_MONGO_EXPRESS_HOST_PORT", "8083"),
     ("SERVICE_MONGO_EXPRESS_MONGODB_PORT", "27017"),
-    ("SERVICE_MONGO_EXPRESS_VERSIONS", "latest,1.0.2,1.0,0.54"),
-    ("SERVICE_MONGO_EXPRESS_VERSION", "latest"),
     ("SERVICE_MONGO_INITDB_ROOT_USERNAME", "root"),
-    ("SERVICE_MONGO_VERSION", "8.0"),
-    // 8.0 leads rather than 8.3 because 8.0 is the LTS major; 8.2 and 8.3 are
-    // rapid releases MongoDB does not recommend running in production. Both are
-    // offered anyway — this is a development stack, and trying the next one is
-    // a legitimate reason to be here.
-    ("SERVICE_MONGO_VERSIONS", "8.0,8.3,8.2,7.0,6.0,5.0"),
     ("SERVICE_MYSQL_DATABASE", "stackvo"),
-    ("SERVICE_MYSQL_VERSION", "8.0"),
-    // 5.7 earns its place: it is end-of-life and it is what a large number of
-    // existing projects were written against, which is the exact case a local
-    // stack exists to serve.
-    ("SERVICE_MYSQL_VERSIONS", "9.7,9.4,8.4,8.0,5.7"),
     ("SERVICE_PGADMIN_DEFAULT_EMAIL", "admin@stackvo.loc"),
-    ("SERVICE_PGADMIN_ENABLE", "false"),
     ("SERVICE_PGADMIN_HOST_PORT", "5050"),
-    ("SERVICE_PGADMIN_VERSION", "latest"),
-    ("SERVICE_PGADMIN_VERSIONS", "latest,9.17,9.16,8.14"),
     ("SERVICE_PHPCACHEADMIN_ADMIN_USER", "admin"),
-    ("SERVICE_PHPCACHEADMIN_ENABLE", "false"),
     ("SERVICE_PHPCACHEADMIN_HOST_PORT", "8084"),
     ("SERVICE_PHPCACHEADMIN_MEMCACHED_PORT", "11211"),
     ("SERVICE_PHPCACHEADMIN_REDIS_PORT", "6379"),
-    ("SERVICE_PHPCACHEADMIN_VERSION", "latest"),
-    ("SERVICE_PHPCACHEADMIN_VERSIONS", "latest,2.6.0,2.5.2"),
-    ("SERVICE_PHPMYADMIN_ENABLE", "false"),
     ("SERVICE_PHPMYADMIN_HOST_PORT", "8081"),
     ("SERVICE_PHPMYADMIN_PORT", "3306"),
-    ("SERVICE_PHPMYADMIN_VERSION", "latest"),
-    ("SERVICE_PHPMYADMIN_VERSIONS", "latest,5.2,5.1,5.0"),
     ("SERVICE_POSTGRES_DB", "stackvo"),
-    ("SERVICE_POSTGRES_ENABLE", "false"),
     ("SERVICE_POSTGRES_USER", "stackvo"),
-    ("SERVICE_POSTGRES_VERSION", "14"),
-    // Bare majors, because that is Postgres's unit of compatibility and the
-    // form its tags take. Back to 12 so a project that has not migrated its
-    // dump format has somewhere to land.
-    ("SERVICE_POSTGRES_VERSIONS", "18,17,16,15,14,13,12"),
     ("SERVICE_RABBITMQ_DEFAULT_USER", "admin"),
-    ("SERVICE_RABBITMQ_ENABLE", "false"),
-    ("SERVICE_RABBITMQ_VERSION", "3"),
-    // Checked as `<tag>-management`, which is what the template writes. The
-    // plain tags exist for series the management ones do not, so verifying the
-    // bare name would have passed while the pull failed.
-    ("SERVICE_RABBITMQ_VERSIONS", "4.3,4.2,4,3.13,3"),
-    ("SERVICE_REDIS_VERSION", "7.0"),
-    ("SERVICE_REDIS_VERSIONS", "8.10,8.2,7.4,7.2,7.0,6.2"),
-    ("SERVICE_TYPESENSE_ENABLE", "false"),
     ("SERVICE_TYPESENSE_HOST_PORT", "8108"),
-    ("SERVICE_TYPESENSE_VERSION", "27.1"),
-    ("SERVICE_TYPESENSE_VERSIONS", "30.2,29.1,28.0,27.1"),
-    ("SERVICE_VALKEY_ENABLE", "false"),
     // Not 6379. Valkey speaks Redis's protocol, so the case for having it is
     // usually "move this project off Redis" — which means both running at once,
     // and a shared port makes whichever starts second fail to bind.
     ("SERVICE_VALKEY_HOST_PORT", "6381"),
-    ("SERVICE_VALKEY_VERSION", "8"),
-    ("SERVICE_VALKEY_VERSIONS", "9.1,9.0,8.1,8,7.2"),
     // Ports and starting credentials, so a workspace ships no `.env` content at
     // all. These are placeholders every install shares, not secrets: they are
     // in this file, which is public, and were in the committed `.env.example`
@@ -404,15 +325,15 @@ pub const LEGACY_SERVICES: [(&str, &str); 150] = [
 /// split above is about what *leaves* later, not about what anybody reads now,
 /// and giving callers two constants to remember would be a way for one of them
 /// to be forgotten on the day the second is deleted.
-pub const EMBEDDED: [(&str, &str); 186] = both_halves();
+pub const EMBEDDED: [(&str, &str); 114] = both_halves();
 
 /// Concatenation, at compile time.
 ///
 /// A `const fn` rather than a `LazyLock` or a `Vec` built on demand: this is
 /// read on every `Env::parse`, and the two halves are literals. Nothing here
 /// is worth a heap allocation or a synchronisation primitive.
-const fn both_halves() -> [(&'static str, &'static str); 186] {
-    let mut out = [("", ""); 186];
+const fn both_halves() -> [(&'static str, &'static str); 114] {
+    let mut out = [("", ""); 114];
     let mut i = 0;
     while i < SETTINGS.len() {
         out[i] = SETTINGS[i];
@@ -527,22 +448,55 @@ impl Env {
         // broke the moment the current name shipped as an embedded default:
         // the first arm then always answered, the alias never fired, and a
         // checkout asking for Apache was quietly served nginx.
+        let mut stated: BTreeSet<String> = BTreeSet::new();
         for (legacy, current) in ALIASES {
             if let Some(value) = from_file.get(legacy) {
                 if !from_file.contains_key(current) {
                     vars.insert(current.to_string(), value.clone());
+                    // Written under its current name, so a caller asking
+                    // whether the file chose it gets yes. It did — in the older
+                    // spelling, which is the whole point of the chain.
+                    stated.insert(current.to_string());
                 }
             }
         }
 
+        stated.extend(from_file.keys().cloned());
         vars.extend(from_file);
         Self {
             vars,
+            stated,
             unresolved: Vec::new(),
         }
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
+        self.vars.get(key).map(|s| s.as_str())
+    }
+
+    /// What the **file** says, with no embedded default underneath it.
+    ///
+    /// [`Self::get`] is right for almost everything: a value the app knows is a
+    /// good answer, and that is what [`EMBEDDED`] is for. This is for the one
+    /// question where a default is not an answer — *did somebody choose this* —
+    /// and [`crate::db`] is the caller that has to ask.
+    ///
+    /// Its resolution order is `stored → .env → the package's default`, with
+    /// `.env` deliberately ahead of the package: a handover leaves the real
+    /// password in `.env` while the manifest declares a placeholder, so
+    /// preferring the manifest would hand a dump the wrong password with no
+    /// readable error. Reading that middle slot with `get` put a third thing in
+    /// it — on a workspace installed from packages, with no `.env` at all,
+    /// `SERVICE_MYSQL_ROOT_PASSWORD` answered `"root"` out of the binary and
+    /// **beat what the package declared**, which is the reverse of ADR 0016.
+    ///
+    /// So the middle slot asks this instead, and the embedded service defaults
+    /// go back to being what they are: values for a workspace that has a
+    /// pre-market `.env`, which is the migration and nothing else (§3 #36).
+    pub fn stated(&self, key: &str) -> Option<&str> {
+        if !self.stated.contains(key) {
+            return None;
+        }
         self.vars.get(key).map(|s| s.as_str())
     }
 
@@ -925,7 +879,7 @@ SERVICE_REDIS_ENABLE=TRUE
     #[test]
     fn the_two_halves_partition_the_defaults() {
         assert_eq!(SETTINGS.len(), 36);
-        assert_eq!(LEGACY_SERVICES.len(), 150);
+        assert_eq!(LEGACY_SERVICES.len(), 78);
         assert_eq!(EMBEDDED.len(), SETTINGS.len() + LEGACY_SERVICES.len());
 
         for (key, _) in LEGACY_SERVICES {
@@ -952,21 +906,67 @@ SERVICE_REDIS_ENABLE=TRUE
         assert_eq!(seen.len(), EMBEDDED.len());
     }
 
+    /// A default is an answer; it is not a choice, and one caller needs to tell.
+    ///
+    /// `get` merges [`EMBEDDED`] under the file and that is right almost
+    /// everywhere. `stated` is the narrow question `db.rs` asks — its
+    /// resolution order puts `.env` ahead of what a package declares, so a
+    /// default arriving in that slot outranks the package, which is the reverse
+    /// of ADR 0016. This is the line between the two, and the alias case is
+    /// included because "the file chose it" has to survive the file choosing it
+    /// under the older spelling.
+    #[test]
+    fn stated_is_what_the_file_wrote_and_get_is_that_plus_the_defaults() {
+        let env = Env::parse("SERVICE_MYSQL_ROOT_PASSWORD=hunter2\n");
+        assert_eq!(env.stated("SERVICE_MYSQL_ROOT_PASSWORD"), Some("hunter2"));
+        assert_eq!(env.get("SERVICE_MYSQL_ROOT_PASSWORD"), Some("hunter2"));
+
+        // The embedded default answers `get` and refuses `stated`: nobody chose
+        // it, and a dump that used it would be using the binary's opinion over
+        // the package's.
+        let untouched = Env::parse("");
+        assert_eq!(untouched.get("SERVICE_MYSQL_ROOT_PASSWORD"), Some("root"));
+        assert_eq!(untouched.stated("SERVICE_MYSQL_ROOT_PASSWORD"), None);
+
+        // A key nobody has ever heard of is absent from both.
+        assert_eq!(untouched.stated("SERVICE_NOTHING_AT_ALL"), None);
+
+        // An alias: chosen under the old name, so `stated` answers under the
+        // new one. Anything else would make the chain a choice the file made
+        // and this function cannot see.
+        let aliased = Env::parse("DEFAULT_SERVER=apache\n");
+        assert_eq!(aliased.stated("SUPPORTED_SERVERS_DEFAULT"), Some("apache"));
+
+        // And an empty value is still a choice — blanking a line is how
+        // somebody asks for the field back (see `service_versions`). Filtering
+        // empties is the caller's business, not this function's.
+        let blanked = Env::parse("SERVICE_MYSQL_ROOT_PASSWORD=\n");
+        assert_eq!(blanked.stated("SERVICE_MYSQL_ROOT_PASSWORD"), Some(""));
+    }
+
     /// `both_halves` concatenates rather than interleaving.
     ///
     /// A `const fn` with two hand-written index loops is exactly the shape that
     /// can be off by one and still compile — the array is the right length
     /// either way, and the hole shows up as an empty key that `Env::parse`
     /// happily inserts under `""`.
+    ///
+    /// Elementwise rather than by the four corners, and the rehearsal is why.
+    /// This used to assert `EMBEDDED[SETTINGS.len()] == LEGACY_SERVICES[0]`,
+    /// which reads fine and is a **compile error** the moment the legacy half
+    /// is empty: `deny(unconditional_panic)` rejects the constant index, so
+    /// deleting the constant §3 #36 is waiting to delete stopped the crate's
+    /// tests from building instead of failing one. Comparing the whole array
+    /// against the two halves laid end to end checks every entry rather than
+    /// four, and survives one half going away — which is the state this test is
+    /// eventually meant to be read in.
     #[test]
     fn the_merge_keeps_every_entry_and_invents_none() {
-        assert_eq!(EMBEDDED[0], SETTINGS[0]);
-        assert_eq!(EMBEDDED[SETTINGS.len() - 1], SETTINGS[SETTINGS.len() - 1]);
-        assert_eq!(EMBEDDED[SETTINGS.len()], LEGACY_SERVICES[0]);
-        assert_eq!(
-            EMBEDDED[EMBEDDED.len() - 1],
-            LEGACY_SERVICES[LEGACY_SERVICES.len() - 1]
-        );
+        let mut expected = Vec::with_capacity(EMBEDDED.len());
+        expected.extend_from_slice(&SETTINGS);
+        expected.extend_from_slice(&LEGACY_SERVICES);
+        assert_eq!(EMBEDDED.as_slice(), expected.as_slice());
+
         for (key, _) in EMBEDDED {
             assert!(!key.is_empty(), "the merge left a hole");
         }
@@ -1049,15 +1049,25 @@ SERVICE_REDIS_ENABLE=TRUE
     }
 
     /// A pinned tag that is not on the list still shows as the current value.
+    ///
+    /// The list is stated rather than inherited. It used to come from
+    /// `SERVICE_MONGO_VERSIONS` as an embedded default, so this test was reading
+    /// the catalogue that ADR 0016 moved into packages — and when those keys
+    /// left (§3 #36) it failed for a reason that had nothing to do with folding.
+    /// A test about what `service_versions` does with a list should say what the
+    /// list is.
     #[test]
     fn an_unlisted_version_is_folded_into_the_options() {
-        let env = Env::parse("SERVICE_MONGO_VERSION=8.0.28\n");
+        const OFFERED: &str = "SERVICE_MONGO_VERSIONS=8.0,7.0,6.0\n";
+
+        let env = Env::parse(&format!("{OFFERED}SERVICE_MONGO_VERSION=8.0.28\n"));
         let versions = env.service_versions("mongo");
 
         assert_eq!(versions.first().map(String::as_str), Some("8.0.28"));
         assert!(versions.contains(&"8.0".to_string()), "{versions:?}");
         // Folded in once, not appended to a list that already had it.
-        let listed = Env::parse("SERVICE_MONGO_VERSION=7.0\n").service_versions("mongo");
+        let listed =
+            Env::parse(&format!("{OFFERED}SERVICE_MONGO_VERSION=7.0\n")).service_versions("mongo");
         assert_eq!(listed.iter().filter(|v| *v == "7.0").count(), 1);
         assert_eq!(listed.first().map(String::as_str), Some("8.0"));
     }

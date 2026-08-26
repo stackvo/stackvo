@@ -7,10 +7,12 @@ buradan silinir; kaydı `CHANGELOG.md`'ye, geri alınamaz bir tercih taşıyorsa
 `✅` bitti · `🟡` yarım · `⬜` başlanmadı · `⛔` engelli (dışarıdan bir şey
 gerekiyor) · `🔒` karar bekliyor
 
-**§2–§4'ün arkasında kapı yok ve olamaz** — "yapılmadı" kodun ölçülebilir bir
-özelliği değil. Elde olan tek şey her satırın **nasıl bakıldığını** taşıması.
-§5, §6 ve §7'nin arkasında **var**: karar tablosu ve ölçüm testlerle tutuluyor,
-yanlış bir sayı build'i kırıyor.
+**§2–§4'ün *durumu* için kapı yok ve olamaz** — "yapılmadı" kodun ölçülebilir
+bir özelliği değil. Elde olan tek şey her satırın **nasıl bakıldığını**
+taşıması. Bir satırın taşıdığı **sayı** ise ölçülebilir ve ölçülüyor: #36'nın
+"okuyan modül" sayısı `legacy_env_claims.rs` ile tutuluyor. §5, §6 ve §7'nin
+arkasında **var**: karar tablosu ve ölçüm testlerle tutuluyor, yanlış bir sayı
+build'i kırıyor.
 
 ---
 
@@ -150,10 +152,10 @@ yalnız kalanı taşıyor.
 | # | Madde | Durum | Nasıl bakıldı |
 | --- | --- | :-: | --- |
 | 2 | Güncelleme endpoint'i | 🟡 | **Engel Windows değildi, ve bunu öğrenmek için log'u açmak yetti.** Satır üç turdur "altı hedef de test adımında düştü, kalan iş W'nin yeşile dönmesi" diyordu. Log'lar açılınca altı düşüşün **üç ayrı sebebi** olduğu görüldü: iki macOS satırı `key_ceremony`'de (`no_private_signing_key_is_committed` kendi dosyasını ve `tools/keys.sh`'i imzalı anahtar sanıyordu), iki Linux satırı `elevate_probe`'da (`hosts::elevated_here` `STACKVO_HOSTS_PATH` görünce yükseltmeyi reddediyordu, testse o dalı denemek için tam da onu kuruyordu), iki Windows satırı #35/W'de. **Üçünün ikisi zaten düzeltilmişti** — `c8ec131`, etiketten sonra inen commit. Yani release, kusurlarının üçte ikisi onarılmışken "Windows'u bekliyor" diye duruyordu. W'nin on dokuz hatasından da **bir tanesi kalmıştı** ve o da bu turda kapandı: `dirs::home_dir()` Unix'te `$HOME`'u okuyor, Windows'ta `%USERPROFILE%`'ı okumayıp kabuğa `FOLDERID_Profile` diye soruyor — `agents` üç platformun ikisinde taşınmış bir ev dizinine uyuyordu, üçüncüsü de burada kimsenin koşmadığı platformdu. Testi Windows'ta atlamak öteki seçenekti ve #35 o takası bir kez yakalamıştı zaten. **Endpoint'e soran bir şey de yoktu:** `updater_endpoint.rs` URL'nin doğru *yazıldığını* kontrol ediyor — bugün doğru, ve endpoint 404 verirken de doğruydu. Aradaki boşluk bir HTTP isteği genişliğinde ve artık bir komut: **`npm run updates:check`** manifest'i updater'ın okuyacağı gibi okuyor (sürüm, altı platformun her biri için url + boş olmayan imza), yargı yarısı ağsız test edildi (`tests/updater-manifest.spec.js`, 11 test). **Ve altı hedef yeşile dönse bile endpoint 404 kalırdı:** sürüm `releaseDraft: true` ile **taslak** açılıyor, GitHub ise `releases/latest`'ı yalnız yayımlanmış sürüme çözer. Taslak bilerek kalıyor (`fail-fast: false` ile eksik matris olağan bir sonuç, ve dört platform adlandıran bir `latest.json` öteki ikiye sonsuza dek "güncelsin" der); yanlış olan taslak değil, adımın hiçbir yerde yazmamasıydı — koşu artık kendi özetinde söylüyor. **Bir daha aynı körlük olmasın diye:** suite `--no-fail-fast` ile koşuyor ve çıktısı `PIPESTATUS` ile artifact olarak iniyor; `workflow_parity.rs` testi koşan işin ortamını CI'ınkinin üst kümesi olmaya zorluyor (liste zaten kaymıştı — `libdbus-1-dev` CI'da vardı, burada yoktu; zararsızdı çünkü `libappindicator3-dev` onu zaten getiriyor, ve zararsız olduğu için kimse fark etmemişti); `updater_endpoint.rs` taslak ↔ endpoint tutarlılığını tutuyor. **Kalan: bir etiket, sonra taslağı yayımlamak, sonra `npm run updates:check`** |
-| 22 | Platform kapsamı (Linux aarch64, Win ARM64) | 🟡 | **Prova gerçek bir yayınla koştu ve iki ARM satırının ilk sorusu cevaplandı.** `v0.1.0` Release #1'i tetikledi; `ubuntu-24.04-arm` ve `windows-11-arm` işleri **başladı, derledi ve test koştu** (11 ve 18 dakika), yani koşucu etiketleri çözülüyor ve toolchain'ler orada çalışıyor — koşucusuz doğrulanamayan tam da buydu. Cevaplanmayan yarısı: **bundler orada mutlu mu**, çünkü altı iş de paketleme adımına varmadan test adımında düştü. Kalan: bir etiket daha — #2'nin iki kusuru kapandığına göre bu sefer paketleme adımına varması beklenir |
+| 22 | Platform kapsamı (Linux aarch64, Win ARM64) | 🟡 | **Teşhis yanlıştı, ve düzeltilmesi koşucu gerektirmedi.** Satır “kalan: bir etiket daha, bu sefer paketleme adımına varması beklenir” diyordu. Varamazdı, **iki ayrı sebeple**, ve ikisi de bu makinede ölçüldü. **Birincisi: paketleme, test adımının arkasındaydı.** İlk gerçek koşuda altı hedefin altısı `cargo test`'te düştü; `windows-11-arm`'da on sekiz dakika harcandı ve #22 sorduğu **tek** şey hakkında hiçbir şey öğrenmedi. İki soru bağımsız — süit orada geçiyor mu, orada paket üretilebiliyor mu — ve bir prova zaten hiçbir şey yayımlamıyor, yani kırmızı bir süitin koruyacağı bir yayın yok. Süit adımı provada `continue-on-error`, paketleme adımları yine koşuyor, ve iş **yine de kırmızı bitiyor**: dosyanın son adımı o adımın `outcome`'unu okuyup düşürüyor. `continue-on-error` tek başına işi yeşile çevirirdi, ki bu cevapsız bir sorudan daha kötü bir iddia. **İkincisi, ve prova bu duvara paketlemeyi bitirmiş hâlde çarpardı:** `createUpdaterArtifacts` açık ve `pubkey` dolu, o yüzden `tauri build` ürettiği paketleri **koşulsuz** imzalıyor, anahtarı `TAURI_SIGNING_PRIVATE_KEY`'den alıyor. Anahtarı olmayan bir depo tauri'nin temiz “public key var, private key yok” hatasını **almıyor**: Actions olmayan bir secret'ı **boş dizgeye** çeviriyor, boş dizge de tauri açısından *set* demek — bekçiden geçiyor ve sıfır uzunluklu anahtarı çözerken ölüyor. Öldüğü yer asıl mesele: `sign_updaters`, `bundle_project`'ten **sonra** koşuyor, yani her yükleyici o an diskte. Ve artifact yüklemesi `if: ${{ inputs.rehearsal }}` idi — her `if` örtük bir `success()` taşır — yani prova #22'nin istediği her şeyi üretip **hiçbirini bırakmadan** düşecekti. Artık provaya `--no-sign` geçiliyor (yayımlamayan bir koşunun imzasının koruyacağı bir şey yok) ve yükleme `always()`. **Üçüncüsü, ve “paketleme adımına vardı” bir cevap değil:** yüklenen zip'i birinin indirip gözüyle okuması bir kontrol değildir — tekrarlanmıyor ve bir hükmü yok. `npm run installers:check` hükmü koşucuda veriyor. `bundle.targets` `"all"`, yani Linux bir `.deb`, bir `.rpm` **ve** bir `.AppImage` borçlu — üç ayrı bundler, biri `linuxdeploy-aarch64.AppImage` indirip çalıştırıyor ki x86 satırlarında karşılığı olmayan adım tam bu; Windows bir `.msi` ve bir NSIS `-setup.exe` borçlu. **Ve bir artifact listesinin gösteremeyeceği kusur:** yeşil bir ARM işinin içindeki x86 yükleyici. Her bundler mimariyi dosya adına yazıyor, üstelik kendi kelimesiyle — dpkg'ye `arm64`, rpm ve AppImage'a `aarch64`, WiX ve NSIS'e `arm64`, dmg'ye `aarch64` — ve tablo `tauri-bundler`'dan **okundu**, tahmin edilmedi: tek kelimeye indirmek her gerçek ARM yayınını düşürürdü. Yargı yarısı bundler'siz test edildi (`tests/installer-formats.spec.js`, 15 test), workflow'un o kontrolü koştuğu ayrıca (`release_rehearsal.rs`, 8 test). **Yol boyunca kapanan dördüncü kusur:** `dtolnay/rust-toolchain@stable` hedefi **stable**'a ekliyordu, oysa bu işte stable ile derlenen hiçbir şey yok — `src-tauri/rust-toolchain.toml` 1.96.1'e sabitliyor ve rustup bu sabiti **çalışma dizininden** çözüyor; `stable-<host>` ile `1.96.1-<host>` aynı derleyici oldukları gün bile ayrı kurulumlar. Hedefin host olduğu dört satırda bedava, `x86_64-apple-darwin`'de derlemenin tamamı. Sidecar adımları da aynı sebeple artık `src-tauri`'den koşuyor: kökten başlatıldığında **paketlenen** sidecar'ları o sabahki `stable` derliyordu, yani içine konduğu uygulamadan başka bir derleyici. **Burada ölçülebilecek her şey ölçüldü:** tauri 2.11.4 bundler'ının kaynağı okundu — aarch64 hem MSI (WiX `-arch arm64`), hem NSIS, hem AppImage için tanınıyor — ve ARM'in indirdiği üç aracın (`AppRun-aarch64`, `linuxdeploy-aarch64.AppImage`, plugin) üçü de 200 veriyor. Kalan **bir koşucu gerektiriyor** ve tek bir şey: **bir prova koşusu** (Actions → Release → Run workflow, `rehearsal` işaretli). Bu sefer düşse bile öğretir — süit onu durdurmuyor, paketler duruyor, ve özet hangi formatın çıkmadığını adıyla yazıyor |
 | 31 | Air-gapped kurulum | 🟡 | **Paket yolu yazıldı.** Okuyan yarı `LocalSource`'tan beri vardı; **yazan** yarı yoktu — bir paketi üretmenin tek yolu paket deposunu klonlayıp düzeninin istemcinin okuduğu düzen olmasını ummaktı, ki bu bir kurulum yolu değil işe yarayan bir tahmin. `market::bundle` indeksi ve her paketi tek dizine yazıyor; çıktı **bir kaynak**: uzak uç `market_refresh` + `market_install`'ı ondan koşuyor ve bir checkout'tan ayırt edemiyor (test bunu iki ayrı çalışma alanıyla uçtan uca koşturuyor). `registry.json` **bayt bayt** kopyalanıyor — imza baytların üstünde (ADR 0015) ve `manifestSha256` onlardan zincirleniyor. Her manifest **burada**, ağı olan makinede doğrulanıyor; geri çekilmiş sürüm satırını koruyup dosyalarını bırakıyor (ADR 0014). Yüzey: `stackvo market-bundle <dizin>` — bir düğme değil, çünkü bunu yapan kişi ssh'tan koşan bir operatör. §9'un `stackvo-packages.tar`'ı bu dizinin **paketlenmesi**, ikinci bir mekanizma değil. **GUI karşılığı da var**: Ayarlar → Katalog panelinde bir klasör seçici; paket yazılınca boyutu MiB olarak, imzasızsa uyarıyı ve taşınmayan sürümleri yayıncının kendi sözleriyle gösteriyor — ikisi de koridoru yürümeden önce okunması gereken şeyler. Kalan: tar'ı üreten adım elle (`tar -cf … -C <dizin> .`) |
 | 35 | Windows ve Linux dallarının çalıştırılması | 🟢 | **Linux kapandı, Windows koşuyor.** Linux: `certs.rs`'in `not(macos)` dalı var olmayan bir fonksiyonu çağırıyordu; CI #38'de `ubuntu-latest` **yeşil**. Windows tip kontrolü `tools/linux/run.sh --windows` ile bu makinede geçiyor — ve o betik hedefin sidecar stub'ını üretmediği için "resource path … doesn't exist" diye duruyordu, artık üretiyor. **Koşma yarısı da açıldı** ve on dokuz hata gösterdi; teşhisi ve düzeltmeleri §2 W'de. Bu satırın kendi sorusu — *dallar koşuyor mu* — cevaplandı; *yeşiller mi* sorusu W'nin |
-| 36 | `EMBEDDED`'ın servis yarısı | 🟡 | ADR 0016'dan sonra **yalnız göç için** duruyor. `config.rs` `SETTINGS` (36, kalan) ve `LEGACY_SERVICES` (150, gidecek) taşıyor — "yaklaşık yarısı" yanlıştı, **beşte dördü**. Okuyan dört modül `legacy_env_claims.rs` ile kilitli. **Tarih artık verildi: 0.4.0** (§5). Ve düzyazı değil bir kapı: uygulama 0.4.0'a çıktığı ve sabit hâlâ orada olduğu an build kırılıyor; tarihin 1.0.0'a ötelenmesi de kırıyor. Kalan: **o gün silmek** |
+| 36 | `EMBEDDED`'ın servis yarısı | 🟢 | **Karar verildi — katalogdan — ve 72 anahtar gitti.** Satır üç turdur "yalnız göç için duruyor" diyordu; `npm run legacy:rehearse` sabiti boşaltıp süiti koşarak bunu yanlışladı: **legacy yarısı tamamen yokken `handover_equivalence.rs` 13/13 geçiyor.** `handover::plan` `.env` ne diyorsa onu alıyor, hiçbir şey demiyorsa **kataloğa** soruyor (`catalogue.recommended`). Sabiti asıl ayakta tutan şey `mail.rs`'in `detect`'iydi: "hangi catcher **bildirilmiş**" diye `.env`'de bir anahtarın *varlığına* bakıyordu, ve el değmemiş bir çalışma alanında onu bildiren tek şey bu sabitti. **ADR 0037: kelime dağarcığı katalogdan okunur.** `detect` artık `contracts::knows_service`'e soruyor, ve `ENABLE`/`VERSION`/`VERSIONS` üçlüsünün **72 anahtarı** silindi — ADR 0016'nın paketlere taşıdığı kataloğun `.env`'de kalmış gölgesiydi. `LEGACY_SERVICES` **150 → 78**, `EMBEDDED` **186 → 114**. **Kalan 78'i "canlı" ve "göç" diye ikiye ayırmak yanlıştı** ve bir tur sürdü. Doğrusu: 78'in tamamı aynı eski `.env` ailesi, ve paket manifesti her birinin işini devraldı — `url` ↔ `_URL`, `ports` ↔ `_HOST_PORT`, `settings` ↔ parolalar ve panel ayarları. Şemanın kendisi söylüyor: `settings[].key` = "**`SERVICE_<ID>_` önekini taşıyan eski `.env` ailesinin** öneksiz hâli". Okuyanların hepsi de doğru kapılı göç-öncesi dallar — `commands.rs` önce `instance_domains`'e bakıyor (tablo + `manifest.url`), `db.rs` önce `declared_for`'a (manifest `connection` + `settings`). **Ama gömülü yarı atıl değil, ve asıl bulgu bu.** `db.rs`'in çözüm sırası `stored → .env → manifest` ve `.env` **kasten ortada**: göç gerçek parolayı `.env`'de bırakıyor, manifest bir yer tutucu beyan ediyor, manifest öne alınsa dump yanlış parolayı okunabilir hiçbir hata vermeden alırdı. Fakat oradaki `env.get` **gömülü varsayılanları da taşıyan birleşik `Env`'den** okuyor. Yani `.env`'i hiç olmayan, paketlerden kurulmuş bir çalışma alanında `SERVICE_MYSQL_ROOT_PASSWORD` binary'den `"root"` cevabını veriyor ve **paketin kendi beyanını eziyor** — ADR 0016'nın tam tersi. Bu davranış artık `stored_beats_env_beats_the_packages_default` ile sabitlenmiş; `mail::detect` de düzeltilmeden önce tam olarak böyle sabitlenmişti. **Yol boyunca kapananlar:** sabitin düzyazısındaki iki yanlış ("sürüm varsayılanı olmadan göç edecek etiket yok" — plan kataloğa soruyor; "kimlik bilgileri kasten yok" — on altı parola tam içinde). Silme günü bir **derleme hatasıyla** açılıyordu (`LEGACY_SERVICES[0]` + `deny(unconditional_panic)`); test artık eleman eleman karşılaştırıyor. Okuyan **5** modül kilitli — tarama anahtarı *adlandıran* yazımı da tanıyor, `src/bin/`'i geziyor, ve öneki **o dosyanın gerçekten eklediği sonekle** eşleştiriyor. **Ve o son okuyucu da kapandı.** `Env` artık *dosyanın yazdığını* ayırt ediyor (`Env::stated`) ve `db.rs`'in orta yuvası onu kullanıyor — gömülü bir varsayılan oraya artık giremiyor, yani paketten kurulmuş bir çalışma alanında parola paketin beyanından geliyor, binary'den değil. `parse` bu ayrımı zaten ALIASES için tutuyordu ve oradaki yorum aynı dersin bedelini yazmış: birleşik haritaya bakıldığı gün Apache isteyen bir checkout sessizce nginx alıyordu. **Böylece sabit gerçekten yalnız göç:** okuyanların hepsi göç ya da göç-öncesi dal, ve bu iddia artık prova ile ölçülüyor. Kalan **kod değil**: göç kesiminde silmek. Kapı 0.4.0'da duruyor ve o gün bunu zorluyor |
 
 ---
 
@@ -200,7 +202,11 @@ kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
   duyurulduğunu yazıyor, kullanmanın nasıl bir şey olduğunu yazamıyor.
 * **#22** — iki ARM satırının ilk sorusu cevaplandı: koşucular çözüldü,
   derlediler, test koştular. Kalan **bundler'ın orada mutlu olup olmadığı**, ve
-  ona varmak için W'nin yeşile dönmesi gerekiyor.
+  ona varmak artık W'ye bağlı değil: prova süiti `continue-on-error` ile koşup
+  paketlemeye yine de gidiyor, `--no-sign` ile imza duvarına çarpmıyor,
+  ürettiğini `always()` ile bırakıyor ve `installers:check` ne çıktığını
+  hükümle yazıyor. Kalan tek eylem **bir prova koşusu**: Actions → Release →
+  Run workflow, `rehearsal` işaretli.
 
 **Elle bir adım, bir tarih ya da bir süreç:**
 
@@ -214,8 +220,12 @@ kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
   altısı yeşile dönse bile endpoint 404 kalırdı: sürüm **taslak** açılıyor ve
   `releases/latest` taslağa çözülmez. Kalan **iki** eylem: bir etiket, sonra
   taslağı yayımlamak — ardından `npm run updates:check` cevabı söylüyor. Bu
-  ikisi #22'nin kalan yarısını ve #21'i birlikte açıyor.
-* **#36** — 0.4.0'da silmek; kapı o gün build'i kırıyor.
+  ikisi #21'i açıyor; #22 artık onları beklemiyor ve kendi provasıyla
+  cevaplanıyor.
+* **#36** — kod tarafı bitti. Kelime dağarcığı katalogdan okunuyor (ADR 0037),
+  72 anahtar gitti, ve `Env::stated` ile gömülü bir varsayılan artık paketin
+  beyanını ezemiyor. Sabit gerçekten yalnız göç; kalan onu kesimde silmek —
+  kapı 0.4.0'da duruyor ve o gün bunu zorluyor.
 * **§2 "Anlatılmayan güçler"** — dördü de bir sayfa ya da bir başlık; hiçbiri
   mühendislik değil.
 
@@ -268,10 +278,17 @@ kapattı — §2 R-2, aşağıda.
 * *Yerel AI servisleri (D-1)?* — ADR 0027. **Yalnız pgvector, ve bir servis
   olarak değil** — `postgres`'in bir sürümü. Bu depoda değişen kod: **hiç**, ve
   bu ADR 0011'in doğru çıkması.
-* *`LEGACY_SERVICES` hangi sürümde siliniyor (#36)?* — **0.4.0.** İki minör
-  boyunca göç desteklenir, sonra silinir. Tarih artık düzyazı değil bir kapı:
-  `legacy_env_claims.rs` uygulama 0.4.0'a çıktığı ve sabit hâlâ orada olduğu an
-  build'i kırıyor.
+* *`LEGACY_SERVICES` hangi sürümde siliniyor (#36)?* — **0.4.0**, ama sorunun
+  kendisi iki kez değişti. Cevap "iki minör göç desteklenir, sonra silinir"di;
+  prova göçün o sabite hiç ihtiyacı olmadığını gösterdi (13/13, §3 #36). Onun
+  yerine çıkan kelime dağarcığı sorusu ADR 0037 ile cevaplandı ve 72 anahtar
+  gitti; `Env::stated` de son göç-dışı okuyucuyu kapattı. Yani 0.4.0'ın bugün
+  zorladığı tek şey silmenin kendisi.
+  Tarih düzyazı değil bir kapı: `legacy_env_claims.rs` uygulama 0.4.0'a çıktığı
+  ve sabit hâlâ orada olduğu an build'i kırıyor — ve bu cümle ile o sabit **tek
+  bir olgu**: sabiti başka bir sürüme taşımak §3'ü, §4'ü ve buradaki cümleyi
+  kırıyor, çünkü öncesinde taşımak üçünü de eski sürümde bırakıp hiçbir şeyi
+  kırmıyordu.
 * *Kapsam eşiği* — **karar gerektirmiyordu, çünkü zaten verilmişti.** Satır
   "ölçüm var, kapı yok" diyordu; `tools/coverage-floors.mjs` tabanları
   kanıttan koyuyor (Rust satır %60, ön yüz %85/85/72),
@@ -1442,6 +1459,54 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   yani boş bırakılmış bir liste IDE'yi compose'un var saymadığı bir servisi
   aramaya gönderirdi.
 
+
+### 0037 — Bir çalışma alanının hangi servisleri tanıdığı katalogdan okunur, `.env`'de bir anahtarın varlığından değil
+
+- **Status:** accepted
+- **Context:** ADR 0016 servisleri paketlere taşıdı ve `env.schema.json`'ın
+  `services`'ini bir **kelime dağarcığı** yaptı. Ama ikinci bir cevap yerinde
+  kaldı: `.env`'de bir anahtarın *var olması*. İkisinin aynı soruya cevap
+  verdiği tek yer küçüktü ve tam da o yüzden kimse bakmamıştı — `mail.rs`'in
+  `detect`'i, hiçbir catcher açık değilken "açacağın catcher bu" diyebilmek
+  için `SERVICE_MAILPIT_ENABLE`'ın *bildirilmiş* olmasına bakıyordu.
+
+  El değmemiş bir çalışma alanında `.env` yok, yani o anahtarı bildiren tek şey
+  `config::LEGACY_SERVICES` idi — adı ve gerekçesi "göç" olan bir tablo. Yani
+  bir panelin davranışı, silinmeyi bekleyen bir sabitten sarkıyordu, ve bunu
+  gösteren şey `npm run legacy:rehearse` oldu: sabit boşaltıldığında göç
+  (`handover_equivalence.rs`) 13/13 geçiyor, düşen sekiz testin hiçbiri göç
+  değil. Sabiti ayakta tutan gerekçe, yazılı olan gerekçe değildi.
+
+  `detect`'in **hiç testi yoktu** — modülün geri kalanının astığı fonksiyon
+  buydu ve davranışı hiçbir yerde sabitlenmemişti. Provanın aradığı yerde
+  yazıldı, ve önce bugünkü davranışı olduğu gibi sabitledi.
+- **Decision:** Tek cevap katalog. `detect` artık
+  `contracts::env_schema().knows_service(...)`'e soruyor; `.env` yalnız *ne
+  açık* sorusuna cevap veriyor, *ne var* sorusuna değil.
+
+  Sonucu bir temizlik değil, bir **çıkarım**: kelime dağarcığı katalogdan
+  okunuyorsa, `.env`'de duran kataloğun gölgesinin okuyucusu kalmıyor.
+  `SERVICE_*_ENABLE`, `*_VERSION` ve `*_VERSIONS` üçlüsünün **72 anahtarı**
+  silindi. `LEGACY_SERVICES` 150 → 78, `EMBEDDED` 186 → 114.
+- **Consequences:** Yirmi beş `_ENABLE` varsayılanının hepsi zaten `"false"`
+  idi ve `Env::bool` eksik anahtarı false okuyor, yani **değer** olarak hiçbiri
+  bir şey yapmıyordu; yaptıkları tek iş **anahtar** olmaktı, ve o iş artık
+  kataloğun. Sürüm tarafında da kayıp yok: `handover::plan` `.env` bir sürüm
+  söylemediğinde zaten `catalogue.recommended`'a soruyor — 0016'nın servisleri
+  dinamik yapmasının anlamı bu.
+
+  Tek kırılan test `config::tests::an_unlisted_version_is_folded_into_the_options`
+  oldu ve kırılma sebebi konusuyla ilgisizdi: fixture'ını `SERVICE_MONGO_VERSIONS`
+  varsayılanından ödünç alıyordu, yani bir listeyle ne yapıldığını sınayan test
+  listenin ne olduğunu söylemiyordu. Artık söylüyor.
+
+  **Kararın ikinci bir sonucu vardı ve o da kapandı.** Kalan 78 anahtarın hepsi
+  aynı eski `.env` ailesi; ama `db.rs` `stored → .env → manifest` sırasıyla
+  çözüyordu ve oradaki `.env` birleşik `Env` idi — `.env`'i hiç olmayan bir
+  kurulumda binary'deki `"root"` paketin beyanını eziyordu. `Env::stated` o
+  yuvaya yalnız dosyanın yazdığını koyuyor. Sabit artık gerçekten yalnız göç,
+  ve §3 #36'nın kalanı onu kesimde silmek.
+
 ---
 
 ## 7. Ölçüm
@@ -1457,9 +1522,9 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
 | `ipc.js` sarmalayıcısı | **302** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **111 modül, 111.562 satır** | `src-tauri/src/*.rs` |
+| Rust kaynağı | **111 modül, 111.734 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
-| Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
+| Gömülü varsayılan — servis tarafı | **78** | `config.rs` → `LEGACY_SERVICES`; toplam **114** |
 
 Son satır iki yerden okunuyor ve bir süre yalnız birinden okunuyordu:
 `tools/validate-contracts.mjs`'nin kazıyıcısı düz bir dizi bekliyordu, sabit

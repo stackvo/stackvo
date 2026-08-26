@@ -44,19 +44,42 @@ fn workflow() -> String {
 /// block that ran a couple of lines long would only make this test *more*
 /// willing to call a step gated — so the sloppiness is checked against, below,
 /// by asserting the gated steps are the ones actually expected.
+///
+/// One thing it is not sloppy about, because in this file the comments *are*
+/// the reasoning: a run of comment lines is held back and given to the step it
+/// introduces rather than to the one it follows. Attached the naive way, a
+/// paragraph explaining why the next step exists reads as part of the previous
+/// step — and a test looking for the step that runs a command finds the step
+/// above it, whose comment merely names it.
 fn steps(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut current = String::new();
+    let mut pending = String::new();
+
     for line in text.lines() {
         let trimmed = line.trim_start();
         let indent = line.len() - trimmed.len();
-        let starts_step = trimmed.starts_with("- ") && indent >= 6;
-        if starts_step && !current.is_empty() {
-            out.push(std::mem::take(&mut current));
+
+        if trimmed.starts_with("- ") && indent >= 6 {
+            if !current.is_empty() {
+                out.push(std::mem::take(&mut current));
+            }
+            current.push_str(&std::mem::take(&mut pending));
+        } else if trimmed.is_empty() || trimmed.starts_with('#') {
+            // Held: it belongs to whichever comes next, a step or more of this
+            // one.
+            pending.push_str(line);
+            pending.push('\n');
+            continue;
+        } else {
+            current.push_str(&std::mem::take(&mut pending));
         }
+
         current.push_str(line);
         current.push('\n');
     }
+
+    current.push_str(&pending);
     if !current.is_empty() {
         out.push(current);
     }
@@ -165,17 +188,196 @@ fn the_builder_is_told_not_to_publish_by_an_expression_with_no_falsy_trap() {
 /// that exist are the only proof that the runner label resolved and the
 /// bundler ran there. Without the upload the run is green and produces nothing
 /// to look at, which answers a different question than the one #22 asks.
+///
+/// And it has to survive a red job. Two steps in this file are now allowed to
+/// fail after the bundles exist — the suite, which is `continue-on-error` in a
+/// rehearsal, and the check on what was produced — so an upload carrying the
+/// implied `success()` would skip on precisely the runs worth reading.
 #[test]
 fn a_rehearsal_keeps_what_it_built() {
     let text = workflow();
-    let keeps = steps(&text).into_iter().find(|step| {
-        step.contains("actions/upload-artifact") && step.contains("${{ inputs.rehearsal }}")
-    });
+    let keeps = steps(&text)
+        .into_iter()
+        .find(|step| step.contains("actions/upload-artifact") && step.contains("inputs.rehearsal"))
+        .expect(
+            "no artifact upload runs in a rehearsal. Then a rehearsal proves the \
+             six targets COMPILED and nothing about whether they bundled — and \
+             the bundler is where an ARM runner actually differs.",
+        );
+
+    let condition = keeps
+        .lines()
+        .find(|l| l.trim_start().starts_with("if:"))
+        .unwrap_or("")
+        .to_string();
     assert!(
-        keeps.is_some(),
-        "no artifact upload runs in a rehearsal. Then a rehearsal proves the \
-         six targets COMPILED and nothing about whether they bundled — and the \
-         bundler is where an ARM runner actually differs."
+        condition.contains("always()"),
+        "the rehearsal upload is `{}`. Every `if:` without a status function \
+         carries an implied `success()`, and a rehearsal that failed — at the \
+         suite, or at the check on what it produced — is the one whose bundles \
+         somebody wants.",
+        condition.trim()
+    );
+}
+
+/// The rehearsal builds without a signing key, and says so to the bundler.
+///
+/// This is the wall the rehearsal would have hit on its first run, having
+/// already done everything #22 asks about. `bundle.createUpdaterArtifacts` is
+/// true and `plugins.updater.pubkey` is set, so `tauri build` signs the
+/// updater-enabled bundles after producing them — reading the key from
+/// `TAURI_SIGNING_PRIVATE_KEY`, unconditionally.
+///
+/// A repository that has not decided where a private key lives does not get
+/// tauri's clean "a public key has been found, but no private key" error.
+/// Actions sets an absent secret to the **empty string**, which is set, so the
+/// guard passes and the run dies decoding a zero-length key instead — after
+/// `bundle_project` has already written every installer to disk.
+///
+/// `--no-sign` is the whole fix, and it is correct rather than a workaround: a
+/// rehearsal publishes nothing, so there is nothing for a signature to protect.
+#[test]
+fn a_rehearsal_tells_the_bundler_not_to_sign() {
+    let text = workflow();
+    let line = text
+        .lines()
+        .find(|l| l.trim_start().starts_with("args:"))
+        .expect("release.yml no longer passes `args:` to tauri-action");
+
+    assert!(
+        line.contains("--no-sign"),
+        "tauri-action is called with `{}`. Without `--no-sign` a rehearsal \
+         bundles all six targets and then fails signing them with a key it \
+         does not have — at the one step #22 exists to reach, for a reason \
+         that has nothing to do with packaging.",
+        line.trim()
+    );
+    assert!(
+        line.contains("inputs.rehearsal &&"),
+        "`--no-sign` is not conditional on this being a rehearsal: `{}`. A \
+         published release must be signed, and an unsigned one is invisible to \
+         the updater on the user's machine rather than here.",
+        line.trim()
+    );
+}
+
+/// A rehearsal reaches its bundler even when the suite is red.
+///
+/// The first real run of this workflow died at the suite on all six targets and
+/// reached no bundler at all — so eighteen minutes on `windows-11-arm` taught
+/// #22 nothing about the only thing it was asking. The two questions are
+/// independent: whether the tests pass there, and whether a package can be
+/// produced there.
+///
+/// The trade has one edge, and this test guards it. `continue-on-error` on its
+/// own finishes the job **green**, and a green tick over a failing suite is a
+/// worse thing to own than an unanswered question — so something later must
+/// read that step's outcome and fail on it.
+#[test]
+fn a_rehearsal_reaches_its_bundler_even_when_the_suite_fails() {
+    let text = workflow();
+
+    let suite = steps(&text)
+        .into_iter()
+        .find(|step| step.contains("cargo test --no-fail-fast"))
+        .expect("release.yml no longer runs the suite");
+    assert!(
+        suite.contains("id: suite"),
+        "the suite step has no `id:`, so nothing downstream can name its \
+         outcome — and every gate below depends on being able to"
+    );
+    assert!(
+        suite.contains("continue-on-error: ${{ inputs.rehearsal"),
+        "the suite is not `continue-on-error` in a rehearsal, so a red suite \
+         stops the job before the bundler runs. That is right for a tag and \
+         wrong for a rehearsal, whose only question is downstream of it:\n{suite}"
+    );
+
+    let votes = steps(&text)
+        .into_iter()
+        .any(|step| step.contains("steps.suite.outcome == 'failure'") && step.contains("exit 1"));
+    assert!(
+        votes,
+        "nothing fails the job when the suite failed. `continue-on-error` \
+         alone makes a rehearsal with a broken suite finish green, which is a \
+         worse claim than the one it was added to avoid."
+    );
+}
+
+/// The run says what the bundler produced, rather than leaving a zip to read.
+///
+/// The upload answers "there is a directory"; #22 asks whether each format a
+/// platform owes came out of it, and whether what came out is for the
+/// architecture the row is named after. `bundle.targets` is `"all"`, so Linux
+/// owes a `.deb`, an `.rpm` and an `.AppImage` from three separate bundlers —
+/// one of which downloads `linuxdeploy-aarch64.AppImage` and executes it, a
+/// step with no equivalent on the x86 rows.
+///
+/// The judgement half of the checker is tested without a bundler in
+/// `tests/installer-formats.spec.js`; this is the half that says it runs.
+#[test]
+fn the_run_says_what_the_bundler_produced() {
+    let text = workflow();
+    let step = steps(&text)
+        .into_iter()
+        .find(|step| step.contains("node tools/check-installers.mjs"))
+        .expect(
+            "nothing checks what the bundler produced. Then the answer to #22 \
+             is a zip file somebody downloads once and reads with their eyes — \
+             which is not a check: it is not repeated and it has no verdict.",
+        );
+
+    assert!(
+        step.contains("--target ${{ matrix.target }}"),
+        "the check is not told which target it is looking at, so it cannot say \
+         whether an ARM row produced an ARM package — the failure hardest to \
+         see from an artifact listing:\n{step}"
+    );
+    assert!(
+        step.contains("inputs.rehearsal && '--unsigned'"),
+        "`--unsigned` is not conditional on this being a rehearsal. A rehearsal \
+         builds with `--no-sign` so there are no signatures to find; a \
+         published release has them, and an artifact without one installs by \
+         hand and is invisible to the updater:\n{step}"
+    );
+    assert!(
+        step.contains("!cancelled()"),
+        "the check carries an implied `success()`, so it is skipped on a \
+         rehearsal whose suite failed — the run where 'did the packaging half \
+         work anyway' is the only question left:\n{step}"
+    );
+}
+
+/// The matrix target reaches the toolchain that actually builds.
+///
+/// `dtolnay/rust-toolchain@stable` installs the target into **stable**, and
+/// nothing in this job builds with stable: `src-tauri/rust-toolchain.toml` pins
+/// 1.96.1 and rustup resolves that pin from the working directory.
+/// `stable-<host>` and `1.96.1-<host>` are separate installations even on the
+/// day they are the same compiler.
+///
+/// Free on the four rows where the target is the host — a host's own std is
+/// always there — and the entire build on `x86_64-apple-darwin`, which
+/// cross-compiles from an arm64 runner. The same class of bug as the one
+/// `workflow_parity.rs` already guards, and invisible in the same way: nobody
+/// runs this job locally.
+#[test]
+fn the_pinned_toolchain_is_given_the_matrix_target() {
+    let text = workflow();
+    let step = steps(&text)
+        .into_iter()
+        .find(|step| step.contains("rustup target add"))
+        .expect(
+            "nothing adds the matrix target to the pinned toolchain. \
+             `dtolnay/rust-toolchain@stable` adds it to `stable`, and the \
+             build runs under the 1.96.1 named in src-tauri/rust-toolchain.toml.",
+        );
+
+    assert!(
+        step.contains("working-directory: src-tauri"),
+        "`rustup target add` runs from the repository root, where there is no \
+         `rust-toolchain.toml` — so it adds the target to whatever the default \
+         toolchain is, which is the toolchain that does not build this:\n{step}"
     );
 }
 
