@@ -30,3 +30,25 @@ Kart, manifest'i değil **konteynerin kendi** mount tablosunu okur. Dev sunucusu
 - **Alpine imajları.** Node projesi Alpine üstünde koşar ve VS Code onun için bir sunucu derlemesi yayımlar. Bu bir sorun değil, bir kayıt. JetBrains böyle bir derleme yayımlamıyor; PhpStorm'un ayrı bir soru olmasının sebebi bu.
 - **İndirme.** VS Code konteynerin içine yaklaşık yüz megabaytlık bir sunucu açar. StackVo bunu adlandırılmış bir volume'da tutar, böylece yeniden derleme onu çöpe atmaz. Bu volume'dan önce oluşturulmuş bir konteyner bunu kartta söyler ve kendini yeniden oluşturmayı önerir.
 - **git.** Araç zincirinde git yoksa düzenleyici, geçmişini okuyamadığı bir çalışma kopyası açar. Düzenlemek yine çalışır.
+
+## PhpStorm
+
+PhpStorm çalışan bir konteynere bağlanamaz — JetBrains'in böyle bir bağlantı tipi yok. Olan şey Dev Containers'tır, ve o genellikle **ikinci** bir konteynerdir: bir imajdan ya da Dockerfile'dan kurulur, çalıştırdığınızın yanında kaynağın kendi kopyasıyla.
+
+Ama öyle olmak zorunda değil. Bir dev container bir compose dosyası ve bir servisle de tarif edilebilir; o dosyalar **StackVo'nun kendi** compose dosyaları ve o servis de bu projenin servisiyse, açılan konteyner zaten çalışan konteynerdir. Bu kartın yazdığı dosya budur.
+
+**Dosyayı yaz** deyin ve PhpStorm'u gösterilen yola yöneltin: *Remote Development → Dev Containers → From Local Project → Specify Path*.
+
+Dosyadaki üç şey bilerek yazılmıştır; her biri burada yanlış olacak bir varsayılanı kapatır:
+
+| Ayar | Neden |
+| --- | --- |
+| `shutdownAction: none` | Varsayılan, IDE'yi kapattığınızda bütün compose projesini durdurur. |
+| `overrideCommand: false` | Varsayılan, servisin komutunu değiştirir — PHP projesinde o komut sitenizi sunan şeydir. |
+| `runServices` | Belirtilmezse listelenen her dosyadaki her servis başlatılır. StackVo bu projenin ihtiyacı olanları zaten başlattı. |
+
+### Bedeli ve sınırı
+
+- **Bağlanmak bu projenin konteynerini yeniden oluşturur.** Bu JetBrains'in kendi davranışı — eklentisi kendi ayarlarında bunu yazıyor — StackVo'nun seçimi değil. Siteniz onunla birlikte geri gelir.
+- **Bu dosya commit'lenmek için değildir.** İçinde bu makineye ait mutlak yollar var; o yüzden deponuzda değil, StackVo'nun kendi dizininde durur. Commit'lenmesi gereken devcontainer, Sürüm sekmesindeki olandır ve başka bir soruya cevap verir: StackVo'su **olmayan** biri bu projeyi nasıl çalıştırır.
+- **Alpine imajlarında JetBrains arka ucu yoktur.** VS Code musl için derlenmiş bir sunucu yayımlar, JetBrains yayımlamaz. `node:*-alpine` üstündeki bir Node projesi VS Code ile açılır, PhpStorm ile açılmaz — ve kart bunu, başarısız bir bağlantıdan öğrenmenizi beklemeden söyler.

@@ -54,8 +54,6 @@ Yapılanlar burada durmuyor — `CHANGELOG.md` her teslimatın ne olduğunu ve n
 | --- | --- | :-: | --- |
 | W | **Windows'ta testlerin koşması** | 🟢 | **Koşuyor, ve koştuğu için düzeltilebildi.** İlk gerçek koşu **on dokuz** hata verdi ve asıl iş onları ayırmaktı: **ikisi üründü**, kalanı yazıldığı platformu iddia eden testler. `dns.rs` `/etc/resolver` yollarını `PathBuf::join` ile kuruyordu — `join` **host'un** ayracını kullanır, yani Windows'ta `/etc/resolver\\test` üretiyordu ve ondan kurulan her komut hiçbir yerde var olamayacak bir dosyayı adlandırıyordu. `runner.rs`'in testleri `sh -c` çağırıyordu, yani **`docker compose`'u başlatan modülün Windows'ta sıfır kapsamı vardı** — dosya kapsamlı test edilmiş görünürken. Artık `node` ile koşuyor; `cmd` ne çıplak satır başı yazabiliyor ne de son satırsonunu atlayabiliyor, ki bu testlerin var olma sebebi tam o iki durum. Kalanı ayraç iddiasıydı (`imports` JSON'a kaçırmadan yol gömüyordu, `agents` POSIX sabiti karşılaştırıyordu, `stats` ürünün kendi toleransından katıydı). `cfg_regions.rs` `runner.rs`'in testlerinde kabuk görürse reddediyor. **Log okundu, ve on dokuzdan bir tanesi kalmıştı.** `agent_install::the_whole_round_trip_against_a_real_home_directory`: test `HOME` ve `USERPROFILE`'ı kendi dizinine çeviriyor — koşucunun gerçek profilini düzenlemeden yazma yarısını denemenin tek yolu bu — ama `dirs::home_dir()` Windows'ta `%USERPROFILE%`'ı okumuyor, kabuğa `FOLDERID_Profile` diye soruyor. Yani kusur testin platform iddiası değil, **ürünün üç platformun ikisinde taşınmış eve uyup üçüncüsünde uymamasıydı**; `agents::home()` artık ortamı her platformda önce soruyor. Testi Windows'ta atlamak öteki seçenekti ve bu satır o takası bir kez yakalamıştı: `runner.rs` orada kapsamlı test edilmiş görünürken sıfır kapsamı vardı. **Ve on dokuz hiç bitmiş bir sayı değilmiş:** `cargo test` düşen ilk test ikilisinde duruyor, `agent_install` de alfabetik olarak önde — o düzelince arkasından **yirmincisi** çıktı. Sebebi de aynı aileden: **CRLF.** Git for Windows `core.autocrlf=true` ile geliyor, Actions koşucusu onu devralıyor, ve deponun kendi kaynağını okuyan her test `\r\n` taşıyan bir dosya okuyor. `cfg_regions.rs` hangi özniteliğin hangi fonksiyona ait olduğunu boş satırdan bölerek buluyor; `"\n\n"` `"\r\n\r\n"`'in içinde geçmiyor, pencere sessizce bir üstteki fonksiyona uzanıyor, ve keystore'un gerçek arka ucu ile bellek içi sahtesi aynı `cfg` gate'ini taşıyor gibi görünüyor — güvenlik biçimli bir iddia, güvenlikle ilgisi olmayan bir sebeple düşüyor. `.gitattributes` (`* text=auto eol=lf`) sınıfın tamamını kökten kapatıyor; yerel olarak CRLF'e çevirip aynı hata birebir üretildi, ve `workflow_parity.rs` dosyanın silinmesini engelliyor. **`--no-fail-fast` ilk koşusunda kendini ödedi:** tek bir Windows işi kalan **dört** hatayı birden listeledi — öncesinde bir tanesini gösterirdi. Üçü yine yazıldığı platformu iddia eden testlerdi. `independence.rs` beklentisini ham host yolundan kuruyordu, oysa compose dosyası `/c/Users/...` diyor çünkü `paths::to_docker_mount` bu işi zaten yapıyor — doğru bir mount "kaynak mount'u proje ağacını takip etmedi" diye düşüyordu. `worktree_flow.rs` kendi git deposunu kuruyor ve makinenin `core.autocrlf`'ini devralıyordu; `git worktree add` `\r\n` taşıyan bir manifest geri veriyordu ve "dalın commit'lenmiş manifest'i el değmemiş" iddiası bu uygulamayı hiç açmadığı bir dosyayı yeniden yazmakla suçluyordu. `foreign_import.rs` symlink kurulumunu Unix'e kapatmış, iddialarını kapatmamıştı — Windows'ta kurulumun sessizce olmadığı bir ağacı ölçüp okuyucuyu bozuk ilan ediyordu; bir Valet sitesi **symlink'tir** (`imports::linked` `read_link` kullanıyor), o yüzden bağ her platformda gerçek olmalı, ve Windows'ta bunun istediği Developer Mode ya da yükseltme bu testin talep edeceği bir şey değil — reddedilirse **sesli** atlıyor. **Dördüncüsü üründü:** üretilen dosya etiketleri yarısı bir yol geleneği yarısı öteki oluyordu (`configs/mysql-8-0\my.cnf.tpl`); etiket bir tanımlayıcıdır — listede görünür, aranır, karşılaştırılır — platform başına bir tane olamaz. `paths::to_label`, ve `applog.rs` aynı sonuca kendi başına varmış olan satırını artık tekrarlamak yerine çağırıyor. **Kalan: koşunun yeşile dönmesi** |
 | Y-1 | **Ekran okuyucu denetimi** | 🟡 | `docs/accessibility.md` §4. **Y-2 buraya katıldı ve kendi satırı kaldırıldı** — ikisinin kalanı tek ve aynı işti. Satırın saydığı üç sorunun hiçbiri tümüyle yargı değilmiş, ve ölçmek **sekiz kusur** çıkardı: About penceresinin boş başlığı, menü çubuğundaki `Hide/Quit stackvo-desktop`, adsız doğan tepsi ikonu, hiç güncellenmeyen `<html lang>`, geçiş başına dil işareti, yeni proje çekmecesinin ters okuma sırası, tek sayfada on bir kez "Bu kart ne işe yarar", ve Logs/Dumps'ta kulakta ayırt edilemeyen iki ayrı "Temizle". Hepsi düzeltildi. **Mekanik taban artık build'i kırıyor:** `accessible-names.spec.js` (adsız kontrol yok, tek başına bir şey söylemeyen kelime yok, sayfanın belirgin ad oranı eşiğin altına düşemez), `reading-order.spec.js` (her yeniden sıralama hangi sıranın anlamlı olduğunu söylemek zorunda), `language-of-parts.spec.js`, `native_window_claims.rs` (8 test), ve `examples/native_ax_probe.rs` yerel ağacı canlı okuyor. **Metin gözden geçirmesi de yapıldı:** `npm run a11y:transcript` altı sayfanın duyurduğu her şeyi iki dilde yazıyor (`docs/accessibility-transcript.md`), liste okundu, bulguları düzeltildi; geriye kaydedilmiş tek sınır kaldı — arama alanının temizle düğmesini Vuetify yalnız `label` prop'undan adlandırıyor, bu alanlar ise bilerek placeholder taşıyor. **Kalan tek şey ve tam tanımı:** hiç kimse bu uygulamayı **gerçekten bir ekran okuyucuyla kullanmadı.** Transcript ne duyurulduğunu söyler, kullanmanın nasıl bir şey olduğunu söylemez — ve EN 301 549 beyanı bu farkı iddia edemez. Kod değil, erişim: bir kişi, VoiceOver ya da NVDA ile bir oturum |
-| R-1 | **Editörün kendisi konteynerin içinde — VS Code** | 🟡 | **Adres, düğme ve reddi indi; kalan bir insanın bir kez basması.** Adres türetiliyor ve hiçbir yere yazılmıyor: `editor::attach_authority` `{"containerName":"/stackvo-shop"}` JSON'ının onaltılığını kuruyor, `folder_uri` `code --folder-uri`'nin aldığı biçimi, `handler_url` da işletim sisteminin açabildiğini veriyor — ikisi de gerekli, çünkü `code` PATH'te olmayabilir ama uygulamanın URL işleyicisi kendini kaydediyor. Onaltılık **elle yazılmış bir sabite** karşı tutuluyor (`editor.rs`, 8 yeni test): kendi aritmetiğini ikinci kez yapan bir test, VS Code'un okuyamadığı bir kodlamada da geçerdi. Doğrulaması eklentinin kendi kaynağından okundu — `attached-container+${Buffer.from(JSON.stringify({containerName:Name})).toString("hex")}`, ve `Name` Docker'ın baştaki bölü işaretini taşıyan adı; bu yüzden iki yazım (`shop` ve `/shop`) tek adres üretiyor. Ekran `EditorPane.vue`, `Container` sekmesinde: iki ret ayrı ayrı adlandırılıyor, adres reddedilse de gösteriliyor (bu makinede VS Code olmaması, çalışan bir adresin olmaması değildir), ve `serverIsNotKept` uyarısı konteyneri yeniden kurma düğmesiyle geliyor. `editor_claims.rs` iki yeni kapı taşıyor: adresi Rust'tan başka hiçbir yer kurmuyor, ve konteyner adı `engine::container_name`'den geliyor. **Ve koşturmak bir ürün hatası çıkardı** — `examples/editor_attach_probe.rs` canlı bir daemon'a sordu: `engine::inspect` mount türünü `format!("{t:?}")` ile yazıyordu, `MountPointType` bollard'da **String**'tir, ve `Debug` bir string'i tırnakla yazar. Yani her konteynerin mount türü `"\"bind\""` geliyordu ve R-3'ün `bind` karşılaştırması **her konteyner için** yanlıştı: kaynağı mount edilmiş bir PHP projesi "kaynak bir kopya" diye reddediliyordu. Hep yanlış olan bir ret, çalışan bir retten ayırt edilemez. `engine::mount_kind` düzeltti, iki test tutuyor. Düzeltmeden sonra aynı prob gerçek konteynere `ATTACHABLE true` dedi. **Kalan:** düğmeye basıldığında pencerenin gerçekten açıldığını bir insanın görmesi — bu makinede `open -a` ile başlatılan VS Code süreci yeni bir pencere günlüğü üretmedi ve konteynerde `/root/.vscode-server` oluşmadı; kod değil, bir oturum |
-| R-2 | **Aynısı PhpStorm için** | 🔒 | Aynı iş değil, ve bunu önce ölçmek gerekiyordu: **JetBrains çalışan bir konteynere bağlanamıyor.** Gateway'in bağlantı tipleri SSH, WSL2, Dev Containers ve bulut eklentileri (Gitpod, Coder, CodeCanvas, Cloud Workstations); "attach to running container" diye bir tip yok. Kalan üç yolun üçü de bir bedel taşıyor, o yüzden §5'te bir soru: **(a) sshd** — Gateway'in resmî yolu, ama sftp alt sistemi *ve bir host portu* gerekiyor, ki ADR 0023 yan konteynerlere host portu vermiyor; **(b) join link** — arka ucu `docker exec` ile elle başlatıp (`remote-dev-server.sh run`) çıktısındaki `tcp://…` bağlantısını `jetbrains-gateway://` ile açmak, SSH'sız, ama arka ucu konteynere **StackVo'nun** koyması gerekiyor (JetBrains'in kendi asgarisi 2 çekirdek, 4 GB bellek, 5 GB disk); **(c)** PhpStorm'un kendi **Dev Containers**'ı, ki `devcontainer.json`'dan **ikinci bir konteyner kurar** — StackVo'nunki çalışırken kaynağın ikinci bir kopyası, ayrı bir veritabanı bağlantısı, ayrı bir port. `devcontainer.rs` o dosyayı zaten yazıyor ama **başka bir soruya** cevap olarak: kendi doküman başlığının dediği gibi, StackVo'su **olmayan** bir makine için |
 
 ### Anlatılmayan güçler
 
@@ -177,8 +175,11 @@ diye adlandırılıyor (`examples/explain_probe.rs` o yedeğin varsayımını ca
 konteynere karşı sormaya devam ediyor). **§2 R-3** indi — `editor.rs` kaynağın
 gerçekten mount olup olmadığını konteynerin kendi mount tablosundan okuyor,
 libc'yi imajdan çıkarıyor, sunucu için adlandırılmış volume'u bir örtüyle
-koyuyor — ve satırı §8 gereği silindi. **§2 R-1**'in kodu da indi: adres, düğme
-ve iki ret. Kalanı bir kod işi değil, bir oturum; aşağıda.
+koyuyor — ve satırı §8 gereği silindi. **§2 R-1** de kapandı ve satırı silindi:
+adres, düğme, iki ret — ve son yarısı artık bir iddia değil, bir ölçüm. Adres
+gerçek bir konteynerde açıldı: `stackvo-parser.ajans` içinde `/root/.vscode-server`
+(956 MB, `bin/<commit>`), on bir sunucu süreci, ve git eklentisinin kendi
+günlüğünde `Opened repository (path): /var/www/html`.
 
 Daha önce kapanmıştı: **§2 P**, paket uzatma noktaları. Üçünün üçü de indi — kullanıcının
 kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
@@ -192,14 +193,6 @@ kendi paketi (`authoring.rs`), üçüncü taraf kaynak politikası
   düzelince arkasından yirmincisi çıktı, çünkü `cargo test` ilk düşen ikilide
   duruyor. İkincisi CRLF'ti ve `.gitattributes` ile kökten kapandı. Kalan tek
   şey bir koşunun bunu doğrulaması.
-* **§2 R-1** — düğmeye bir kez basıp pencerenin gerçekten açıldığını görmek.
-  Adres türetiliyor ve doğrulaması eklentinin kendi kaynağıyla karşılaştırıldı,
-  ret koşulları canlı bir konteynere karşı ölçüldü (`editor_attach_probe`) —
-  ölçmenin çıkardığı ürün hatası da düzeltildi, çünkü mount türü tırnaklı
-  geliyordu ve ret **her** konteyner için yanlıştı. Ölçülemeyen tek şey kaldı:
-  bu makinede `open -a` ile başlatılan VS Code süreci yeni bir pencere günlüğü
-  yazmadı ve konteynerde `/root/.vscode-server` oluşmadı. Bir insanın ekranı,
-  bir tık, ve iki cevaptan biri.
 * **§2 Y-1** — bu uygulamayı gerçekten bir ekran okuyucuyla kullanmak. Y-2
   buraya katıldı ve satırı kaldırıldı; `tauri-driver`'ın macOS'ta koşmaması
   hiçbir zaman doğru engel değildi — WebDriver yerel bir menüye zaten
@@ -240,25 +233,25 @@ görüyordu. Hepsi yeşil raporluyordu — ya da hiç raporlamıyordu.
 Kodla çözülmeyen maddeler. Cevaplanmadan planlanamazlar — sessizce varsayılan
 seçmek, bu listenin var olma sebebine aykırı.
 
-**Bir soru açık, ve yeni.** Önceki beşin dördü cevaplandı ve cevapları kod
-oldu; beşincisi sorulduğunda **zaten kapatılmış** olduğu görüldü. Altıncısı
-§2 R-2 ile birlikte geldi:
-
-* **PhpStorm konteynerin içinde nasıl koşar (§2 R-2)?** Üç yol var ve üçü de
-  bir şey feda ediyor. **sshd** resmî yol ama bir host portu istiyor, ki
-  ADR 0023 yan konteynerlere tam da onu vermiyor — ve gerekçesi hâlâ geçerli,
-  çünkü bu kez dinleyen şey bir kabuk. **Join link** portu istemiyor ama arka
-  ucun konteynere nasıl gireceğini soruyor: indiren StackVo olursa proje
-  imajına ürünün kendi indirdiği bir gigabaytlarca yabancı ikili giriyor,
-  indiren kullanıcı olursa "tek tık" iddiası düşüyor. **Dev Containers**
-  hiçbirini istemiyor ama ikinci bir konteyner kuruyor, yani projenin tek bir
-  çalışan hâli olduğu varsayımını — bu ürünün her yerinde duran varsayımı —
-  kırıyor. Dördüncü bir cevap da var ve yazılı olması gerekiyor: **hiçbiri**,
-  yani PhpStorm'a `devcontainer.rs`'in bugün yazdığı dosyayı verip orada
-  durmak. R-1'in VS Code tarafı bu sorunun cevabını beklemiyor; R-2 bekliyor.
+**Açık soru kalmadı.** Altısı da cevaplandı ve cevapları kod oldu; beşincisi
+sorulduğunda **zaten kapatılmış** olduğu görüldü, altıncısını da ölçmek
+kapattı — §2 R-2, aşağıda.
 
 **Cevaplananlar:**
 
+* *PhpStorm konteynerin içinde nasıl koşar (§2 R-2)?* — **ADR 0036.** Soru üç
+  yolu sayıyordu ve üçü de bir şey feda ediyordu; dördüncü cevap ise "hiçbiri"
+  olacaktı. Onu kapatan şey bir tercih değil bir **ölçüm** oldu: "Dev Containers
+  ikinci bir konteyner kurar" iddiası yalnız **imaj/Dockerfile** tadı için
+  doğruymuş. PhpStorm 2026.2'nin taşıdığı `clouds-docker-gateway` eklentisinin
+  kendi içindeki devcontainer şeması `dockerComposeFile`, `service`,
+  `runServices`, `workspaceFolder`, `shutdownAction` ve `overrideCommand`
+  anahtarlarını taşıyor — yani compose tadında bir dev container'ın **ne
+  olduğuna onu yazan karar veriyor**. StackVo kendi üretilmiş compose
+  dosyalarını ve projenin servisini adlandıran bir `devcontainer.json` yazıyor;
+  açılan şey zaten çalışan konteyner. sshd yok, host portu yok (ADR 0023 el
+  değmeden), proje imajına yabancı ikili girmiyor. Ödenen tek bedel ekranda
+  yazıyor: eklentinin kendi ayarının dediği gibi ana servis yeniden oluşturuluyor.
 * *`latest.json` nerede yayınlanacak, anahtar nerede duracak (#2)?* — ADR 0025.
   **Aynı repoda GitHub Releases.** Endpoint artık `raw.githubusercontent.com`'daki
   bir dal dosyası değil, `releases/latest/download/latest.json` — yani
@@ -1387,6 +1380,68 @@ sürüm ve bir göç notu olurdu. Bunu şimdi yapmanın sebebi bu.
   daemon'una verilecek imaj olup olmadığı. Yazılmamış kuralları olan bir gözden
   geçirme, onu yapana göre değişen bir gözden geçirmedir.
 
+### 0036 — PhpStorm konteynere bir dev container olarak giriyor, ve o dev container projenin kendi servisi
+
+- **Status:** accepted
+- **Context:** VS Code çalışan bir konteynere bir **adresle** bağlanıyor;
+  JetBrains'in öyle bir bağlantı tipi yok — Gateway SSH, WSL, Dev Containers ve
+  bulut eklentileri sunuyor, "attach to running container" bunların arasında
+  değil. Kalan üç yolun üçü de bir bedel taşıyordu: **sshd** bir host portu
+  istiyordu, ki ADR 0023 yan konteynerlere tam da onu vermiyor ve bu kez
+  dinleyen şey bir kabuk; **join link** arka ucu konteynere kimin koyacağını
+  soruyordu — indiren StackVo olursa proje imajına gigabaytlarca yabancı ikili
+  giriyor, indiren kullanıcı olursa "tek tık" iddiası düşüyor; **Dev Containers**
+  ise ikinci bir konteyner kuruyordu.
+
+  Üçüncüsünün ölçümü bu kararı açtı, ve ölçüm sayfadan değil **IDE'nin
+  kendisinden** okundu: PhpStorm 2026.2 `clouds-docker-gateway` eklentisini
+  taşıyor, eklentinin içindeki devcontainer şeması `dockerComposeFile`,
+  `service`, `runServices`, `workspaceFolder`, `shutdownAction` ve
+  `overrideCommand` anahtarlarını taşıyor. Yani "ikinci bir konteyner" iddiası
+  yalnız **imaj/Dockerfile** tadı için doğru. Compose tadında dev container'ın
+  ne olduğuna **onu yazan** karar veriyor.
+- **Decision:** StackVo compose tadında bir `devcontainer.json` yazıyor:
+  `dockerComposeFile` bu çalışma alanının **kendi üretilmiş dosyaları**
+  (`runner::compose_base_args`'ten okunuyor, örtüler dahil), `service` projenin
+  servisi, `workspaceFolder` de kaynağın konteyner içindeki yolu. Böylece açılan
+  şey ikinci bir kopya değil, **zaten çalışan konteyner**.
+
+  Üç alan üç sessiz varsayılanı reddediyor: `shutdownAction: "none"` (compose
+  varsayılanı `stopCompose`, yani IDE kapanınca çalışma alanı iniyor),
+  `overrideCommand: false` (varsayılan servisin komutunu değiştiriyor — PHP
+  projesinde o komut siteyi sunan şeyin ta kendisi) ve
+  `runServices: [servis]` (belirtilmezse listelenen her dosyadaki her servis).
+
+  Dosya `generated/devcontainer/<proje>/` altına yazılıyor, **projeye değil**:
+  içindeki yollar bu kullanıcının ev dizini altında mutlak yollar, yani
+  commit'lenmiş bir kopya bir başkasının makinesinde hiçbir şeye çözülmez.
+  `devcontainer.rs`'in yazdığı dosya bunun tam tersi ve o yüzden ayrı duruyor:
+  o dosya commit'lenmek için var ve StackVo'su **olmayan** bir makineyi tarif
+  ediyor.
+- **Consequences:** sshd yok, host portu yok (ADR 0023 el değmeden duruyor),
+  proje imajına yabancı ikili girmiyor — arka ucu JetBrains'in kendi eklentisi
+  indiriyor, ki bu zaten onun işi. Karşılığında ödenen tek bedel **söyleniyor**:
+  eklentinin kendi gelişmiş ayarı "the Main service will always be recreated"
+  diyor, yani bağlanmak projenin konteynerini yeniden oluşturuyor. Ekranda bir
+  satır, gizlenmiş bir sürpriz değil.
+
+  Ve bir olgu bu tasarımı taşıyor: üretilen compose dosyaları **hiçbir şey
+  interpolate etmiyor** (`${` sayısı sıfır), o yüzden onları `--env-file`
+  geçirmeyen başka bir araca vermek dürüst. `editor_claims.rs` bunu bir kapı
+  yaptı — bir gün bir değişken girerse, PhpStorm'un okuduğu dosya StackVo'nun
+  koştuğundan başka bir dosya olur ve bu taraf bunu fark etmezdi.
+
+  **Ve iddia değil ölçüm:** yazılan dosyanın adlandırdığı altı dosyayla,
+  eklentinin koşacağı komutun kendisi canlı daemon'a `--dry-run` ile soruldu —
+  `docker compose -f … up -d --no-recreate parser.ajans` — ve cevap
+  `Container stackvo-parser.ajans Running` oldu. Yani açılacak konteyner
+  gerçekten **zaten çalışan** konteyner, ve `--env-file` geçmeden çözülüyor.
+  Aynı koşu bir şeyi daha kapattı: üretilen her proje servisi bir compose
+  **profili** arkasında duruyor ve profil ancak biri onu ya da servisi adıyla
+  andığında etkinleşiyor — `runServices` tam olarak o adlandırmayı yapıyor,
+  yani boş bırakılmış bir liste IDE'yi compose'un var saymadığı bir servisi
+  aramaya gönderirdi.
+
 ---
 
 ## 7. Ölçüm
@@ -1396,13 +1451,13 @@ Mekanik olarak sayılabilenler koda karşı tutuluyor:
 
 | | Sayı | Nasıl sayıldı |
 |---|---|---|
-| Toplam IPC komutu | **308** | `contracts/ipc.json` → `commands` (304 Rust + 1 ertelenmiş + 3 `frontend-plugin`) |
-| Bunlardan `#[tauri::command]` olarak yazılmış | **304** | `commands.rs`, `#[cfg(test)]` dışı |
+| Toplam IPC komutu | **309** | `contracts/ipc.json` → `commands` (305 Rust + 1 ertelenmiş + 3 `frontend-plugin`) |
+| Bunlardan `#[tauri::command]` olarak yazılmış | **305** | `commands.rs`, `#[cfg(test)]` dışı |
 | Frontend kaynak dosyası | **155** | `src/**/*.{js,vue}`, spec dosyaları hariç |
 | Bunlardan `@tauri-apps` kullanan | **20** | aynı küme içinde metin taraması |
 | **Veri katmanının geçtiği fonksiyon** | **1** (`src/lib/ipc.js` → `call()`) | `invoke(` `ipc.js` dışında **0** yerde geçiyor |
-| `ipc.js` sarmalayıcısı | **301** | `api` nesnesinin üye sayısı |
-| Rust kaynağı | **111 modül, 111.249 satır** | `src-tauri/src/*.rs` |
+| `ipc.js` sarmalayıcısı | **302** | `api` nesnesinin üye sayısı |
+| Rust kaynağı | **111 modül, 111.562 satır** | `src-tauri/src/*.rs` |
 | Gömülü varsayılan — **kalan** | **36** | `config.rs` → `SETTINGS` |
 | Gömülü varsayılan — **yalnız göç için** | **150** | `config.rs` → `LEGACY_SERVICES`; toplam **186** |
 

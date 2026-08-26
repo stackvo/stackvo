@@ -15,8 +15,7 @@
 //!   `render_compose_service`, three hundred lines away, with no comment there
 //!   pointing here.
 //!
-//! §2 R-1 adds a third, and it is about where the **address** is allowed to be
-//! built. `vscode-remote://attached-container+<hex>/<path>` is derived from
+//! The address adds a third, and it is about where it is allowed to be built. `vscode-remote://attached-container+<hex>/<path>` is derived from
 //! two facts — the container's name and the directory the source is mounted at
 //! — and a second derivation of it anywhere else is a copy that goes stale in
 //! silence: it would keep opening a window, just not onto this container.
@@ -127,12 +126,24 @@ fn the_editor_overlay_is_layered_into_every_compose_command() {
     let path = repo_root().join("src-tauri/src/runner.rs");
     let source = std::fs::read_to_string(&path).expect("runner.rs");
 
-    let editor = source.find("crate::editor::sync(root)").expect(
-        "compose_base_args still layers the editor overlay — without it the volume \
-                 is written to a file nothing passes to compose",
+    assert!(
+        source.contains("for file in compose_file_list(root, true)"),
+        "compose_base_args no longer builds its `-f` arguments from the list \
+         editor.rs reads. Two lists is the one failure this pair cannot see: \
+         the IDE would open a container assembled from different files than the \
+         ones StackVo starts."
+    );
+
+    // Named rather than called: `overlay_files` layers each overlay through one
+    // macro, so the syncs appear as `crate::editor::sync` with no arguments.
+    // What is being checked has not changed — that the overlay is in the chain,
+    // and where in it.
+    let editor = source.find("crate::editor::sync").expect(
+        "the compose chain still layers the editor overlay — without it the volume \
+         is written to a file nothing passes to compose",
     );
     let devserver = source
-        .find("crate::devserver::sync(root)")
+        .find("crate::devserver::sync")
         .expect("the dev server overlay is still layered");
 
     assert!(
@@ -253,5 +264,50 @@ fn the_mount_kind_the_refusal_reads_is_the_one_the_engine_writes() {
         !region.contains("{t:?}") && !region.contains("{:?}"),
         "the mount kind is being Debug-formatted again. Debug on a string puts \
          the quotes in, and editor.rs then refuses every container there is:\n{region}"
+    );
+}
+
+/// Handing another tool this workspace's compose files only works because they
+/// interpolate nothing.
+///
+/// `runner.rs` invokes compose with `--env-file <root>/.env`, and PhpStorm's
+/// Dev Containers plugin invokes it with its own arguments and none of ours.
+/// So the moment a `${...}` appears in generated output, the file StackVo hands
+/// PhpStorm resolves to something different from the one StackVo runs — an
+/// empty image name, a mount at `/`, a service that will not start — and
+/// nothing on this side would notice.
+///
+/// Read from the differential fixture rather than from a live workspace: that
+/// file is what `fixtures_differential.rs` holds the generator's output to, so
+/// it is the output, and it exists on a machine that has never run StackVo.
+#[test]
+fn the_generated_compose_carries_nothing_for_another_tool_to_interpolate() {
+    let path = repo_root().join("src-tauri/tests/fixtures/docker-compose.projects.yml");
+    let text = std::fs::read_to_string(&path).expect("the differential fixture");
+
+    assert!(
+        !text.contains("${"),
+        "the generated compose now interpolates a variable. editor.rs hands \
+         these files to PhpStorm's Dev Containers, which runs compose without \
+         this app's --env-file, so an interpolated value there is a different \
+         file from the one StackVo runs:\n{path:?}"
+    );
+}
+
+/// The devcontainer names the same compose files every other command uses.
+///
+/// A second list written here would be right on the day it was written and
+/// wrong the first time an overlay was added — and the failure is quiet: the
+/// IDE would attach to a container assembled from fewer files than the one
+/// StackVo starts, so the mounts an overlay adds would simply not be there.
+#[test]
+fn the_devcontainer_takes_its_compose_list_from_the_runner() {
+    let path = repo_root().join("src-tauri/src/editor.rs");
+    let source = without_comments(&std::fs::read_to_string(&path).expect("editor.rs"));
+
+    assert!(
+        source.contains("crate::runner::compose_file_list("),
+        "editor.rs builds its own list of compose files instead of reading the \
+         one runner.rs assembles for every compose command this app runs"
     );
 }

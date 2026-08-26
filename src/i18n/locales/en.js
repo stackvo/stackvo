@@ -1495,6 +1495,22 @@ export default {
       'Derived from the container name and the directory the source is mounted at, and never stored — so a rebuilt or renamed container cannot leave a stale address behind.',
     serverNote:
       'The server unpacks itself into {dir}, which is a named volume — a rebuild does not throw away the hundred megabytes it downloaded.',
+    jbTitle: 'PhpStorm',
+    jbWhy:
+      'JetBrains has no “attach to a running container” connection type. What it has is Dev Containers — and a dev container that names StackVo’s own compose files and this project’s service is not a second container, it is the one already running. StackVo writes that file; you point PhpStorm at it.',
+    jbNotInstalled:
+      'PhpStorm was not found on this machine. The file is still worth writing — it is what you point the IDE at on the machine that has it.',
+    jbStale:
+      'The file on disk was written for a different set of compose files. Rewrite it, or PhpStorm will open a container assembled from fewer overlays than the one StackVo starts.',
+    jbMusl:
+      'This is an Alpine image. VS Code publishes a server built for it; JetBrains publishes none, so its backend cannot start in this container at all. The file below is still correct — changing the image is the way through.',
+    jbWrite: 'Write the file',
+    jbRewrite: 'Rewrite the file',
+    jbService: 'Points at the {service} service in this workspace’s compose files.',
+    jbSteps:
+      'In PhpStorm: Remote Development → Dev Containers → From Local Project → Specify Path, and give it the path above.',
+    jbRecreates:
+      'Attaching recreates this project’s container — that is JetBrains’ own behaviour, not a choice StackVo makes. The site comes back up with it; anything unsaved inside the container does not.',
   },
 
   phpIni: {

@@ -1,18 +1,19 @@
-//! Whether a container can carry an editor at all — the half of §2 R-1 that
-//! had to be answered before an address was worth having.
+//! Whether a container can carry an editor at all, and the address that
+//! opens it when it can.
 //!
 //! [`crate::ide`] wires an IDE on the *host* to a debugger in the container.
 //! This is the other half of that idea and a much larger one: the editor itself
 //! running **inside** the image — language server, extensions, terminal,
 //! `composer` and `artisan` all in there, and no PHP on the machine at all.
 //!
-//! R-1 is the address that opens it. This is the question that has to be
-//! answered before the address is worth having, and it is not one question:
+//! The address is at the bottom of this file. This is the question that has to
+//! be answered before the address is worth having, and it is not one question:
 //!
 //! * **libc.** VS Code ships a server for musl and JetBrains does not, so
 //!   `node:X-alpine` is fine for one and refused by the other. Reported rather
-//!   than judged here, because which of the two is being opened is R-1's and
-//!   R-2's business.
+//!   than judged here, and it is the one fact that lands differently on each
+//!   of the two editors this file serves: VS Code publishes a musl server and
+//!   JetBrains publishes none (decision 0036).
 //! * **The source.** This is the one that is silently wrong. A PHP project
 //!   bind-mounts `/var/www/html`, so an editor in there edits the repository.
 //!   A `runtime: node` project does not: its Dockerfile is `COPY . .`, and the
@@ -106,7 +107,8 @@ pub enum Blocker {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Caveat {
-    /// Alpine. Fine for VS Code, refused by JetBrains — see §2 R-2.
+    /// Alpine. Fine for VS Code, and the end of the road for JetBrains, which
+    /// publishes no musl backend — see [`Jetbrains::musl`] and decision 0036.
     Musl,
     /// The server directory is not a named volume, so the download repeats
     /// after every rebuild. The overlay provides one; the container predates
@@ -229,7 +231,7 @@ const REMOTE_SCHEME: &str = "vscode-remote";
 /// Not `dev-container`, which is the other one and means something else: that
 /// authority names a `devcontainer.json` and *builds* from it — a second
 /// container beside this project's own. This one attaches to the container
-/// that is already there, which is the whole of R-1.
+/// that is already there, which is the whole of this half.
 const ATTACHED: &str = "attached-container";
 
 /// The launcher this module opens. VS Code, and only VS Code.
@@ -365,6 +367,151 @@ pub fn open(readiness: &Readiness) -> crate::error::Result<String> {
     Ok(readiness.folder_uri.clone())
 }
 
+// ------------------------------------------------------- the other editor
+
+/// The IDE this half is for.
+pub const PHPSTORM: &str = "phpstorm";
+
+/// Where StackVo writes the file it hands PhpStorm.
+///
+/// Under `generated/`, and deliberately **not** in the project.
+/// [`crate::devcontainer`] writes into `.devcontainer/` because that file is
+/// meant to be committed and describes a machine with no StackVo on it. This
+/// one is the opposite in both halves: it names absolute paths under this
+/// user's home — the generated compose files — so a teammate who cloned it
+/// would get a file that resolves to nothing, and what it describes is the
+/// container this machine is already running.
+pub fn jetbrains_path(root: &Path, project: &str) -> PathBuf {
+    root.join("generated")
+        .join("devcontainer")
+        .join(project)
+        .join("devcontainer.json")
+}
+
+/// The file that points PhpStorm at the container that is already there.
+///
+/// JetBrains has no "attach to a running container" connection type — Gateway
+/// offers SSH, WSL, Dev Containers and the cloud plugins, and that is not one
+/// of them. What it does have, measured in the IDE rather than read off a page,
+/// is Dev Containers with the **compose flavour**: PhpStorm 2026.2 bundles
+/// `clouds-docker-gateway`, and the devcontainer schema inside it carries
+/// `dockerComposeFile`, `service`, `runServices`, `workspaceFolder`,
+/// `shutdownAction` and `overrideCommand`.
+///
+/// That is what moves the answer. A dev container built from an image or a
+/// Dockerfile is a *second* container beside this project's — a second copy of
+/// the source, a second database connection, a second port. A dev container
+/// that names **StackVo's own compose files and this project's service** is
+/// the container that is already running.
+///
+/// Three of the fields carry the whole decision, and each refuses a default
+/// that would have been wrong here:
+///
+/// * `shutdownAction: "none"` — the compose default is `stopCompose`, so
+///   closing the IDE would take the workspace down with it.
+/// * `overrideCommand: false` — the default replaces the service's command,
+///   which in a PHP project is the thing serving the site. An editor that
+///   stops the site to open it is not an editor for a local environment.
+/// * `runServices: [service]` — unspecified means every service in every file
+///   listed, and StackVo has already started the ones this project needs.
+///
+/// `customizations.jetbrains.backend` is the plugin's own way of saying which
+/// IDE the backend should be, quoted from its change notes: `"jetbrains":
+/// {"backend": "IntelliJ"}`. PhpStorm, here, because this is a PHP tool.
+pub fn jetbrains_json(project: &str, workdir: &str, compose_files: &[String]) -> String {
+    let value = serde_json::json!({
+        "name": format!("StackVo: {project}"),
+        "dockerComposeFile": compose_files,
+        "service": project,
+        "runServices": [project],
+        "workspaceFolder": workdir,
+        "shutdownAction": "none",
+        "overrideCommand": false,
+        "customizations": { "jetbrains": { "backend": "PhpStorm" } },
+    });
+
+    // Trailing newline: the file is read by a human as often as by the IDE.
+    format!(
+        "{}\n",
+        serde_json::to_string_pretty(&value).unwrap_or_default()
+    )
+}
+
+/// The compose files a devcontainer must name, taken from the one place that
+/// knows which overlays are in play.
+///
+/// [`crate::runner::compose_file_list`] is what every compose command this app
+/// runs is built from, so reading the list out of it is the difference between
+/// "the same files" and "the same files as of the day this was written".
+///
+/// `refresh` is the difference between the two callers here, and it is not an
+/// optimisation. Writing the file is an act somebody asked for, so it re-renders
+/// the overlays first and names what compose would actually layer. *Reading*
+/// must not: re-rendering reaches the OS keystore, and a query that reaches the
+/// keystore is one the loopback surface may not serve — a rule
+/// `websurface_claims.rs` enforces, and which caught this the first time this
+/// function was written the other way.
+fn compose_files_for(root: &Path, refresh: bool) -> Vec<String> {
+    crate::runner::compose_file_list(root, refresh)
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect()
+}
+
+/// What is true about the PhpStorm half for one project.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Jetbrains {
+    /// Is PhpStorm on this machine at all?
+    pub installed: bool,
+    pub path: String,
+    pub exists: bool,
+    /// The file on disk is what would be written now. A stale one is worse
+    /// than none: it names a compose file list from before an overlay changed.
+    pub current: bool,
+    /// The compose service the dev container is pointed at.
+    pub service: String,
+    /// Always true, and it is the cost this half has to state out loud: the
+    /// plugin's own advanced setting says "the Main service will always be
+    /// recreated", so attaching restarts this project's container.
+    pub recreates: bool,
+    /// The image is Alpine, and this is where that stops being a note and
+    /// becomes a refusal. VS Code publishes a server built against musl;
+    /// JetBrains publishes none, so the backend cannot start in there at all.
+    /// The file is still written — it is correct, and the image is a thing the
+    /// project can change — but the screen must not offer a door that opens
+    /// onto nothing.
+    pub musl: bool,
+}
+
+pub fn jetbrains_status(root: &Path, project: &str, workdir: &str, libc: Libc) -> Jetbrains {
+    let path = jetbrains_path(root, project);
+    let wanted = jetbrains_json(project, workdir, &compose_files_for(root, false));
+    let found = std::fs::read_to_string(&path).ok();
+
+    Jetbrains {
+        installed: crate::apps::resolve_editor(PHPSTORM).is_some(),
+        path: path.display().to_string(),
+        exists: found.is_some(),
+        current: found.as_deref() == Some(wanted.as_str()),
+        service: project.to_string(),
+        recreates: true,
+        musl: libc == Libc::Musl,
+    }
+}
+
+/// Write it, and answer with the path the user has to point PhpStorm at.
+pub fn write_jetbrains(root: &Path, project: &str, workdir: &str) -> crate::error::Result<String> {
+    let path = jetbrains_path(root, project);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| crate::error::Error::io("creating the devcontainer directory", e))?;
+    }
+    let json = jetbrains_json(project, workdir, &compose_files_for(root, true));
+    crate::atomic::write(&path, &json)?;
+    Ok(path.display().to_string())
+}
+
 // -------------------------------------------------------------- the reading
 
 /// What is true for one project, container included.
@@ -375,6 +522,8 @@ pub struct Status {
     /// Is there a VS Code on this machine to open the address with?
     pub editor_installed: bool,
     pub readiness: Readiness,
+    /// The other editor, which needs a file rather than an address.
+    pub jetbrains: Jetbrains,
 }
 
 /// Read the container and judge it.
@@ -399,16 +548,19 @@ pub async fn status(root: &Path, name: &str) -> crate::error::Result<Status> {
         .unwrap_or_else(|| declared_image(&manifest));
     let mounts = details.map(|d| d.mounts).unwrap_or_default();
 
+    let readiness = readiness(
+        &crate::engine::container_name(name),
+        &manifest.runtime,
+        &image,
+        running,
+        &mounts,
+    );
+
     Ok(Status {
         project: name.to_string(),
         editor_installed: installed(),
-        readiness: readiness(
-            &crate::engine::container_name(name),
-            &manifest.runtime,
-            &image,
-            running,
-            &mounts,
-        ),
+        jetbrains: jetbrains_status(root, name, &readiness.workdir, readiness.libc),
+        readiness,
     })
 }
 
@@ -623,7 +775,8 @@ mod tests {
         assert!(r.attachable);
         assert!(r.source_live);
         // Alpine is a caveat and never a refusal here: VS Code publishes a musl
-        // server. JetBrains does not, and that is R-2's problem to state.
+        // server. JetBrains does not, and the PhpStorm half states that where
+        // it matters — see `Jetbrains::musl`.
         assert_eq!(r.caveats, vec![Caveat::Musl]);
     }
 
@@ -876,6 +1029,139 @@ mod tests {
             );
         }
         assert_eq!(workdir_of("php"), PHP_WORKDIR);
+    }
+
+    // ----------------------------------------------------- the other editor
+
+    fn phpstorm_file(project: &str, workdir: &str) -> serde_json::Value {
+        serde_json::from_str(&jetbrains_json(
+            project,
+            workdir,
+            &[
+                "/root/generated/stackvo.yml".to_string(),
+                "/root/generated/docker-compose.projects.yml".to_string(),
+            ],
+        ))
+        .expect("what is written is JSON")
+    }
+
+    /// The three defaults this file exists to refuse.
+    ///
+    /// Each of them is silent and each of them is destructive in a different
+    /// way, which is why they are asserted together: a file that got two of
+    /// three right would look correct in every screenshot.
+    #[test]
+    fn the_devcontainer_refuses_the_three_defaults_that_would_be_wrong_here() {
+        let file = phpstorm_file("shop", PHP_WORKDIR);
+
+        // Closing the IDE would otherwise take the workspace down: the compose
+        // flavour's default is `stopCompose`.
+        assert_eq!(file["shutdownAction"], "none");
+
+        // The default replaces the service's command — in a PHP project that
+        // command is the thing serving the site, so an editor that attached
+        // would stop the site it was opened to work on.
+        assert_eq!(file["overrideCommand"], false);
+
+        // Unspecified means every service in every file listed, and StackVo has
+        // already started the ones this project needs.
+        //
+        // It carries a second job nothing else states: every generated project
+        // service sits behind a compose **profile**, and a profile is only
+        // active when something names it — or names a service explicitly.
+        // `runServices` is what makes the devcontainer's own `up` name this
+        // service, and an empty list here would leave the IDE looking for a
+        // service compose does not consider to exist. Measured against the real
+        // files: `compose … up -d --no-recreate parser.ajans` answers
+        // `Container stackvo-parser.ajans Running`.
+        assert_eq!(file["runServices"], serde_json::json!(["shop"]));
+    }
+
+    /// The container it opens is this project's own, not a second one.
+    #[test]
+    fn the_devcontainer_names_stackvos_own_service_and_compose_files() {
+        let file = phpstorm_file("shop", PHP_WORKDIR);
+
+        assert_eq!(file["service"], "shop");
+        assert_eq!(file["workspaceFolder"], PHP_WORKDIR);
+        assert_eq!(
+            file["dockerComposeFile"],
+            serde_json::json!([
+                "/root/generated/stackvo.yml",
+                "/root/generated/docker-compose.projects.yml"
+            ])
+        );
+        // No `image`, no `build`: either one is the flavour that builds a
+        // second container beside the one already running.
+        assert!(file.get("image").is_none(), "{file}");
+        assert!(file.get("build").is_none(), "{file}");
+    }
+
+    /// Which backend the plugin launches, in the plugin's own spelling.
+    #[test]
+    fn the_devcontainer_asks_for_the_php_ide_rather_than_the_default_one() {
+        let file = phpstorm_file("shop", PHP_WORKDIR);
+        assert_eq!(file["customizations"]["jetbrains"]["backend"], "PhpStorm");
+    }
+
+    /// The workdir is the readiness's, so a node project in dev mode is opened
+    /// at `/app` — the same answer the address gives VS Code.
+    #[test]
+    fn the_devcontainer_opens_the_workdir_the_readiness_reports() {
+        let node = readiness(
+            "stackvo-blog",
+            "node",
+            "node:22-alpine",
+            true,
+            &[mount(crate::devserver::CONTAINER_PATH, "bind")],
+        );
+        let file = phpstorm_file("blog", &node.workdir);
+
+        assert_eq!(file["workspaceFolder"], crate::devserver::CONTAINER_PATH);
+    }
+
+    /// Alpine is a note for VS Code and the end of the road for JetBrains.
+    ///
+    /// Two editors, one fact, two different weights — which is exactly why the
+    /// libc is reported rather than judged where it is read.
+    #[test]
+    fn the_php_ide_half_says_when_the_image_has_no_backend_for_it() {
+        let php = jetbrains_status(Path::new("/root"), "shop", PHP_WORKDIR, Libc::Glibc);
+        assert!(!php.musl);
+
+        let node = jetbrains_status(Path::new("/root"), "blog", "/app", Libc::Musl);
+        assert!(node.musl);
+        // The file is still described: the image is a thing a project can
+        // change, and a path that is correct should not be hidden because
+        // today's image cannot walk it.
+        assert!(node.path.ends_with("devcontainer.json"));
+    }
+
+    /// It is written where StackVo owns the files, and never into the project.
+    ///
+    /// The list of compose files in it is absolute and under this user's home,
+    /// so a committed copy would resolve to nothing on anybody else's machine.
+    /// `devcontainer.rs` writes the file that *is* meant to be committed, and
+    /// the two must not end up in the same place.
+    #[test]
+    fn the_file_is_written_under_generated_and_not_into_the_project() {
+        let path = jetbrains_path(Path::new("/root"), "shop");
+
+        assert_eq!(
+            path,
+            Path::new("/root/generated/devcontainer/shop/devcontainer.json")
+        );
+        assert!(
+            !path.to_string_lossy().contains("/projects/"),
+            "{}",
+            path.display()
+        );
+        assert!(
+            !path.to_string_lossy().contains(crate::devcontainer::DIR),
+            "this file has landed in the directory devcontainer.rs writes the \
+             committed one into: {}",
+            path.display()
+        );
     }
 
     #[test]

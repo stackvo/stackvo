@@ -5,7 +5,7 @@ import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
 
 /**
- * §2 R-1: the editor itself, inside the container.
+ * The editor itself, inside the container.
  *
  * The pane is one button and an address, so what is worth holding is not the
  * layout — it is the three things a reader could be told wrongly without
@@ -53,9 +53,20 @@ const vuetify = createVuetify({ components, directives });
 const URI = 'vscode-remote://attached-container+7b2263/var/www/html';
 
 /** A PHP project whose source is mounted and whose volume is in place. */
+const JETBRAINS = {
+  installed: true,
+  musl: false,
+  path: '/root/generated/devcontainer/shop/devcontainer.json',
+  exists: false,
+  current: false,
+  service: 'shop',
+  recreates: true,
+};
+
 const READY = {
   project: 'shop',
   editorInstalled: true,
+  jetbrains: JETBRAINS,
   readiness: {
     container: 'stackvo-shop',
     workdir: '/var/www/html',
@@ -77,6 +88,8 @@ const withReadiness = (patch, top = {}) => ({
   ...top,
   readiness: { ...READY.readiness, ...patch },
 });
+
+const withJetbrains = (patch) => ({ ...READY, jetbrains: { ...JETBRAINS, ...patch } });
 
 const emitted = [];
 
@@ -245,5 +258,84 @@ describe('the caveat with a fix', () => {
     await flushPromises();
 
     expect(wrapper.text()).not.toContain('downloads its server again');
+  });
+});
+
+/**
+ * The other editor, and it is deliberately not the same shape.
+ *
+ * VS Code is handed an address; PhpStorm is handed a file, because JetBrains
+ * has no connection type that attaches to a container already running. What
+ * these hold is the part that would be invisible if it went wrong: a file that
+ * is out of date opens a container assembled from fewer overlays than the one
+ * StackVo starts, and nothing on screen would say so.
+ */
+describe('the PhpStorm half', () => {
+  it('writes the file and re-reads what it wrote', async () => {
+    replies.editorJetbrainsWrite = JETBRAINS.path;
+    const wrapper = mountPane();
+    await flushPromises();
+
+    const write = wrapper.findAll('button').find((b) => b.text().includes('Write the file'));
+    await write.trigger('click');
+    await flushPromises();
+
+    expect(calls.filter(([name]) => name === 'editorJetbrainsWrite')).toEqual([
+      ['editorJetbrainsWrite', 'shop'],
+    ]);
+    expect(calls.filter(([name]) => name === 'editorStatus').length).toBe(2);
+  });
+
+  it('shows the path and the two clicks only once the file is there', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+    expect(wrapper.text()).not.toContain(JETBRAINS.path);
+
+    replies.editorStatus = withJetbrains({ exists: true, current: true });
+    const written = mountPane();
+    await flushPromises();
+    expect(written.text()).toContain(JETBRAINS.path);
+    expect(written.text()).toContain('Remote Development');
+  });
+
+  /** Worse than no file: it names a compose list from before an overlay moved. */
+  it('says when the file on disk is out of date, and offers to rewrite it', async () => {
+    replies.editorStatus = withJetbrains({ exists: true, current: false });
+    const wrapper = mountPane();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('written for a different set of compose files');
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Rewrite the file'))).toBe(true);
+  });
+
+  /** A machine without PhpStorm is not a reason to withhold the file. */
+  it('still offers the file when PhpStorm is not on this machine', async () => {
+    replies.editorStatus = withJetbrains({ installed: false });
+    const wrapper = mountPane();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('PhpStorm was not found on this machine');
+    const write = wrapper.findAll('button').find((b) => b.text().includes('Write the file'));
+    expect(write.attributes('disabled')).toBeUndefined();
+  });
+
+  /**
+   * One fact, two weights. Alpine is a note in the VS Code half and a wall in
+   * this one, and a screen that showed it once would be wrong on one of them.
+   */
+  it('says an Alpine image has no JetBrains backend, and still describes the file', async () => {
+    replies.editorStatus = withJetbrains({ musl: true });
+    const wrapper = mountPane();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('JetBrains publishes none');
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Write the file'))).toBe(true);
+  });
+
+  /** The cost this half cannot design away is on screen, not in a doc. */
+  it('states that attaching recreates the container', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+    expect(wrapper.text()).toContain('recreates this project’s container');
   });
 });
