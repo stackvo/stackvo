@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { mount } from '@vue/test-utils';
 
 /**
  * What a screen reader is handed, written down so a person can read it.
  *
  * ```sh
- * npm run a11y:transcript      # writes docs/accessibility-transcript.md
+ * npm run a11y:transcript      # writes reports/accessibility-transcript.md
  * ```
  *
  * This is the piece that was actually missing. The known limitation says a human has to
@@ -54,7 +54,7 @@ import { mount } from '@vue/test-utils';
 const vuetify = (await import('@/plugins/vuetify')).default;
 const { i18n } = await import('@/i18n');
 
-const OUT = resolve(import.meta.dirname, '../docs/accessibility-transcript.md');
+const OUT = resolve(import.meta.dirname, '../reports/accessibility-transcript.md');
 
 const PAGES = ['Dashboard', 'Projects', 'Logs', 'Dumps', 'Mail', 'About'];
 const LOCALES = ['tr', 'en'];
@@ -233,6 +233,9 @@ describe('screen reader transcript', () => {
       }
 
       i18n.global.locale.value = 'en';
+      // `reports/` is gitignored and starts absent on a fresh clone; the write
+      // creates it rather than failing on the first run.
+      mkdirSync(dirname(OUT), { recursive: true });
       writeFileSync(OUT, out);
 
       // The guard on the generator: an empty transcript is a mounting failure

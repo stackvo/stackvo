@@ -268,6 +268,31 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   stops failing as loudly as one that starts — which is how two rows were caught
   going stale on the commit that made them stale.
 
+### Changed
+
+- **The accessibility statement moved to the root, and the transcript moved out
+  of the source tree.** `docs/` in this repository is not a documentation dump:
+  `tauri.conf.json` bundles `docs/help` into the application as a resource, so
+  what lives there is shipped product content, and beside it there was only a
+  worklog. A conformance statement is neither. It is a public claim about the
+  product in the same register as `PRIVACY.md` and `SECURITY.md`, which is a
+  class this repository already has a home for — so `docs/accessibility.md` is
+  now `ACCESSIBILITY.md`, at the root with the rest of them, one click from the
+  landing page instead of two.
+
+  `docs/accessibility-transcript.md` had a second problem: it is generated,
+  gitignored, and rewritten by every `npm run test:js` — a build product living
+  inside a directory otherwise fully tracked and partly shipped. It writes to
+  `reports/` now, which is ignored whole. Not `test-results/`, which is
+  Playwright's output directory and is emptied at the start of every browser
+  run; not `coverage/`, which is vitest's. The spec creates the directory
+  itself, so a fresh clone's first run does not fail on a missing path.
+
+  Nothing about the statement's content changed, and nothing stopped being
+  checked: `accessibility-claims.spec.js` still reads it and holds it against
+  the routes and the axe suite, and `native_window_claims.rs` still fails if §4
+  stops saying the native audit is owed.
+
 ### Added
 
 - **PhpStorm opens the same container, not a second one (§2 R-2, decision

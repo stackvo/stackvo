@@ -169,8 +169,10 @@ rust-coverage.txt
 # externalBin. Build products, named after a target triple.
 src-tauri/binaries/
 
-# The accessibility transcript, written by `npm run a11y:transcript` (and by the
-# ordinary `npm run test:js`, which runs the same spec). It is a rendering of the
-# tree's own markup, so it is a build product like coverage/ — docs/accessibility.md
-# names the command that produces it rather than a file checked in beside it.
-docs/accessibility-transcript.md
+# Generated human-readable reports. The accessibility transcript lands here,
+# written by `npm run a11y:transcript` (and by the ordinary `npm run test:js`,
+# which runs the same spec). It is a rendering of the tree's own markup, so it is
+# a build product like coverage/ — ACCESSIBILITY.md names the command that
+# produces it rather than a file checked in beside it. Its own directory because
+# test-results/ is Playwright's and gets emptied at the start of every run.
+/reports/

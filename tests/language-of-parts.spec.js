@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
  * `lang="en"` and nothing ever changed it, so a Turkish window announced itself
  * as English for its whole life. A screen reader picks its voice and its
  * pronunciation rules from that attribute, so the entire interface was being
- * read out with English phonetics. `docs/accessibility.md` said the interface
+ * read out with English phonetics. `ACCESSIBILITY.md` said the interface
  * language "is announced on the document" — the sentence was true about the
  * attribute existing and false about what it said.
  *
