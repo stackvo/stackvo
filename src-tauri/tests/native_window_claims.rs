@@ -1,6 +1,6 @@
 //! What this repository can decide about the windows the operating system draws.
 //!
-//! The known limitation `docs/accessibility.md` states: the measurement drives
+//! The known limitation `ACCESSIBILITY.md` states: the measurement drives
 //! the front end in a browser
 //! engine, so the window chrome, the menu bar and the tray menu are out of
 //! scope. `tauri-driver` would cover them and does not run on macOS, which is
@@ -256,7 +256,7 @@ fn the_status_item_is_named_before_the_first_refresh() {
 
 /// The window properties the accessibility statement leans on.
 ///
-/// `docs/accessibility.md` offers an interface scale as the answer to reflow,
+/// `ACCESSIBILITY.md` offers an interface scale as the answer to reflow,
 /// and a scale is only an answer in a window that can be resized to meet it. A
 /// build that shipped a fixed-size window would make that section false without
 /// touching a word of it.
@@ -269,7 +269,7 @@ fn the_main_window_can_be_resized_to_the_scale_the_statement_offers() {
         main["resizable"].as_bool(),
         Some(true),
         "the main window is not resizable, which makes the interface-scale \
-         setting `docs/accessibility.md` offers unusable at the sizes it is for"
+         setting `ACCESSIBILITY.md` offers unusable at the sizes it is for"
     );
     assert!(
         main["minWidth"].as_f64().is_some() && main["minHeight"].as_f64().is_some(),
@@ -280,12 +280,12 @@ fn the_main_window_can_be_resized_to_the_scale_the_statement_offers() {
 
 /// The claim in the statement, against the code.
 ///
-/// `docs/accessibility.md` §4 says what is *not* covered. A limitation that has
+/// `ACCESSIBILITY.md` §4 says what is *not* covered. A limitation that has
 /// been closed and left in the document is worse than one nobody wrote down:
 /// the first is a statement somebody relies on.
 #[test]
 fn the_accessibility_statement_still_says_the_audit_is_owed() {
-    let doc = read("docs/accessibility.md");
+    let doc = read("ACCESSIBILITY.md");
 
     assert!(
         doc.contains("tauri-driver"),

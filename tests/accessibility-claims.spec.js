@@ -19,7 +19,7 @@ import { join } from 'node:path';
 const root = join(import.meta.dirname, '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const statement = read('docs/accessibility.md');
+const statement = read('ACCESSIBILITY.md');
 const suite = read('tests/e2e/a11y.e2e.js');
 const router = read('src/router/index.js');
 
@@ -79,7 +79,7 @@ describe('the statement and the measurement', () => {
     expect(statement).toContain('zero violations');
     expect(suite).toMatch(/toEqual\(\[\]\)/);
     // Scoped to `#app`, the run cannot see the overlay container — the mistake
-    // §2 of `docs/accessibility.md` records. It must not come back.
+    // §2 of `ACCESSIBILITY.md` records. It must not come back.
     expect(suite, 'the axe run must not be scoped away from the overlays again').not.toMatch(
       /\.include\(['"]#app/
     );
