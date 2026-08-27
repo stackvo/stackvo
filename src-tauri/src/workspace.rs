@@ -75,7 +75,7 @@ pub struct Workspace {
     pub bootstrapped: bool,
     /// Has a catalogue ever been fetched onto this machine?
     ///
-    /// ADR 0011: nothing is embedded, so `false` means there are no service
+    /// Nothing is embedded, so `false` means there are no service
     /// definitions here at all — not an empty catalogue, none. The first-run
     /// gate is keyed on it, and it is on the workspace rather than left to the
     /// Market page because the answer decides which *screen* opens.
@@ -88,8 +88,8 @@ pub struct Workspace {
     ///
     /// True while the instance table is absent and `.env` still has a service
     /// switched on — the two halves `handover::is_pending` weighs. The screen
-    /// this opens is a gate rather than a banner, and that is the decision
-    /// recorded as ADR 0016: the `.env` branch of the renderer is gone, so a
+    /// this opens is a gate rather than a banner, and the reason is that the
+    /// `.env` branch of the renderer is gone: so a
     /// workspace in this state cannot build a stack at all, and telling it
     /// gently would be telling it nothing.
     ///
@@ -240,7 +240,7 @@ fn describe(root: PathBuf, source: Source) -> Workspace {
         bootstrapped: bootstrap_marker(&root).is_file(),
         catalogue_fetched: crate::market::registry_path(&root).is_file(),
         // Read through the catalogue the workspace actually has, not through a
-        // compiled-in list — there is no compiled-in list any more (ADR 0011).
+        // compiled-in list — there is no compiled-in list any more.
         // A machine with no catalogue cannot answer this yet, and does not need
         // to: `CatalogueGate` comes first, and until it is past there is nothing
         // to migrate *into*.

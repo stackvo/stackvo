@@ -10,7 +10,7 @@ import { stage } from './stage.js';
  * is still the right test — but jsdom has no layout, so what it cannot ask is
  * whether anything on screen actually moved.
  *
- * §3 #24 stood at half done with the reason "no rtl configuration in
+ * This stood at half done with the reason "no rtl configuration in
  * `vuetify.js`". That was wrong twice: the configuration was in
  * `appearance.js`, where it belongs, and the real gap was in a third place
  * again. Measured here rather than reasoned about, and all three were only

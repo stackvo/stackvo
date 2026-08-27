@@ -2,7 +2,7 @@ import { computed, ref } from 'vue';
 import { api, asList } from '@/lib/ipc';
 
 /**
- * Projects somebody pinned to the top of the list (M-1).
+ * Projects somebody pinned to the top of the list.
  *
  * ## Why this is a preference and not a manifest key
  *

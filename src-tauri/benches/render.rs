@@ -17,7 +17,7 @@
 //! useful fails on runs where nothing changed, and one loose enough to be
 //! stable catches nothing. Either way the outcome is the same, and this
 //! repository has already written it down once: a red gate that people learn to
-//! ignore is worse than no gate — §36.1 of the readiness report makes exactly
+//! ignore is worse than no gate — an earlier report makes exactly
 //! this argument about flooring a coverage number nobody can act on.
 //!
 //! So the bundle budget next door **is** a gate, because bytes are the same on

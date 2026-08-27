@@ -1,4 +1,4 @@
-//! Who may open the tunnel, and what its address is called (B-7).
+//! Who may open the tunnel, and what its address is called.
 //!
 //! [`crate::tunnel`] answers "can this project be reached from the internet".
 //! The second question everybody asks about a link they just pasted into a
@@ -295,7 +295,7 @@ pub fn set(project: &str, credentials: Option<Credentials>) -> Result<Option<Cre
     }
 }
 
-/// What a pane needs to know before it can offer either half of B-7.
+/// What a pane needs to know before it can offer either half of the identity.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Identity {

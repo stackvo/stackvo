@@ -68,7 +68,7 @@ describe('formToSpec', () => {
   });
 
   /**
-   * J-2, and the assertion the field's design rests on: an unset picker must
+   * And the assertion the field's design rests on: an unset picker must
    * not become `"npm"`.
    *
    * Every node manifest on disk was written before this field existed. If the
@@ -95,7 +95,7 @@ describe('formToSpec', () => {
   });
 
   /**
-   * J-1. Bun and Deno write their own block, not a node one — the same W-02
+   * Bun and Deno write their own block, not a node one — the same W-02
    * rule the test above states, extended to the two runtimes most likely to be
    * mistaken for node.
    */

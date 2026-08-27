@@ -358,7 +358,7 @@ describe('the runtime rows', () => {
 });
 
 /**
- * Moving one instance's data into another (G-4).
+ * Moving one instance's data into another.
  *
  * The plan is the feature, so the assertions are about it being *readable
  * before the button is worth pressing*: a refused pair says why rather than

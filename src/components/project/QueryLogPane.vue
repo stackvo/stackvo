@@ -9,7 +9,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
  * What the database was asked while you were looking, and what it was asked
  * three hundred times.
  *
- * F-1 — the row §2 calls the largest product gap. Three competitors sell this
+ * The largest product gap this stack had. Three competitors sell this
  * and none of them do it without an agent; MySQL and MariaDB have had a
  * collector all along, and it is switchable at runtime from the connection this
  * app already has.

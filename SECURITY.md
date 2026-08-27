@@ -52,7 +52,7 @@ enumerated rather than assumed, and each one names the thing that answers it.
 | #   | Threat                                  | What it would cost               | What answers it                                                                                 |
 | --- | --------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------- |
 | T-1 | A forged registry (DNS, MITM)           | arbitrary packages installed     | HTTPS only — `http://` is refused before a request — plus the signature                         |
-| T-2 | The package repository is taken over    | a bad package for every user     | minisign over the index, pinned keys, rotation and retirement (`signing.rs`, ADR 0021)          |
+| T-2 | The package repository is taken over    | a bad package for every user     | minisign over the index, pinned keys, rotation and retirement (`signing.rs`)                    |
 | T-3 | A malicious compose fragment            | **root on the host**             | the allowlist in `contracts/compose-policy.json`, checked after rendering (`compose_policy.rs`) |
 | T-4 | A malicious image                       | execution inside the container   | a pinned digest, and `policy.market.allowedRegistries`                                          |
 | T-5 | A template that exfiltrates `.env`      | credentials leave the machine    | the render context is built from the manifest and nothing else (`render.rs`)                    |
@@ -67,13 +67,13 @@ before a fragment is assembled. Only the second is still standing when a
 repository has been taken over or a mirror is lying.
 
 **A workspace may put its own copy of a package file in front of the published
-one** (ADR 0031). That copy takes the same path: it is substituted from a
+one**. That copy takes the same path: it is substituted from a
 context the manifest defines and it passes the same allowlist. It cannot be a
 manifest — overriding one would let a workspace run one image while the
 catalogue reported another.
 
 **No package key is pinned in a stock build**, and that is stated rather than
-papered over. ADR 0015 gives the registry its own ed25519 pair and the ceremony
+papered over. The registry has its own ed25519 pair and the ceremony
 that would produce one has not happened; a build with no key **refuses** a
 signed refresh instead of quietly accepting an unsigned index. An organisation
 running its own mirror signs it and names its key in

@@ -9,7 +9,7 @@
  *
  * ## Why this exists
  *
- * §3 #22 is two rows of the release matrix — `aarch64-unknown-linux-gnu` on
+ * Two rows of the release matrix — `aarch64-unknown-linux-gnu` on
  * `ubuntu-24.04-arm`, `aarch64-pc-windows-msvc` on `windows-11-arm` — and its
  * remaining question was never "does it compile there". That half was answered
  * by a real run: both jobs started, built and ran the suite. The open half is

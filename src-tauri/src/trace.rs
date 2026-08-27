@@ -1,4 +1,4 @@
-//! Real stacks, and therefore a real flame graph (F-3).
+//! Real stacks, and therefore a real flame graph.
 //!
 //! ## Why this module exists at all
 //!
@@ -8,7 +8,7 @@
 //! from the root, so a function called from two places is two boxes with their
 //! own widths. `profile::call_tree` says all this in its own comment and is
 //! honest about the consequence — it draws a call *tree*, and the screen calls
-//! it one. F-3 stayed amber for that reason and could not be closed by
+//! it one. Profiling stayed half-answered for that reason and could not be closed by
 //! arranging the same numbers more cleverly. No arrangement of edges recovers
 //! information the file does not contain.
 //!

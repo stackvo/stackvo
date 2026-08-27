@@ -92,7 +92,7 @@ export default {
   },
 
   /**
-   * The command palette (A-2).
+   * The command palette.
    *
    * `keys` spells the shortcut out rather than drawing key caps: the string is
    * one line in a footer and a reader who has never used a palette needs the
@@ -127,7 +127,7 @@ export default {
   },
 
   /**
-   * `stackvo.local.json` — this machine's overrides (B-2).
+   * `stackvo.local.json` — this machine's overrides.
    *
    * `notIgnored` is the only warning of the three git states, and it says what
    * to do rather than only that something is wrong: a file that reaches a
@@ -147,7 +147,7 @@ export default {
   },
 
   /**
-   * Lifecycle hooks (B-3).
+   * Lifecycle hooks.
    *
    * `explain` names the risk rather than only the feature. A screen that made
    * approving easier than reading would be the opposite of what this is for.
@@ -215,7 +215,7 @@ export default {
   },
 
   /**
-   * The local DNS responder (E-1).
+   * The local DNS responder.
    *
    * `explain` says what it is *not* — a resolver — because that is the fact
    * somebody needs before turning on something that answers DNS on their
@@ -362,7 +362,7 @@ export default {
   },
 
   /**
-   * User routes (E-4).
+   * User routes.
    *
    * `explain` leads with `localhost`, because that is the one thing everybody
    * types and the one thing that cannot work unaided.
@@ -382,7 +382,7 @@ export default {
   },
 
   /**
-   * Moving one instance's data into another (G-4).
+   * Moving one instance's data into another.
    *
    * `explain` names the destructive half first, because that is the fact the
    * plan exists to put on screen before the button is worth pressing.
@@ -398,7 +398,7 @@ export default {
   },
 
   /**
-   * Suspending idle projects (I-2).
+   * Suspending idle projects.
    *
    * `explain` names the signal, because "how does it know" is the first
    * question about anything that stops a container on its own.

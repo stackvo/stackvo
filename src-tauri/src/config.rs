@@ -71,7 +71,7 @@ pub const SETTINGS: [(&str, &str); 36] = [
     // only for keys that are missing — embedding them pinned one machine's ids
     // into every install, so Grafana would have run as uid 501 on a Linux box
     // where the developer is 1000.
-    // I-2. Off, and off is the default that matters: a project that stops
+    // Off, and off is the default that matters: a project that stops
     // behind somebody's back and then answers 502 is worse than one that stays
     // up, so this is asked for rather than assumed.
     ("IDLE_SUSPEND_MINUTES", "0"),
@@ -120,8 +120,8 @@ pub const SETTINGS: [(&str, &str); 36] = [
 
 /// The service half. Seventy-eight keys, and not all of them are legacy.
 ///
-/// ADR 0016 deleted the `.env` branch of the renderer: services come from the
-/// instance table and packages now, and `skeleton/core/templates/services/`
+/// The `.env` branch of the renderer is gone: services come from the instance
+/// table and packages now, and `skeleton/core/templates/services/`
 /// left the binary with it. This constant stayed behind, and the sentence that
 /// kept it said [`crate::handover`] needs it — a `.env` that predates the market
 /// says `SERVICE_MYSQL_ENABLE=true` and nothing else, so without a `VERSION`
@@ -141,8 +141,8 @@ pub const SETTINGS: [(&str, &str); 36] = [
 /// catcher a workspace knows about by asking whether a key was **present**, and
 /// on an untouched workspace the only thing making `SERVICE_MAILPIT_ENABLE`
 /// present was this table. A panel's behaviour hanging off a constant named for
-/// migration. ADR 0037 pointed that question at the catalogue, where ADR 0016
-/// had already put the vocabulary, and **seventy-two keys left with it** — every
+/// migration. That question was pointed at the catalogue, where the vocabulary
+/// already lived, and **seventy-two keys left with it** — every
 /// `_ENABLE`, `_VERSION` and `_VERSIONS`, which were the `.env` shadow of a
 /// catalogue that had moved into packages. 150 became 78.
 ///
@@ -171,11 +171,11 @@ pub const SETTINGS: [(&str, &str); 36] = [
 /// installed from packages, with no `.env` at all,
 /// `SERVICE_MYSQL_ROOT_PASSWORD` still answers `"root"` out of the binary — and
 /// by that order it beats what the package declares, which is the reverse of
-/// ADR 0016.
+/// what the package system is for.
 ///
 /// Pinned by `db::tests::stored_beats_env_beats_the_packages_default`, in the
-/// state `mail::detect` was in before ADR 0037: described, relied upon, and
-/// asserted nowhere.
+/// state `mail::detect` was in before anybody went looking: described, relied
+/// upon, and asserted nowhere.
 ///
 /// A new service arriving as a package must still not gain a key here — gaining
 /// one would mean the app had an opinion about a service it does not ship.
@@ -488,11 +488,11 @@ impl Env {
     /// readable error. Reading that middle slot with `get` put a third thing in
     /// it — on a workspace installed from packages, with no `.env` at all,
     /// `SERVICE_MYSQL_ROOT_PASSWORD` answered `"root"` out of the binary and
-    /// **beat what the package declared**, which is the reverse of ADR 0016.
+    /// **beat what the package declared**, which is backwards.
     ///
     /// So the middle slot asks this instead, and the embedded service defaults
     /// go back to being what they are: values for a workspace that has a
-    /// pre-market `.env`, which is the migration and nothing else (§3 #36).
+    /// pre-market `.env`, which is the migration and nothing else.
     pub fn stated(&self, key: &str) -> Option<&str> {
         if !self.stated.contains(key) {
             return None;
@@ -865,11 +865,10 @@ SERVICE_REDIS_ENABLE=TRUE
     /// The split is a partition, and both numbers are measured rather than
     /// estimated.
     ///
-    /// `docs/durum.md` called the service half "roughly half of 186" for three
-    /// rounds. It is 150 of 186 — four fifths — and the difference matters,
-    /// because the size of that constant is the size of the deletion §3 #36 is
-    /// waiting to make. A number nobody counts drifts toward whatever the last
-    /// person guessed.
+    /// The service half was called "roughly half of 186" for three rounds. It is
+    /// 150 of 186 — four fifths — and the difference matters, because the size
+    /// of that constant is the size of the deletion this is waiting to make. A
+    /// number nobody counts drifts toward whatever the last person guessed.
     ///
     /// The membership rule is the prefix and nothing else. A cleverer rule —
     /// "keys the handover reads", "keys with a `_VERSION` beside them" — would
@@ -892,7 +891,7 @@ SERVICE_REDIS_ENABLE=TRUE
             assert!(
                 !key.starts_with("SERVICE_"),
                 "{key} is a service key sitting in the half that stays — it would \
-                 survive the deletion §3 #36 is waiting for"
+                 survive the deletion `LEGACY_SERVICES` is waiting for"
             );
         }
 
@@ -911,8 +910,8 @@ SERVICE_REDIS_ENABLE=TRUE
     /// `get` merges [`EMBEDDED`] under the file and that is right almost
     /// everywhere. `stated` is the narrow question `db.rs` asks — its
     /// resolution order puts `.env` ahead of what a package declares, so a
-    /// default arriving in that slot outranks the package, which is the reverse
-    /// of ADR 0016. This is the line between the two, and the alias case is
+    /// default arriving in that slot outranks the package, which is backwards.
+    /// This is the line between the two, and the alias case is
     /// included because "the file chose it" has to survive the file choosing it
     /// under the older spelling.
     #[test]
@@ -955,7 +954,7 @@ SERVICE_REDIS_ENABLE=TRUE
     /// This used to assert `EMBEDDED[SETTINGS.len()] == LEGACY_SERVICES[0]`,
     /// which reads fine and is a **compile error** the moment the legacy half
     /// is empty: `deny(unconditional_panic)` rejects the constant index, so
-    /// deleting the constant §3 #36 is waiting to delete stopped the crate's
+    /// deleting the constant that is waiting to go stopped the crate's
     /// tests from building instead of failing one. Comparing the whole array
     /// against the two halves laid end to end checks every entry rather than
     /// four, and survives one half going away — which is the state this test is
@@ -990,9 +989,9 @@ SERVICE_REDIS_ENABLE=TRUE
     /// app had an opinion about a service it does not ship.
     ///
     /// The remaining work is the other direction: that constant goes once no
-    /// supported workspace still needs migrating. §3 of `docs/durum.md` carries
-    /// it as an item, and `tests/legacy_env_claims.rs` carries the list of what
-    /// has to change on the day.
+    /// supported workspace still needs migrating. `tests/legacy_env_claims.rs`
+    /// carries the list of what has to change on the day, and the version it is
+    /// due by.
     #[test]
     fn every_catalog_service_ships_an_enable_and_a_version() {
         let embedded: std::collections::BTreeSet<&str> =
@@ -1052,8 +1051,8 @@ SERVICE_REDIS_ENABLE=TRUE
     ///
     /// The list is stated rather than inherited. It used to come from
     /// `SERVICE_MONGO_VERSIONS` as an embedded default, so this test was reading
-    /// the catalogue that ADR 0016 moved into packages — and when those keys
-    /// left (§3 #36) it failed for a reason that had nothing to do with folding.
+    /// the catalogue that moved into packages — and when those keys
+    /// left it failed for a reason that had nothing to do with folding.
     /// A test about what `service_versions` does with a list should say what the
     /// list is.
     #[test]

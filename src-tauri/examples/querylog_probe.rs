@@ -1,6 +1,6 @@
 //! Does the query log actually record what it claims, on the real databases?
 //!
-//! F-1. `querylog.rs` has unit tests, and every one of them parses a **fixture**
+//! `querylog.rs` has unit tests, and every one of them parses a **fixture**
 //! — a string somebody typed to look like what MySQL, Postgres or Mongo would
 //! write. That proves the parser reads what its author believed the format to
 //! be, and proves nothing about what a `mysql:9` container actually emits, or

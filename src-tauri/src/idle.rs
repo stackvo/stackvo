@@ -1,6 +1,6 @@
 //! Which projects have not been asked for anything, and stopping them.
 //!
-//! I-2. A workspace with nine projects runs nine containers, and on most days
+//! A workspace with nine projects runs nine containers, and on most days
 //! one of them is the one being worked on. The other eight hold memory for a
 //! machine that has other uses for it.
 //!

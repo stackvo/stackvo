@@ -11,7 +11,7 @@ import en from '@/i18n/locales/en.js';
 /**
  * The palette lists what can run, and running a row reaches the right command.
  *
- * A-2. Two things here are only visible at this layer. The first is that the
+ * Two things here are only visible at this layer. The first is that the
  * list is *derived* — a stopped project must offer Start and not Stop, and the
  * difference between the two is one branch that reads correctly either way. The
  * second is the keyboard: arrows and Enter are the whole point of the feature

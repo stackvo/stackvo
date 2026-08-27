@@ -139,7 +139,7 @@ const envFile = envPath ? parseEnv(readFileSync(envPath, 'utf8')) : {};
  * Read from the source rather than restated here, so the two cannot drift.
  *
  * Read from the two constants that hold the pairs, NOT from `EMBEDDED` itself:
- * §3 #36 split the defaults into `SETTINGS` (36, staying) and `LEGACY_SERVICES`
+ * The defaults are split into `SETTINGS` (36, staying) and `LEGACY_SERVICES`
  * (150, going at 0.4.0), and `EMBEDDED` became a `const fn` that merges them at
  * compile time. The old regex wanted a literal array, stopped matching that
  * day, and returned an **empty set** — so every key with a binary default went
@@ -176,7 +176,7 @@ const env = { ...EMBEDDED_VALUES, ...envFile };
 
 // A scraper over source text fails by finding nothing, and finding nothing here
 // looks exactly like "no key has a default". The floor is deliberately far
-// below 186: the number is §7's business and this only has to notice a scrape
+// below 186: the exact number is measured elsewhere and this only has to notice a scrape
 // that collapsed.
 if (HAVE_WORKSPACE && EMBEDDED.size < 100)
   err(
@@ -556,7 +556,7 @@ for (const e of defaultSet) {
  * service had a template, that every template was declared, and that each
  * template's compose profiles matched the id the app starts it by.
  *
- * ADR 0016 deleted that directory. A service is a **package** now, fetched from
+ * That directory is gone. A service is a **package** now, fetched from
  * a catalogue at run time, and there is no copy of it in this repository to
  * check against — which is the point of the catalogue and not a gap in it. So
  * three of the four checks lost their subject, and leaving them in place meant
@@ -588,7 +588,8 @@ const declaredIds = Object.entries(envSchema.services)
  * `SERVICE_MYQSL_ENABLE` in a workspace is a switch that will never turn
  * anything on, and nothing else in the toolchain would notice.
  *
- * These keys are a migration surface and are meant to go — see docs/durum.md §3
+ * These keys are a migration surface and are meant to go — see
+ * `src-tauri/tests/legacy_env_claims.rs`, which carries the deletion checklist
  * #36. When they do, this check goes with them.
  */
 const SWITCH = /^SERVICE_([A-Z0-9_]+)_ENABLE$/;

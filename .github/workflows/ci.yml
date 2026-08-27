@@ -1,9 +1,9 @@
 name: CI
 #
 # Everything below can be run before pushing: `tools/before-push.sh --all`.
-# `ci.yml` is the second opinion, not the first — ADR 0030 says why that
-# distinction had to be written down, and `tools/linux/` is how the Linux and
-# Windows halves became answerable off a runner.
+# `ci.yml` is the second opinion, not the first — that distinction is what
+# `tools/linux/` exists for, and is how the Linux and Windows halves became
+# answerable off a runner.
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: npm run test:js
 
-      # §3 #10. `src/lib/ipc.d.ts` is generated from `contracts/ipc.json`, and a
+      # `src/lib/ipc.d.ts` is generated from `contracts/ipc.json`, and a
       # generated file that is edited by hand or left behind by a contract
       # change is worse than none: an editor keeps offering the old argument
       # names with no sign that it is wrong. Ubuntu only — the output is the
@@ -91,7 +91,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: npm run bundle:budget
 
-      # The front end in a real engine (§3 #12). Ubuntu only, for the reason the
+      # The front end in a real engine. Ubuntu only, for the reason the
       # steps above are: the assertions are about layout and roles, not about an
       # OS, and a browser download on three runners is three minutes for one
       # answer.
@@ -171,7 +171,7 @@ jobs:
         working-directory: src-tauri
         run: cargo fmt --check
 
-  # The other half of §3 #12: the whole binary, under a driver.
+  # The other half: the whole binary, under a driver.
   #
   # A separate job rather than a step in `build`, and the reason is the one the
   # matrix cannot express: this runs on exactly one of the three platforms, and
@@ -461,7 +461,7 @@ jobs:
   # This job used to clone `stackvo/stackvo` and validate against it. That
   # repository is now **empty** — `.gitignore`, `LICENSE`, `README.md` and
   # nothing else — so the first step, `cp stackvo-checkout/.env.example …`,
-  # failed and took the job with it. §3 #33 called this "an external
+  # failed and took the job with it. This was called "an external
   # dependency"; it turned out to be a dependency on content that is not there.
   #
   # `tools/fixtures/validator-workspace/` is the replacement and it is strictly

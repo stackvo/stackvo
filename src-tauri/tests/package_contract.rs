@@ -11,7 +11,7 @@
 //! kind of check existed.
 //!
 //! It is the same argument `contract_agreement.rs` makes for `ipc.json` — the
-//! contract is written rather than generated (ADR 0006), and what makes that
+//! contract is written rather than generated, and what makes that
 //! affordable is a test that fails when the two halves disagree.
 
 use std::collections::BTreeSet;
@@ -190,7 +190,8 @@ fn every_required_field_is_one_the_schema_declares() {
 /// The client's refusals are the schema's rules, spelled the same way.
 ///
 /// `MOVING_TAGS` and the schema's `not.enum` are the same list in two files,
-/// and they are the list ADR 0014 turns on. A tag that is moving in one and not
+/// and they are the list the moving-tag rule turns on. A tag that is moving in
+/// one and not
 /// the other is a version somebody can publish and nobody can install.
 #[test]
 fn the_moving_tags_are_the_same_list_on_both_sides() {

@@ -16,9 +16,9 @@
 //! arbitrary command string from its own frontend is a remote shell with extra
 //! steps.
 //!
-//! That rule is intact and is **not** what B-4 changed.
+//! That rule is intact and is **not** what the workspace unlock changed.
 //!
-//! ## What a project may add, and why it is allowed to (B-4)
+//! ## What a project may add, and why it is allowed to
 //!
 //! [`CATALOG`] is eleven commands that most projects have. What it cannot know
 //! is the one command *this* project runs every day — `artisan app:reindex`,
@@ -32,10 +32,10 @@
 //! ```
 //!
 //! The webview still only ever sends `"reindex"`. What changed is where the
-//! **workspace** may declare one — and `docs/durum.md` §5's first question was
-//! exactly that distinction: the argument against a webview naming a program is
-//! about a surface that runs code it did not choose; a file on disk in the
-//! repository is not that surface.
+//! **workspace** may declare one, and that distinction is the whole of it: the
+//! argument against a webview naming a program is about a surface that runs
+//! code it did not choose; a file on disk in the repository is not that
+//! surface.
 //!
 //! ### The container, and nothing else
 //!
@@ -47,7 +47,7 @@
 //! button into arbitrary code execution, and that one has a consent record
 //! keyed to a digest.
 //!
-//! So B-4 stops at the container line. Reaching past it is `hooks`' `host`
+//! So the unlock stops at the container line. Reaching past it is `hooks`' `host`
 //! step, which already exists, already asks, and is a different decision than
 //! the one that was taken here.
 //!
@@ -234,7 +234,7 @@ pub const CATALOG: &[Spec] = &[
     },
     // ---------------------------------------------------------- Symfony
     //
-    // M-9. Laravel and WordPress had a row here from the start and the other
+    // Laravel and WordPress had a row here from the start and the other
     // three frameworks this app scaffolds did not, which made "quick commands"
     // read as "Laravel commands". Each of the rows below is the same shape as
     // the ones above — a fixed id, an argv, and a marker file that only that
@@ -380,7 +380,7 @@ pub struct QuickCommand {
     pub interactive: bool,
     /// What the offer is based on, so an unexpected list can be explained.
     pub because: String,
-    /// Declared by the project rather than compiled in (B-4).
+    /// Declared by the project rather than compiled in.
     ///
     /// On screen rather than merely in the data: a row that came out of the
     /// repository somebody cloned is a different kind of thing from one this
@@ -389,7 +389,7 @@ pub struct QuickCommand {
     pub declared: bool,
 }
 
-/// A command a project declared in its own `stackvo.json` (B-4).
+/// A command a project declared in its own `stackvo.json`.
 ///
 /// Owned rather than `&'static`, which is the one structural difference from
 /// [`Spec`] and the reason [`Resolved`] exists: a catalogue entry lives in the
@@ -770,7 +770,7 @@ pub fn for_project(root: &Path, name: &str) -> Result<Vec<QuickCommand>> {
 /// reported where every other manifest problem is.
 ///
 /// Reads the **effective** manifest, so `stackvo.local.json` can override it —
-/// the same rule hooks follow, and the case B-2 exists for.
+/// the same rule hooks follow, and the case the overlay exists for.
 pub fn declared_for(root: &Path, name: &str) -> Declared {
     crate::workspace::project_dir(root, name)
         .ok()
@@ -781,7 +781,7 @@ pub fn declared_for(root: &Path, name: &str) -> Declared {
 
 /// Resolve an id, refusing anything that is neither built in nor declared.
 ///
-/// The whole point of the id survives B-4: the frontend still cannot name a
+/// The whole point of the id survives the unlock: the frontend still cannot name a
 /// program. It can pick one that was compiled in, or one the **project's own
 /// file** declared — and this function is the only place either becomes an
 /// argv.
@@ -829,7 +829,7 @@ mod tests {
         }
     }
 
-    /// The security model in one assertion, and B-4 did not weaken it: an id
+    /// The security model in one assertion, and the unlock did not weaken it: an id
     /// that is neither compiled in nor declared by the project resolves to
     /// nothing, so there is still no path from the webview to an arbitrary
     /// `docker exec`.
@@ -844,7 +844,7 @@ mod tests {
         assert!(resolve_with(&none, "reindex").is_err());
     }
 
-    // ------------------------------------------- declared commands (B-4)
+    // ------------------------------------------- declared commands
 
     fn declared(json: &str) -> (Declared, Vec<crate::hooks::Problem>) {
         parse(&serde_json::from_str(json).expect("the fixture is JSON"))
@@ -880,7 +880,7 @@ mod tests {
         assert!(!offered.iter().find(|c| c.id == "tinker").unwrap().declared);
     }
 
-    /// The line B-4 stops at. A host step is what turns `git clone` plus a
+    /// The line the unlock stops at. A host step is what turns `git clone` plus a
     /// button into arbitrary code execution, and it has a consent record
     /// somewhere else; here it is refused, by name, so the author is told
     /// where the real feature lives.
@@ -1080,7 +1080,7 @@ mod tests {
             "migrate:reset",
             "db:wipe",
             "update",
-            // The same rule read across the frameworks M-9 added: each of these
+            // The same rule read across the frameworks added later: each of these
             // drops the developer's data, and each is one word away from the
             // safe row sitting next to it.
             "db:drop",
@@ -1096,7 +1096,7 @@ mod tests {
         }
     }
 
-    /// M-9. Each framework's rows appear on its own marker and on no other's —
+    /// Each framework's rows appear on its own marker and on no other's —
     /// the failure this prevents is a Symfony button on a Laravel project,
     /// which fails as `Could not open input file: bin/console` after the click.
     #[test]

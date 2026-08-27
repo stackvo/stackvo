@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * The redirect URI to paste into an identity provider's console (M-12).
+ * The redirect URI to paste into an identity provider's console.
  *
  * Beside the tunnel rather than inside it, because most of the time the tunnel
  * is not needed: a redirect URI is a **browser redirect, not a fetch**, so the

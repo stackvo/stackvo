@@ -622,7 +622,7 @@ const serviceSnapshots = computed(() =>
 );
 
 /**
- * Moving this instance's data into another one (G-4).
+ * Moving this instance's data into another one.
  *
  * The plan is fetched the moment a target is chosen, not when the button is
  * pressed. The whole point of the plan is the sentence "everything in X will be
@@ -1394,7 +1394,7 @@ onUnmounted(() => {
         </v-list>
       </template>
 
-      <!-- Moving data into another instance (G-4) ------------------------ -->
+      <!-- Moving data into another instance ------------------------ -->
       <template v-if="moveTargets.length">
         <div class="sheet-group">{{ t('dbMove.title') }}</div>
         <p class="text-caption text-medium-emphasis mb-2">{{ t('dbMove.explain') }}</p>

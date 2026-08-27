@@ -8,7 +8,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Workspace pane, mounted.
  *
- * Fifth and largest out of `Settings.vue` under §14.16 — the folder, the
+ * Fifth and largest out of `Settings.vue` in the pane split — the folder, the
  * compose verbs and the stack preset were three panes for one subject and three
  * places to look before finding the button you wanted.
  *

@@ -1,7 +1,7 @@
 //! One request, from the code's side and the database's side, on one axis.
 //!
-//! F-2 in `docs/durum.md`, whose note read: "dump/mail/log three separate
-//! screens, no correlation". Each of those answers a different half of the same
+//! The gap this closes was recorded as "dump/mail/log three separate screens,
+//! no correlation". Each of those answers a different half of the same
 //! question — `dd($user)` says what the code thought it had, the query log says
 //! what it actually asked for, and the two were readable only by looking at two
 //! screens and comparing clocks by eye.
@@ -12,7 +12,7 @@
 //! `GET /api/health`, or the artisan command for a CLI run — and its `Event`
 //! already carried a `kind` whose doc comment said, before any of this existed,
 //! that it was there "so queries and jobs do not need a second file and a
-//! second reader when they arrive". They have arrived. The second is that F-1
+//! second reader when they arrive". They have arrived. The second is that the query log
 //! made the query log readable at all, and made it report seconds since the
 //! epoch **as the server computed them** rather than a formatted local time —
 //! which is what lets a query sit beside a dump on one axis instead of three

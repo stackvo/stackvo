@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 
 /**
- * A QR code for one of the addresses this app hands out (M-3).
+ * A QR code for one of the addresses this app hands out.
  *
  * ## Why the encoding is not done here
  *

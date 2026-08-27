@@ -48,7 +48,7 @@ export async function updatesConfigured() {
  * release found to be broken cannot be recalled, because every running copy
  * keeps asking the same endpoint and getting the same answer.
  *
- * `updater_offer` is that second question (§3 #21, `src-tauri/src/channel.rs`).
+ * `updater_offer` is that second question — see `src-tauri/src/channel.rs`.
  * It reads the manifest the plugin already fetched — `rawJson`, so there is no
  * second request and no chance of the two disagreeing — and answers with what
  * this install should be offered.

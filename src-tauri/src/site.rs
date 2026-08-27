@@ -1,5 +1,5 @@
 //! Two per-project settings that reach the container through this app's own
-//! layers rather than through the manifest (M-5, M-6).
+//! layers rather than through the manifest.
 //!
 //! ## Why they share a file
 //!
@@ -43,7 +43,7 @@ pub const FILE_NAME: &str = "site.json";
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    /// Forward the host's SSH agent into the container (M-10).
+    /// Forward the host's SSH agent into the container.
     ///
     /// What it is for: `composer install` on a private repository, and
     /// `git pull` inside the container. Both need a key, and the alternative
@@ -57,13 +57,13 @@ pub struct Config {
     /// container running somebody else's code.
     #[serde(default)]
     pub ssh_agent: bool,
-    /// Environment variables for the project's own container (M-5).
+    /// Environment variables for the project's own container.
     ///
     /// Sorted, because the overlay is rendered from it before every compose
     /// command and a map that reorders would rewrite the file for nothing.
     #[serde(default)]
     pub env: BTreeMap<String, String>,
-    /// Serve a directory index where there is no index file (M-6).
+    /// Serve a directory index where there is no index file.
     #[serde(default)]
     pub directory_listing: bool,
 }
@@ -152,8 +152,6 @@ pub fn checked_value(value: &str) -> Result<()> {
     Ok(())
 }
 
-// ------------------------------------------------------------------ M-6
-
 /// The server directives that turn a directory index on.
 ///
 /// Returned per server rather than written once, because the two that have a
@@ -177,7 +175,7 @@ pub fn listing_directives(server: &str) -> Option<&'static str> {
 pub struct Entry {
     pub service: String,
     pub env: BTreeMap<String, String>,
-    /// Whether this project asked for the agent (M-10).
+    /// Whether this project asked for the agent.
     pub ssh_agent: bool,
 }
 
@@ -370,7 +368,7 @@ mod tests {
         }
     }
 
-    /// M-10. The socket the container mounts is a fixed path on the two
+    /// The socket the container mounts is a fixed path on the two
     /// platforms where the daemon is in a VM, and the real one on the platform
     /// where it is not — mounting `$SSH_AUTH_SOCK` on macOS forwards a path
     /// that means nothing inside the VM.
@@ -489,7 +487,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// M-6 is a server setting, and the servers that have no configuration file
+    /// This is a server setting, and the servers that have no configuration file
     /// cannot do it — which is a sentence the pane has to be able to say.
     #[test]
     fn only_the_servers_with_a_config_file_can_list_a_directory() {

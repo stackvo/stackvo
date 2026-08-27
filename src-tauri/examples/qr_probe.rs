@@ -1,4 +1,4 @@
-//! Can anything actually read what the encoder drew? (M-3)
+//! Can anything actually read what the encoder drew?
 //!
 //! `qr.rs` is checked in its unit tests against the specification's own worked
 //! example and against the format and version strings it publishes. That is the

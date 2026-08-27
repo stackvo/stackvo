@@ -1,11 +1,11 @@
 //! The CLI against `contracts/ipc.json`, held the way `mcp.rs` is held.
 //!
-//! A-1 sat unbuilt because a CLI is a **third surface** — the desktop reaches
+//! The CLI sat unbuilt because it is a **third surface** — the desktop reaches
 //! the core one way, an assistant another, and a third consumer is a third
 //! thing that can drift from the contract while every existing test passes.
-//! `docs/durum.md` §5 asked whether that was acceptable. It is, on the
-//! condition this file enforces: every command names the contract command it
-//! implements, and the pair is checked.
+//! Whether that was acceptable was the open question. It is, on the condition
+//! this file enforces: every command names the contract command it implements,
+//! and the pair is checked.
 //!
 //! What each check buys:
 //!
@@ -152,7 +152,7 @@ fn the_two_surfaces_agree_about_what_writes() {
     }
 }
 
-// -------------------------------------------------- the shell commands (A-3)
+// -------------------------------------------------- the shell commands
 //
 // `Backing::HostShell` is the one exception to "every command names a contract
 // command", and an exception nobody checks is a hole. These four assertions are

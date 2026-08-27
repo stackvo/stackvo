@@ -7,7 +7,7 @@ import { createI18n } from 'vue-i18n';
 import en from '../src/i18n/locales/en.js';
 
 /**
- * The loopback API pane — §3 #34, ADR 0026.
+ * The loopback API pane.
  *
  * The transport is proved over a real socket in `websurface_socket.rs`. What is
  * left for this side is the one thing the socket cannot check: **what a person

@@ -9,7 +9,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
 /**
  * Language, and the two settings that are about language without being it.
  *
- * Eighth pane out of `Settings.vue` under §14.16 and the smallest. Three
+ * Eighth pane out of `Settings.vue` in the pane split and the smallest. Three
  * controls, three different owners, which is the whole reason it is worth
  * mounting: the app locale goes through `setLocale` because it also persists
  * and relabels the tray; the console locale and the RTL flag are appearance
@@ -19,7 +19,7 @@ const { t, locale } = useI18n();
 const appearance = useAppearanceStore();
 
 /**
- * Language packs (M-7).
+ * Language packs.
  *
  * The two built-in languages are compiled in; anything else is a JSON file in
  * the app's config directory, and this is where somebody finds out that it is

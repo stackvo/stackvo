@@ -1,7 +1,7 @@
 //! The hosts file, planned and actually written — on whichever platform is
 //! running this.
 //!
-//! §3 #35 said the privilege paths never ran on Windows or Linux. CI has run
+//! The privilege paths never ran on Windows or Linux. CI has run
 //! `cargo test` on three operating systems for a long time, so the *pure* half
 //! of `hosts.rs` — the parser, the marker block, `plan_text` — has been covered
 //! everywhere all along. What had never run anywhere is the half that touches a
@@ -23,8 +23,8 @@
 //! its own environment and cannot do that to anybody.
 //!
 //! What this still does **not** cover is the elevation itself — pkexec, UAC,
-//! osascript. Those need a human at a dialog, and the row in `docs/durum.md`
-//! says so rather than claiming the whole item.
+//! osascript. Those need a human at a dialog, which is said here rather than
+//! left for a reader to assume the coverage is total.
 
 use stackvo_desktop_lib::hosts;
 use std::path::PathBuf;

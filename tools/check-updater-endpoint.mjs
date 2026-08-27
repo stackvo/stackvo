@@ -8,7 +8,7 @@
  *
  * ## Why this exists
  *
- * §3 #2 has been "half done" through three rounds, and every round the sentence
+ * The update endpoint has been "half done" through three rounds, and every round the sentence
  * was some version of *the keys are in place, the workflow ran, and
  * `latest.json` is still 404.* Nothing in this repository could say more than
  * that, because nothing here had ever **asked the endpoint**. The Rust tests

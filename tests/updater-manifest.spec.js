@@ -11,7 +11,7 @@ import { inspect, diagnose, platformsFrom, declared } from '../tools/check-updat
  * is a check people learn to ignore. What can be gated is whether it would
  * *recognise* a broken manifest, and that is this file.
  *
- * The four manifests below are the four ways §3 #2 could still be broken after
+ * The four manifests below are the four ways the update endpoint could still be broken after
  * the release page looks finished, and every one of them serves a 200.
  */
 

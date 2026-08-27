@@ -244,7 +244,7 @@ describe('the profiler', () => {
   });
 
   /**
-   * F-3. A trace is not a profile with a different name: it is read by another
+   * A trace is not a profile with a different name: it is read by another
    * parser, drawn as another picture, and the one thing it must never do is
    * leave the previous profile's table or tree on screen underneath it. Those
    * are cachegrind's summed edges; this is folded stacks, and a reader cannot

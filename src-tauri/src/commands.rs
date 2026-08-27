@@ -84,7 +84,7 @@ pub struct AppState {
     /// processes write the same compose file is worse. A Tokio mutex because it
     /// is held across the await.
     pub generate_lock: std::sync::Arc<tokio::sync::Mutex<()>>,
-    /// The DNS responder, when it is running (E-1).
+    /// The DNS responder, when it is running.
     ///
     /// A handle rather than a "should it run" setting, because whether the
     /// socket is bound is the only honest answer to "is this working" — a
@@ -280,7 +280,7 @@ pub async fn projects_list(state: State<'_, AppState>) -> Result<Vec<Project>> {
 /// ## There is no cache here, and that is the measured answer rather than an
 /// omission
 ///
-/// §3 #27 carried "no cache" as a gap for a long time. `examples/list_bench.rs`
+/// "No cache" stood as a gap for a long time. `examples/list_bench.rs`
 /// is what settles it, and the split it prints is the whole argument:
 ///
 /// | | 1 project | 50 projects |
@@ -1851,7 +1851,7 @@ pub async fn compose_down(app: AppHandle, state: State<'_, AppState>) -> Result<
 
 // ---------------------------------------------------------- lifecycle hooks
 
-/// Run a project's hooks for one lifecycle event (B-3).
+/// Run a project's hooks for one lifecycle event.
 ///
 /// Everything about *whether* a step runs is `hooks::plan`'s; this reads the
 /// three inputs it needs and reports what happened.
@@ -1933,7 +1933,7 @@ pub struct SidecarVolume {
     pub volume: String,
 }
 
-/// The containers this project's own repository declares (ADR 0023).
+/// The containers this project's own repository declares.
 ///
 /// A project with no `sidecars` key answers with an empty list rather than an
 /// error: declaring none is the ordinary case, and every project in this
@@ -2134,7 +2134,7 @@ pub async fn project_build(
 
 use crate::pty::{self, PtyTarget};
 
-// ------------------------------------------------ idle projects (I-2)
+// ------------------------------------------------ idle projects
 
 /// How long since each running project was last asked for anything.
 #[tauri::command]
@@ -2188,7 +2188,7 @@ pub async fn projects_suspend_idle(
     Ok(stopped)
 }
 
-// ------------------------------------------- moving a database (G-4)
+// ------------------------------------------- moving a database
 
 /// Every database instance, which is what a move names.
 #[tauri::command]
@@ -2263,7 +2263,7 @@ pub async fn db_move_apply(
     outcome
 }
 
-// --------------------------------------------------- user routes (E-4)
+// --------------------------------------------------- user routes
 
 /// The saved routes, each with what it would actually do.
 ///
@@ -2342,7 +2342,7 @@ pub async fn routes_save(
     routes_list(state)
 }
 
-// ------------------------------------------------------------- DNS (E-1)
+// ------------------------------------------------------------- DNS
 
 /// The suffix this workspace's names end in.
 fn dns_suffix(state: &AppState) -> String {
@@ -3053,7 +3053,7 @@ pub async fn mail_message(state: State<'_, AppState>, id: String) -> Result<mail
     mail::message(&root, &id).await
 }
 
-/// The relay settings, without the password (M-2).
+/// The relay settings, without the password.
 ///
 /// `hasPassword` rather than the password: there is no command in this app that
 /// reads a stored credential back, and this is not going to be the first.
@@ -3232,7 +3232,7 @@ pub async fn service_db_clients(
 
 /// Hand this service's address to a database client.
 ///
-/// The last of G-3, and the smaller half by a distance: the correct string has
+/// The last of it, and the smaller half by a distance: the correct string has
 /// been available since `connect.rs` was written and the sheet has offered to
 /// copy it since. What was missing was the step that pastes it, which is what
 /// everybody was doing by hand.
@@ -3352,11 +3352,11 @@ pub async fn service_open_in_client(
     })
 }
 
-// ------------------------------------------------------- query log (F-1)
+// ------------------------------------------------------- query log
 
 /// What the database was asked, and what it was asked repeatedly.
 ///
-/// F-1. The row in §2 said this needed a collector inside the container, and
+/// This was assumed to need a collector inside the container, and
 /// for MySQL and MariaDB it does not: their general query log can be pointed at
 /// a table and switched on with two statements, at runtime, on a stock image.
 /// See [`crate::querylog`] for what that buys and what it costs.
@@ -3411,7 +3411,7 @@ pub async fn query_log_clear(
 
 /// One request, from the code's side and the database's side, on one axis.
 ///
-/// F-2. The row said "dump/mail/log three separate screens, no correlation",
+/// The row said "dump/mail/log three separate screens, no correlation",
 /// and the two halves that matter — what the code thought it had, and what it
 /// actually asked the database for — were readable only by comparing clocks by
 /// eye across two panes.
@@ -3450,7 +3450,7 @@ pub async fn request_timeline(
 
 /// Why one recorded request was slow — the three instruments around it.
 ///
-/// B-1. SPX says where the code's time went, the query log says what the
+/// SPX says where the code's time went, the query log says what the
 /// database was asked, and the axis says what else happened; each was its own
 /// pane, and putting them around **one** request meant reading three of them
 /// and comparing clocks by eye.
@@ -3606,7 +3606,7 @@ async fn safety_snapshot(state: &State<'_, AppState>, service: &str) -> Result<(
     Ok(())
 }
 
-// ----------------------------------------------------- snapshots (G-1, G-2)
+// ------------------------------------------------------------------ snapshots
 
 /// Every snapshot in the workspace, newest first.
 #[tauri::command]
@@ -4607,7 +4607,7 @@ pub async fn release_build(
     Ok(ReleaseResult { plan, verification })
 }
 
-/// Whether a built image may be pushed (H-1).
+/// Whether a built image may be pushed.
 ///
 /// Verification is re-run rather than remembered from the build. It is a
 /// question about an image that is on this machine now, and the answer between
@@ -4669,7 +4669,7 @@ pub async fn release_push(
     Ok(push)
 }
 
-/// A compose file for running the built image somewhere else (H-1).
+/// A compose file for running the built image somewhere else.
 ///
 /// Returned as text rather than written to a path the caller names. Where a
 /// deployment recipe belongs is the user's decision — a repository, a server, a
@@ -4807,7 +4807,7 @@ pub struct ProfilerStatus {
     /// multi-megabyte file per page load.
     pub trigger: String,
     pub profiles: Vec<crate::profile::ProfileFile>,
-    /// Recorded traces (F-3). Beside the profiles rather than mixed in with
+    /// Recorded traces. Beside the profiles rather than mixed in with
     /// them: they are read by a different parser and answer a different
     /// question, and a list that interleaved the two would make a person check
     /// the file name to know which view they were about to open.
@@ -4900,7 +4900,7 @@ pub fn profiler_read(
 
 /// The same profile as a call tree, for the flame view.
 ///
-/// F-3. `profiler_read` answers "where did the time go" — a table of the
+/// `profiler_read` answers "where did the time go" — a table of the
 /// costliest functions — and cannot answer "what called that", which is the
 /// question a flame view exists for. Separate from `profiler_read` rather than
 /// a field on it: the table is what the pane opens with and the tree is
@@ -4921,7 +4921,7 @@ pub fn profiler_tree(
 
 /// One recorded trace, folded into a flame graph.
 ///
-/// F-3, and the reason it can be called one. `profiler_tree` draws what
+/// And the reason it can be called one. `profiler_tree` draws what
 /// cachegrind holds — summed edges, so a function called from two places is one
 /// box carrying both — and says so. A trace holds the stacks themselves, so the
 /// same function under two callers is two boxes with their own widths, which is
@@ -4967,7 +4967,7 @@ pub fn profiler_clear(state: State<'_, AppState>, name: String) -> Result<serde_
     Ok(serde_json::json!({ "removed": removed, "freed": freed }))
 }
 
-// ------------------------------------------------ the performance layer (I-1)
+// ------------------------------------------------ the performance layer
 
 /// What this project's heavy directories cost, and where they live.
 #[tauri::command]
@@ -5057,7 +5057,7 @@ pub async fn perf_forget(
     crate::perf::status(&root, &name).await
 }
 
-// ------------------------------------- per-project settings (M-5, M-6, M-10)
+// ------------------------------------------------------ per-project settings
 
 /// What this project sets for itself.
 #[tauri::command]
@@ -5222,7 +5222,7 @@ pub async fn quick_command_run(
 
 // ------------------------------------------------------------ the workbench
 
-/// The runners this project has the files for (F-5).
+/// The runners this project has the files for.
 #[tauri::command]
 pub fn repl_runners(state: State<'_, AppState>, name: String) -> Result<Vec<crate::repl::Runner>> {
     crate::repl::for_project(&state.root()?, &name)
@@ -5810,7 +5810,7 @@ pub fn project_manifest_text(state: State<'_, AppState>, name: String) -> Result
     )
 }
 
-/// This machine's overrides for a project (B-2).
+/// This machine's overrides for a project.
 #[tauri::command]
 pub fn project_local_read(
     state: State<'_, AppState>,
@@ -5866,7 +5866,7 @@ pub fn project_manifest_write(
     Ok(spec)
 }
 
-// ----------------------------------------------------- LAN sharing (E-3)
+// ----------------------------------------------------- LAN sharing
 
 /// What another device on this network can reach, and what it cannot.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -5905,7 +5905,7 @@ pub struct LanProject {
 
 /// Where this workspace is reachable from the rest of the network.
 ///
-/// E-3. `shop.loc` lives in exactly one `/etc/hosts` and that is this machine's,
+/// `shop.loc` lives in exactly one `/etc/hosts` and that is this machine's,
 /// so a real phone has never been able to open it. See [`crate::lan`] for why
 /// the answer is a wildcard DNS suffix rather than a resolver of our own, and
 /// for the warning the visiting browser will show.
@@ -5987,7 +5987,7 @@ pub fn project_lan_share(
     Ok(manifest)
 }
 
-// ------------------------------------------------- declared services (B-1)
+// ------------------------------------------------- declared services
 
 /// One service a project's manifest asks for, and what this stack does about it.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -6517,7 +6517,7 @@ pub async fn imports_take(
 
 // ------------------------------------------------- fetching and sending data
 
-/// What this project can fetch its data from, and what each would do (A-1).
+/// What this project can fetch its data from, and what each would do.
 ///
 /// Both directions of every recipe, planned. A direction a provider does not
 /// offer is returned **named** rather than omitted: a card that silently lists
@@ -6629,8 +6629,8 @@ pub fn provider_consent(
 ///
 /// Never into the manifest, and never into `.env`: this is a credential for
 /// somewhere that is not this machine, and the file the recipe lives in is
-/// committed. ADR 0010's rule, applied to the one feature that would most like
-/// to break it.
+/// committed. The keystore rule, applied to the one feature that would most
+/// like to break it.
 #[tauri::command]
 pub fn provider_secret_set(
     state: State<'_, AppState>,
@@ -7031,7 +7031,7 @@ pub async fn project_adopt(
     outcome.map(|_| operation_id)
 }
 
-/// Adopt every folder named, in one pass (A-5).
+/// Adopt every folder named, in one pass.
 ///
 /// ## Why this is a command and not a loop in the UI
 ///
@@ -7347,7 +7347,7 @@ pub async fn project_register(
 
 // --------------------------------------------- exporting as a devcontainer
 
-/// What a devcontainer export would write into this project (A-7).
+/// What a devcontainer export would write into this project.
 ///
 /// A plan and not a write, because the destination is somebody's repository:
 /// `.devcontainer/` is meant to be committed, which is exactly why it should be
@@ -10293,7 +10293,7 @@ pub async fn stripe_stop(state: State<'_, AppState>, name: String) -> Result<()>
 
 // ------------------------------------------------------------------- oauth
 
-/// The redirect URI to register with an identity provider (M-12).
+/// The redirect URI to register with an identity provider.
 ///
 /// Both addresses, because there are two and the choice between them is a fact
 /// about the provider: a redirect URI is a browser redirect rather than a
@@ -10340,7 +10340,7 @@ pub async fn oauth_callbacks(
 
 /// What the page would list, and whether anything is serving it.
 ///
-/// M-4. The address is the workspace suffix itself — the name `core_domains`
+/// The address is the workspace suffix itself — the name `core_domains`
 /// already writes into the hosts file and `certs::required_domains` already
 /// covers, and which until now answered with Traefik's 404.
 async fn landing_entries(
@@ -10532,7 +10532,7 @@ pub async fn landing_stop(state: State<'_, AppState>) -> Result<()> {
 
 /// A QR code for a URL this app handed out.
 ///
-/// M-3. Both addresses meant for another device — the LAN name and the public
+/// Both addresses meant for another device — the LAN name and the public
 /// tunnel — are long enough that typing one on a phone is where people give up
 /// and reach for the desktop browser's device emulation instead.
 ///
@@ -10599,7 +10599,7 @@ pub fn tunnel_token_set(provider: String, token: Option<String>) -> Result<bool>
     }
 }
 
-/// What this project's tunnel asks for, and what it is called (B-7).
+/// What this project's tunnel asks for, and what it is called.
 ///
 /// Never the password: that has a command of its own, named after what it
 /// does. This one answers the two questions a pane opens with — is this link
@@ -10724,7 +10724,7 @@ pub async fn tunnel_start(
         .unwrap_or_else(|| "stackvo-net".to_string());
     let port = crate::tunnel::internal_port(&manifest);
 
-    // B-7, the second half: the address this provider is asked to keep. Stored
+    // The second half: the address this provider is asked to keep. Stored
     // per project AND per provider, because a name is granted by one account
     // on one service — an ngrok domain is not a tailnet hostname.
     let reserved = crate::tunnelid::name_of(&name, provider.id);
@@ -10740,7 +10740,7 @@ pub async fn tunnel_start(
         .with_hint("Set the tunnel's hostname before starting it."));
     }
 
-    // B-7, the first half: a credential in the keystore IS authentication
+    // The first half: a credential in the keystore IS authentication
     // being on. When there is one, the sidecar is pointed at a guard of ours
     // rather than at the project, and the guard is what asks for a password.
     let credentials = crate::tunnelid::read(&name)?;
@@ -11131,7 +11131,7 @@ pub fn secrets_status(state: State<'_, AppState>) -> Result<serde_json::Value> {
 /// Deliberately one key at a time and never automatic. Anything that reads
 /// `.env` directly takes `keychain:…` for the password itself, so this is a
 /// decision with a consequence somebody has to be told about — see
-/// [`crate::secrets`] and ADR 0010. A sweep that moved every credential at
+/// [`crate::secrets`]. A sweep that moved every credential at
 /// once would be the same decision made silently, twelve times.
 #[tauri::command]
 pub fn secret_move(state: State<'_, AppState>, key: String) -> Result<()> {
@@ -11577,7 +11577,7 @@ pub fn updater_status() -> serde_json::Value {
     })
 }
 
-/// What this install would be offered, given a manifest (§3 #21).
+/// What this install would be offered, given a manifest.
 ///
 /// Split from `updates_check` deliberately. That command is the *plugin's* —
 /// it fetches, verifies a signature and installs — and it is still deferred.
@@ -11624,7 +11624,7 @@ pub fn updater_offer(
     }))
 }
 
-/// Start the loopback API, and hand back the token once (§3 #34, ADR 0026).
+/// Start the loopback API, and hand back the token once.
 ///
 /// Off until somebody asks. Not because loopback is dangerous by itself, but
 /// because a listener nobody knows about is a listener nobody turns off — and
@@ -11743,7 +11743,7 @@ pub fn preferred_locale() -> String {
         .ok()
         .and_then(|p| p.get("locale").and_then(|v| v.as_str()).map(str::to_string));
 
-    // A chosen language pack outranks the resolver (M-7). `locale::resolve`
+    // A chosen language pack outranks the resolver. `locale::resolve`
     // only ever answers a language this binary was built with, which is right
     // for the tray's first second and wrong here: without this, somebody who
     // picked a pack is told "en" on every launch and the window resets itself
@@ -11767,7 +11767,7 @@ pub fn locale_get() -> String {
     preferred_locale()
 }
 
-/// Every language pack installed on this machine (M-7).
+/// Every language pack installed on this machine.
 ///
 /// Adding a language stops being a code change: a pack is one JSON file in the
 /// app's config directory with the same shape as the shipped catalogue, and
@@ -12341,13 +12341,13 @@ pub type Rendered = (Vec<GenFile>, Vec<(String, String)>);
 /// middle of it would be a function nobody could read either half of.
 /// Where the services half of a render comes from — and there is only one.
 ///
-/// ADR 0016 is what closed the second one. This used to be a switch: no
+/// The package system is what closed the second one. This used to be a switch: no
 /// `instances.json` meant render from `.env` and the templates compiled into the
 /// binary, an `instances.json` meant render from the table and the package tree.
 /// Both branches existed so that every workspace in existence could keep working
 /// while the second one was built.
 ///
-/// The first branch is gone (ADR 0016). What made keeping it untenable was not
+/// The first branch is gone. What made keeping it untenable was not
 /// the code — it was that the two branches knew about **different catalogues**:
 /// `.env` knew the twenty-five services that had a template inside the binary,
 /// the table knows whatever the package tree holds. Adding Solr and ClickHouse
@@ -12371,7 +12371,7 @@ fn service_source(root: &std::path::Path) -> Result<crate::instances::Table> {
     if crate::handover::pending(root) {
         // `Conflict` rather than a new code: the workspace's state and this
         // version's renderer disagree, which is what that code already means,
-        // and a new variant is a contract change (ADR 0008) for a message.
+        // and a new variant is a contract change for a message.
         return Err(Error::new(
             Code::Conflict,
             "this workspace still keeps its services in .env, and this version renders them \
@@ -12505,7 +12505,7 @@ pub fn render_generated(root: &std::path::Path) -> Result<Rendered> {
             // nginx.conf / supervisord.conf / Caddyfile per server; apache,
             // swoole and node correctly contribute nothing here.
             //
-            // M-6. The workspace's own directives, plus this project's
+            // The workspace's own directives, plus this project's
             // directory-listing switch appended to them. Appended rather than
             // merged: the workspace file is the user's and comes first, and a
             // switch that silently overrode a directive somebody wrote by hand
@@ -12848,7 +12848,7 @@ pub fn write_generated(
         written.push(f.label);
     }
 
-    // The agent context (K-2), written into each project's own directory
+    // The agent context, written into each project's own directory
     // rather than into `generated/`. It is not a file the stack reads — the
     // reader is an assistant working inside the container, which sees the
     // project tree and not this app's.
@@ -13079,12 +13079,12 @@ use std::collections::BTreeMap;
 // The commands that touch Docker — enabling an instance, starting it — arrived
 // one round later than the rest, and the order was deliberate: they need the
 // generate path to render from the instance table, and until that swap landed
-// (ADR 0016) they would have been buttons that wrote a row nothing rendered.
+// they would have been buttons that wrote a row nothing rendered.
 
 /// Has this machine got a catalogue, where from, and how old is it?
 ///
-/// Every field can be absent, and the absence is the useful part: ADR 0011
-/// leaves a fresh install with nothing at all, and "no catalogue yet" is a
+/// Every field can be absent, and the absence is the useful part: with nothing
+/// embedded, a fresh install has nothing at all, and "no catalogue yet" is a
 /// different sentence from "the catalogue is empty".
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13160,7 +13160,7 @@ pub struct MarketPackage {
 #[serde(rename_all = "camelCase")]
 pub struct MarketVersion {
     pub version: String,
-    /// What `latest` resolves to (ADR 0014).
+    /// What `latest` resolves to.
     pub recommended: bool,
     /// `supported`, `deprecated` or `eol`. An `eol` version is listed and
     /// installable; the picker hides it behind "show older versions" rather
@@ -13173,7 +13173,7 @@ pub struct MarketVersion {
     /// Whether an instance is using it, so the UI can refuse an uninstall
     /// before the filesystem does.
     pub in_use: bool,
-    /// How many of this version's files this workspace has taken over (ADR 0031).
+    /// How many of this version's files this workspace has taken over.
     ///
     /// On the row rather than behind a click, because it is the answer to "why
     /// does this behave unlike the documentation" — and a person asking that
@@ -13252,8 +13252,8 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
     let market = crate::policy::current().market();
 
     // An administrator's bundle wins over the path the user picked, and that is
-    // the whole of what `market.offlineBundle` does. ADR 0011 leaves nothing
-    // embedded, so on an air-gapped machine this is not an enterprise extra —
+    // the whole of what `market.offlineBundle` does. Nothing is embedded, so on
+    // an air-gapped machine this is not an enterprise extra —
     // it is the only way a catalogue ever arrives.
     // The bundle first, then the mirror, then what the user typed. An offline
     // bundle beats a `registryUrl` because a machine given one is a machine
@@ -13301,7 +13301,7 @@ pub async fn market_refresh(state: State<'_, AppState>, location: String) -> Res
     // signature, so publishing one would have changed nothing anybody could
     // see. The default is now `WhenSigned` — check what the publisher published,
     // and never go back to unsigned once they have. `requireSignature` is still
-    // the one policy key that is a lock rather than a note (ADR 0009), and it
+    // the one policy key that is a lock rather than a note, and it
     // still only tightens: it turns a *missing* signature into a refusal too.
     let trust = crate::market::trust_for(market.require_signature, seen_signed);
 
@@ -13689,7 +13689,7 @@ pub async fn market_probe(state: State<'_, AppState>, location: String) -> Resul
 /// Write a catalogue and every package into one directory, for a machine that
 /// has no network.
 ///
-/// §3 #31. The reading half has been shipped since `LocalSource`:
+/// The reading half has been shipped since `LocalSource`:
 /// `market.offlineBundle` points at a directory and everything is read from it
 /// with the same verification as from the network. Nothing could **write** one,
 /// so the only way to get a bundle was to clone the packages repository and
@@ -13915,8 +13915,8 @@ fn preview_of(root: &std::path::Path) -> Result<HandoverPreview> {
     //
     // `installable` is the difference between "press this" and something else
     // entirely: the registry either publishes that version or it does not, and
-    // ADR 0014 makes the second case a mistake somebody made rather than a
-    // withdrawal.
+    // a published version is never withdrawn, so the second case is a mistake
+    // somebody made rather than a withdrawal.
     let registry = crate::market::cached(root)?;
     let missing: Vec<MissingPackage> = plan
         .blockers
@@ -14265,7 +14265,7 @@ pub async fn instance_create(
     Ok(id)
 }
 
-/// Forget an instance. Its volumes are not touched (ADR 0012).
+/// Forget an instance. Its volumes are not touched.
 #[tauri::command]
 pub async fn instance_remove(state: State<'_, AppState>, id: String) -> Result<()> {
     let root = state.root()?;
@@ -14827,7 +14827,7 @@ pub async fn instance_enable(
     outcome.map(|_| operation_id)
 }
 
-/// Switch an instance off. **Nothing is deleted** (ADR 0012).
+/// Switch an instance off. **Nothing is deleted**.
 ///
 /// `service_disable` removes the container, the image and the named volumes,
 /// and in a single-version world that was right: "off" should be a state rather
@@ -15336,7 +15336,7 @@ mod tests {
         crate::skeleton::install(&dir).expect("install the embedded skeleton");
         crate::workspace::point_at_projects(&dir, &dir.join("projects")).expect("projects pointer");
         // An empty instance table, because a workspace without one is refused
-        // rather than rendered (ADR 0016). Empty rather than populated: these
+        // rather than rendered. Empty rather than populated: these
         // tests are about the generator reporting progress and writing files,
         // not about what a service renders to, and an empty table exercises the
         // same path with nothing to install.

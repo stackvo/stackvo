@@ -12,7 +12,7 @@ import { stage } from './stage.js';
  * is somewhere else on screen — none of those exist until something has done
  * layout.
  *
- * This is also what §3 #25 is waiting for. An accessibility statement is a
+ * This is also what the accessibility statement is waiting for. A statement is a
  * claim about the product, and a claim needs a measurement; the note in that
  * row says the statement "cannot be produced without #12", and this is the half
  * of #12 that produces it.

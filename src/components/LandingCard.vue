@@ -6,7 +6,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import HelpButton from '@/components/HelpButton.vue';
 
 /**
- * The one page that lists every site (M-4).
+ * The one page that lists every site.
  *
  * On the dashboard rather than in settings, because it is not a setting: it is
  * an address somebody opens, and the question it answers — "what is in this

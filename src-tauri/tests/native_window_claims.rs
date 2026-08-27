@@ -1,6 +1,7 @@
 //! What this repository can decide about the windows the operating system draws.
 //!
-//! Y-2 in `docs/durum.md`: the measurement drives the front end in a browser
+//! The known limitation `docs/accessibility.md` states: the measurement drives
+//! the front end in a browser
 //! engine, so the window chrome, the menu bar and the tray menu are out of
 //! scope. `tauri-driver` would cover them and does not run on macOS, which is
 //! where this application is developed — so the row is blocked on a machine.
@@ -68,7 +69,7 @@ fn every_declared_window_carries_a_title() {
     }
 }
 
-/// The About window's title, which was `""` until Y-2.
+/// The About window's title, which was `""` until the native-window audit.
 ///
 /// Checked against the source rather than by building a window: constructing a
 /// `WebviewWindow` needs a running Tauri application, and what is being kept

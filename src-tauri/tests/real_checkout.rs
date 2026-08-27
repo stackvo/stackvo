@@ -363,7 +363,7 @@ fn quick_commands_match_what_each_real_project_has() {
         for command in &commands {
             // Every offer resolves back — the id the UI is given is exactly the
             // id `quick_command_run` will accept, whether it came from the
-            // catalogue or from the project's own manifest (B-4).
+            // catalogue or from the project's own manifest.
             let spec =
                 quickcmd::resolve(&root, &name, &command.id).expect("offered id must resolve");
             assert_eq!(spec.display, command.display);

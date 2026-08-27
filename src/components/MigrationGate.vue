@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 /**
  * The fourth of the pattern, and the only one that is not skippable.
  *
- * ADR 0016. StackVo used to render its services from `.env` and a set of
+ * StackVo used to render its services from `.env` and a set of
  * templates compiled into the binary; it renders them from `instances.json` and
  * a package tree now, and as of this version the first branch is gone. A
  * workspace that still keeps its services in `.env` therefore cannot build a
@@ -16,7 +16,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
  *
  * ## Why not a banner
  *
- * Because a banner is for something that can be ignored. The three answers §5
+ * Because a banner is for something that can be ignored. The three answers
  * weighed were a forced migration, two paths for one release, and a silent one;
  * two paths is what was already happening and is what left the catalogue with
  * two lists that disagree, and a silent migration changes somebody's service

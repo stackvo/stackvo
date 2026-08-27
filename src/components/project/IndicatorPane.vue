@@ -7,7 +7,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * One project's live resource use.
  *
- * First pane out of `ProjectDetail.vue` under §14.16 — the view `Settings.vue`
+ * First pane out of `ProjectDetail.vue` in the pane split — the view `Settings.vue`
  * used to sit beside at 0% coverage, and the last one still there.
  *
  * It takes its numbers as props rather than fetching them: the polling timer

@@ -36,7 +36,7 @@ import tr from '@/i18n/locales/tr.js';
  * ## Which pages, and which not
  *
  * `Settings.vue` (3,433 lines) and `ProjectDetail.vue` (3,007) still cannot be
- * mounted — that is the §2.3 finding and splitting them is its own work item.
+ * mounted — that was the finding, and splitting them is its own work.
  * The other seven always could, and `tests/views-render.spec.js` now mounts
  * them, so they are scanned here too. This file said it was "the reason to add
  * to that list"; this is that.
@@ -94,7 +94,7 @@ const RULES = {
   // Contrast is the rule this app most needs checked, too, because
   // `appearance.js` derives the theme from the OS accent colour — so the
   // palette is not fixed and cannot be audited once by hand. It needs a real
-  // browser, which means the E2E run in §14.12. Named here so that work has a
+  // browser, which means the E2E run under a driver. Named here so that work has a
   // reason attached to it.
   'color-contrast': { enabled: false },
 };
@@ -280,7 +280,7 @@ describe('axe over the pages that can be mounted', () => {
 });
 
 /**
- * The Settings panes extracted in §14.16.
+ * The Settings panes extracted in the pane split.
  *
  * Mounted **with data**, through a mocked boundary. Scanning an empty pane is
  * scanning the empty state and calling it the pane: most of the markup is

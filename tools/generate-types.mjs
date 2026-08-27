@@ -5,10 +5,10 @@
  *   node tools/generate-types.mjs           # write src/lib/ipc.d.ts
  *   node tools/generate-types.mjs --check   # fail if it is not current
  *
- * ## Why this and not `tauri-specta` (§3 #10)
+ * ## Why this and not `tauri-specta`
  *
- * ADR 0006 measured `tauri-specta` and deferred it, on the cost of changing how
- * every command is declared. Re-measured before this was written, and one fact
+ * `tauri-specta` was measured and deferred, on the cost of changing how every
+ * command is declared. Re-measured before this was written, and one fact
  * settles it for this repository rather than merely delaying it:
  *
  * **There is no TypeScript here.** No `tsconfig.json`, no `.ts` file, no
@@ -17,9 +17,9 @@
  * compiler configured, that is a file nothing reads and nothing checks, bought
  * with three new crates and an attribute on 245 command functions.
  *
- * The gap §3 #10 names is "the front end stays untyped". The generator was
+ * The gap is that the front end stays untyped. The generator was
  * never what was missing; the *types* were. And the contract already is the
- * single source of truth, already hand-written by ADR 0006's decision, and
+ * single source of truth, already hand-written by that decision, and
  * already gated against the implementation by `contract_agreement.rs`. So the
  * types come from there, into a `.d.ts` — which editors apply to plain
  * JavaScript with no build step, no compiler and no file renamed.
@@ -56,7 +56,7 @@ const OUTPUT = resolve(ROOT, 'src/lib/ipc.d.ts');
  *
  * A list rather than a count, and `--report` prints it. Every entry is a
  * contract field whose description does not begin with a type — which is worth
- * seeing, because the contract is hand-written (ADR 0006) and a field nobody
+ * seeing, because the contract is hand-written and a field nobody
  * gave a type to is a field the front end was never going to be told about.
  */
 const unread = [];
@@ -380,7 +380,7 @@ function generate() {
   const header = `/**
  * GENERATED — do not edit. \`node tools/generate-types.mjs\`
  *
- * The IPC surface as types, from \`contracts/ipc.json\`. §3 #10.
+ * The IPC surface as types, from \`contracts/ipc.json\`.
  *
  * Applies to plain JavaScript: an editor reads this beside \`ipc.js\` and offers
  * the argument names, the return shape and a complaint about a method that does

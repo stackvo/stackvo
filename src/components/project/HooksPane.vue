@@ -6,7 +6,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * What this project runs when it starts, stops or is rebuilt (B-3).
+ * What this project runs when it starts, stops or is rebuilt.
  *
  * ## The screen exists because the commands come from a repository
  *

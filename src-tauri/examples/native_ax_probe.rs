@@ -1,6 +1,6 @@
 //! The native window, read the way a screen reader reads it.
 //!
-//! Y-2 said the window chrome, the menu bar and the tray menu are out of scope
+//! The window chrome, the menu bar and the tray menu are out of scope
 //! because `tauri-driver` does not run on macOS. That named the wrong blocker,
 //! and naming it wrong is what kept the row unstartable for as long as it was:
 //!

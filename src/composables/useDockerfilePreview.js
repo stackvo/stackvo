@@ -16,7 +16,7 @@ import { api } from '@/lib/ipc';
  * kept their value because "what will be built" and "what would be refused" are
  * still different questions.
  *
- * Lifted out of `ProjectDetail.vue` with the Dockerfile pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the Dockerfile pane in the pane split.
  */
 export function useDockerfilePreview(name) {
   const preview = ref(null);

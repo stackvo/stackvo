@@ -110,7 +110,7 @@ pub fn with_extension(extensions: &[String], enabled: bool) -> Vec<String> {
 /// multi-megabyte file. Offering `debug,profile` would have to pick one of
 /// those, and either choice silently breaks the other half.
 ///
-/// [`Mode::Trace`] is the third, and it is what closes F-3. Profiling writes
+/// [`Mode::Trace`] is the third, and it is what completes the set. Profiling writes
 /// cachegrind, which holds summed edges and no stacks, so what can be drawn
 /// from it is a call tree. A trace holds every entry and exit with its depth,
 /// which is a stack — see [`crate::trace`] for what that changes and what it
@@ -437,7 +437,7 @@ pub struct XdebugStatus {
     pub needs_rebuild: bool,
     /// Does the image carry the extension at all?
     ///
-    /// Separate from [`Self::enabled`] since F-4 split the two, and the split
+    /// Separate from [`Self::enabled`] since the two were split, and the split
     /// is what the screen needs to explain itself: switching on for the *first*
     /// time rebuilds the image, and every time after that recreates a
     /// container. Without this the second toggle looks identical to the first
@@ -576,7 +576,7 @@ fn entries(root: &Path) -> Vec<Entry> {
         }
         let Some(php) = &manifest.php else { continue };
         // Switched on, not merely compiled in. Those were the same thing until
-        // F-4 split them, and conflating them is what made every toggle a
+        // They are separate, and conflating them is what made every toggle a
         // rebuild: turning debugging off removed the extension from the image.
         // Measured — an image carrying Xdebug at `mode=off` runs at the speed
         // of one without it — so the extension stays and only the mode moves.
@@ -799,7 +799,7 @@ pub async fn set(root: &Path, name: &str, enabled: bool) -> Result<XdebugStatus>
     // Two decisions, and only one of them costs a rebuild.
     //
     // The extension goes in when debugging is first switched on and **never
-    // comes out**. That is the change F-4 asked for: removing it on the way off
+    // comes out**. That is the change asked for: removing it on the way off
     // meant the next `on` rebuilt the image, minutes for something that should
     // be seconds. It can stay because it is free when off — measured at the
     // speed of an image without it, against about 6.7× for `mode=debug` — so
@@ -827,9 +827,9 @@ pub async fn set(root: &Path, name: &str, enabled: bool) -> Result<XdebugStatus>
 
 #[cfg(test)]
 mod tests {
-    // ------------------------------------------------- the split (F-4)
+    // ------------------------------------------------- the split
 
-    /// The change F-4 asked for, as an assertion about the manifest.
+    /// The change asked for, as an assertion about the manifest.
     ///
     /// Turning debugging off used to remove the extension, so the next `on`
     /// rebuilt the image. It stays now, because it is free when off: measured

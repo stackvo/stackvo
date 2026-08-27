@@ -8,7 +8,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * A snippet, the application it runs inside, and what came back.
  *
- * F-5, and §5.5 held it as a decision rather than a task: `quickcmd.rs` refused
+ * Held as a decision rather than a task: `quickcmd.rs` refused
  * an in-app REPL in writing — "a second, worse REPL next to the one they
  * already have configured" — and reversing a refusal is not something a commit
  * does quietly.

@@ -9,7 +9,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
  * The template-override pane, as a component rather than 102 lines of
  * `Settings.vue`.
  *
- * The second slice of the §14.16 split, and the second shape mirror retired.
+ * The second slice of the pane split, and the second shape mirror retired.
  * `tests/template-overrides.spec.js` rebuilt the button and its two refs in the
  * test file and then read `Settings.vue` as text to check the copy still
  * matched — because the pane could not be mounted. `tests/settings-templates.spec.js`

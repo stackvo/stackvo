@@ -415,7 +415,7 @@ async fn instance_of(root: &Path, id: &str, reveal: bool) -> Result<Option<Conne
 ///
 /// One source. This used to be a switch — the instance table when there was
 /// one, `.env` and a compiled-in table of twenty-five connection shapes when
-/// there was not — and ADR 0016 removed the second half everywhere else. It is
+/// there was not — and the second half is gone everywhere else. It is
 /// removed here too: a workspace with no table cannot render a stack, so it has
 /// no running service to ask about, and the `.env` branch was unreachable code
 /// carrying a second copy of what every package manifest now declares in its

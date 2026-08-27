@@ -13,7 +13,7 @@ import Market from '@/views/Market.vue';
  *
  * "Nothing fetched", "fetched and empty" and "fetched with packages" are three
  * different screens, and only the first one is a state a fresh install is
- * genuinely in — StackVo embeds no services at all (ADR 0011). A page that
+ * genuinely in — StackVo embeds no services at all. A page that
  * showed "no services found" for all three would send somebody to reinstall
  * the app to fix a directory they had not chosen yet.
  *

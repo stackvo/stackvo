@@ -1,4 +1,4 @@
-//! `stackvo tui` against a real terminal (M-8).
+//! `stackvo tui` against a real terminal.
 //!
 //!   cargo run --example tui_probe
 //!

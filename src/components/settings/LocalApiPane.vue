@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import { useCopyTick } from '@/composables/useCopyTick';
 
 /**
- * The loopback API — §3 #34, ADR 0026.
+ * The loopback API.
  *
  * ## Why this pane exists at all, rather than a line in preferences.json
  *

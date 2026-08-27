@@ -7,7 +7,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
  * Three per-project settings that reach the container through this app's own
- * layers rather than through the manifest (M-5, M-6, M-10).
+ * layers rather than through the manifest.
  *
  * They share a pane because they share a file and a moment: somebody setting up
  * one project sets all three at once, and three panes would be three places to
@@ -99,7 +99,6 @@ watch(() => [props.name, props.runtime], load, { immediate: true });
 
     <ErrorAlert v-if="error" :error="error" class="mb-3" />
 
-    <!-- M-5 -->
     <div class="section-head mt-2 mb-2">
       <v-icon size="16" class="mr-2">mdi-code-braces</v-icon>{{ t('site.envTitle') }}
     </div>
@@ -150,7 +149,6 @@ watch(() => [props.name, props.runtime], load, { immediate: true });
 
     <v-divider class="mb-3" />
 
-    <!-- M-6 -->
     <div class="d-flex align-center ga-3">
       <v-switch
         :model-value="settings.directoryListing"
@@ -170,7 +168,6 @@ watch(() => [props.name, props.runtime], load, { immediate: true });
       }}
     </p>
 
-    <!-- M-10 -->
     <div class="d-flex align-center ga-3">
       <v-switch
         :model-value="settings.sshAgent"

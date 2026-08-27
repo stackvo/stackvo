@@ -6,7 +6,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 
 /**
- * Names pointed at something StackVo did not start (E-4).
+ * Names pointed at something StackVo did not start.
  *
  * ## The notes are the feature
  *

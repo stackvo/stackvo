@@ -38,7 +38,7 @@
 //!
 //! There is no signing here and no upload, and that division is not a gap. The
 //! three things third-party *distribution* needs beyond authoring all exist and
-//! all live where they can be enforced: a takedown mechanism (§6, decision
+//! all live where they can be enforced: a takedown mechanism (the withdrawal
 //! 0014 — a withdrawn version is refused at install and `doctor` names one
 //! already installed), a publisher identity (`publishers.json` in the packages
 //! repository, checked before the index is signed), and a written moderation
@@ -417,7 +417,7 @@ fn compose_yml(service: &str) -> String {
 #
 # The only names available are the ones the manifest declares: image, instance,
 # settings.*, port.*, volume.*, file.* and network. A fragment cannot read the
-# process environment, which is the first line of defence in §4 and not a
+# process environment, which is the first line of defence and not a
 # convenience limit.
 image: "{{{{ image }}}}"
 container_name: "{{{{ instance.container }}}}"

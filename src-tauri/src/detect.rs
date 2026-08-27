@@ -831,7 +831,7 @@ mod tests {
         }
     }
 
-    /// J-1. Deno's marker is exclusive; Bun's is not, and the difference is the
+    /// Deno's marker is exclusive; Bun's is not, and the difference is the
     /// whole of what these two cover.
     ///
     /// A repository with `deno.json` has committed — nothing else reads it, and

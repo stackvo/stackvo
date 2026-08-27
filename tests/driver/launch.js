@@ -8,7 +8,7 @@
  * not start the Rust binary, so it cannot tell anyone whether a command named
  * in `contracts/ipc.json` is actually registered, whether the built bundle
  * loads under the CSP `tauri.conf.json` declares, or whether a failure comes
- * back in ADR 0004's shape. Every one of those has exactly one way to be
+ * back in the contract's error shape. Every one of those has exactly one way to be
  * checked: run the binary and ask it.
  *
  * ## Where it runs, and why the skip is loud
@@ -25,7 +25,7 @@
  * The application is pointed at a temporary `STACKVO_ROOT` and
  * `STACKVO_CONFIG_DIR`, so a driver run reads and writes a directory that is
  * deleted afterwards. `hosts_roundtrip.rs` made the same argument for
- * `STACKVO_HOSTS_PATH` (§3 #35): a test that touches the developer's real
+ * `STACKVO_HOSTS_PATH`: a test that touches the developer's real
  * workspace is a test somebody eventually switches off.
  */
 
@@ -54,7 +54,7 @@ export const BASE = `http://127.0.0.1:${PORT}`;
  */
 export function whyNotHere(platform = process.platform) {
   if (platform === 'darwin') {
-    return 'tauri-driver does not support macOS — there is no WKWebView driver. This suite runs on Linux CI (§3 #12).';
+    return 'tauri-driver does not support macOS — there is no WKWebView driver. This suite runs on Linux CI.';
   }
   // `false`, NOT `null`. `node:test` takes `{ skip: <string|boolean> }`, and it
   // treats a `null` as a skip DIRECTIVE with no reason: a test that throws is
@@ -199,8 +199,8 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
         STACKVO_ROOT: join(root, 'app'),
         STACKVO_CONFIG_DIR: join(root, 'config'),
         // A policy file that does not exist reads as "no policy" rather than
-        // as whatever this machine has under /Library or /etc. ADR 0009 says
-        // the layer is not a security boundary; it is still an input, and an
+        // as whatever this machine has under /Library or /etc. The policy layer
+        // is not a security boundary; it is still an input, and an
         // input a test should not inherit from the host it runs on.
         STACKVO_POLICY_FILE: join(root, 'policy.json'),
       },

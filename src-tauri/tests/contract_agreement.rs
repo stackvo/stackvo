@@ -157,7 +157,7 @@ fn registered() -> BTreeSet<String> {
 /// Three entries are `frontend-plugin`: `open_path`, `open_url` and
 /// `pick_directory` are served by Tauri plugins from the JavaScript side and
 /// have no Rust function by design. One is `deferred`: `updates_check` is
-/// specified and deliberately not built (see §14.2 — it needs a signing key and
+/// specified and deliberately not built (it needs a signing key and
 /// an endpoint that answers). Both exclusions are read from the file rather
 /// than hardcoded here, so adding a fourth plugin command needs no edit to this
 /// test — and un-deferring `updates_check` correctly starts demanding an

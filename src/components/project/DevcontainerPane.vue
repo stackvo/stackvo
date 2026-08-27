@@ -6,7 +6,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * This project as a devcontainer (A-7).
+ * This project as a devcontainer.
  *
  * Beside the release pane rather than in Configuration, because those panes
  * describe what the project *is* and these two are the artefacts that leave

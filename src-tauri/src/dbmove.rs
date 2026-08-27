@@ -1,6 +1,6 @@
 //! Moving a database's contents from one instance to another.
 //!
-//! G-4. Instances made "MySQL 8.0 and MySQL 8.4 side by side" possible, which
+//! Instances made "MySQL 8.0 and MySQL 8.4 side by side" possible, which
 //! immediately made "and now get my data into the new one" the obvious next
 //! question — and the answer was dump to a file, find the file, restore into
 //! the other one, three screens apart. This is that, as one operation, with the

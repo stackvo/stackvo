@@ -1,4 +1,4 @@
-//! Letting a caught message leave (M-2).
+//! Letting a caught message leave.
 //!
 //! [`crate::mail`] catches everything the stack sends and shows it in the app.
 //! That is the right default and it is not the whole job: the message somebody
@@ -26,7 +26,7 @@
 //!
 //! The password is in the OS keystore ([`crate::secrets`]) and only the
 //! keystore. It is written into the rendered overlay under `generated/`, which
-//! is the same partial answer ADR 0010 already states for service passwords and
+//! is the same partial answer that already holds for service passwords and
 //! is stated here rather than implied: `generated/` is output, rewritten on
 //! every run and never hand-maintained, while the settings file this module
 //! writes carries a reference and never the value.
@@ -221,8 +221,8 @@ pub fn overlay_yaml(services: &[String], config: &Config, password: &str) -> Opt
          #\n\
          # This file carries the relay password, because the container reads it\n\
          # from its environment. `generated/` is output — rewritten on every run\n\
-         # and never hand-maintained — which is the same partial answer ADR 0010\n\
-         # states for service passwords.\n\
+         # and never hand-maintained — which is the same partial answer that\n\
+         # holds for service passwords.\n\
          #\n\
          # NOTE: `stackvo up` from the Bash CLI does not layer this file, and\n\
          # will recreate the catcher without a relay.\n\

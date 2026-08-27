@@ -10,7 +10,7 @@ import { api } from '@/lib/ipc';
  * when you set a breakpoint — is precisely the one a user will not go looking
  * for.
  *
- * Lifted out of `ProjectDetail.vue` with the Xdebug pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the Xdebug pane in the pane split.
  */
 export function useXdebug(name) {
   const status = ref(null);

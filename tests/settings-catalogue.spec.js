@@ -8,7 +8,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Catalogue pane, and specifically the half that writes an offline bundle.
  *
- * §3 #31. `market::bundle` and `stackvo market-bundle` came first because the
+ * `market::bundle` and `stackvo market-bundle` came first because the
  * person producing a bundle is usually an operator at a terminal; this is the
  * other audience, and it is the one that cannot be told to run a command —
  * somebody sitting at the machine that has the network, about to walk a folder

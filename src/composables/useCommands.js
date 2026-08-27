@@ -12,7 +12,7 @@ import { api } from '@/lib/ipc';
 /**
  * Everything this window can be asked to do, as one list.
  *
- * A-2. Until this existed there was exactly one way into any action: know which
+ * Until this existed there was exactly one way into any action: know which
  * page it lives on, get to that page, and find the control. That is fine for
  * the second week and hostile for the first hour, and it is the reason eight of
  * the ten tools this one is measured against ship a keyboard route of some kind.

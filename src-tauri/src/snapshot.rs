@@ -5,7 +5,7 @@
 //! `mysql-2026-08-11T09-14-02.sql` in Downloads is not something anybody comes
 //! back to. `ddev snapshot` and `lerd db:snapshot` name a point in time and
 //! restore it by that name; Laragon and ServBay take one on a timer. Both
-//! halves are gaps G-1 and G-2 of the competitive review, and both are this
+//! halves are two gaps the competitive review found, and both are this
 //! module.
 //!
 //! ## The registry is the directory

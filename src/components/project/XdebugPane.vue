@@ -11,7 +11,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * Xdebug's three layers, and the switch that moves all of them.
  *
- * One of three panes out of the Debug section under §14.16. Toggling rewrites
+ * One of three panes out of the Debug section in the pane split. Toggling rewrites
  * the manifest on disk, which is also what the Configuration section is
  * showing — hence `changed`: the view re-reads the manifest rather than this
  * pane reaching across to an editor it does not own.
@@ -189,7 +189,7 @@ defineExpose({ ideState });
 
       <!-- The extension is compiled in, so the manifest can be ahead of
            the image. Saying nothing here is how a toggle becomes a lie. -->
-      <!-- F-4. Switching on for the first time puts the extension in the
+      <!-- Switching on for the first time puts the extension in the
            image and costs a rebuild; every time after that it moves one
            environment variable and costs a container recreate. Without saying
            so, the second toggle looks identical to the first and being much

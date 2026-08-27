@@ -12,7 +12,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
  * What to send when something is wrong: the engine as this app sees it, the
  * doctor report, the log folder, and the archive that packages all of it.
  *
- * Twelfth and last pane out of `Settings.vue` under §14.16. With it gone the
+ * Twelfth and last pane out of `Settings.vue` in the pane split. With it gone the
  * view holds no pane markup at all — only the rail, the shared `.env` editor
  * and the About card.
  */
