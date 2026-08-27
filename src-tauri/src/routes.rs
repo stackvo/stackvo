@@ -1,6 +1,6 @@
 //! Pointing a development name at something this app did not start.
 //!
-//! E-4. Traefik already routes every project and every service in the
+//! Traefik already routes every project and every service in the
 //! catalogue, and it routes nothing else — so a Vite server somebody started by
 //! hand, an API running in another tool, or a staging host they want to reach
 //! under a local name has no way in. That is the whole gap: the proxy is here,

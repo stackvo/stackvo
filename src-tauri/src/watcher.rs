@@ -9,7 +9,7 @@
 //! action, because silently rebuilding a container underneath someone who is
 //! mid-edit is worse than the problem it solves.
 //!
-//! ## The second question, added for A-5
+//! ## The second question, added later
 //!
 //! The project directory **is** what Herd and Valet call a park: point the
 //! workspace at it and every child of it is a candidate site. `adoptable`

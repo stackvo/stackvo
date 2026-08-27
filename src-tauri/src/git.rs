@@ -205,7 +205,7 @@ pub const CLONE_ENV: [(&str, &str); 2] = [
 
 /// Whether git would ignore this path, as far as git itself is concerned.
 ///
-/// B-2 rests entirely on `stackvo.local.json` not being committed — that is the
+/// The overlay rests entirely on `stackvo.local.json` not being committed — that is the
 /// whole difference between "my machine's settings" and "the team's settings",
 /// and it is not something this app can enforce, because the ignore rules are
 /// the user's file in the user's repository. What it can do is *measure* it and

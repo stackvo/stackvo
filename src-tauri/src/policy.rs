@@ -111,7 +111,7 @@ pub struct Policy {
 ///
 /// ## One of these is a lock and the rest are not
 ///
-/// ADR 0009's sentence holds for this block as it holds for the rest of the
+/// The sentence above holds for this block as it holds for the rest of the
 /// file: **it is not a security boundary.** A user who can write the policy can
 /// widen it, and `STACKVO_POLICY_FILE` points it anywhere.
 ///
@@ -129,13 +129,13 @@ pub struct Market {
     pub registry_url: Option<String>,
     /// A directory or bundle to install from with no network at all.
     ///
-    /// ADR 0011 makes this the **only** way an air-gapped machine gets a
+    /// With nothing embedded, this is the **only** way an air-gapped machine gets a
     /// catalogue, because nothing is embedded. Not an enterprise extra.
     pub offline_bundle: Option<PathBuf>,
     /// Refuse an unsigned index.
     ///
     /// Off by default, and that is about what is *published* rather than about
-    /// what this build can check: the official key is pinned (ADR 0015), and
+    /// what this build can check: the official key is pinned, and
     /// turning this on before a signed index exists would refuse every refresh.
     /// A machine that sets it gets a refusal rather than a downgrade, which is
     /// `market::Trust::Signed`'s behaviour and the reason this is the one key
@@ -149,7 +149,7 @@ pub struct Market {
     ///
     /// Third-party packages were deliberately not a v1 feature, and what was
     /// built instead was an architecture *ready* for them: the source field, the
-    /// signature verifier (ADR 0021) and the compose policy all exist, and
+    /// signature verifier and the compose policy all exist, and
     /// opening the gate is a separate decision. This is the enterprise half of
     /// that gate — an organisation that runs its own mirror names it here and
     /// the machine will fetch from nothing else.
@@ -164,7 +164,7 @@ pub struct Market {
     /// Whether the app may replace an installed package on its own.
     pub auto_update: Option<bool>,
     /// Whether a workspace may put its own copy of a package file in front of
-    /// the published one ([`crate::overrides`], ADR 0031).
+    /// the published one ([`crate::overrides`]).
     ///
     /// `None` is the same "no opinion" every other field here defaults to, and
     /// no opinion means allowed — read [`Market::allows_overrides`]. An
@@ -223,7 +223,7 @@ impl Market {
     ///   through — the same class of bug as reading `mysql:8.0`'s tag as a
     ///   port, and worth avoiding the same way.
     ///
-    /// Not a security boundary — ADR 0009's sentence holds here as everywhere
+    /// Not a security boundary — that sentence holds here as everywhere
     /// in this file. It stops a well-meaning user pointing the app at the wrong
     /// mirror; it does not stop the person holding the machine.
     pub fn allows_source(&self, location: &str) -> bool {
@@ -289,7 +289,7 @@ impl Market {
 
 /// The `hooks` block: whether a project may run commands when it starts.
 ///
-/// B-3. Both fields default to on, which is the same "no opinion" default the
+/// Both fields default to on, which is the same "no opinion" default the
 /// rest of this file has — an unmanaged machine behaves as though no policy
 /// existed.
 ///
@@ -329,7 +329,7 @@ impl Hooks {
 
 /// The `providers` block: whether a project may fetch or send its own data.
 ///
-/// A-1. Same shape and same asymmetry as [`Hooks`], and for a sharper reason:
+/// Same shape and same asymmetry as [`Hooks`], and for a sharper reason:
 /// a provider command reaches the network **with the developer's credentials**,
 /// and a push writes to somewhere that is not this machine. Both keys default
 /// to on, so an unmanaged machine behaves as though no policy existed.
@@ -1282,7 +1282,7 @@ mod tests {
 
     /// The one key in the block that can only tighten. There is no value of it
     /// that turns verification off — a policy key that could would mean the
-    /// check was never a check (ADR 0009).
+    /// check was never a check.
     #[test]
     fn require_signature_is_off_until_it_is_asked_for() {
         assert!(
@@ -1320,7 +1320,7 @@ mod tests {
         assert!(policy.market().allows_package("anything"));
     }
 
-    /// ADR 0011: with nothing embedded, this is the whole of how a machine with
+    /// With nothing embedded, this is the whole of how a machine with
     /// no network gets a catalogue.
     #[test]
     fn an_offline_bundle_is_a_path() {

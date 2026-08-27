@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { tsType, wrappersOf } from '../tools/generate-types.mjs';
 
 /**
- * The contract's prose, read as types. §3 #10.
+ * The contract's prose, read as types.
  *
  * `tools/generate-types.mjs` says why this exists instead of `tauri-specta`;
  * the short version is that there is no TypeScript in this repository, so a
@@ -135,7 +135,7 @@ describe('the generated file', () => {
 
   it('declares the api and the error shape the front end branches on', () => {
     expect(generated).toContain('export declare const api: StackvoApi;');
-    // ADR 0004: `code` is what a caller switches on, and a `.d.ts` that left it
+    // `code` is what a caller switches on, and a `.d.ts` that left it
     // out would make the one field the front end branches on invisible.
     expect(generated).toMatch(/class StackvoError[\s\S]*code: string;/);
   });

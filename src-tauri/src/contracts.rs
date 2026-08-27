@@ -102,8 +102,8 @@ impl EnvSchema {
 
     /// Is this a service the contract knows about?
     ///
-    /// The catalog is a **vocabulary**, not an inventory — since ADR 0016 there
-    /// are no templates in this binary and a service comes from a package. So
+    /// The catalog is a **vocabulary**, not an inventory — there are no
+    /// templates in this binary and a service comes from a package. So
     /// this answers "is that a word for a service", and an id that fails it is a
     /// typo or a stale caller: acting on one writes a `SERVICE_<JUNK>_ENABLE`
     /// key into the user's .env and brings up a compose profile that matches
@@ -223,7 +223,7 @@ mod tests {
         // template directories that shipped inside the binary. (The original
         // README claims of "40+" and "14" were both wrong, C-17.) It became 27
         // with Solr and ClickHouse — the first two that were never templates at
-        // all, which is what ADR 0011 was aiming at and ADR 0016 finished.
+        // all, which is what carrying no service definitions was aiming at.
         //
         // 31 now, and the four that closed the gap are the reason this number
         // is worth keeping: dragonfly, soketi, prometheus and graylog were
@@ -240,8 +240,8 @@ mod tests {
     ///
     /// This used to assert the catalog and the compiled-in template directories
     /// were the same set, in both directions, and the doc comment explained
-    /// what each direction cost. ADR 0016 removed the templates, so the anchor
-    /// is gone — and with it the constraint that made D-1 awkward: a service
+    /// what each direction cost. The templates are gone, so the anchor
+    /// is gone — and with it the constraint that made the question awkward: a service
     /// could not be named here without a template behind it, which is why Solr
     /// and ClickHouse shipped as packages and were still reported as unknown.
     ///

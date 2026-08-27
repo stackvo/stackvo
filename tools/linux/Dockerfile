@@ -1,6 +1,6 @@
 # The Linux half of this repository, runnable without waiting for CI.
 #
-# §3 #12 and #35 both said the same thing: the code is written, the job is
+# Two open items said the same thing: the code is written, the job is
 # wired, and nobody has ever seen it run. On macOS `tauri-driver` does not
 # exist and `elevate.rs`'s polkit branch compiles out, so "it will be fine"
 # was the only available answer — which is the answer this repository refuses
@@ -35,7 +35,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       --component rustfmt --component clippy
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Node, because the driver suite (§3 #12) builds the front end and runs the
+# Node, because the driver suite builds the front end and runs the
 # tests with it. CI uses `actions/setup-node@v4` with 22; matching the major is
 # what makes a green run here mean anything about a green run there.
 ARG NODE_MAJOR=22
@@ -112,7 +112,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # The ARM Windows target, so `--windows-bundle` can be asked about the row that
-# §3 #22 is actually about. `cargo-xwin` handles both.
+# the ARM rows are actually about. `cargo-xwin` handles both.
 RUN rustup target add aarch64-pc-windows-msvc
 
 # Wine, so the Windows suite can RUN here and not only type-check.
@@ -120,11 +120,11 @@ RUN rustup target add aarch64-pc-windows-msvc
 # `cargo xwin test` cross-builds the test binaries and hands them to wine — its
 # own binary carries `WINEDEBUG` and "Failed to run cargo test" side by side,
 # which is the whole mechanism. Until now `--windows` could only answer "does it
-# compile", and §2 W's nineteen failures were all found on a runner, one round
+# compile", and the Windows suite's nineteen failures were all found on a runner, one round
 # at a time, from a screenshot.
 #
 # Honest about which triple. On an arm64 host wine 9 executes **ARM64** PE
-# binaries natively, so `aarch64-pc-windows-msvc` — the row §3 #22 is about — is
+# binaries natively, so `aarch64-pc-windows-msvc` — the row in question — is
 # the one this can really run. An x86_64 PE on arm64 needs an emulation layer
 # wine 9 does not carry; that row wants a `--platform linux/amd64` container or
 # a runner.

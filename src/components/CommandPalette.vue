@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 /**
  * One box, every action, reachable from the keyboard.
  *
- * A-2, the visible half. `useCommands` decides what exists; this decides how it
+ * The visible half. `useCommands` decides what exists; this decides how it
  * is chosen. The shortcut that opens it lives in `App.vue` rather than here,
  * because a listener owned by a component that only mounts while open cannot be
  * what opens it.

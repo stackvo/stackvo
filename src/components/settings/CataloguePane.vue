@@ -113,7 +113,7 @@ async function pickFolder() {
 }
 
 /**
- * Write an offline bundle (§3 #31).
+ * Write an offline bundle.
  *
  * Here rather than on the Market page, and for the same reason the address
  * field is: "where do packages come from" is a setting, and producing a bundle
@@ -163,7 +163,7 @@ const bundleSize = computed(() =>
     :title="t('catalogueSettings.sourceTitle')"
     :description="t('catalogueSettings.sourceWhat')"
   >
-    <!-- What is in force now. Absent is a state of its own (ADR 0011): nothing
+    <!-- What is in force now. Absent is a state of its own: nothing
          is embedded, so a machine that has never fetched has no catalogue at
          all rather than an empty one. -->
     <v-alert :type="fetched ? 'success' : 'info'" variant="tonal" density="compact" class="mb-4">
@@ -283,7 +283,7 @@ const bundleSize = computed(() =>
   </SettingsGroup>
 
   <!-- The other end of the same question: getting this catalogue to a
-       machine that cannot fetch one (§3 #31). ADR 0011 makes this the only
+       machine that cannot fetch one. With nothing embedded, this is the only
        way such a machine ever has services at all, which is why it is a
        group of its own here and not an advanced menu. Its sentence is the
        group's description now — the header is where every other pane says

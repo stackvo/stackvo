@@ -177,7 +177,7 @@ export const api = {
   marketProbe: (location) => call('market_probe', { location }),
 
   // Write the catalogue and every package into one directory, for a machine
-  // that has no network (§3 #31). Takes the destination and nothing else: the
+  // that has no network. Takes the destination and nothing else: the
   // source is the one this machine already fetched from, because a bundle
   // built from somewhere else would be a copy of a catalogue nobody here has
   // verified.
@@ -250,24 +250,24 @@ export const api = {
   // already carries required/optional/unmetDependencies — a second round trip
   // for the same facts is a way for the two to disagree.
   dbInstances: () => call('db_instances'),
-  // I-2. Which projects nothing has asked for, and stopping them. The sweep
+  // Which projects nothing has asked for, and stopping them. The sweep
   // returns names because a background action that surprises somebody has to
   // be able to say exactly what it did.
   projectsIdle: () => call('projects_idle'),
   projectsSuspendIdle: () => call('projects_suspend_idle'),
 
-  // G-4. Moving one instance's data into another. Planned first because the
+  // Moving one instance's data into another. Planned first because the
   // target is emptied, which is a sentence somebody has to read.
   dbMovePlan: (from, to) => call('db_move_plan', { from, to }),
   dbMoveApply: (from, to) => call('db_move_apply', { from, to }),
 
-  // E-4. Names pointed at something StackVo did not start. Saved whole: the
+  // Names pointed at something StackVo did not start. Saved whole: the
   // list is a handful of pairs in one table, and three commands over one small
   // document is three ways for it and the screen to disagree.
   routesList: () => call('routes_list'),
   routesSave: (routes) => call('routes_save', { routes }),
 
-  // E-1. A responder for this machine's development names — one suffix,
+  // A responder for this machine's development names — one suffix,
   // refusing everything else. The resolver file is a separate call because it
   // asks for a password and changes how the whole machine resolves names,
   // which is the same separation `hostsPlan`/`hostsApply` has below.
@@ -307,7 +307,7 @@ export const api = {
   mailClear: () => call('mail_clear'),
 
   /**
-   * The mail relay (M-2): letting one caught message leave.
+   * The mail relay: letting one caught message leave.
    *
    * `mailRelayGet` never returns the password — `hasPassword` is a boolean and
    * there is no command in this app that reads a stored credential back.
@@ -349,20 +349,20 @@ export const api = {
    * is bullets until `reveal` — the same act `envReveal` is.
    */
   /**
-   * F-1: what the database was asked, and what it was asked repeatedly.
+   * What the database was asked, and what it was asked repeatedly.
    *
    * `supported: false` is a normal answer, not a failure — only MySQL and
    * MariaDB keep a log this can switch on without changing the image.
    */
   /**
-   * F-2: dumps and queries on one axis.
+   * Dumps and queries on one axis.
    *
    * `service` is optional — without it this is the dumps alone. Queries carry
    * no request and that is deliberate, not missing: see the Rust module.
    */
   requestTimeline: (project, service = null) => call('request_timeline', { project, service }),
   /**
-   * B-1: the three instruments around one recorded request.
+   * The three instruments around one recorded request.
    *
    * `key` is a php-spx report — the only artefact that names a request, says
    * when it started and says how long it took, which is what makes it the key
@@ -374,7 +374,7 @@ export const api = {
   requestExplain: (project, key, service = null) =>
     call('request_explain', { project, key, service }),
   /**
-   * F-3: the same profile as a call tree, for the flame view.
+   * The same profile as a call tree, for the flame view.
    *
    * Separate from `profilerRead` because the tree is thousands of nodes and the
    * table is sixty rows — a pane that opens on the table should not carry the
@@ -382,7 +382,7 @@ export const api = {
    */
   profilerTree: (name, id) => call('profiler_tree', { name, id }),
   /**
-   * The flame graph for a recorded trace (F-3).
+   * The flame graph for a recorded trace.
    *
    * A different command from `profilerTree` because it is a different picture
    * read from a different file: cachegrind holds summed edges and traces hold
@@ -391,11 +391,11 @@ export const api = {
    */
   profilerFlame: (name, id) => call('profiler_flame', { name, id }),
 
-  // I-1. The heavy directories of a project, in named volumes rather than on
+  // The heavy directories of a project, in named volumes rather than on
   // the host filesystem — measured at 3.8x on a framework boot and 2.8x on the
   // writes a request makes. `perfSet` seeds the volume from the host before it
   // saves anything, which is why it is one call and not two.
-  // M-5, M-6, M-10. Three per-project settings in one small document: whole
+  // Three per-project settings in one small document: whole
   // document rather than per key, because three commands over one file is three
   // chances for it and the screen to disagree.
   siteSettings: (name) => call('site_settings', { name }),
@@ -538,7 +538,7 @@ export const api = {
   releasePlan: (name, tag = null) => call('release_plan', { name, tag }),
   /** Builds, then runs the result and asks whether it leaked an .env. */
   releaseBuild: (name, tag = null) => call('release_build', { name, tag }),
-  // H-1. Getting the built image somewhere, and something to run it with.
+  // Getting the built image somewhere, and something to run it with.
   // Planned first because the refusals — unverified image, no registry host —
   // are the whole reason the push is safe.
   releasePushPlan: (name, tag = null) => call('release_push_plan', { name, tag }),
@@ -573,7 +573,7 @@ export const api = {
    *  opened the user's own terminal. */
   quickCommandRun: (name, id) => call('quick_command_run', { name, id }),
 
-  // The workbench (F-5). Same rule one level down: the webview picks a runner
+  // The workbench. Same rule one level down: the webview picks a runner
   // by id and the argv is built on the Rust side, so `laravel` means
   // `php artisan tinker --execute` and nothing else. The snippet crosses as one
   // argument and never meets a shell.
@@ -677,7 +677,7 @@ export const api = {
 
   /**
    * Whether this project's tunnel asks for a password, and what its address is
-   * called on each provider (B-7). Never the password itself.
+   * called on each provider. Never the password itself.
    */
   tunnelIdentity: (name) => call('tunnel_identity', { name }),
   /**
@@ -704,7 +704,7 @@ export const api = {
     call('tunnel_name_set', { name, provider, reserved }),
 
   /**
-   * A QR code for an address meant to be opened on another device (M-3).
+   * A QR code for an address meant to be opened on another device.
    *
    * Returns the module matrix, not a picture: the caller draws it, so the same
    * symbol can be an SVG here and something else later without a second
@@ -714,7 +714,7 @@ export const api = {
   qrEncode: (text) => call('qr_encode', { text }),
 
   /**
-   * The page that lists every site, on the workspace suffix itself (M-4).
+   * The page that lists every site, on the workspace suffix itself.
    *
    * `landingRefresh` is separate from `landingStart` on purpose: the sidecar
    * serves a file, so starting a project after the page was written leaves it
@@ -722,7 +722,7 @@ export const api = {
    * a container to update a list.
    */
   /**
-   * The redirect URI to register with an identity provider (M-12).
+   * The redirect URI to register with an identity provider.
    *
    * The tunnel URL is read on the Rust side rather than passed in: a quick
    * tunnel's address changes on every start, and a callback registered from a
@@ -731,7 +731,7 @@ export const api = {
   oauthCallbacks: (name, path) => call('oauth_callbacks', { name, path }),
 
   /**
-   * Stripe's own webhook listener, per project (M-11).
+   * Stripe's own webhook listener, per project.
    *
    * `stripeKeySet` writes to the OS keystore and returns a boolean; there is
    * no command that reads a key back, deliberately — the pane can replace it
@@ -814,7 +814,7 @@ export const api = {
   /** Write it into `<project>/.devcontainer/`. */
   projectDevcontainerWrite: (name) => call('project_devcontainer_write', { name }),
   /**
-   * A-1. Where this project's data really lives, and what fetching it would do.
+   * Where this project's data really lives, and what fetching it would do.
    *
    * Both directions of every recipe, planned before anything is spawned — the
    * reader is about to hand somebody else's command their production
@@ -837,13 +837,13 @@ export const api = {
   projectManifestText: (name) => call('project_manifest_text', { name }),
   projectManifestWrite: (name, manifest) => call('project_manifest_write', { name, manifest }),
 
-  // B-2. `stackvo.local.json` — this machine's overrides for a committed
+  // `stackvo.local.json` — this machine's overrides for a committed
   // manifest. Text, not an object: the file is typed by hand and a struct
   // round-trip would reformat it.
   projectLocalRead: (name) => call('project_local_read', { name }),
   projectLocalWrite: (name, text) => call('project_local_write', { name, text }),
 
-  // B-3. What a project's lifecycle hooks would run, and the approval for the
+  // What a project's lifecycle hooks would run, and the approval for the
   // ones that touch this machine. The digest goes back with the approval on
   // purpose — it is a receipt for the list that was on screen.
   projectHooksPlan: (name) => call('project_hooks_plan', { name }),
@@ -874,7 +874,7 @@ export const api = {
 
   updaterStatus: () => call('updater_status'),
   updaterOffer: (manifest, channel = null) => call('updater_offer', { manifest, channel }),
-  /** The token comes back once. Nothing stores it — see ADR 0026. */
+  /** The token comes back once. Nothing stores it — see `websurface.rs`. */
   websurfaceStart: (port = null) => call('websurface_start', { port }),
   websurfaceStatus: () => call('websurface_status'),
   websurfaceStop: () => call('websurface_stop'),
@@ -941,7 +941,7 @@ export const api = {
   localeGet: () => call('locale_get'),
 
   /**
-   * Language packs (M-7) — a language this build was not shipped with.
+   * Language packs — a language this build was not shipped with.
    *
    * One JSON file per language in the app's config directory, with the same
    * shape as `i18n/locales/en.js`. `localePacks` lists them, a broken one

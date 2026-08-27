@@ -5,7 +5,7 @@ import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
 
 /**
- * B-7: who can open the tunnel, and what its address is called.
+ * Who can open the tunnel, and what its address is called.
  *
  * The pane's older half — the picker, the token field, the URL — is covered by
  * `tunnel.rs`'s own tests, because everything shown there is the provider

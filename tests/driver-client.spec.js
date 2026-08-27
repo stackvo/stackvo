@@ -14,7 +14,7 @@ import { whyNotHere, binaryPath } from './driver/launch.js';
  *
  * `tauri-driver` does not run on macOS, which is where this repository is
  * developed, so `tests/driver/boot.driver.js` is a file its author can write
- * and never see pass (§3 #12). That is a real hazard and it has a name: code
+ * and never see pass. That is a real hazard and it has a name: code
  * whose first execution is in CI is code whose first execution is in front of
  * everybody.
  *
@@ -144,7 +144,7 @@ describe('the async script wrapper', () => {
 
   it('boxes a rejection with a plain object intact', async () => {
     // The reason the box exists. A rejected `invoke` carries a StackvoError —
-    // `{code, message, hintKey}` (ADR 0004) — and letting it reach the driver
+    // `{code, message, hintKey}` — and letting it reach the driver
     // would flatten it to the string "javascript error", losing the one field
     // `boot.driver.js` is there to look at.
     const boxed = await run(`() => Promise.reject({ code: 'NOT_FOUND', message: 'gone' })`);

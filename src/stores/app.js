@@ -163,7 +163,7 @@ export const useAppStore = defineStore('app', () => {
     // screen the boot can land on — the requirements gate, the first-run setup
     // — is one somebody reads, and reading it in the wrong language is worst on
     // exactly the launch where nothing has been chosen yet.
-    // Packs before the language is settled (M-7): `syncLocale` checks the
+    // Packs before the language is settled: `syncLocale` checks the
     // resolved tag against the registered locales, and a pack that has not
     // been loaded yet is a language the app would decline to open in — one
     // frame of the user's choice, then English.

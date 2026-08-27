@@ -41,7 +41,8 @@ pub const API_VERSION: &str = "stackvo.dev/package/v1";
 
 /// Tags that name a moving target rather than a version.
 ///
-/// ADR 0014. These cannot be package versions: an image that changes under a
+/// A moving tag is forbidden. These cannot be package versions: an image that
+/// changes under a
 /// fixed manifest has no digest the manifest can pin, so it has no place in the
 /// chain of trust — and a user whose `instances.json` says `latest` cannot be
 /// told which version they are actually running. The registry expresses "the
@@ -606,7 +607,7 @@ pub struct Identity {
     pub name: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     pub summary: std::collections::BTreeMap<String, String>,
-    /// Which version `latest` resolves to (ADR 0014).
+    /// Which version `latest` resolves to.
     #[serde(default)]
     pub recommended_version: Option<String>,
     #[serde(default)]
@@ -655,7 +656,7 @@ struct TreeEntry {
 impl Tree {
     /// Scan `<root>/packages`. An absent directory is an empty tree, not an
     /// error: a workspace that has installed nothing has no packages, and that
-    /// is the state ADR 0011 leaves a fresh machine in.
+    /// is the state a fresh machine is in, because nothing is embedded.
     pub fn open(root: &Path) -> Result<Self> {
         let mut tree = Self::default();
         let packages = root.join("packages");
@@ -1277,7 +1278,7 @@ mod tests {
     }
 
     /// A machine that has installed nothing has no packages, and that is a
-    /// state rather than a failure (ADR 0011).
+    /// state rather than a failure.
     #[test]
     fn a_root_with_no_packages_is_an_empty_tree() {
         let root = scratch("empty");

@@ -13,8 +13,8 @@
 //!
 //! ## No client library
 //!
-//! The requests below are written as bytes over `TcpStream`. ADR 0019's method
-//! and `tests/driver/webdriver.js`'s: the thing being tested is what goes on the
+//! The requests below are written as bytes over `TcpStream`, which is also
+//! `tests/driver/webdriver.js`'s method: the thing being tested is what goes on the
 //! wire, and a client that normalises a malformed request before sending it
 //! would hide exactly the case worth checking.
 //!
@@ -112,7 +112,7 @@ async fn the_surface_binds_to_loopback_and_nowhere_else() {
     let bound = started().await;
     assert!(
         bound.address.starts_with("127.0.0.1:"),
-        "bound to {} — ADR 0026 binds loopback, and `0.0.0.0` would put this on \
+        "bound to {} — this binds loopback, and `0.0.0.0` would put this on \
          every network this laptop joins",
         bound.address
     );

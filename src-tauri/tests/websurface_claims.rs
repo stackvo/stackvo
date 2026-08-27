@@ -6,7 +6,7 @@
 //! half is a list of four names, and a list of four names is exactly the shape
 //! of thing that is right on the day it is written and wrong six months later.
 //!
-//! §7 already carries one scar from this: "the four commands with no meaning on
+//! There is already one scar from this: "the four commands with no meaning on
 //! the web" was hand-counted, and could only ever go wrong by the codebase
 //! growing. That one is derived now. This is the same failure waiting in a
 //! worse place — a fifth `secrets::read` in a query body would join the served
@@ -318,7 +318,7 @@ fn every_query_that_reaches_the_keystore_is_named_as_one() {
 ///
 /// Two ways this decision could quietly become something else: the served set
 /// collapsing to nothing (a surface that answers no question is not the thing
-/// §5 agreed to), or growing to include everything (the secret rule doing
+/// was agreed), or growing to include everything (the secret rule doing
 /// nothing). Both are numbers, so both can be held.
 #[test]
 fn the_served_set_is_every_read_except_the_ones_that_carry_a_secret() {
@@ -346,7 +346,7 @@ fn the_served_set_is_every_read_except_the_ones_that_carry_a_secret() {
     assert!(
         served > 50,
         "only {served} command(s) would be served. A loopback surface that \
-         answers almost nothing is not what §5 agreed to — if the denial list \
+         answers almost nothing is not what was agreed — if the denial list \
          has grown this far, the decision needs revisiting rather than the \
          number."
     );

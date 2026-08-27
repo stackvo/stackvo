@@ -12,7 +12,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
  * The workspace: where the stack lives, how it is run, and how it is handed to
  * somebody else.
  *
- * Fifth pane out of `Settings.vue` under §14.16 and the largest — the folder,
+ * Fifth pane out of `Settings.vue` in the pane split and the largest — the folder,
  * the compose verbs and the preset were three panes for one subject, and were
  * also three places to look before finding the button you wanted.
  *

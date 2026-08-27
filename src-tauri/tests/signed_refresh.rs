@@ -25,7 +25,7 @@
 //! procedure** produced. If the ceremony stops working, this stops passing.
 //!
 //! The key here is *not* the official one, and it stays that way now that there
-//! is one. `PINNED` carries the registry's real key (ADR 0033) and its private
+//! is one. `PINNED` carries the registry's real key and its private
 //! half is on one machine, deliberately not in CI — so a test that wanted a
 //! signature from it could only get one by putting the key somewhere a test
 //! runner can reach, which is the arrangement the ceremony exists to avoid.

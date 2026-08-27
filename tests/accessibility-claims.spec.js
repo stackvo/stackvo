@@ -5,7 +5,7 @@ import { join } from 'node:path';
 /**
  * The accessibility statement, held to the thing it is a statement about.
  *
- * §3 #25 asked for a statement and the prerequisite was a measurement. The risk
+ * A statement was asked for and the prerequisite was a measurement. The risk
  * with that pair is not that the statement is written badly — it is that the
  * measurement moves and the statement does not. A conformance claim that
  * silently describes a smaller product than the one shipping is worse than no
@@ -79,7 +79,7 @@ describe('the statement and the measurement', () => {
     expect(statement).toContain('zero violations');
     expect(suite).toMatch(/toEqual\(\[\]\)/);
     // Scoped to `#app`, the run cannot see the overlay container — the mistake
-    // §2 of the statement records. It must not come back.
+    // §2 of `docs/accessibility.md` records. It must not come back.
     expect(suite, 'the axe run must not be scoped away from the overlays again').not.toMatch(
       /\.include\(['"]#app/
     );

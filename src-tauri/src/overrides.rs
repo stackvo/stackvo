@@ -1,7 +1,7 @@
 //! A workspace taking over one file of a package it did not write.
 //!
-//! Decision 0031 in `docs/durum.md`, and the last of the three extension points
-//! the package system was designed to have. The other two are here already:
+//! The last of the three extension points the package system was designed to
+//! have. The other two are here already:
 //! authoring a package is [`crate::authoring`], and the organisation's half of a
 //! third-party source is `policy.market.allowedSources`. This is the one in
 //! between — a package that is *nearly* right, and a person who needs one line
@@ -10,8 +10,8 @@
 //! ## Why the old answer stopped working
 //!
 //! Before packages, that person edited `core/templates/services/redis/…` and
-//! [`crate::skeleton`] made the edit win over the bytes in the binary. ADR 0016
-//! deleted that directory, and the replacement is a verified tree: every file a
+//! [`crate::skeleton`] made the edit win over the bytes in the binary. That
+//! directory is gone, and the replacement is a verified tree: every file a
 //! package ships is hashed by its manifest and [`crate::pkg::verify`] checks it
 //! on every read. So the same edit now produces a package that refuses to load,
 //! complaining about bytes rather than about the line just typed — the exact

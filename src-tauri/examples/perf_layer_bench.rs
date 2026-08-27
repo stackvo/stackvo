@@ -1,4 +1,4 @@
-//! What does moving `vendor/` off the host actually buy? (I-1)
+//! What does moving `vendor/` off the host actually buy?
 //!
 //! `mount_bench` answered the general question — a bind mount costs 2–3× a
 //! named volume on metadata and writes — and that number is what justified

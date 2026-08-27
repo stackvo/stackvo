@@ -75,5 +75,5 @@
     "source": "https://endoflife.date/api/postgresql.json",
     "status": "supported"
   },
-  "notes": "PostgreSQL 16 with the pgvector extension already installed. A VERSION of postgres rather than a service of its own (§5, D-1): the wire protocol, the port, the volume layout and the client are identical, and a second service id would put two rows in the catalogue for one database. What differs is one capability, `vector`, which is what an instanceRef asking for it matches on — so a project that needs embeddings names the capability and not the image."
+  "notes": "PostgreSQL 16 with the pgvector extension already installed. A VERSION of postgres rather than a service of its own: the wire protocol, the port, the volume layout and the client are identical, and a second service id would put two rows in the catalogue for one database. What differs is one capability, `vector`, which is what an instanceRef asking for it matches on — so a project that needs embeddings names the capability and not the image."
 }

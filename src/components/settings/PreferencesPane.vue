@@ -9,7 +9,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
  * The app's own preferences: which editor, terminal and browser to launch, what
  * closing the window does, and whether StackVo starts with the machine.
  *
- * Eleventh pane out of `Settings.vue` under §14.16, and the last that owns
+ * Eleventh pane out of `Settings.vue` in the pane split, and the last that owns
  * state. These are facts about this installation rather than about the stack,
  * so they live in `preferences.json` and never touch the `.env` editor.
  */

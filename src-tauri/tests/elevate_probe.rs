@@ -1,6 +1,6 @@
 //! The privileged path, driven end to end — everything except the dialog.
 //!
-//! §3 #35's remaining half is written as "the elevation itself — a pkexec, UAC
+//! The remaining half is "the elevation itself — a pkexec, UAC
 //! or osascript dialog needs a human". Half of that sentence is permanent and
 //! half of it was a description of how the code was arranged.
 //!

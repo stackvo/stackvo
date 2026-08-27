@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 
 /**
  * Answering for this machine's development names, instead of editing
- * `/etc/hosts` once per project (E-1).
+ * `/etc/hosts` once per project.
  *
  * ## Two switches, not one, because they are two different acts
  *

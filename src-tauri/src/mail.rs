@@ -583,12 +583,12 @@ pub struct MailStatus {
 /// this app knows about at all" — used to be answered by asking whether
 /// `SERVICE_MAILPIT_ENABLE` was **present** in the merged `.env`. On an
 /// untouched workspace there is no `.env`, so the only thing making it present
-/// was `config::LEGACY_SERVICES`, the constant §3 #36 exists to delete.
+/// was `config::LEGACY_SERVICES`, the constant that is waiting to go.
 ///
 /// That made a panel's behaviour depend on a table whose stated purpose was
 /// migrating old workspaces, and it was the last thing holding the catalogue
-/// half of that constant up. The question is a vocabulary question and ADR 0016
-/// already named the vocabulary: `env.schema.json`'s service catalogue. Asking
+/// half of that constant up. The question is a vocabulary question, and the
+/// vocabulary already has a home: `env.schema.json`'s service catalogue. Asking
 /// it directly is both the correct source and one fewer reason for the constant
 /// to exist — the deletion is a consequence of the answer, not the point of it.
 fn detect(env: &crate::config::Env) -> Option<Kind> {
@@ -833,7 +833,7 @@ pub async fn save_attachment(root: &Path, id: &str, part_id: &str, path: &Path) 
 }
 
 /// Empty the inbox.
-/// Send one caught message on to real recipients (M-2).
+/// Send one caught message on to real recipients.
 ///
 /// Mailpit's own release endpoint. The catcher goes on catching everything —
 /// this is the opposite shape from pointing the application at a real server,
@@ -962,9 +962,8 @@ mod tests {
     /// That was load-bearing rather than incidental, and writing it down is
     /// what showed it: those two keys were in `config::LEGACY_SERVICES`, the
     /// half whose stated reason was "only for the migration" — and nothing
-    /// about this is migration. ADR 0037 moved the question to the catalogue,
-    /// where ADR 0016 had already put the vocabulary, and the keys left with
-    /// seventy others.
+    /// about this is migration. The question moved to the catalogue, where the
+    /// vocabulary already lived, and the keys left with seventy others.
     ///
     /// The assertions did not change, and that is the point of keeping them:
     /// the answers are the same, the source is not. Without this test the move

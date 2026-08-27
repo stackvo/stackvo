@@ -32,8 +32,8 @@
 //! A version that is enabled in `.env` and absent from the catalogue is a
 //! **blocker**, not a nudge to the nearest neighbour. Silently migrating
 //! `mysql@5.7` to 8.0 because 5.7 was withdrawn is an upgrade nobody asked for,
-//! performed on a datadir, without a backup. ADR 0014's rule that a published
-//! version is never removed exists so this stays a case that only a mistake can
+//! performed on a datadir, without a backup. The rule that a published version
+//! is never removed exists so this stays a case that only a mistake can
 //! produce — and when it is produced, this says so.
 
 use crate::config::Env;
@@ -86,7 +86,7 @@ pub enum Blocker {
     /// for different things: one is a click in the Market, the other is a
     /// version that was never in the index. Saying the second when the first is
     /// true sends somebody to look for a withdrawal that never happened, and
-    /// ADR 0014 makes withdrawals impossible anyway.
+    /// a published version is never removed anyway.
     ///
     /// `available` is what *is* installed, which is the list somebody needs to
     /// see next to the one they asked for.
@@ -291,7 +291,7 @@ pub fn plan(
             let key = format!("{prefix}{}", setting.key);
             let value = env.get(&key).map(str::to_string);
             if setting.is_secret() {
-                // The reference, never the value (ADR 0010). A secret that has
+                // The reference, never the value. A secret that has
                 // never been moved is still in `.env`; naming the entry here is
                 // what lets `secrets` move it on the first read.
                 //
@@ -431,7 +431,7 @@ pub fn apply(root: &std::path::Path, plan: &Plan) -> crate::error::Result<Table>
     };
     table.save(root)?;
 
-    // `.env`'s service lines are marked, not removed (§7, step 3). Removing
+    // `.env`'s service lines are marked, not removed. Removing
     // them would make the revert — delete the table, get the old workspace
     // back — a restore from backup instead of a deletion, and the two differ
     // by everything the user changed in between.

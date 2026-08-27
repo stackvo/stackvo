@@ -114,7 +114,7 @@ pub struct Report {
     /// Who called whom, and what it cost — the half of the file the top-N table
     /// throws away.
     ///
-    /// F-3. A cost table answers "where did the time go"; it cannot answer
+    /// A cost table answers "where did the time go"; it cannot answer
     /// "what called that", which is the question a flame graph exists for. The
     /// parser was already reading these edges — it needs them to attribute an
     /// inclusive cost to a callee — and was discarding the caller.
@@ -388,7 +388,7 @@ pub fn parse<R: BufRead>(reader: R, limit: u64) -> Result<Report> {
 /// end is the tail that would render as a line one pixel wide.
 pub const EDGE_LIMIT: usize = 2_000;
 
-// ------------------------------------------------------- the call tree (F-3)
+// ------------------------------------------------------- the call tree
 
 /// One box in the flame view.
 #[derive(Debug, Clone, Serialize)]
@@ -679,7 +679,7 @@ pub fn clear(root: &std::path::Path, name: &str) -> Result<(usize, u64)> {
 
 #[cfg(test)]
 mod tests {
-    // ------------------------------------------------- the call tree (F-3)
+    // ------------------------------------------------- the call tree
 
     fn edge(caller: &str, callee: &str, time: u64) -> Edge {
         Edge {

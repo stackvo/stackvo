@@ -291,7 +291,7 @@ describe('the panes', () => {
 });
 
 /**
- * The performance layer (I-1).
+ * The performance layer.
  *
  * Three things here are only true at this layer and each is the kind that looks
  * fine and is wrong: that turning a layer on is a *seed then save* the backend

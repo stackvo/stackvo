@@ -26,8 +26,8 @@
 //! the index is parsed — the same ordering this module applies to a manifest,
 //! for the same reason.
 //!
-//! The official key is pinned now. ADR 0015 gives the registry its own ed25519
-//! pair, separate from the updater's, and the ceremony that produces both is
+//! The official key is pinned now. The registry has its own ed25519 pair,
+//! separate from the updater's, and the ceremony that produces both is
 //! `tools/keys.sh`; `signing::PINNED` carries the public half. For a long time
 //! it was empty and said so loudly, because shipping a placeholder would have
 //! been worse than the gap — every later reader would have believed the chain
@@ -37,7 +37,7 @@
 //! key signs nothing, and until somebody signed `registry.json` with the
 //! private half — by hand, on the machine that holds it — a signed refresh got
 //! past the key check and was refused for the *signature* it could not find.
-//! The official index carries one as of ADR 0034's round, so the chain runs end
+//! The official index carries one, so the chain runs end
 //! to end: pinned key → index → manifest → file.
 //!
 //! What that costs is an operational rule, and it is load-bearing: the index is
@@ -81,7 +81,7 @@ pub fn dir(root: &Path) -> PathBuf {
 /// Where the index is cached once it has been fetched.
 ///
 /// Absent before the first refresh, and that absence is a **state** rather than
-/// an error (ADR 0011): a machine that has never fetched has no catalogue, and
+/// an error: a machine that has never fetched has no catalogue, and
 /// the app says so rather than showing an empty one.
 pub fn registry_path(root: &Path) -> PathBuf {
     dir(root).join("registry.json")
@@ -95,7 +95,7 @@ pub fn packages_dir(root: &Path) -> PathBuf {
 /// The catalogue as this workspace actually sees it.
 ///
 /// Verified packages, with whatever files the workspace has taken over layered
-/// on top ([`crate::overrides`], ADR 0031). **The** way to open a tree for a
+/// on top ([`crate::overrides`]). **The** way to open a tree for a
 /// workspace, and the reason it exists rather than each caller opening one: an
 /// override that only some screens honoured would be worse than none — the
 /// compose file would render from the workspace's bytes while the connection
@@ -130,9 +130,9 @@ pub struct VersionRow {
     pub support: String,
     #[serde(default)]
     pub eol_date: Option<String>,
-    /// Withdrawn by the publisher: the client-side half of a takedown (ADR 0014).
+    /// Withdrawn by the publisher: the client-side half of a takedown.
     ///
-    /// A **marking**, never a deletion, and ADR 0014 is why: a version that
+    /// A **marking**, never a deletion, and here is why: a version that
     /// disappeared from the index would leave every machine that installed it
     /// holding an `instances.json` entry pointing at nothing, with no way to
     /// find out what happened. Marked, the machine can say it.
@@ -208,7 +208,8 @@ impl Registry {
             .find(|v| v.version == version)
     }
 
-    /// What `latest` means, per ADR 0014.
+    /// What `latest` means: the newest version the publisher recommends,
+    /// never a moving tag.
     pub fn recommended(&self, service: &str) -> Option<&VersionRow> {
         self.package(service)?
             .versions
@@ -277,8 +278,9 @@ impl Registry {
 ///
 /// A trait, and three answers behind it: a directory ([`LocalSource`]), HTTPS
 /// ([`HttpSource`]), and an offline bundle — which is a directory, and is why
-/// air-gapped installation needed no third implementation. ADR 0011 leaves that
-/// bundle as the **only** way a machine with no network gets a catalogue.
+/// air-gapped installation needed no third implementation. With nothing
+/// embedded, that bundle is the **only** way a machine with no network gets a
+/// catalogue.
 ///
 /// Synchronous on purpose. [`crate::pkg`] and [`crate::render`] read this trait
 /// and neither has any business knowing what an async runtime is; the cost is
@@ -337,7 +339,7 @@ const MOST_BYTES: u64 = 8 * 1024 * 1024;
 /// ## `https` only, and it is checked here
 ///
 /// Not left to the server, and not a matter of what somebody types. The chain
-/// in §4.2 starts at a signature that does not exist yet (ADR 0015), so
+/// starts at a signature that does not exist yet, so
 /// transport is the only thing standing between an index and whoever is on the
 /// path — and `http://` would remove even that. A URL that does not start
 /// `https://` is refused before a request is made.
@@ -386,7 +388,7 @@ pub struct HttpSource {
 /// choice and is honoured.
 ///
 /// Nothing else is rewritten. A CDN, a Pages site, a corporate file server —
-/// ADR 0013's "any static host" — is taken exactly as given, because there is no
+/// any static host at all — is taken exactly as given, because there is no
 /// pattern to recognise and inventing one would be this function guessing at
 /// somebody's infrastructure.
 pub fn resolve_location(location: &str) -> String {
@@ -431,7 +433,7 @@ impl HttpSource {
                 Code::InvalidInput,
                 format!(
                     "{base:?} is not an https:// address. Nothing verifies a signature yet \
-                     (ADR 0015), so the transport is the whole of what stands between this \
+                    , so the transport is the whole of what stands between this \
                      catalogue and whoever is on the path"
                 ),
             )
@@ -699,8 +701,7 @@ pub enum Trust {
 ///
 /// Its own function so the default is a thing with a test rather than a branch
 /// inside a Tauri command, which is where it was and where nothing could reach
-/// it. The one asymmetry is deliberate and is ADR 0009's: policy may only
-/// tighten. `requireSignature` turns a missing signature into a refusal even
+/// it. The one asymmetry is deliberate: policy may only tighten. `requireSignature` turns a missing signature into a refusal even
 /// for a publisher who has never signed; nothing in policy can turn a *present*
 /// signature into something optional.
 /// The raw base the official catalogue is served from.
@@ -907,7 +908,7 @@ pub fn refresh(
 
         // Absent is a different answer from wrong, and only one of them is
         // allowed to be survivable. A publisher who has never signed is a state
-        // (ADR 0011); a publisher who signed yesterday and serves no signature
+        //; a publisher who signed yesterday and serves no signature
         // today is either a mistake worth stopping for or somebody on the path
         // who deleted a file, and this machine cannot tell which — which is
         // exactly when it should not guess.
@@ -1125,10 +1126,10 @@ pub fn install(
     })?;
 
     // The publisher's own withdrawal, before the organisation's list and before
-    // anything is fetched — the client half of a takedown (ADR 0014).
+    // anything is fetched — the client half of a takedown.
     //
-    // Refused rather than merely marked on screen. ADR 0014 keeps a withdrawn
-    // version *in* the index precisely so a machine can find out what happened
+    // Refused rather than merely marked on screen. A withdrawn version stays
+    // *in* the index precisely so a machine can find out what happened
     // to something it already installed; that is a different question from
     // whether a new install may go ahead, and answering both with a warning
     // would make the withdrawal advisory.
@@ -1347,7 +1348,7 @@ pub struct Bundled {
 
 /// Write everything an air-gapped machine needs into one directory.
 ///
-/// §3 #31. The consuming half has been there since [`LocalSource`] — point
+/// The consuming half has been there since [`LocalSource`] — point
 /// `market.offlineBundle` at a directory and the catalogue, the manifests and
 /// the templates are read from it with the same verification as from the
 /// network. What was missing was the **producing** half: nothing on a connected
@@ -1374,7 +1375,7 @@ pub struct Bundled {
 /// ## The index is copied byte for byte
 ///
 /// Not re-serialised from [`Registry`]. Two reasons and both are load-bearing:
-/// the signature (ADR 0015) is over the bytes, so a round trip through serde
+/// the signature is over the bytes, so a round trip through serde
 /// invalidates it even when every field survives; and `manifestSha256` chains
 /// from those bytes to each manifest, which is the chain `refresh` and
 /// [`install`] check on the far end. A bundle that had to be trusted differently
@@ -1390,7 +1391,7 @@ pub struct Bundled {
 ///
 /// ## Withdrawn versions travel as rows, not as files
 ///
-/// ADR 0014 keeps a revoked version *in* the index so a machine can find out
+/// A revoked version stays *in* the index so a machine can find out
 /// what happened to something it installed, and [`install`] refuses to install
 /// one — before it fetches anything. So its files would be bytes nobody can
 /// ever ask for. They are skipped and named in [`Bundled::skipped`]; the row
@@ -1448,7 +1449,7 @@ pub fn bundle(source: &dyn Source, dest: &Path) -> Result<Bundled> {
 
         // Best effort, and the only best-effort fetch in this function. An
         // unsigned index is the state every build is in until the key ceremony
-        // (ADR 0021), so treating a missing signature as a failure would make
+        //, so treating a missing signature as a failure would make
         // this command unusable today; treating it as invisible would let
         // somebody carry an unsignable bundle to a machine that requires one.
         // Reported instead.
@@ -1546,7 +1547,7 @@ pub fn bundle(source: &dyn Source, dest: &Path) -> Result<Bundled> {
 /// Remove one version's package directory.
 ///
 /// Only the package — not the instance that used it, not its volumes, not its
-/// data. ADR 0012 puts data deletion behind `purgeData` on the command above
+/// data. Data deletion is behind `purgeData` on the command above
 /// this one, and a module that removed a directory of templates has no business
 /// deciding about somebody's database.
 pub fn uninstall(root: &Path, category: &str, service: &str, version: &str) -> Result<()> {
@@ -1913,7 +1914,7 @@ mod tests {
         );
     }
 
-    /// ADR 0009: policy tightens and never loosens.
+    /// Policy tightens and never loosens.
     #[test]
     fn policy_can_demand_a_signature_and_cannot_wave_one_through() {
         assert_eq!(trust_for(true, false), Trust::Signed);
@@ -1929,11 +1930,11 @@ mod tests {
         }
     }
 
-    /// The client half of a takedown (ADR 0014): a withdrawn version does not
+    /// The client half of a takedown: a withdrawn version does not
     /// install.
     ///
-    /// Refused rather than warned about. ADR 0014 keeps a withdrawn version in
-    /// the index so a machine can find out what happened to one it already
+    /// Refused rather than warned about. A withdrawn version stays in the
+    /// index so a machine can find out what happened to one it already
     /// has; whether a *new* install may proceed is a different question, and
     /// answering both with a warning would make the withdrawal advisory.
     #[test]
@@ -2207,7 +2208,7 @@ mod tests {
 
     /// `http://` is refused where a person can still do something about it,
     /// not at the moment a request would have gone out. Nothing verifies a
-    /// signature yet (ADR 0015), so the transport is the whole of what stands
+    /// signature yet, so the transport is the whole of what stands
     /// between an index and whoever is on the path.
     #[test]
     fn a_plain_http_catalogue_is_refused_before_anything_is_requested() {
@@ -2331,7 +2332,7 @@ mod tests {
         assert!(resolve_location("https://github.com/o/r").ends_with("/HEAD"));
     }
 
-    /// Everything else is taken as given. ADR 0013 says any static host, and a
+    /// Everything else is taken as given — any static host will do — and a
     /// second pattern here would be this function guessing at somebody's
     /// infrastructure.
     #[test]
@@ -2415,7 +2416,7 @@ mod tests {
 
     /// The index travels as bytes, not as a re-serialised `Registry`.
     ///
-    /// The signature is over the bytes (ADR 0015) and `manifestSha256` chains
+    /// The signature is over the bytes and `manifestSha256` chains
     /// from them, so a round trip through serde would break both while every
     /// field still looked right — the class of failure that only shows up on
     /// the machine that cannot be debugged.
@@ -2479,7 +2480,7 @@ mod tests {
 
     /// A withdrawn version keeps its row and loses its files.
     ///
-    /// ADR 0014 keeps the row so the far end can find out what happened to
+    /// The row stays so the far end can find out what happened to
     /// something it installed; `install` refuses to install one before it
     /// fetches anything, so its files would be bytes nobody can ask for.
     #[test]

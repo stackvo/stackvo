@@ -192,7 +192,7 @@ async function clearAll() {
 const current = computed(() => messages.value.find((m) => m.id === selected.value) ?? null);
 
 /**
- * Release one message to a real address (M-2).
+ * Release one message to a real address.
  *
  * The catcher goes on catching everything; this sends the one that is open. The
  * opposite shape — pointing the application at a real server — would send the
@@ -292,7 +292,7 @@ onUnmounted(() => clearInterval(timer));
 
       <ErrorAlert :error="error" type="error" closable class="ma-4 mb-0" @close="error = null" />
 
-      <!-- Where a released message goes (M-2). On this page rather than in
+      <!-- Where a released message goes. On this page rather than in
            settings, because it is configured for a reason that happens here:
            somebody presses Release and is told no relay is set up. -->
       <MailRelayPane v-if="status?.enabled && running" class="mx-4 mt-3" />
@@ -460,7 +460,7 @@ onUnmounted(() => clearInterval(timer));
                   </v-btn>
                 </div>
 
-                <!-- M-2. Typed rather than pre-filled with the message's own
+                <!-- Typed rather than pre-filled with the message's own
                      recipient: the reason to release is that somebody else has
                      to see it, and re-sending to the fixture address is the one
                      thing that is never useful. -->

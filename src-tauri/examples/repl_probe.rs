@@ -1,6 +1,6 @@
 //! Does the workbench actually run code in the projects on this machine?
 //!
-//! F-5. `repl.rs` has unit tests and every one of them is about an **argv** — a
+//! `repl.rs` has unit tests and every one of them is about an **argv** — a
 //! Vec<String> compared against another Vec<String>. That proves the command
 //! this app builds is the one its author meant to build, and proves nothing
 //! about whether `php artisan tinker --execute` exists in that container, or

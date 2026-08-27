@@ -8,7 +8,7 @@
 //!
 //! What kept it alive past that point was not its content but its **citations**:
 //! thirteen Rust modules, its tests and three contract files pointed at it by
-//! section number (`§4.4`, `§9`, `Faz 2`). Deleting it would have left every one
+//! section number. Deleting it would have left every one
 //! of them addressing nothing, which is worse than a stale document — a reader
 //! who cannot find the reference does not learn that the reference was wrong,
 //! they learn that this repository's comments cannot be followed.
@@ -22,7 +22,7 @@
 //! | the compose allowlist   | `contracts/compose-policy.json`              |
 //! | the index and its chain | `contracts/registry.schema.json`             |
 //! | the threat model        | `SECURITY.md`                                |
-//! | every decision in it    | `docs/durum.md` §6, decisions 0011–0016, 0021, 0031, 0032 |
+//! | every decision in it    | the module header of the code it decided       |
 //!
 //! ## Why the phase numbers go too
 //!
@@ -39,6 +39,18 @@
 //! link-checker, and `architecture_claims.rs` already runs one over the document
 //! that carries most of them. This holds one specific promise: **this** file was
 //! deleted, and nothing points at it.
+//!
+//! ## The second document
+//!
+//! `docs/durum.md` was deleted later and for a different reason: it was a
+//! numbered backlog and a numbered decision register, and a number is read as
+//! settled. Items were being planned around rather than re-examined, and the
+//! citation outlived the thinking behind it.
+//!
+//! It is guarded here for the same reason the first one is. There were roughly
+//! six hundred references to that document — its path, its numbered decisions
+//! and its numbered sections — and a cleanup that large is only worth doing
+//! once. Without a gate the first citation written from memory puts it back.
 
 use std::path::{Path, PathBuf};
 
@@ -49,8 +61,13 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// The file itself, and the phase labels that only meant anything inside it.
-const GONE: &str = "servis-market-mimarisi";
+/// The two deleted documents, and the phase labels that only meant anything
+/// inside the first.
+///
+/// Spelled without a directory or an extension so a citation is caught however
+/// it was written — as a link, as a bare filename, or in the middle of a
+/// sentence.
+const GONE: [&str; 2] = ["servis-market-mimarisi", "durum.md"];
 const PHASES: [&str; 8] = [
     "Faz 0", "Faz 1", "Faz 2", "Faz 3", "Faz 4", "Faz 5", "Faz 6", "Faz 7",
 ];
@@ -133,14 +150,25 @@ fn relative(path: &Path) -> String {
 }
 
 #[test]
-fn the_deleted_design_document_is_gone_and_stays_gone() {
-    let path = repo_root().join("docs/servis-market-mimarisi.md");
-    assert!(
-        !path.exists(),
-        "docs/servis-market-mimarisi.md is back. It was deleted because a design \
-         document outlives its usefulness the moment the thing it describes \
-         exists; if there is something to say, say it where the code is."
-    );
+fn the_deleted_documents_are_gone_and_stay_gone() {
+    for (path, why) in [
+        (
+            "docs/servis-market-mimarisi.md",
+            "a design document outlives its usefulness the moment the thing it \
+             describes exists",
+        ),
+        (
+            "docs/durum.md",
+            "a numbered backlog is read as settled, and its items were being \
+             planned around rather than re-examined",
+        ),
+    ] {
+        assert!(
+            !repo_root().join(path).exists(),
+            "{path} is back. It was deleted because {why}; if there is something \
+             to say, say it where the code is."
+        );
+    }
 }
 
 #[test]
@@ -148,28 +176,36 @@ fn nothing_cites_the_deleted_design_document() {
     let mut offenders = Vec::new();
 
     for path in searched() {
-        // Two files name it on purpose. This one is the gate and has to say
-        // what it is gating; `docs/durum.md` §1 carries the tombstone — the
-        // sentence that says the document was deleted and where each part of it
-        // went. A tombstone is the opposite of a dangling pointer: it is what a
-        // reader who half-remembers the file needs to find.
-        if path.ends_with("no_dangling_docs.rs") || path.ends_with("durum.md") {
+        // Two files name them on purpose, and both are tombstones rather than
+        // dangling pointers — a reader who half-remembers a deleted document
+        // needs somewhere that says it was deleted and where its parts went.
+        //
+        // This one is the gate and has to say what it is gating. `isler.md` is
+        // the report that records both deletions and the cleanup they cost;
+        // rewriting it to keep this scan quiet would be the same trade
+        // `CHANGELOG.md` is exempted from making.
+        if path.ends_with("no_dangling_docs.rs") || path.ends_with("isler.md") {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
-        if text.contains(GONE) {
-            offenders.push(relative(&path));
+        for gone in GONE {
+            if text.contains(gone) {
+                offenders.push(format!("{} ({gone})", relative(&path)));
+            }
         }
     }
 
     assert!(
         offenders.is_empty(),
-        "these point at docs/servis-market-mimarisi.md, which does not exist: \
-         {offenders:?}\nThe format is contracts/package-version.schema.json, the \
-         allowlist is contracts/compose-policy.json, the threat model is \
-         SECURITY.md, and the decisions are docs/durum.md §6."
+        "these cite a document that does not exist: {offenders:?}\n\
+         For the package design: the format is \
+         contracts/package-version.schema.json, the allowlist is \
+         contracts/compose-policy.json, and the threat model is SECURITY.md.\n\
+         For the status document: say what the code does and why, in the module \
+         header beside it. There is no numbered item to cite any more, which is \
+         the point."
     );
 }
 
@@ -196,7 +232,8 @@ fn nothing_still_dates_itself_by_a_delivery_phase() {
     assert!(
         offenders.is_empty(),
         "these date themselves by a delivery phase of a plan that finished: \
-         {offenders:?}\nSay what the code does, and cite the decision in \
-         docs/durum.md §6 for why."
+         {offenders:?}\nSay what the code does and why. The plan these date \
+         themselves by is finished, and the git history is where its order \
+         lives."
     );
 }

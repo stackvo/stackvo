@@ -4,7 +4,7 @@
 //!   cargo run --example mount_bench -- --runs 5 --only bind,volume
 //!   cargo run --example mount_bench -- --fresh          # drop the composer cache too
 //!
-//! I-1 in `docs/durum.md`, and the first thing that section asks for is not a
+//! The first thing this asks for is not a
 //! feature — it is this number. Bind-mounted source on macOS and Windows is the
 //! single most common reason people leave a Docker-based workflow, DDEV ships
 //! Mutagen turned on to answer it, and StackVo currently mounts a project with

@@ -6,7 +6,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * `stackvo.local.json` — what this machine does differently (B-2).
+ * `stackvo.local.json` — what this machine does differently.
  *
  * The pane above holds the committed manifest, which is the thing that makes a
  * checkout reproducible and is exactly why there was nowhere to say "on *this*

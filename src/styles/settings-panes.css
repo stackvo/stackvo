@@ -4,7 +4,7 @@
  * where a descendant selector already reaches into Vuetify's own markup.
  *
  * Same break as `project-panes.css`, found the same way and on the same day:
- * §14.16 moved twelve sections of `Settings.vue` into child components and left
+ * The pane split moved twelve sections of `Settings.vue` into child components and left
  * these rules in the view's `<style scoped>` block, which reaches only the
  * elements that component itself renders. Six panes rendered unstyled — the
  * appearance swatches, the services list, the preset JSON — and the suite

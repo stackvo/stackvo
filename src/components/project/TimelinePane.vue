@@ -8,7 +8,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * One page load, from both ends.
  *
- * F-2. `dd($user)` says what the code thought it had; the query log says what
+ * `dd($user)` says what the code thought it had; the query log says what
  * it actually asked the database for. Both were already on this page, in two
  * panes, and reading them together meant comparing clocks by eye.
  *

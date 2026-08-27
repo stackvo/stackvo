@@ -8,7 +8,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
 /**
  * The versions a new project starts on, and the PHP tooling that ships with it.
  *
- * Seventh pane out of `Settings.vue` under §14.16. The choices come from the
+ * Seventh pane out of `Settings.vue` in the pane split. The choices come from the
  * catalog compiled into the binary rather than a list typed here, so a release
  * added there shows up without a second edit — see `useCatalog`.
  */

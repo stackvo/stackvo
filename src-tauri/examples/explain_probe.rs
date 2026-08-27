@@ -1,6 +1,6 @@
 //! Is `exec_ts` the moment a recording **started**?
 //!
-//! B-1. `explain.rs` joins a query log, a set of dumps and a mail catcher to one
+//! `explain.rs` joins a query log, a set of dumps and a mail catcher to one
 //! request by the stretch of wall clock that request claims, and it builds that
 //! stretch out of two numbers php-spx wrote: `exec_ts`, and the run's own wall
 //! time. Every unit test in that module asserts against a `Report` this

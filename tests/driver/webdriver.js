@@ -10,9 +10,8 @@
  * close the session. That is six endpoints of a protocol that is JSON over
  * HTTP, and `fetch` has been in Node since 18.
  *
- * ADR 0019 made this same trade for the TUI and wrote down the rule it used:
- * measure the packages first, and only claim "zero new packages" after
- * counting. Counted here too — `package.json` gains nothing.
+ * The TUI made this same trade, under a rule worth repeating: measure the
+ * packages first, and only claim "zero new packages" after counting. Counted here too — `package.json` gains nothing.
  *
  * ## What is deliberately *not* here
  *
@@ -27,7 +26,7 @@
  * Everything above `Session` is pure: it builds a request, or reads a response.
  * That half is unit-tested in `tests/driver-client.spec.js`, which runs on
  * every platform including the one this repository is developed on. The half
- * below it needs a live driver and only runs on Linux CI (§3 #12).
+ * below it needs a live driver and only runs on Linux CI.
  *
  * That split is not tidiness. `tauri-driver` cannot run on macOS — Tauri's
  * documentation is explicit that macOS has no WKWebView driver — so the person
@@ -122,7 +121,7 @@ export function unwrap(status, body) {
  * The result is boxed into `{ok, value}` / `{ok, error}` rather than letting a
  * rejection reach the driver, and that box is the point of this function. A
  * rejected `invoke` carries a `StackvoError` — a plain object with `code`,
- * `message` and `hint_key` (ADR 0004) — and handing it to the driver's own
+ * `message` and `hint_key` — and handing it to the driver's own
  * error path would flatten it into the string `javascript error`, losing the
  * exact field this suite exists to look at.
  */

@@ -55,7 +55,7 @@
         "pattern": "^(\\*\\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$"
       },
       "default": [],
-      "description": "OPTIONAL. Additional hostnames the same project answers on, beside `domain`. Multi-tenant applications that resolve the tenant from a subdomain cannot be developed with one name; DDEV calls these additional_hostnames and additional_fqdns, Herd allows several per site. A leading `*.` is accepted and becomes a certificate SAN and a Traefik HostRegexp router — but NOT an /etc/hosts entry, because a hosts file cannot express a wildcard. That is a property of the resolver, not a limitation of this field: until StackVo runs a local DNS server (gap E-1), a wildcard alias resolves only for names the user has added by other means, and the app reports it as unresolved rather than pretending otherwise. An entry equal to `domain` is dropped as a duplicate."
+      "description": "OPTIONAL. Additional hostnames the same project answers on, beside `domain`. Multi-tenant applications that resolve the tenant from a subdomain cannot be developed with one name; DDEV calls these additional_hostnames and additional_fqdns, Herd allows several per site. A leading `*.` is accepted and becomes a certificate SAN and a Traefik HostRegexp router — but NOT an /etc/hosts entry, because a hosts file cannot express a wildcard. That is a property of the resolver, not a limitation of this field: until StackVo runs a local DNS server, a wildcard alias resolves only for names the user has added by other means, and the app reports it as unresolved rather than pretending otherwise. An entry equal to `domain` is dropped as a duplicate."
     },
     "lan_share": {
       "type": "boolean",
@@ -76,7 +76,7 @@
     "sidecars": {
       "type": "object",
       "maxProperties": 8,
-      "description": "Containers this project needs that the catalogue does not have (§5.1). A **sidecar**, not a service: it is rendered into this project's own compose block, it comes up and goes down with the project's profile, and it is NOT an entry in instances.json. Two clones of the same repository under different project names get two separate containers with two separate volumes and cannot collide, because every name here is derived from the project's name rather than declared. Kept apart from `services`, which names a catalogue id — a *need* the machine satisfies from packages. This describes a container the repository brought with it. Reaching the host is deliberately absent: no host port, no host path. ADR 0020's argument — the container already runs the repository's code — does not carry over to a NEW image, so anything that reaches out of the project's own network belongs behind a consent gate and is refused until that gate exists.",
+      "description": "Containers this project needs that the catalogue does not have. A **sidecar**, not a service: it is rendered into this project's own compose block, it comes up and goes down with the project's profile, and it is NOT an entry in instances.json. Two clones of the same repository under different project names get two separate containers with two separate volumes and cannot collide, because every name here is derived from the project's name rather than declared. Kept apart from `services`, which names a catalogue id — a *need* the machine satisfies from packages. This describes a container the repository brought with it. Reaching the host is deliberately absent: no host port, no host path. The argument that the container already runs the repository's code does not carry over to a NEW image, so anything that reaches out of the project's own network belongs behind a consent gate and is refused until that gate exists.",
       "propertyNames": {
         "pattern": "^[a-z0-9-]{1,40}$"
       },
@@ -90,7 +90,7 @@
             "minLength": 3,
             "maxLength": 200,
             "pattern": "^[a-z0-9][a-z0-9._/-]*:[a-zA-Z0-9._-]+$",
-            "description": "The image to run, WITH a tag. A tag is required for the reason ADR 0014 gives about `latest`: an untagged image moves under somebody who pulled it last month, and a repository that pins its own PHP version has no business leaving this one floating."
+            "description": "The image to run, WITH a tag. A tag is required for the same reason `latest` is refused elsewhere: an untagged image moves under somebody who pulled it last month, and a repository that pins its own PHP version has no business leaving this one floating."
           },
           "about": {
             "type": "string",
@@ -512,7 +512,7 @@
     "commands": {
       "type": "object",
       "maxProperties": 32,
-      "description": "Commands this project offers next to the built-in ones (B-4). The webview still only ever sends an id; what changed is that a workspace may declare one in a file on disk. Keyed by id: lower-case letters, digits and dashes, up to 40 characters. An id that is already a built-in command is refused rather than allowed to replace it, because either silent outcome ends with somebody pressing a button whose label does not describe what it runs.",
+      "description": "Commands this project offers next to the built-in ones. The webview still only ever sends an id; what changed is that a workspace may declare one in a file on disk. Keyed by id: lower-case letters, digits and dashes, up to 40 characters. An id that is already a built-in command is refused rather than allowed to replace it, because either silent outcome ends with somebody pressing a button whose label does not describe what it runs.",
       "propertyNames": {
         "pattern": "^[a-z0-9-]{1,40}$"
       },
@@ -603,11 +603,11 @@
               "type": "string",
               "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
             },
-            "description": "Names of values the recipe needs and never carries. They live in the OS keystore (ADR 0010), per project and per provider, and arrive as environment variables for the length of one run. DDEV mounts the developer's ssh agent instead; this application's rule is that a repository-declared container gets no host path (ADR 0023), and an ssh agent is a host path that signs things."
+            "description": "Names of values the recipe needs and never carries. They live in the OS keystore, per project and per provider, and arrive as environment variables for the length of one run. DDEV mounts the developer's ssh agent instead; this application's rule is that a repository-declared container gets no host path, and an ssh agent is a host path that signs things."
           }
         }
       },
-      "description": "A-1. Named places this project's data really lives, and how to fetch it from there or send it back. Every dangerous property of this block was already answered by `hooks`: an argv array and no shell, a container and never the machine, consent per project keyed on a digest so editing the recipe asks again, and an administrator who can forbid it and cannot approve it."
+      "description": "Named places this project's data really lives, and how to fetch it from there or send it back. Every dangerous property of this block was already answered by `hooks`: an argv array and no shell, a container and never the machine, consent per project keyed on a digest so editing the recipe asks again, and an administrator who can forbid it and cannot approve it."
     }
   },
   "allOf": [

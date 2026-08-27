@@ -1,6 +1,6 @@
 //! Does the responder answer a *real* resolver, not just its own encoder?
 //!
-//! E-1. `dns.rs` has its own unit tests and every one of them builds the query
+//! `dns.rs` has its own unit tests and every one of them builds the query
 //! with the same code that reads it back. That proves the module is
 //! self-consistent and proves nothing about whether `dig`, `getaddrinfo` or a
 //! browser would accept a word of it — which is the only question that matters,

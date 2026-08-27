@@ -88,7 +88,7 @@ export default {
   },
 
   /**
-   * Komut paleti (A-2).
+   * Komut paleti.
    *
    * `keys` kısayolu tuş resmiyle değil cümleyle veriyor: bu satır bir altbilgi
    * ve paleti ilk kez gören okuyucunun ihtiyacı olan şey cümle.
@@ -120,7 +120,7 @@ export default {
   },
 
   /**
-   * `stackvo.local.json` — bu makineye özel geçersiz kılmalar (B-2).
+   * `stackvo.local.json` — bu makineye özel geçersiz kılmalar.
    *
    * Üç git durumundan yalnız `notIgnored` bir uyarı, ve neyin yanlış olduğunu
    * değil ne yapılacağını söylüyor: commit'e giren bir dosya artık makine
@@ -140,7 +140,7 @@ export default {
   },
 
   /**
-   * Yaşam döngüsü hook'ları (B-3).
+   * Yaşam döngüsü hook'ları.
    *
    * `explain` yalnız özelliği değil riski adlandırıyor. Onaylamayı okumaktan
    * kolaylaştıran bir ekran, bu ekranın var olma nedeninin tersi olurdu.
@@ -208,7 +208,7 @@ export default {
   },
 
   /**
-   * Yerel DNS yanıtlayıcısı (E-1).
+   * Yerel DNS yanıtlayıcısı.
    *
    * `explain` ne *olmadığını* söylüyor — bir çözümleyici değil — çünkü kendi
    * makinesinde DNS'e cevap veren bir şeyi açmadan önce insanın ihtiyacı olan
@@ -354,7 +354,7 @@ export default {
   },
 
   /**
-   * Kullanıcı rotaları (E-4).
+   * Kullanıcı rotaları.
    *
    * `explain` `localhost` ile başlıyor, çünkü herkesin yazdığı ve yardımsız
    * çalışamayan tek şey o.
@@ -374,7 +374,7 @@ export default {
   },
 
   /**
-   * Bir örneğin verisini diğerine taşıma (G-4).
+   * Bir örneğin verisini diğerine taşıma.
    *
    * `explain` yıkıcı yarıyla başlıyor, çünkü planın var olma nedeni tam da bu
    * bilgiyi düğmeye basmaya değer olmadan önce ekrana koymak.
@@ -390,7 +390,7 @@ export default {
   },
 
   /**
-   * Boştaki projeleri askıya alma (I-2).
+   * Boştaki projeleri askıya alma.
    *
    * `explain` sinyali adlandırıyor, çünkü kendi başına konteyner durduran bir
    * şey hakkındaki ilk soru "nereden biliyor".

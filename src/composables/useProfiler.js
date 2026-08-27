@@ -9,14 +9,14 @@ import { api, asList } from '@/lib/ipc';
  * stepping connects on the next request, profiling waits for `XDEBUG_TRIGGER`
  * so an idle stack does not write a multi-megabyte file per page load.
  *
- * Lifted out of `ProjectDetail.vue` with the Profiler pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the Profiler pane in the pane split.
  */
 export function useProfiler(name) {
   const status = ref(null);
   const report = ref(null);
   /**
    * The call tree for the open profile, fetched only when the flame view is
-   * asked for (F-3).
+   * asked for.
    *
    * Lazily and separately, because the two answers are different sizes: the
    * table is sixty rows and the tree is thousands of nodes. A pane that opens
@@ -25,14 +25,14 @@ export function useProfiler(name) {
   const tree = ref(null);
   const treeBusy = ref(false);
   /**
-   * The flame graph for an open **trace** (F-3).
+   * The flame graph for an open **trace**.
    *
    * Separate from `tree` rather than the same ref with a flag, because the two
    * are different claims about the same picture: `tree` is cachegrind's summed
    * edges — one box per callee however many callers it had — and this is folded
    * stacks, where a function called from two places is two boxes with their own
    * widths. Rendering one under the other's caption is exactly the confusion
-   * F-3 was amber for.
+   * profiling could not answer on its own.
    */
   const flame = ref(null);
   const openId = ref('');

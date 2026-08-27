@@ -13,7 +13,7 @@ import { api, asList } from '@/lib/ipc';
  * ## Three states, not two
  *
  * `status.fetched` is false before the first refresh, and that is a different
- * screen from an empty catalogue. StackVo embeds no packages at all (ADR 0011),
+ * screen from an empty catalogue. StackVo embeds no packages at all,
  * so a fresh machine genuinely has nothing — and telling somebody "no services
  * found" when the answer is "you have not pointed me at a source yet" is the
  * kind of message that makes people reinstall.
@@ -223,7 +223,7 @@ export function useMarket() {
   const promote = (id) => run(id, () => api.instancePromote(id));
 
   /// On and off, which is a different decision from installed and removed.
-  /// Nothing is deleted by either (ADR 0012) — the volume outlives both.
+  /// Nothing is deleted by either — the volume outlives both.
   const enable = (id) => run(id, () => api.instanceEnable(id));
   const disable = (id) => run(id, () => api.instanceDisable(id));
 

@@ -207,7 +207,7 @@ describe('unused translations', () => {
  * is what a real error hides in.
  *
  * It shipped that way and was only noticed because the pane it lives in was
- * extracted and mounted (§14.16). The escape is vue-i18n's own literal syntax,
+ * extracted and mounted. The escape is vue-i18n's own literal syntax,
  * `{'{{ VAR }}'}`, and this is what stops the next one going unnoticed.
  */
 describe('message compilation', () => {

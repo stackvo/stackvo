@@ -13,7 +13,7 @@
 //! [`crate::quickcmd`] offers the same set as buttons. Downloading a second
 //! `composer` onto the host would produce two answers to "which one runs", and
 //! the host's copy would be the one that is wrong — it knows nothing about the
-//! project's PHP. `cli.rs`'s A-3 note says the same thing about `php`: the
+//! project's PHP. `cli.rs` says the same thing about `php`: the
 //! version is a property of a project, not of a directory a shim guesses at.
 //!
 //! So the catalogue below holds **host** tools only: the four programs this app
@@ -413,7 +413,7 @@ pub fn resolve(program: &str) -> PathBuf {
 /// with the comment "nothing is installed in a test run" — which stops being
 /// true the first time the person developing this app installs a tool with it,
 /// and then a full suite fails on one machine and passes on every other. That
-/// is the same flaw as a test waiting on the real keychain (§3 #37), one turn
+/// is the same flaw as a test waiting on the real keychain, one turn
 /// quieter: it does not hang, it just accuses the wrong change.
 fn resolve_in(dir: Option<&Path>, program: &str) -> PathBuf {
     let name = exe_name(program);

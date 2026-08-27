@@ -198,7 +198,7 @@ fn traefik_opts(
             .map(|(id, on)| (id, on, None))
             .collect(),
         // None, deliberately: this file compares the whole rendered output
-        // against bytes frozen from the Bash generator, and a user route (E-4)
+        // against bytes frozen from the Bash generator, and a user route
         // is a thing that generator never had. A fixture carrying one would be
         // asserting that the port reproduces something it is not reproducing.
         routes: Vec::new(),
