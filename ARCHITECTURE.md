@@ -289,7 +289,7 @@ So the reasoning lives where it is load-bearing:
 | Why is this code shaped this way?          | The module's own header comment, beside the code it explains       |
 | Why was it changed?                        | [`CHANGELOG.md`](CHANGELOG.md) and the git history                 |
 | What is the boundary allowed to assume?    | [`contracts/`](contracts/), which is validated rather than read    |
-| What is true about accessibility today?    | [`docs/accessibility.md`](docs/accessibility.md)                   |
+| What is true about accessibility today?    | [`ACCESSIBILITY.md`](ACCESSIBILITY.md)                             |
 | What can this app reach, and how far?      | [`SECURITY.md`](SECURITY.md) and [`PRIVACY.md`](PRIVACY.md)        |
 
 None of those can drift silently: every one of them is either checked by a test

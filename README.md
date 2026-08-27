@@ -551,7 +551,7 @@ endpoint that is not there, and a release run warns on every unsigned target.
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — the map: the four bands of the Rust
   side, the one request flow worth knowing, and what the front end's panes and
   composables are for.
-- **[docs/accessibility.md](docs/accessibility.md)** — the conformance
+- **[ACCESSIBILITY.md](ACCESSIBILITY.md)** — the conformance
   statement, in the shape EN 301 549 asks for. Every number in it is reproduced
   by `npm run test:e2e`, and a test fails if the statement and the routes it
   claims come apart.
