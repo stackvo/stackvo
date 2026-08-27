@@ -366,8 +366,8 @@ mod tests {
     /// The one template the renderer still reads from the binary.
     ///
     /// This used to walk `template::DYNAMIC_SERVICES` and check all twenty-five
-    /// service templates were compiled in. There are none: ADR 0016 removed the
-    /// `.env` renderer that read them, and the packages carry their own compose
+    /// service templates were compiled in. There are none: the `.env` renderer
+    /// that read them is gone, and the packages carry their own compose
     /// fragments now.
     #[test]
     fn the_templates_the_generator_needs_are_all_compiled_in() {
@@ -626,8 +626,8 @@ mod tests {
         let root = scratch("override-cycle");
         install(&root).unwrap();
 
-        // A server config rather than a service template: ADR 0016 removed the
-        // latter, and what is left to override is the compose base and the three
+        // A server config rather than a service template: the latter are gone,
+        // and what is left to override is the compose base and the three
         // web-server configs.
         const TARGET: &str = "core/servers/nginx.conf";
         assert!(
@@ -704,7 +704,7 @@ mod tests {
             wrote += 1;
         }
         // Was 30 — the skeleton carried twenty-five service directories then.
-        // It carries the compose base and three server configs now (ADR 0016).
+        // It carries the compose base and three server configs now.
         assert!(wrote >= 4, "expected the whole skeleton, wrote {wrote}");
         assert_eq!(
             overridden(&root).len(),

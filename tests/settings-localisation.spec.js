@@ -8,7 +8,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Localisation pane, mounted.
  *
- * Eighth and smallest out of `Settings.vue` under §14.16 — three controls with
+ * Eighth and smallest out of `Settings.vue` in the pane split — three controls with
  * three different owners, which is exactly why it is worth mounting rather than
  * reading. The app locale goes through `setLocale`, because changing it also
  * persists the preference and relabels the tray; the console locale and the RTL

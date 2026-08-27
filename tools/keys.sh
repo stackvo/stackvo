@@ -16,13 +16,13 @@
 #
 # ## Two keys, and why not one
 #
-# ADR 0015. The updater key signs the binary; the content key signs the package
+# The updater key signs the binary; the content key signs the package
 # index. Separate, so that a leak of one is a forged installer OR a forged
 # package — never both. The cost is two secrets to look after, and the single
 # thing that makes that cost worth paying is that the **procedure** is shared:
-# same tool, same storage, same access list, same rotation steps. ADR 0015 says
-# what two procedures produce — the one nobody maintains — so this file exists
-# to make sure there is only ever one.
+# same tool, same storage, same access list, same rotation steps. Two procedures
+# produce the one nobody maintains, so this file exists to make sure there is
+# only ever one.
 #
 # `tauri signer` does both. That was not free: until the round that wrote this,
 # a signature it produced was one the app refused, because it wraps the whole
@@ -221,7 +221,7 @@ check() {
   updater_line="$( [ -n "$conf_pub" ] && printf '%s' "$conf_pub" | base64 -d 2>/dev/null | sed -n '2p' | tr -d '\r\n' )"
   registry_line="$(printf '%s\n' "$registry_pinned" | head -1)"
   if [ -n "$updater_line" ] && [ -n "$registry_line" ] && [ "$updater_line" = "$registry_line" ]; then
-    bad "the updater and the registry are pinned to ONE key — a single leak forges both a binary and a package (ADR 0015)"
+    bad "the updater and the registry are pinned to ONE key — a single leak forges both a binary and a package"
     problems=$((problems + 1))
   else
     ok "separate, or not yet both set"
@@ -327,8 +327,8 @@ verify() {
 sign() {
   local file="" trusts=()
   # `--key` is the mirror operator's case, and leaving it out would have made
-  # the check below a wall for exactly the people ADR 0021 says are not waiting
-  # on the official ceremony: an organisation signs its own index with its own
+  # the check below a wall for exactly the people who are not waiting on the
+  # official ceremony: an organisation signs its own index with its own
   # key and names it in `policy.market.additionalKeys`, so "does a shipped build
   # trust this" is the wrong question to hold them to — the right one is whether
   # *their* machines will, and only they can say which keys those carry.

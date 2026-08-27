@@ -1,4 +1,4 @@
-//! Does the tunnel's guard actually refuse anybody? (B-7)
+//! Does the tunnel's guard actually refuse anybody?
 //!
 //! [`tunnelid`](../src/tunnelid.rs) puts an nginx container between a tunnel
 //! sidecar and the project, so a public link asks for a password. Every part

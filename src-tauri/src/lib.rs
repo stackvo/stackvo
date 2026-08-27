@@ -236,7 +236,7 @@ pub fn run() {
             app.manage(watcher);
 
             // Answer for this workspace's names, if the machine is already
-            // asking us for them (E-1).
+            // asking us for them.
             //
             // On its own thread rather than inline: the sockets bind in
             // microseconds, but the check in front of them reads a file — and

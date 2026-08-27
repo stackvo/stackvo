@@ -19,9 +19,9 @@ Three parts, in the order a request travels:
 
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
-| Front end — Vue 3, Vuetify 3, Pinia | `src/`               | 38k lines               |
-| Back end — Rust, 111 modules        | `src-tauri/src/`     | 76k lines               |
-| The boundary between them           | `contracts/ipc.json` | 309 commands, 71 events |
+| Front end — Vue 3, Vuetify 3, Pinia | [`src/`](src/)                         | 38k lines               |
+| Back end — Rust, 111 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
+| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 309 commands, 71 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -49,21 +49,18 @@ Vue component
                                                          back to the front end
 ```
 
-Four things in that path are load-bearing and are each a decision with a
-document behind it:
+Four things in that path are load-bearing, and each is a decision rather than
+an accident of how it was first written:
 
 - **`state.inflight.acquire`** — one operation per subject, held for the life of
   the command. The front end has a busy flag per view; this is the boundary the
   tray, a second window and a keyboard shortcut all share.
-  → [decision 0003](docs/durum.md)
 - **`generator::render`** — the compose file and the Dockerfile are _rendered_
   from the manifest every time, never edited in place.
-  → [decision 0002](docs/durum.md)
 - **`runner::run_operation(sink, …)`** — the long half of the work reports
   through a sink rather than returning, so a build does not block a promise for
-  four minutes. → [decision 0005](docs/durum.md)
+  four minutes.
 - **the error that comes back** — a `StackvoError` with a `code`, not a string.
-  → [decision 0004](docs/durum.md)
 
 ---
 
@@ -93,10 +90,11 @@ downward:
                             crash, contracts
 ```
 
-`commands.rs` is the only file that mentions `AppHandle` or `State<'_, …>`, and
+[`commands.rs`](src-tauri/src/commands.rs) is the only file that mentions `AppHandle`
+or `State<'_, …>`, and
 that is the rule the band structure exists to enforce: everything below it can
 be called from a test, from the `diagnose` example, or from the MCP surface,
-with no running application. → [decision 0001](docs/durum.md)
+with no running application.
 
 The 12.7k-line `commands.rs` is the known cost of that rule. It is a directory of
 thin functions rather than a module with a subject, and splitting it by subject
@@ -198,14 +196,13 @@ rejections".
 
 ## 5. The contract
 
-`contracts/ipc.json` is the specification of the boundary: 309 commands, 71
+[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 309 commands, 71
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
 trade-off worth stating plainly. Generating TypeScript types from the Rust
 (`tauri-specta`) would make drift impossible; it was measured and deferred
 because it changes how every command is declared and belongs on its own branch.
-→ [decision 0006](docs/durum.md)
 
 What keeps it honest in the meantime is `src-tauri/tests/contract_agreement.rs`,
 which fails the build when the contract, the `#[tauri::command]` functions and
@@ -268,28 +265,38 @@ worth knowing about before adding to them:
 
 **What is not covered.** There is no end-to-end run. `tauri-driver` compiles on
 macOS and then refuses — WKWebView has no WebDriver — so the scenarios would be
-unrunnable until a Linux runner exists. That is tracked as §14.12 of the
-readiness review rather than papered over with tests that cannot execute.
+unrunnable until a Linux runner exists — which is stated here rather than
+papered over with tests that cannot execute.
 
 ---
 
-## 7a. Where the open work is, and where the decisions are
+## 7a. Where the reasoning is
 
-One document, [`docs/durum.md`](docs/durum.md). It replaced five — two
-competitive reviews, a readiness review, a platform matrix and ten ADR files —
-when keeping "what is left" in five places stopped being readable.
+There is no status document and no `docs/adr/`. There was one of each; both were
+deleted, and the reason is worth stating because the absence looks like an
+oversight and is not.
 
-| Section | Answers                                                                                                                              |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| §1      | Where the record of delivered work is — `CHANGELOG.md`, §6 and the git history. Finished items leave that document.                  |
-| §2–§3   | What the product cannot do against ten rivals, and what the engineering will not carry at ten developers and three hundred machines. |
-| §4–§5   | What to do next, and what is waiting on a decision only the owner can make.                                                          |
-| §6      | **The decisions**, numbered. Comments in this codebase say "ADR 0005"; that is §6.                                                   |
-| §7      | The measurements, held to the tree by `platform_matrix_claims.rs`.                                                                   |
+A numbered backlog and a numbered decision register are read as settled. An item
+keeps its number long after the question behind it has changed, and the number
+is what gets cited — so the citation outlives the thinking, and the next person
+inherits a conclusion instead of a problem. That is what happened here: items
+were being planned around rather than re-examined.
 
-Two of those sections have gates and three do not, and the document says which:
-§6 and §7 fail the build when they drift, while "not done" is not a measurable
-property of code and no test can pretend otherwise.
+So the reasoning lives where it is load-bearing:
+
+| Question                                  | Where it is answered                                      |
+| ----------------------------------------- | --------------------------------------------------------- |
+| Why is this code shaped this way?          | The module's own header comment, beside the code it explains       |
+| Why was it changed?                        | [`CHANGELOG.md`](CHANGELOG.md) and the git history                 |
+| What is the boundary allowed to assume?    | [`contracts/`](contracts/), which is validated rather than read    |
+| What is true about accessibility today?    | [`docs/accessibility.md`](docs/accessibility.md)                   |
+| What can this app reach, and how far?      | [`SECURITY.md`](SECURITY.md) and [`PRIVACY.md`](PRIVACY.md)        |
+
+None of those can drift silently: every one of them is either checked by a test
+in `src-tauri/tests/*_claims.rs` or is the thing the tests read from.
+
+What this deliberately gives up is a single page answering "what is left". That
+question now has to be asked of the tree — which is slower, and is the point.
 
 ---
 
@@ -306,5 +313,5 @@ covers `README.md`; the counts above (111 modules, 309 commands) come from
 a claim that drifts fails a test rather than aging quietly.
 
 The prose is not machine-checkable, and that is what review is for. When a
-decision in §2 changes, the ADR is the thing to write; this file only points at
-it.
+decision changes, the module's own header is the thing to rewrite; this file
+only points at where to look.

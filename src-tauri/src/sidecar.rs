@@ -1,14 +1,14 @@
 //! Containers a repository brings with it, scoped to the project that declared
 //! them.
 //!
-//! §5.1. The *command* half of that question was answered by ADR 0020: yes, a
-//! workspace may declare one, on the condition that it stays inside its own
-//! container. This is the other half, and it needed its own answer because the
+//! The *command* half of that question is already answered: yes, a workspace
+//! may declare one, on the condition that it stays inside its own container.
+//! This is the other half, and it needed its own answer because the
 //! argument does not carry over.
 //!
-//! ## Why ADR 0020's reasoning stops here
+//! ## Why that reasoning stops here
 //!
-//! That decision rests on one sentence: the project's container already runs
+//! It rests on one sentence: the project's container already runs
 //! the repository's code, so a repository able to name a command in it has
 //! gained nothing it did not already have. Every word of that is about a
 //! container that is already running somebody else's code by design.
@@ -47,7 +47,7 @@
 //!
 //! A sidecar that wants a host port or a host directory is refused **by name**
 //! rather than ignored, because somebody who wrote one has a model to correct.
-//! That case is not "never": it is the second half of §5.1's answer — a consent
+//! That case is not "never": it is the second half of the answer — a consent
 //! gate in `hooks`' shape, digest-bound, asked once per repository and again
 //! whenever the declaration changes. Until that exists, refusing is the honest
 //! state, and it is refused at *parse* time so the message arrives on the
@@ -89,8 +89,8 @@ fn in_file_order<S: serde::Serializer>(inner: &Inner, s: S) -> Result<S::Ok, S::
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sidecar {
-    /// With a tag, always. ADR 0014's argument about `latest` applies here for
-    /// the same reason: an untagged image moves under somebody who pulled it
+    /// With a tag, always. The argument against `latest` applies here for the
+    /// same reason: an untagged image moves under somebody who pulled it
     /// last month.
     pub image: String,
     /// Every optional half below is omitted when it is empty rather than
@@ -237,7 +237,7 @@ pub fn parse(json: &serde_json::Value) -> (Declared, Vec<crate::hooks::Problem>)
                 "a sidecar has no host port: it is reachable from this project \
                  and from nothing else, which is what stops two clones of one \
                  repository fighting over the same number. Binding a host port \
-                 is the half of §5.1 that waits on a consent gate"
+                 is the half that waits on a consent gate"
                     .into(),
             ));
             continue;
@@ -320,7 +320,7 @@ pub fn parse(json: &serde_json::Value) -> (Declared, Vec<crate::hooks::Problem>)
                     problems.push(bad(format!(
                         "\"{path}\" is not a path inside the container. A sidecar \
                          mounts Docker volumes only; a host directory is the half \
-                         of §5.1 that waits on a consent gate"
+                         that waits on a consent gate"
                     )));
                     volumes_ok = false;
                     break;

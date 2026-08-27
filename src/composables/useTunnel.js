@@ -9,10 +9,10 @@ import { api, asList } from '@/lib/ipc';
  * starts, so starting polls until the status call can read it out of the
  * sidecar's log — the same place it is read from after an app restart.
  *
- * Lifted out of `ProjectDetail.vue` with the Tunnel pane under §14.16, and
+ * Lifted out of `ProjectDetail.vue` with the Tunnel pane in the pane split, and
  * given the provider table when the pane stopped being cloudflared's.
  *
- * B-7 added the two things a link is asked about the moment it is shared: who
+ * Two things a link is asked about the moment it is shared: who
  * else can open it, and whether it will still be this address tomorrow. Both
  * are state of the *project* rather than of a running tunnel, so they load
  * beside the status rather than out of it — and `tunnel.guarded` is still read

@@ -1,4 +1,4 @@
-//! Stripe webhooks, forwarded to a project (M-11).
+//! Stripe webhooks, forwarded to a project.
 //!
 //! Testing a payment flow means Stripe reaching the application, and
 //! `shop.loc` does not exist on the internet. [`crate::tunnel`] answers the

@@ -30,7 +30,7 @@
 //! So the two halves go to two places:
 //!
 //! * **Identity** — the name and the hostname — goes into `stackvo.local.json`,
-//!   the machine-local overlay B-2 already defines, which exists precisely to be
+//!   the machine-local overlay already defined, which exists precisely to be
 //!   the file that is never committed. `manifest::local_name_refused` is the one
 //!   change this feature needed there: an overlay may restate the directory it
 //!   sits in, and nothing else about identity.

@@ -1,6 +1,6 @@
-//! A terminal surface you can work in (M-8).
+//! A terminal surface you can work in.
 //!
-//! M-8 is "alternative surfaces", and its own record says what makes something
+//! This is one of the "alternative surfaces", and what makes something
 //! one: the tray stopped being a shortcut the day it could **act** without
 //! raising the window. The same test applies here. A screen that only reported
 //! would be `watch stackvo projects`, which anybody can already write.

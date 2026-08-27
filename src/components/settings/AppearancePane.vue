@@ -15,7 +15,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
 /**
  * How the app looks: theme, accent, density, font and the saved presets.
  *
- * Sixth pane out of `Settings.vue` under §14.16 and the cleanest seam so far —
+ * Sixth pane out of `Settings.vue` in the pane split and the cleanest seam so far —
  * it is the only one that touches neither the `.env` editor nor the operation
  * console. Everything it changes lives in `useAppearanceStore`, which persists
  * and applies on its own, so the pane is markup over a store and nothing else.

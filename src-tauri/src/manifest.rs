@@ -65,7 +65,7 @@ pub struct NodeConfig {
     pub build: Option<String>,
     pub start: String,
     pub port: u16,
-    /// `npm`, `yarn` or `pnpm` — J-2, and `None` is load-bearing.
+    /// `npm`, `yarn` or `pnpm`, and `None` is load-bearing.
     ///
     /// Absent means the image is built exactly as it has always been built: no
     /// `corepack` line, `npm install`, `npm start`. `fixtures_differential.rs`
@@ -220,7 +220,7 @@ pub struct Manifest {
     pub errors: Vec<Finding>,
     pub warnings: Vec<Finding>,
 
-    /// Commands to run when this project starts, stops or is rebuilt (B-3).
+    /// Commands to run when this project starts, stops or is rebuilt.
     ///
     /// Read here so a malformed hook is a manifest finding like everything
     /// else, and so `read` is the one place that knows how a project is
@@ -239,7 +239,7 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schedule: Vec<crate::cron::Job>,
 
-    /// Commands this project offers next to the built-in ones (B-4).
+    /// Commands this project offers next to the built-in ones.
     ///
     /// Here for the same reason `hooks` is: a malformed declaration becomes a
     /// manifest finding rather than a surprise at the moment somebody presses
@@ -248,7 +248,7 @@ pub struct Manifest {
     /// these are container commands and can be nothing else.
     #[serde(skip_serializing_if = "crate::quickcmd::Declared::is_empty")]
     pub commands: crate::quickcmd::Declared,
-    /// Containers this project brought with it (§5.1).
+    /// Containers this project brought with it.
     ///
     /// Read here so a malformed declaration is a manifest finding beside every
     /// other one, on the same terms as `hooks` and `commands`. Not a service:
@@ -256,7 +256,7 @@ pub struct Manifest {
     /// why this one never reaches `instances.json`.
     pub sidecars: crate::sidecar::Declared,
 
-    /// Named places this project's data really lives, and how to move it (A-1).
+    /// Named places this project's data really lives, and how to move it.
     ///
     /// Read here for the fourth time and for the reason the three above are: a
     /// malformed recipe should be a manifest finding beside every other one,
@@ -291,7 +291,7 @@ fn str_field(v: &serde_json::Value, key: &str) -> Option<String> {
 /// match it (W-04), because `listProjects` keys containers off the directory.
 ///
 /// **This is the effective manifest** — the committed file with this machine's
-/// `stackvo.local.json` laid over it (B-2). That is the default because it is
+/// `stackvo.local.json` laid over it. That is the default because it is
 /// what every reader that runs, renders or inspects a project wants, and there
 /// are twenty-odd of them: making the overlay the thing you opt *into* would
 /// mean twenty-odd chances to forget it, each one a machine-local setting that
@@ -533,7 +533,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
     // ---- declared services ------------------------------------------------
     let services = read_services(json, &mut warnings);
 
-    // ---- lifecycle hooks (B-3) --------------------------------------------
+    // ---- lifecycle hooks --------------------------------------------
     //
     // Warnings, never errors. A typo in an optional convenience must not be
     // the reason a project cannot be opened or built; the step that could not
@@ -561,7 +561,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
-    // ---- declared commands (B-4) ------------------------------------------
+    // ---- declared commands ------------------------------------------
     //
     // Warnings for the same reason hooks are: a project with one unreadable
     // command still has ten that work, and refusing to open it would be the
@@ -575,7 +575,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
-    // ---- declared sidecars (§5.1) -----------------------------------------
+    // ---- declared sidecars -----------------------------------------
     //
     // Warnings, exactly as the two blocks above are: a project with one
     // unreadable sidecar still has a runtime, a domain and a Dockerfile, and
@@ -589,7 +589,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
-    // ---- declared providers (A-1) -----------------------------------------
+    // ---- declared providers -----------------------------------------
     //
     // Warnings, like the three blocks above and for the same reason: a project
     // with one unreadable recipe still has a runtime, a domain and a database,
@@ -672,7 +672,7 @@ fn local_name_refused(value: &serde_json::Value, dir_name: &str) -> bool {
 
 /// Read the committed manifest with this machine's overrides laid over it.
 ///
-/// B-2. `stackvo.json` is committed, which is the whole of what makes a
+/// `stackvo.json` is committed, which is the whole of what makes a
 /// checkout reproducible — and is also why there was nowhere to say "on *this*
 /// machine, PHP 8.3, because I am chasing a bug in it". The answer everywhere
 /// else in this space is a second file that is not committed, and this is that
@@ -1562,7 +1562,7 @@ mod tests {
         assert!(m.valid, "{:?}", m.errors);
     }
 
-    // ------------------------------------------------- extra hostnames (E-2)
+    // ------------------------------------------------- extra hostnames
 
     #[test]
     fn aliases_are_normalised_the_way_the_domain_is() {
@@ -1610,7 +1610,7 @@ mod tests {
         assert!(!resolves_through_hosts("*.shop.loc"));
     }
 
-    // ------------------------------------------------ declared services (B-1)
+    // ------------------------------------------------ declared services
 
     #[test]
     fn declared_services_are_normalised_and_kept_in_order() {
@@ -1713,7 +1713,7 @@ mod tests {
         assert!(m.warnings.iter().any(|w| w.code == "BIND_LOCALHOST"));
     }
 
-    /// J-2, and the half that matters most: a project that never named a
+    /// And the half that matters most: a project that never named a
     /// package manager must be read exactly as it was before the field existed.
     ///
     /// Absent is not `npm`. If it defaulted to a value, every node manifest on
@@ -1937,7 +1937,7 @@ pub fn to_json(manifest: &Manifest) -> String {
         lines.push(format!("  \"schedule\": [\n{}\n  ]", items.join(",\n")));
     }
 
-    // B-4, and here for exactly the reason the hooks block above is: this text
+    // And here for exactly the reason the hooks block above is: this text
     // is what `project_manifest_write` saves on every form submission, so a
     // field the serialiser does not know about is one that disappears the
     // first time somebody changes an unrelated setting. A project quietly
@@ -1964,7 +1964,7 @@ pub fn to_json(manifest: &Manifest) -> String {
         lines.push(format!("  \"commands\": {{\n{}\n  }}", items.join(",\n")));
     }
 
-    // §5.1, and here for the third time for the same reason: a field the
+    // Here for the third time for the same reason: a field the
     // serialiser does not know about disappears the first time somebody
     // changes an unrelated setting. A project losing the search engine it
     // declared is the same class of loss as one losing its commands.
@@ -2009,7 +2009,7 @@ pub fn to_json(manifest: &Manifest) -> String {
         lines.push(format!("  \"sidecars\": {{\n{}\n  }}", items.join(",\n")));
     }
 
-    // A-1, and here for the fourth time for the reason the three blocks above
+    // And here for the fourth time for the reason the three blocks above
     // give: this text is what `project_manifest_write` saves on every form
     // submission, so a field the serialiser does not know about is one that
     // disappears the first time somebody changes an unrelated setting. A
@@ -2133,7 +2133,7 @@ pub fn to_json(manifest: &Manifest) -> String {
 
 /// Write a manifest to `<project_dir>/stackvo.json`, refusing anything invalid.
 pub fn write(path: &Path, manifest: &Manifest) -> Result<()> {
-    // The B-2 guard, and the reason `local` is a field rather than a return
+    // The overlay guard, and the reason `local` is a field rather than a return
     // value nobody has to keep. Every other mistake around a machine-local
     // overlay is loud — an override that fails to apply is noticed within
     // seconds. This one is silent and lands in somebody else's checkout: read
@@ -2320,7 +2320,7 @@ mod write_tests {
         assert!(!normalize(&json, &text, "shop").lan_share);
     }
 
-    /// The same trap `lan_share` fell into, for the switch F-4 added.
+    /// The same trap `lan_share` fell into, for the switch that was added later.
     ///
     /// Every form save round-trips the whole document through `to_json`. A
     /// field the serialiser did not know about survives being read and is then
@@ -2396,7 +2396,7 @@ mod write_tests {
         assert_eq!(lang.port, 8080);
     }
 
-    /// J-1. Bun and Deno are lang runtimes, not a flavour of node.
+    /// Bun and Deno are lang runtimes, not a flavour of node.
     ///
     /// They read the same `package.json` and are built from their own images
     /// with their own verbs, so folding them into the node block would mean one
@@ -2615,7 +2615,7 @@ mod write_tests {
         assert!(again.valid, "{:?}", again.errors);
     }
 
-    /// Declared sidecars survive a form save (§5.1).
+    /// Declared sidecars survive a form save.
     ///
     /// The third field to need this test and the third for the same reason:
     /// `project_manifest_write` re-renders the whole file on every form
@@ -2678,7 +2678,7 @@ mod write_tests {
         assert!(again.valid, "{:?}", again.errors);
     }
 
-    /// Declared providers survive a form save (A-1).
+    /// Declared providers survive a form save.
     ///
     /// The fourth block to need this test and the fourth for the same reason,
     /// except this one was found the hard way: `providers` was read by
@@ -2949,7 +2949,7 @@ mod write_tests {
         assert_eq!(m.warnings[0].path, "sidecars.x");
     }
 
-    /// Declared commands survive a form save (B-4).
+    /// Declared commands survive a form save.
     ///
     /// The same hazard the hooks round trip covers, and the reason both are
     /// written: this text is what `project_manifest_write` saves whenever
@@ -3023,7 +3023,7 @@ mod write_tests {
         );
     }
 
-    // ---- B-2: the machine-local overlay -----------------------------------
+    // ---- the machine-local overlay -----------------------------------
 
     /// A project directory with a committed manifest and, optionally, a local
     /// one — in a fresh temp dir per test, because these read real files.

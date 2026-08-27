@@ -8,9 +8,9 @@ import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
 
 /**
- * `Settings.vue`, mounted — the finish line of §14.16.
+ * `Settings.vue`, mounted — the finish line of the pane split.
  *
- * It began at **3,433 lines and 0% coverage**, and the readiness review's §2.3
+ * It began at **3,433 lines and 0% coverage**, and an earlier review
  * called it the most expensive debt in the front end: too large to mount, so
  * two of its panes were tested against *copies* of their own markup, and the
  * other ten were not tested at all.
@@ -24,7 +24,7 @@ import * as directives from 'vuetify/directives';
  * `v-if`, so a pane whose script referenced something the view had stopped
  * providing would fail *only* when that tab was opened — on a screen nobody
  * opens during the change that broke it. Three real instances of exactly that
- * were caught by `vue/no-undef-properties` during the split (§26.2, §27.4);
+ * were caught by `vue/no-undef-properties` during the split;
  * this catches the rest.
  */
 

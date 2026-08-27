@@ -1,20 +1,20 @@
 //! Two keys, one procedure, and neither of them in the repository.
 //!
-//! §3 #2 was never an engineering problem — it is a ceremony nobody had
+//! The update endpoint was never an engineering problem — it is a ceremony nobody had
 //! performed. What *was* an engineering problem, and is what this file guards,
 //! is that the ceremony had no written form: the updater key had a sentence in
-//! a workflow comment, the content key (ADR 0015) had none at all, and the two
+//! a workflow comment, the content key had none at all, and the two
 //! were reached by different tools. `tools/keys.sh` is the procedure now, and
 //! the rules below are the ones a script cannot hold on its own because they
 //! are about the tree rather than about a run.
 //!
 //! ## Why one procedure is the load-bearing part
 //!
-//! ADR 0015 pays a real price for separating the two keys: two secrets, two
+//! Separating the two keys costs something real: two secrets, two
 //! places to leak from. What buys that back is that a leak of either is *one*
 //! forgery rather than both — a fake installer or a fake package, never a fake
-//! installer carrying fake packages. And the sentence ADR 0015 adds is the one
-//! this file exists for: **the trade is only worth it while the procedure is
+//! installer carrying fake packages. And the second sentence is the one this
+//! file exists for: **the trade is only worth it while the procedure is
 //! shared.** Same tool, same storage, same access list, same rotation. Two
 //! procedures means one of them goes unmaintained, and the unmaintained one is
 //! the one nobody notices has stopped being followed.
@@ -205,13 +205,13 @@ fn is_a_private_key(text: &str) -> bool {
     false
 }
 
-/// ADR 0015's whole reason for existing, as a rule about this tree.
+/// The whole reason two key pairs exist, as a rule about this tree.
 ///
 /// It was written while `PINNED` was still empty, which is exactly when a rule
 /// like this is worth having: the moment somebody fills `PINNED` is the moment
 /// the shortcut is tempting — there is already a key pair, it already works,
 /// and reusing it saves an afternoon. What it costs is the property the
-/// separation was for. The ceremony has since happened (ADR 0033) and a key is
+/// separation was for. The ceremony has since happened and a key is
 /// pinned, so this stopped being vacuous without anybody having to remember to
 /// come back and turn it on.
 #[test]
@@ -223,7 +223,7 @@ fn the_updater_and_the_registry_are_not_the_same_key() {
         !key_list("PINNED").contains(&updater),
         "the updater key and the registry key are the same key. One leak would \
          then forge a signed installer AND signed packages, which is the pair \
-         ADR 0015 separates them to keep apart."
+         they are separated to keep apart."
     );
 }
 
@@ -263,12 +263,12 @@ fn the_ceremony_script_offers_what_everything_else_names() {
     }
 
     // Both halves, in one place. A script that generated only the updater key
-    // would be the second procedure ADR 0015 warns about, wearing the first
+    // would be the second procedure this whole file warns about, wearing the first
     // one's name.
     assert!(
         script.contains("for kind in updater registry"),
-        "tools/keys.sh no longer generates both keys — ADR 0015's shared \
-         procedure is what makes two keys worth having"
+        "tools/keys.sh no longer generates both keys — one shared procedure is \
+         what makes two keys worth having"
     );
 
     // The output has to be the name `market::refresh` fetches. `tauri signer`
@@ -682,9 +682,9 @@ fn no_source_file_still_describes_the_other_state_of_pinned() {
 
     for path in tracked_files() {
         // Source, and the one document that makes this claim to users. Not
-        // `CHANGELOG.md` or `docs/durum.md` §6, which are records: an entry
-        // saying the list was empty when it was empty stays true, and a rule
-        // that rewrote history to keep a scan quiet would be the worse trade.
+        // `CHANGELOG.md`, which is a record: an entry saying the list was empty
+        // when it was empty stays true, and a rule that rewrote history to keep
+        // a scan quiet would be the worse trade.
         let source = path.extension().and_then(|e| e.to_str()) == Some("rs");
         let readme = path.ends_with("README.md");
         if !source && !readme {

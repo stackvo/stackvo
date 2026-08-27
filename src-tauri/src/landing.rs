@@ -1,4 +1,4 @@
-//! One page that lists every site in the workspace (M-4).
+//! One page that lists every site in the workspace.
 //!
 //! Every rival in this category has one — it is the first thing their installer
 //! shows and the address people bookmark. StackVo has had the *name* for it

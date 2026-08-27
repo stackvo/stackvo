@@ -1,4 +1,4 @@
-//! The redirect URI to register with an identity provider (M-12).
+//! The redirect URI to register with an identity provider.
 //!
 //! This was on the list as "an OAuth callback for `.loc`" and was left alone
 //! because it was not defined enough to build. Reading what the providers

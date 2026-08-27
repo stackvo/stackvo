@@ -1,6 +1,6 @@
 //! An override that only some screens honour is worse than no override.
 //!
-//! `crate::overrides` (ADR 0031) lets a workspace put its own copy of a
+//! `crate::overrides` lets a workspace put its own copy of a
 //! package file in front of the published one. The mechanism is one line in
 //! `pkg::Tree::file`, and it only works for a tree that was opened **with** the
 //! overrides directory attached — which `market::catalogue` is the one place

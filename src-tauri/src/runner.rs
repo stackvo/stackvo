@@ -407,15 +407,15 @@ pub fn overlay_files(root: &Path, refresh: bool) -> Vec<PathBuf> {
         // one because they are independent.
         layer!(crate::xdebug::sync, crate::xdebug::overlay_path),
         layer!(crate::phpini::sync, crate::phpini::overlay_path),
-        // The performance layer (I-1): named volumes over the directories a
+        // The performance layer: named volumes over the directories a
         // bind mount is slowest at.
         layer!(crate::perf::sync, crate::perf::overlay_path),
         // php-spx: the built extension, its web UI and the report directory. A
         // project that has never asked for it renders no entry.
         layer!(crate::spx::sync, crate::spx::overlay_path),
-        // Per-project environment variables and the SSH agent (M-5, M-10).
+        // Per-project environment variables and the SSH agent.
         layer!(crate::site::sync, crate::site::overlay_path),
-        // The mail relay (M-2): the catcher's own environment, so one caught
+        // The mail relay: the catcher's own environment, so one caught
         // message can be released to a real address. This is the render that
         // reads the keystore, and therefore the reason `refresh` exists.
         layer!(crate::mailrelay::sync, crate::mailrelay::overlay_path),
@@ -590,7 +590,7 @@ mod tests {
         assert!(overlays(&args).contains(&"docker-compose.xdebug.yml".to_string()));
 
         // And it disappears again once the switch goes off — with the
-        // extension still in the image, which is the whole of F-4: turning
+        // extension still in the image, which is the whole of the split: turning
         // debugging off must not cost the next `on` a rebuild.
         std::fs::write(
             project.join("stackvo.json"),

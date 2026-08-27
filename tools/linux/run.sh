@@ -64,7 +64,7 @@ if [ "${1:-}" = "--shell" ]; then
     -w /repo "$image" bash
 fi
 
-# §3 #12. The driver suite needs more than a plain `cargo test`: the front end
+# The driver suite needs more than a plain `cargo test`: the front end
 # built, the application built the way it SHIPS, `tauri-driver` on PATH, and a
 # display, because the app opens a window.
 #
@@ -99,7 +99,7 @@ if [ "${1:-}" = "--driver" ]; then
   exit $?
 fi
 
-# §3 #22. The half nothing here could answer, and the reason a release run was
+# The half nothing here could answer, and the reason a release run was
 # being used as a test environment.
 #
 # Every other mode in this file compiles or tests. None of them **bundle**, and
@@ -139,7 +139,7 @@ if [ "${1:-}" = "--bundle" ]; then
   exit $?
 fi
 
-# §3 #22, the Windows half — as far as it can be taken off a Windows machine.
+# The Windows half — as far as it can be taken off a Windows machine.
 #
 # NSIS is buildable here and MSI is not, and that is `tauri-bundler`'s own
 # division rather than a limitation of this script: its `msi` module is
@@ -181,7 +181,7 @@ if [ "${1:-}" = "--windows-bundle" ]; then
     echo "    tools/linux/run.sh --windows-bundle x86_64-pc-windows-msvc" >&2
     echo >&2
     echo "  The ARM row is answered by \`windows-11-arm\` in the release workflow," >&2
-    echo "  or by a Windows ARM64 machine. §3 #22 records this." >&2
+    echo "  or by a Windows ARM64 machine." >&2
     exit 2
   fi
   run bash -lc "
@@ -212,11 +212,11 @@ run bash -lc 'node ../tools/sidecars.mjs --stubs --target "$(uname -m)-unknown-l
 # The exit status is the point of running this at all: the first version of
 # this script ended on a pipeline whose status was the tail's, so a failing
 # compile reported success. A runner that cannot fail is not a runner.
-# §3 #35's other half. The Windows branch of this crate is only ever read on a
+# The other half. The Windows branch of this crate is only ever read on a
 # Mac, and `cargo check --target x86_64-pc-windows-msvc` cannot help there:
 # `aws-lc-sys` wants `windows.h`. `cargo-xwin` fetches Microsoft's SDK and
 # points clang at it, so the type checker finally reads those lines.
-# §2 W. The Windows suite, run rather than type-checked.
+# The Windows suite, run rather than type-checked.
 #
 # `--windows` above answers "does it compile", and that has been the ceiling
 # since it was written: every one of W's nineteen failures was found on a
@@ -225,7 +225,7 @@ run bash -lc 'node ../tools/sidecars.mjs --stubs --target "$(uname -m)-unknown-l
 #
 # `cargo xwin test` cross-builds the test binaries and hands them to wine. On
 # this arm64 machine the triple that really runs is `aarch64-pc-windows-msvc` —
-# wine 9 executes ARM64 PE natively — which happens to be the row §3 #22 is
+# wine 9 executes ARM64 PE natively — which happens to be the row this
 # about. The x86_64 row wants a `--platform linux/amd64` container or a runner.
 #
 # Wine is not Windows, and the gap is exactly the shape of the bugs W is made

@@ -7,7 +7,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The extra-directives editor, mounted.
  *
- * Third pane out of `Settings.vue` under §14.16, and the first with no shape
+ * Third pane out of `Settings.vue` in the pane split, and the first with no shape
  * mirror behind it — which is the point: the two mirrors existed because
  * somebody had a bug they could not otherwise pin. This pane had neither a bug
  * nor a test, and its most breakable behaviour is invisible in review.

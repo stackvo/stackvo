@@ -10,7 +10,7 @@ import { mount } from '@vue/test-utils';
  * npm run a11y:transcript      # writes docs/accessibility-transcript.md
  * ```
  *
- * This is the piece Y-1 was actually missing. The row said a human has to
+ * This is the piece that was actually missing. The known limitation says a human has to
  * decide whether a label *makes sense* and that nobody had done it — and the
  * reason nobody had done it was never unwillingness. It was that the job, as it
  * stood, meant installing a screen reader, learning its rotor, and driving it
@@ -155,7 +155,7 @@ const HEADER = `# What a screen reader announces
 
 Every page below is mounted, and its headings and controls are listed in the
 order the markup puts them, under the name a screen reader announces. This is
-what Y-1 needs a person for, and it is the only part of Y-1 a person is needed
+what a screen-reader audit needs a person for, and it is the only part a person is needed
 for: the mechanical floor is held by \`tests/accessible-names.spec.js\` and
 \`tests/reading-order.spec.js\`, which fail the build.
 

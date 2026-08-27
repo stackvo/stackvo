@@ -42,7 +42,7 @@
 //! it. Writing a `.dockerignore` into somebody's project to build their image
 //! would be a side effect nobody asked for.
 
-//! ## Pushing it, and the one rule that makes pushing safe (H-1)
+//! ## Pushing it, and the one rule that makes pushing safe
 //!
 //! The hard half of the production bridge was the image. The easy half is
 //! getting it somewhere and having something to run it with — and the easy half
@@ -482,7 +482,7 @@ fn loaded_tags(stdout: &str) -> Vec<String> {
         .collect()
 }
 
-// ----------------------------------------------------------- push (H-1)
+// ----------------------------------------------------------- push
 
 /// Whether an image may be pushed, and what would happen if it were.
 #[derive(Debug, Clone, Serialize)]
@@ -622,7 +622,7 @@ pub fn push_argv(tag: &str) -> Vec<String> {
     vec!["push".to_string(), tag.to_string()]
 }
 
-// --------------------------------------------------------- recipe (H-1)
+// --------------------------------------------------------- recipe
 
 /// A compose file for running the built image somewhere else.
 ///
@@ -823,7 +823,7 @@ mod tests {
         assert!(!argv.iter().any(|a| a.contains(' ')));
     }
 
-    // ---- push (H-1) ------------------------------------------------------
+    // ---- push ------------------------------------------------------
 
     fn clean() -> Verification {
         Verification {
@@ -899,7 +899,7 @@ mod tests {
         );
     }
 
-    // ---- recipe (H-1) ----------------------------------------------------
+    // ---- recipe ----------------------------------------------------
 
     /// The two things that make a dev compose a dev compose, and the one that
     /// makes a committed file dangerous.

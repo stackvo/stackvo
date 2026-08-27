@@ -87,7 +87,7 @@ futures-util = { version = "0.3", default-features = false, features = ["std"] }
 
 # The OS keystore — Keychain, Credential Manager, Secret Service — for the
 # database passwords that otherwise sit in plain text in a file that gets backed
-# up and synced. `secrets.rs` carries the reasoning and ADR 0010 its limits.
+# up and synced. `secrets.rs` carries the reasoning and its limits.
 #
 # Measured before adding, and it is not the same on all three platforms. A build
 # gains **one** crate on macOS and Windows, where the native stores are already
@@ -155,7 +155,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 # else's machine.
 sha2 = "0.10"
 
-# Sixteen random bytes for the install id the staged rollout buckets on (§3
+# Sixteen random bytes for the install id the staged rollout buckets on
 # #21). Measured before adding, on the same terms as sha2 above: **no new crate
 # enters the tree** — 0.3.4 is already built here through `rand`, which `tauri`
 # pulls in, so this changes what this crate may `use` rather than what gets
@@ -169,11 +169,11 @@ sha2 = "0.10"
 # microsecond are one id.
 getrandom = "0.3"
 # `io-std` is for the MCP server, which speaks JSON-RPC over stdin and stdout.
-# `net` is new, for the loopback surface (§3 #34 / ADR 0026). A feature on a
+# `net` is new, for the loopback surface. A feature on a
 # crate already compiled here, not a crate — the listener is 40 lines of
 # `TcpListener` and the alternative was axum or hyper-as-a-direct-dependency
-# for one method, one path and one header. ADR 0019 measured the same choice
-# for the TUI and `tests/driver/webdriver.js` for WebDriver; this is the third.
+# for one method, one path and one header. The same choice was measured for
+# the TUI, and `tests/driver/webdriver.js` for WebDriver; this is the third.
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util", "io-std", "net"] }
 thiserror = "2"
 dirs = "6"
@@ -224,7 +224,7 @@ time = { version = "0.3.44", default-features = false, features = ["parsing"] }
 # the company proxy — so `mail::client` builds with `no_proxy()`. Read that
 # comment before adding a second reqwest caller.
 reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls", "system-proxy"] }
-# Verifying the package index's signature (C, ADR 0015).
+# Verifying the package index's signature.
 #
 # Measured before adding, like every other line here: **zero new packages.**
 # minisign is ed25519 with a file format around it, and it is what
@@ -232,7 +232,7 @@ reqwest = { version = "0.13.3", default-features = false, features = ["json", "r
 # crate is in `Cargo.lock` and in `NOTICE.md` already, and taking it directly
 # adds a dependency edge and nothing else.
 #
-# It also means the key ceremony ADR 0015 describes has a tool that exists:
+# It also means the key ceremony in `tools/keys.sh` has a tool that exists:
 # `minisign -G`, or Tauri's own signer. A scheme needing a bespoke tool is one
 # whose ceremony never happens.
 minisign-verify = "0.2.5"

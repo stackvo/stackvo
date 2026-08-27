@@ -1,7 +1,7 @@
 /* The vocabulary the project-detail panes speak.
  *
  * These rules used to live in `ProjectDetail.vue`'s `<style scoped>`, which is
- * exactly where they stopped working the moment §14.16 moved the markup into
+ * exactly where they stopped working the moment the split moved the markup into
  * fourteen child components: a scoped block only reaches the elements its own
  * component renders. Every pane rendered unstyled — cards with no surface,
  * label/value pairs run together into one string — and no test looked at CSS,

@@ -69,7 +69,7 @@ fn an_empty_folder_becomes_a_working_workspace() {
     );
 
     // An empty instance table, because a workspace without one is refused
-    // rather than rendered (ADR 0016) — this test is about a fresh workspace
+    // rather than rendered — this test is about a fresh workspace
     // needing no files copied into it, not about what a service renders to.
     instances::Table::default()
         .save(&dir)
@@ -129,7 +129,7 @@ fn an_empty_folder_becomes_a_working_workspace() {
 
     // This used to prove that every service template still resolved from the
     // binary, by looking for the volumes they declared. There are no service
-    // templates in the binary (ADR 0016), so the property this file is about —
+    // templates in the binary, so the property this file is about —
     // a fresh workspace needs nothing copied into it — is proved by the render
     // above succeeding at all, with a `core/compose/base.yml` that resolved
     // from the embedded skeleton and nothing on disk.
@@ -217,7 +217,7 @@ fn the_project_tree_can_live_outside_the_app_directory() {
     )
     .unwrap();
 
-    // See the note in the test above: no table means no render (ADR 0016).
+    // See the note in the test above: no table means no render.
     instances::Table::default()
         .save(&app)
         .expect("an empty instance table");

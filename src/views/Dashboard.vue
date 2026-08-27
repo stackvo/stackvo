@@ -338,7 +338,7 @@ onMounted(() => {
       </v-row>
 
       <!-- One page listing every site, on the name the stack already claims
-           (M-4). Here rather than in settings: it is an address somebody
+          . Here rather than in settings: it is an address somebody
            opens, not a preference. -->
       <v-row class="dash-row">
         <v-col cols="12">

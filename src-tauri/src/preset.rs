@@ -378,7 +378,7 @@ pub fn load(path: &Path) -> Result<Preset> {
 
 /// A project's `services` list, as a preset.
 ///
-/// The whole of B-1 is this function, and the reason it is four lines is that
+/// The whole of the explain feature is this function, and the reason it is four lines is that
 /// the hard part already existed. A repository-committed environment definition
 /// and an exported preset are the same statement made by different people —
 /// "this stack should hold these services" — so the declaration is turned into

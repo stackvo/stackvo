@@ -145,7 +145,7 @@ pub fn resolve(stored: Option<&str>) -> &'static str {
 
 // ------------------------------------------------------- language packs
 
-/// A language this app was not shipped with (M-7).
+/// A language this app was not shipped with.
 ///
 /// ## Why a file and not a third `locales/*.js`
 ///

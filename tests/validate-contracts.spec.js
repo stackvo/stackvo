@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 /**
- * Suite A, actually run. §3 #33.
+ * Suite A, actually run.
  *
  * The row said "checkout var ama suite A hiç koşmuyor", and it was right for a
  * reason nobody had looked at closely: suite A reads `stackvo.json` files under
@@ -28,7 +28,7 @@ import { resolve } from 'node:path';
  *
  * Two dead checks, both in the validator rather than in a manifest:
  *
- *  * `EMBEDDED` was scraped with a regex expecting a literal array. §3 #36 split
+ *  * `EMBEDDED` was scraped with a regex expecting a literal array. The split
  *    the defaults into `SETTINGS` and `LEGACY_SERVICES` and made `EMBEDDED` a
  *    `const fn`, the regex stopped matching that day, and the scrape returned an
  *    **empty set** — twenty keys with binary defaults went back to being
@@ -117,7 +117,7 @@ describe('the defaults the binary carries', () => {
   });
 
   it('are scraped in a quantity that means the scrape worked', () => {
-    // Not the exact 186 — that number is §7's business and
+    // Not the exact 186 — that number is measured elsewhere and
     // `platform_matrix_claims.rs` holds it. This only refuses the failure a
     // regex over source text actually has: matching nothing and looking calm.
     const report = validate(ROOT);

@@ -8,7 +8,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 /**
  * The Certificates pane, as a component rather than 210 lines of `Settings.vue`.
  *
- * It is the first slice of the §14.16 split, chosen because it is the pane with
+ * It is the first slice of the pane split, chosen because it is the pane with
  * a *shape mirror* test — `tests/certificates-pane.spec.js` rebuilt a copy of
  * this markup and then read the real file as text to check the copy still
  * matched. That was the only way to test a pane trapped inside a 3,433-line

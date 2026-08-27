@@ -31,14 +31,14 @@ import { defineConfig, devices } from '@playwright/test';
  * what it covers is *the webview half*. It does not start the Rust binary and
  * does not prove an IPC command exists — `contracts/ipc.json` and the contract
  * tests do that, and they do it on every platform. What is genuinely still
- * missing is the whole binary under a driver on Linux CI; §3 #12 says so.
+ * missing is the whole binary under a driver on Linux CI.
  *
  * ## Why stubbing the boundary is not a cheat here
  *
  * There is exactly one function the data layer passes through — `ipc.js` →
- * `call()`, which §7 measures and a test enforces — and underneath it exactly
+ * `call()`, which `web_build_invariants.rs` enforces — and underneath it exactly
  * one global, `window.__TAURI_INTERNALS__.invoke`. Replacing that global is
- * replacing the process boundary at the same seam ADR 0001 draws it, not
+ * replacing the process boundary at the seam the architecture draws it, not
  * reaching inside a component to make it behave.
  */
 export default defineConfig({

@@ -1,4 +1,4 @@
-//! A QR code for the addresses this app hands out (M-3).
+//! A QR code for the addresses this app hands out.
 //!
 //! Two of this app's features produce a URL whose whole point is that it is
 //! opened on **another device**: [`crate::lan`] gives a phone on the same Wi-Fi

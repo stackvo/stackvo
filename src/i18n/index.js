@@ -55,7 +55,7 @@ export const i18n = createI18n({
 });
 
 /**
- * Load every language pack on this machine and register it (M-7).
+ * Load every language pack on this machine and register it.
  *
  * A pack is one JSON file in the app's config directory with the same shape as
  * `locales/en.js`. Adding a language is therefore a file somebody drops in,

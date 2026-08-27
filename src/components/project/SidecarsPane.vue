@@ -6,14 +6,14 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * Containers this project's own repository brought with it (ADR 0023).
+ * Containers this project's own repository brought with it.
  *
  * ## Why this screen had to exist before the feature really did
  *
  * The `sidecars` block was parsed, validated, refused when it asked for the
  * host, and rendered into the project's compose file — and nothing anywhere
  * showed it. `hooks`, the sibling block in the same manifest, has had a pane
- * since it was written. So ADR 0027 could answer "can I have Qdrant or Ollama"
+ * since it was written. So the app could answer "can I have Qdrant or Ollama"
  * with "write a `sidecars` block" while nobody reading the app could find out
  * that the block exists, which is the same as not having it.
  *

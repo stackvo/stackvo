@@ -23,7 +23,7 @@
 //!
 //! ## Corruption is a fresh start, not a failure
 //!
-//! Same stance as `preferences.json` (§18.2 of the readiness report), and for a
+//! Same stance as `preferences.json`, and for a
 //! weaker reason, which makes it easier: this file is a cache. A prefs file
 //! that fails to parse costs the user their settings and is worth preserving
 //! for them to look at; this one costs a sparkline its first hour. Nothing here

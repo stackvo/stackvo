@@ -16,8 +16,8 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
  *
  * It also says what the move does **not** do. The password is still rendered
  * into `generated/docker-compose.dynamic.yml`, as it always has been, and a
- * keystore feature is normally read as meaning otherwise. ADR 0010 carries the
- * reasoning; this pane carries the sentence.
+ * keystore feature is normally read as meaning otherwise. `secrets.rs` carries
+ * the reasoning; this pane carries the sentence.
  */
 const { t } = useI18n();
 

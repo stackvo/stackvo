@@ -1,11 +1,11 @@
 //! The updater points at something that will exist.
 //!
-//! §3 #2 was never an engineering problem. `tauri.conf.json` carried an
+//! The update endpoint was never an engineering problem. `tauri.conf.json` carried an
 //! endpoint, the endpoint answered 404, and the row said so — but the reason it
 //! answered 404 was a **decision**: nobody had said where `latest.json` would
-//! be published or who would hold the signing key. §5 held it, and #21 (release
+//! be published or who would hold the signing key. It waited on that, and the release
 //! channels, staged rollout, rollback) sat behind it, and so did the package
-//! registry's key ceremony (§6, decision 0033). One answer, three rows.
+//! registry's key ceremony. One answer, three rows.
 //!
 //! The answer is GitHub Releases on this repository. Which makes the endpoint
 //! derivable rather than typed, and that is what this file checks — because the
@@ -139,7 +139,7 @@ fn the_release_workflow_still_writes_the_file_the_endpoint_asks_for() {
 
 /// The public half in the config, and the private half named as a secret.
 ///
-/// The key ceremony is what §5 was actually holding: the private key lives at
+/// The key ceremony is what it was actually waiting on: the private key lives at
 /// `~/.tauri/stackvo.key` on one machine, and until it is a repository secret
 /// no release can be signed — which is why #22's ARM rows were stuck behind a
 /// question that had nothing to do with ARM.
@@ -165,7 +165,7 @@ fn the_updater_carries_a_public_key_and_the_workflow_names_its_private_half() {
 
 /// A draft release has no `releases/latest`, and the workflow has to say so.
 ///
-/// The two halves of §3 #2's last round are in two files that do not mention
+/// The two halves of the last round are in two files that do not mention
 /// each other. `tauri.conf.json` asks for
 /// `releases/latest/download/latest.json`; `release.yml` creates the release
 /// with `releaseDraft: true`. GitHub resolves `releases/latest` to the latest

@@ -1,6 +1,6 @@
 //! Every function a `cfg` gate hides is still a function somebody has to build.
 //!
-//! §3 #35 said the Windows and Linux branches had never been *run*. That was
+//! The Windows and Linux branches had never been *run*. That was
 //! true and it was the smaller half. The first time this crate was compiled for
 //! Linux anywhere a person could watch — `tools/linux/run.sh`, added with this
 //! file — it did not compile at all:

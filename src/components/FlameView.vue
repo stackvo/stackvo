@@ -4,7 +4,7 @@ import { computed, ref } from 'vue';
 /**
  * A profile as nested bars: what called what, and how much each branch cost.
  *
- * F-3. The table beside this answers "where did the time go"; it cannot answer
+ * The table beside this answers "where did the time go"; it cannot answer
  * "what called that", which is the question that turns a slow page into a
  * fixed one.
  *
@@ -28,7 +28,7 @@ import { computed, ref } from 'vue';
  * The rows are text with a background, and text in a div is selectable,
  * searchable with the browser's own find, and reachable by keyboard. A canvas
  * would need every one of those written by hand, and this repository has a
- * browser suite (§3 #12) that would then have nothing to assert against — a
+ * browser suite that would then have nothing to assert against — a
  * canvas is one node with no accessible name.
  */
 const props = defineProps({

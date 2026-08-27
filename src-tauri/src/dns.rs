@@ -1,7 +1,7 @@
 //! Answering for this machine's development names, so `/etc/hosts` stops being
 //! the only way a project resolves.
 //!
-//! E-1. Every new project needs a line in `/etc/hosts`, and writing that file
+//! Every new project needs a line in `/etc/hosts`, and writing that file
 //! needs an administrator password. That is a prompt per project, and it is
 //! also the reason E-2's wildcards do not work at all: `/etc/hosts` maps names,
 //! one at a time, and `*.shop.loc` is not a name.
@@ -1665,7 +1665,7 @@ mod tests {
         assert_eq!(&out[..2], &[0x12, 0x34]);
     }
 
-    /// The half `/etc/hosts` cannot do, and the reason E-2 was left at 🟡.
+    /// The half `/etc/hosts` cannot do, and the reason the wildcard was left undone.
     #[test]
     fn a_wildcard_falls_out_of_a_suffix_match() {
         for name in ["a.shop.loc", "deep.nested.shop.loc", "loc"] {

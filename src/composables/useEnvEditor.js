@@ -4,7 +4,7 @@ import { api } from '@/lib/ipc';
 /**
  * The `.env` editor six Settings panes share.
  *
- * This is the machine the readiness review's §2.3 called `useEnvEditor()`, and
+ * This is the machine an earlier review called `useEnvEditor()`, and
  * it is why the split stalled at three panes: the appearance, domain, PHP,
  * server-limits, services and workspace panes all edit the same file through
  * the same four refs, so none of them could leave `Settings.vue` on its own.

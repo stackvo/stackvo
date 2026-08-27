@@ -5,7 +5,7 @@
 //! supply themselves. Every competitor with an MCP server stopped asking that a
 //! year ago — `lerd mcp:enable-global` writes eight clients, ServBay installs
 //! its own rules file, Herd goes through Laravel Boost — and the competitive
-//! review called this the cheapest item in the whole document (K-1).
+//! review called this the cheapest item in the whole document.
 //!
 //! It is cheap. It is also the place where a small tool can do real damage,
 //! because the file it edits is not ours: `~/.cursor/mcp.json` holds every
@@ -30,7 +30,7 @@
 //! belongs to the user's editor, and a feature that litters it is a feature
 //! they turn off.
 //!
-//! ## The two that used to be missing (K-1)
+//! ## The two that used to be missing
 //!
 //! **Codex** was absent because its configuration is TOML and editing TOML
 //! while preserving comments and key order needs `toml_edit` — a dependency,

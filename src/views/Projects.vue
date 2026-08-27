@@ -202,7 +202,7 @@ function clearFilters() {
  * order Docker happened to answer in, and changes between refreshes.
  */
 /**
- * Starred projects first, then by domain (M-1).
+ * Starred projects first, then by domain.
  *
  * A sort rather than a filter: nothing is hidden, so this cannot become a mode
  * somebody gets stuck in — the same reason the inventory store refuses to hide
@@ -774,7 +774,7 @@ async function adopt(folder) {
 /**
  * Every folder in the list, in one press.
  *
- * The park half of A-5. The list is already the park — the project directory
+ * The park half. The list is already the park — the project directory
  * is what Herd and Valet mean by one, and every child of it is here with its
  * detected runtime beside it. What was missing is that adopting them was one
  * click per row, and the machine this was written against had eleven.

@@ -2,7 +2,7 @@
 //!
 //! `.env` holds the stack's configuration and, today, its credentials. On a
 //! company machine that file is backed up, synced to a laptop, and scanned by
-//! whatever the organisation runs — which is the readiness review's §5.2, and
+//! whatever the organisation runs — which an earlier review asked for, and
 //! it is a fair complaint about a file whose whole purpose is to be copied
 //! around.
 //!
@@ -18,23 +18,23 @@
 //! ## What this removes, and what it does not
 //!
 //! It takes the password out of `.env`. It does **not** take it off the disk,
-//! and pretending otherwise would be the same mistake ADR 0009 refused to make
-//! about the policy file.
+//! and pretending otherwise would be the same mistake the policy layer refused
+//! to make about its own file.
 //!
 //! `generated/docker-compose.dynamic.yml` is rendered from
 //! `{{ SERVICE_MYSQL_ROOT_PASSWORD }}`, so the real value is substituted into
 //! it — as it always has been. The secret was never in one file; it was in two,
-//! and §5.2 only counted the first. What changes is *which* file: `.env` is
+//! and that review only counted the first. What changes is *which* file: `.env` is
 //! hand-maintained, quoted in support threads, and the thing a backup tool is
-//! pointed at, while `generated/` is output that ADR 0002 says is rewritten from
-//! scratch on every run. Moving the value from the first to the second is a real
+//! pointed at, while `generated/` is output, rewritten from scratch on every
+//! run. Moving the value from the first to the second is a real
 //! reduction and a partial one, and the honest thing is to say which.
 //!
 //! Getting it out of `generated/` as well means emitting `${VAR}` and feeding
 //! the value to `docker compose` through its environment. That changes the
 //! rendered bytes, which breaks the differential comparison against the Bash
 //! generator, and it breaks `docker compose up` run by hand in that directory.
-//! It is a v2 change and it is described in ADR 0010 rather than half-done here.
+//! It is a v2 change, and saying so is better than half-doing it here.
 //!
 //! ## The Bash CLI cannot read these, and that is the sharp edge
 //!
@@ -148,7 +148,7 @@ fn digest(text: &str) -> u32 {
 // access whenever the binary asking has changed, which after `cargo build` is
 // every time — and with nobody to answer the prompt the test **hangs**, taking
 // the whole `cargo test` run with it. A suite that cannot finish is a suite
-// nobody runs, which is ADR 0028's whole subject.
+// nobody runs, which is the whole reason this seam exists.
 
 #[cfg(not(test))]
 fn entry(name: &str) -> Result<keyring::Entry> {
@@ -192,7 +192,7 @@ mod fake {
 /// [`Code::PermissionDenied`] rather than [`Code::Forbidden`]: a locked
 /// keychain, a Secret Service that is not running, a prompt somebody dismissed
 /// — every one of them is answered by the user doing something and trying
-/// again, which is exactly the distinction ADR 0009 drew between the two codes.
+/// again, which is exactly the distinction between the two codes.
 #[cfg_attr(test, allow(dead_code))]
 fn unreachable_store(name: &str, err: keyring::Error) -> Error {
     Error::new(

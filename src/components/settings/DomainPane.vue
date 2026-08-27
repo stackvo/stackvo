@@ -18,13 +18,13 @@ import ManagedBadge from '@/components/settings/ManagedBadge.vue';
  * How the stack is addressed: the domain suffix, the hosts file, the proxy and
  * the network.
  *
- * The fourth pane out of `Settings.vue` under §14.16, and the first that needed
+ * The fourth pane out of `Settings.vue` in the pane split, and the first that needed
  * the shared `.env` editor — six panes write one file through one diff, so it
  * is injected rather than constructed here. `useSharedEnvEditor` falls back to
  * its own instance when nothing provided one, which is what lets this be
  * mounted alone in a test.
  *
- * The logic came out one round earlier (§26) and is in `useStackShape`; this is
+ * The logic came out one round earlier and is in `useStackShape`; this is
  * the markup that was left behind.
  */
 const { t } = useI18n();

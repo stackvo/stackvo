@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * legacy-deletion-rehearsal — performs the deletion §3 #36 is waiting for, and
+ * legacy-deletion-rehearsal — performs the deletion `LEGACY_SERVICES` is waiting for, and
  * reports what it costs.
  *
  * `config::LEGACY_SERVICES` goes at 0.4.0. `tests/legacy_env_claims.rs` names
@@ -21,9 +21,9 @@
  * It also found what was actually holding the constant up, which was not the
  * migration: `handover_equivalence.rs` passes 13 of 13 without it. It was
  * `mail.rs` asking whether a key was *present* to decide which mail catcher a
- * workspace knows about. ADR 0037 pointed that question at the catalogue, and
- * seventy-two keys — the `.env` shadow of the catalogue ADR 0016 moved into
- * packages — left with it. Two rows disappeared from the list below on that
+ * workspace knows about. That question was pointed at the catalogue, and
+ * seventy-two keys — the `.env` shadow of a catalogue that had already moved
+ * into packages — left with it. Two rows disappeared from the list below on that
  * commit, and the tool is what said so: a row that stops failing is reported
  * as loudly as one that starts.
  *
@@ -108,11 +108,6 @@ const EXPECTED = [
     file: 'src-tauri/tests/legacy_env_claims.rs',
     why: 'same file. Its keys come from the constant, so with the constant gone it is scanning for nothing and says so.',
   },
-  {
-    test: 'the_rust_source_size_is_current',
-    file: 'src-tauri/tests/platform_matrix_claims.rs',
-    why: '§7 states the size of the Rust source, and the constant is part of it. The document is part of the deletion.',
-  },
 ];
 
 // ---------------------------------------------------------------- the mutation
@@ -161,7 +156,7 @@ function applyDeletion(source) {
  *
  * `--no-fail-fast` is not optional here. Without it cargo stops at the first
  * failing binary, and the first failing binary is the lib — so the run would
- * report three sites and hide four. §2 W learned this on Windows and it is the
+ * report three sites and hide four. The Windows suite learned this the hard way and it is the
  * same lesson.
  */
 function parseFailures(output) {

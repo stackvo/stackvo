@@ -618,7 +618,7 @@ onUnmounted(() => {
                 {{ t('quickCmd.because', { file: command.because }) }}
               </v-list-item-subtitle>
               <template #append>
-                <!-- Where the row came from, said rather than implied (B-4).
+                <!-- Where the row came from, said rather than implied.
                    A command out of the repository somebody cloned is a
                    different kind of thing from one this application shipped,
                    and the person deciding whether to press it is entitled to
@@ -828,7 +828,7 @@ onUnmounted(() => {
         </template>
 
         <!-- WHY WAS THIS REQUEST SLOW ---------------------------------------- -->
-        <!-- B-1, and first on the tab rather than last. Everything below it is
+        <!-- First on the tab rather than last. Everything below it is
              an instrument; this is the question the instruments were bought to
              answer, and a reader who arrives with a slow page should not have
              to know which three panes to open and how to line their clocks up.
@@ -892,15 +892,15 @@ onUnmounted(() => {
              cannot drift between them. -->
         <template v-if="shows('debug')">
           <DumpsPane :name="name" @apply="applyToContainer" />
-          <!-- A-1. Beside the dumps because it is the same act with a longer
+          <!-- Beside the dumps because it is the same act with a longer
                arm: a pull ends in the restore the dumps pane already offers,
                with the copy that restore takes of what it replaces. -->
           <ProvidersPane :name="name" />
-          <!-- F-1. Beside the dumps because they answer the same question from
+          <!-- Beside the dumps because they answer the same question from
                two ends: `dd()` says what the code thought, this says what the
                database was actually asked. -->
           <QueryLogPane />
-          <!-- F-2. And this puts the two on one axis, which is the thing
+          <!-- And this puts the two on one axis, which is the thing
                neither pane above can do on its own. -->
           <TimelinePane :name="name" />
         </template>
@@ -912,7 +912,7 @@ onUnmounted(() => {
              trusted. -->
         <template v-if="shows('release')">
           <ReleasePane :name="name" />
-          <!-- A-7. The generated compose cannot travel — it names paths under
+          <!-- The generated compose cannot travel — it names paths under
                this machine's home, a network another file creates and a Traefik
                that is not in it — so this is a second rendering of the same
                manifest rather than a copy of the first. -->
@@ -935,12 +935,12 @@ onUnmounted(() => {
              and changes nothing. -->
         <template v-if="shows('runtime')">
           <PhpIniPane :name="name" :runtime="project?.runtime" />
-          <!-- I-1. Here rather than in its own tab because it is the same kind
+          <!-- Here rather than in its own tab because it is the same kind
                of thing as the two panes above it: a setting that reaches the
                container through a compose overlay this app layers, not through
                the manifest. -->
           <PerfPane :name="name" :runtime="project?.runtime" @apply="applyToContainer" />
-          <!-- M-5, M-6, M-10. The same kind of thing as the panes above:
+          <!-- The same kind of thing as the panes above:
                settings that reach the container through a compose overlay or a
                generated server config, not through the manifest. -->
           <SitePane :name="name" :runtime="project?.runtime" @apply="applyToContainer" />
@@ -1001,7 +1001,7 @@ onUnmounted(() => {
              nobody runs a shell on never pays for the pane at all. -->
         <div v-if="!loading && shellVisited" v-show="section === 'shell'">
           <TerminalPane :container-name="project?.containerName" :running="running" />
-          <!-- F-5, and deliberately directly under the terminal. §5.5 was the
+          <!-- Deliberately directly under the terminal. The open question was the
                decision to reverse `quickcmd.rs`'s refusal of an in-app REPL,
                and the refusal is answered by adjacency rather than by argument:
                a line at a time goes above, a snippet you edit goes here. -->

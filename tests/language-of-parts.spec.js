@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 /**
  * Which language is this, and which language is *that* passage?
  *
- * Y-3 in `docs/durum.md`, and it turned out to be two criteria rather than one.
+ * It turned out to be two criteria rather than one.
  *
  * **3.1.1, Language of Page — and it was failing.** `index.html` ships
  * `lang="en"` and nothing ever changed it, so a Turkish window announced itself

@@ -1,6 +1,6 @@
-//! Who may ask this app a question over HTTP, and which questions (§5 · #34).
+//! Who may ask this app a question over HTTP, and which questions (the loopback surface).
 //!
-//! §3 #34 sat in §5 for one reason, stated there in full: an HTTP surface means
+//! This sat unbuilt for one reason: an HTTP surface means
 //! putting *this* command set on a socket, and this command set contains
 //! `quickcmd_run`, `project_hooks_approve`, `env_reveal` and paths that go
 //! through `elevate`. A server written before that question is answered is not
@@ -40,7 +40,7 @@
 //! ## What is not here
 //!
 //! The transport. There is no listener, no route table and no runtime in this
-//! file, and that is deliberate rather than unfinished: the decision §5 was
+//! file, and that is deliberate rather than unfinished: the decision that was
 //! holding is *what may be served and to whom*, and that is answerable, pure,
 //! and testable on its own. A socket added later has to come through
 //! [`exposable`] to reach anything.
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn the_commands_that_made_this_a_decision_are_all_refused() {
-        // The four §5 named. Three are mutations or operations and fall to the
+        // The four named below. Three are mutations or operations and fall to the
         // first rule; `service_connection` is a query and needs the second.
         for command in [
             "quickcmd_run",
@@ -459,7 +459,7 @@ mod tests {
         ] {
             assert!(
                 !exposable(command),
-                "{command} would be served, and it is one of the four §5 said \
+                "{command} would be served, and it is one of the four ruled out \
                  made a web surface a decision rather than a task"
             );
         }
@@ -556,7 +556,7 @@ mod tests {
 // ============================================================ the transport
 //
 // Written after the policy above and deliberately after it: what may be served
-// and to whom is the question §5 was holding, and a listener written before
+// and to whom is the question that was open, and a listener written before
 // that answer would have been the remote code execution surface the row warned
 // about. This half is the socket, and it is small on purpose.
 //
@@ -566,7 +566,7 @@ mod tests {
 // ninety-seven arms, drifting from the ones Tauri generates. `mcp.rs` already
 // has a dispatcher: a curated table of tools, each naming the contract command
 // it stands for, each flagged `writes`, and each calling this crate's own logic
-// rather than a Tauri command. That table is the same shape §5.4 chose for this
+// rather than a Tauri command. That table is the same shape chosen for this
 // surface, so this serves it instead of growing a rival.
 //
 // A tool reaches the wire only if BOTH policies allow it: `!tool.writes`, and
@@ -907,7 +907,7 @@ async fn serve_with_handle(
         Error::new(
             Code::IoError,
             "the operating system would not provide a token, and this surface does not \
-             invent one — an unauthenticated loopback socket is what ADR 0026 refused",
+             invent one — an unauthenticated loopback socket is what this refuses to open",
         )
     })?;
 

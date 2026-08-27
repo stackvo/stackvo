@@ -7,7 +7,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The PHP / runtime-defaults pane, mounted.
  *
- * Seventh out of `Settings.vue` under §14.16. The version choices come from the
+ * Seventh out of `Settings.vue` in the pane split. The version choices come from the
  * catalog compiled into the binary rather than a list typed into the view, so a
  * release added there shows up without a second edit.
  *

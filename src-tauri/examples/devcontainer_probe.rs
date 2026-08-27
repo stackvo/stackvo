@@ -1,4 +1,4 @@
-//! Does the exported devcontainer actually parse? (A-7)
+//! Does the exported devcontainer actually parse?
 //!
 //!   cargo run --example devcontainer_probe
 //!

@@ -78,7 +78,7 @@ pub struct Instance {
     pub service: String,
     /// Concrete. `latest` never reaches this file — the registry resolves it at
     /// install time and the answer is written here, which is what stops a
-    /// re-pull from moving somebody's version underneath them (ADR 0014).
+    /// re-pull from moving somebody's version underneath them.
     pub version: String,
     pub package: PackageRef,
     /// Whether it should be running. Distinct from whether it *is* — that is
@@ -98,7 +98,7 @@ pub struct Instance {
     /// Non-secret settings. Secrets are references, below.
     #[serde(default)]
     pub settings: BTreeMap<String, String>,
-    /// Setting key → keystore entry. The value is never in this file (ADR 0010).
+    /// Setting key → keystore entry. The value is never in this file.
     #[serde(default)]
     pub secret_refs: BTreeMap<String, String>,
 }
@@ -651,7 +651,7 @@ mod tests {
         assert_eq!(back.get("mysql-8-0"), Some(&a));
     }
 
-    /// No password reaches the file, only the reference (ADR 0010).
+    /// No password reaches the file, only the reference.
     #[test]
     fn the_written_file_carries_references_and_not_secrets() {
         let root = scratch("secrets");
@@ -705,7 +705,7 @@ mod tests {
         assert!(!path(&root).exists());
     }
 
-    /// S-18. The primary keeps the bare name — it is in a bookmark and a
+    /// The primary keeps the bare name — it is in a bookmark and a
     /// password manager — and every other instance carries its version.
     #[test]
     fn only_the_primary_answers_on_the_bare_subdomain() {

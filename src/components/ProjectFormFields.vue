@@ -150,7 +150,7 @@ const langVersions = computed(() => {
 });
 
 /**
- * J-2. The blank entry heads the list and is not `npm`.
+ * The blank entry heads the list and is not `npm`.
  *
  * It means the project never named one, which is what every node manifest on
  * disk says and what builds the image they have always built. Naming one —
@@ -420,7 +420,7 @@ defineExpose({ focusName: () => nameField.value?.focus() });
         persistent-hint
       />
 
-      <!-- J-2. The blank entry is not "npm" — it is "this project never asked",
+      <!-- The blank entry is not "npm" — it is "this project never asked",
            which builds the image it has always built. Choosing one enables
            Corepack, which is what makes a `packageManager` field in
            package.json mean anything at all. -->

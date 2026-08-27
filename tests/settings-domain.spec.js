@@ -8,7 +8,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Domain pane, mounted.
  *
- * Fourth out of `Settings.vue` under §14.16, and the first that needed the
+ * Fourth out of `Settings.vue` in the pane split, and the first that needed the
  * shared `.env` editor: six panes write one file through one diff, so the
  * editor is injected. `useSharedEnvEditor` falls back to its own instance when
  * nothing provided one — which is what makes this file possible, and is the
@@ -337,7 +337,7 @@ describe('what a save still needs', () => {
 });
 
 /**
- * The DNS pane (E-1).
+ * The DNS pane.
  *
  * Four things here are only visible at this layer, and each is the kind that
  * looks fine and is wrong: that the two switches are two separate acts, that a
@@ -544,7 +544,7 @@ describe('the DNS pane', () => {
 });
 
 /**
- * Custom routes (E-4).
+ * Custom routes.
  *
  * The notes are the feature, so they are what is asserted. Each one stands for
  * a failure that is otherwise completely silent: a 502 from `localhost`, an

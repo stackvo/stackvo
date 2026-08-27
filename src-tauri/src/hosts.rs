@@ -28,7 +28,7 @@ pub struct HostsEntry {
 ///
 /// `STACKVO_HOSTS_PATH` is a seam, and the same one `STACKVO_ROOT` is: without
 /// it the only way to exercise [`apply`] is to overwrite the real
-/// `/etc/hosts`, so §3 #35 — "the privilege paths never ran on Windows or
+/// `/etc/hosts`, so "the privilege paths never ran on Windows or
 /// Linux" — could only ever be closed by trusting the code. With it, the plan,
 /// the write and the marker block round-trip against a temporary file on every
 /// platform CI runs, which is all three.
@@ -347,7 +347,7 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
     // outcome is one that teaches people to type their password at anything
     // that asks, which is the opposite of what a single elevation point is for.
     //
-    // It is also what makes §3 #35 testable at all: with `STACKVO_HOSTS_PATH`
+    // It is also what makes this testable at all: with `STACKVO_HOSTS_PATH`
     // pointing at a temporary file, this branch is the one that runs, on every
     // platform, without a prompt nobody could answer in CI.
     let ok = write_in_place(&path, &plan.preview) || elevated_here(&staged, &path)?;
@@ -371,7 +371,7 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
 /// something other than a hope. It was a hope, and it cost a hung suite: on a
 /// busy machine `hosts_roundtrip` fell through to the elevated path, macOS put
 /// up `osascript`'s administrator dialog behind every other window, and the
-/// whole `cargo test` sat at 0% CPU until it was killed. That is §3 #37's
+/// whole `cargo test` sat at 0% CPU until it was killed. That is the
 /// failure exactly — a hanging suite looks like a slow one — one seam over.
 ///
 /// The refusal is the honest answer as well as the safe one. The seam exists
