@@ -365,7 +365,7 @@ export function applyAppearance(appearance, systemAccent = null) {
     // 3.1.1, and it is the criterion everything else about language rests on: a
     // screen reader picks its voice and its pronunciation rules from this
     // attribute, so a Turkish interface was being read out with English
-    // phonetics. `docs/accessibility.md` said the interface language "is
+    // phonetics. `ACCESSIBILITY.md` said the interface language "is
     // announced on the document", which was the claim this line makes true.
     //
     // The **active** locale, like `dir` above — including a pack's tag, which

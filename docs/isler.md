@@ -363,3 +363,1813 @@ Bu, mühendislik disiplini bakımından yayına hazır olmayı hak eden bir proj
 yayından alıkoyan şey kodun kalitesi değil, **yayınlanmamış bir sürüm, temin edilmemiş iki
 imzalama kimliği ve bir son kullanıcıya hitap etmeyen bir README** — üçü de kod yazmayı
 değil, sıraya koymayı gerektiren işler.
+
+---
+
+# Ek Rapor — Sabit kod (hardcode) ve arayüzden yönetilmesi gereken veri
+
+**Tarih:** 2026-08-27 (ikinci tur)
+**Taban:** `6e56a2f` (main) + çalışma ağacındaki belge değişiklikleri
+**Sorulan iki soru:** (1) Kodda hardcode var mı? (2) Arayüzde bir **seçim** olması gereken
+değişken veri doğrudan koda mı gömülü?
+
+**Kapsam ve yöntem.** 275 kaynak dosya okundu/tarandı — **47.794 satır** JS/Vue (`src/`),
+**111.843 satır** Rust (`src-tauri/src/`, 113 modül), `contracts/` (12 dosya), `tools/`
+(15 betik). Tarama grep ile değil, çoğu yerde **iki listeyi karşılaştıran** küçük
+betiklerle yapıldı: bir sabitin nerede tekrarlandığını grep gösterir, **birbirinden
+ayrıştığını** yalnız karşılaştırma gösterir. Doğrulama için `vitest` (84/84 dosya, 1275
+test geçti) ve `npm run contracts:check` (0 hata / 12 uyarı) çalıştırıldı.
+
+**Tek cümlelik hüküm:** Bu depoda "gelişigüzel serpiştirilmiş sihirli sayı" sorunu **yok** —
+zamanlayıcılar adlandırılmış, renkler tema dosyasında toplanmış, i18n disiplini neredeyse
+kusursuz (şablonlarda yalnız 4 marka adı ve 2 yol dizgesi çevrilmemiş). Bulunan sorun daha
+dar ve daha keskin: **aynı değerin iki ya da dört ayrı yerde sabitlenmesi**, ve
+**kullanıcının arayüzden seçtiği ayarın, o değeri ikinci kez sabitleyen kod yolunda
+görmezden gelinmesi.**
+
+## Özet
+
+| # | Bulgu | Nerede | Sınıf |
+| --- | --- | --- | --- |
+| A-1 | Sürüm **listelerinin** hiçbir arayüz denetimi yok | `config.rs:81-95` | Arayüz eksiği |
+| A-2 | Kabul (adopt) yolu hiçbir ayarı okumuyor — PHP, sunucu, TLD | `commands.rs:7405` | **Ayar baypası** |
+| A-3 | Editör/terminal/tarayıcı/DB istemcisi kataloğu genişletilemiyor | `apps.rs` | Arayüz eksiği |
+| A-4 | Hızlı komutlar kataloğu derlenmiş, kullanıcı ekleyemiyor | `quickcmd.rs:120` | Bilinçli, ama yazılı değil |
+| A-5 | "Varsayılan sunucu" ayarının tek tüketicisi var | `commands.rs:1073` | **Ayar baypası** |
+| B-1 | Dokuz nginx yönergesi **üç** yerde sabit; bağlayan test yok + indeks hatası | `generator.rs:823,946` | **Gizli hata** |
+| B-2 | `stackvo.loc` ×14, `stackvo-net` ×9, `nginx` ×7 literal | `commands.rs` | Sürüklenme riski |
+| B-3 | Varsayılan PHP sürümü dört yerde; biri `8.2` diyor | `validate-contracts.mjs:489` | Sürüklenme |
+| B-4 | Varsayılan Python `3.14` mü `3.13` mü | `config.rs:86` / `manifest.rs:120` | Sürüklenme |
+| B-5 | 28 proje şablonu dört elle yazılmış listede, kapı yok | `NewProjectDrawer.vue:46` | Sürüklenme riski |
+| B-6 | Ön yüz 5 runtime biliyor, arka uç 8 üretebiliyor | `useCatalog.js:53` | Erişilemeyen özellik |
+| C-1 | Grafik renkleri `#1976D2` sabit — kullanıcının accent'i geçersiz | `useContainerStats.js:34` | **Ayar baypası** |
+| C-2 | Isı ızgarasının beş yeşili tema dışı | `project-panes.css:225` | Tema dışı |
+| D-1 | Uygulamanın kendi 10 imgesi sabit, 6'sı `:latest` | `tunnel.rs`, `landing.rs` | Tedarik zinciri |
+| D-2 | Kayıt defteri aynası (mirror) bu 10 imgeye **hiç uygulanmıyor** | `commands.rs:12668` | **Politika deliği** |
+| E-1 | `env.schema.json`'daki 43 tüketicinin 39'u var olmayan dosya | `contracts/env.schema.json` | Bayat sözleşme |
+| E-2 | `SUPPORTED_LANGUAGES_RUST_DEFAULT`: sözleşme `1.62`, kod `1.84` | `env.schema.json:494` | **Sözleşme yalanı** |
+| F-1 | 39 İngilizce katalog cümlesi iki dilli arayüze ham gidiyor | `quickcmd/oauth/tooling` | i18n deliği |
+| G-1 | Genel Bakış her projeye `/var/www/html` diyor — Node/Go'da `/app` | `OverviewPane.vue:86` | **Kullanıcıya görünen hata** |
+| H-1 | Önceki raporun bir maddesi yanlış: `appsAvailable()` ölü değil | `PreferencesPane.vue:32` | Düzeltme |
+
+---
+
+## A. Arayüzde olması gereken ama yalnız kodda olan veri
+
+Bu bölüm sorunun ikinci yarısının doğrudan cevabı.
+
+### A-1. Sunulan sürüm **listeleri** hiçbir yerden düzenlenemiyor
+
+`config::SETTINGS` iki tür anahtar taşıyor ve ikisi arayüzde eşit muamele görmüyor:
+
+| Anahtar ailesi | Ne demek | Arayüz denetimi |
+| --- | --- | --- |
+| `SUPPORTED_LANGUAGES_*_DEFAULT` | Hangi sürüm seçili gelsin | ✅ `PhpPane.vue` — altı `v-select` |
+| `SUPPORTED_LANGUAGES_*_VERSIONS` | **Hangi sürümler sunulsun** | ❌ hiçbiri |
+
+Ölçüldü: `SETTINGS`'in 36 anahtarından **7'si** `src/` ağacının tamamında bir kez bile
+geçmiyor — altı `_VERSIONS` listesi ve `SUPPORTED_LANGUAGES_PHP_EXTENSIONS_DEFAULT`.
+
+```
+src-tauri/src/config.rs:81   SUPPORTED_LANGUAGES_PHP_VERSIONS     = 5.6 … 8.5
+src-tauri/src/config.rs:85   SUPPORTED_LANGUAGES_PYTHON_VERSIONS  = 2.7 … 3.14
+src-tauri/src/config.rs:87   SUPPORTED_LANGUAGES_GO_VERSIONS      = 1.11 … 1.23
+src-tauri/src/config.rs:89   SUPPORTED_LANGUAGES_RUBY_VERSIONS    = 2.4 … 3.3
+src-tauri/src/config.rs:91   SUPPORTED_LANGUAGES_RUST_VERSIONS    = 1.70 … 1.84
+src-tauri/src/config.rs:93   SUPPORTED_LANGUAGES_NODEJS_VERSIONS  = 16,18,20,21,22,23
+```
+
+`config.rs`'in kendi belge yorumu bu tasarımın gerekçesini yazıyor ve gerekçe doğru:
+listeler `.env`'den ikilik dosyaya taşındı, "yeni PHP sürümü → yeni build → yeni liste".
+Eksik olan cümlenin ikinci yarısı: **iki build arasında kullanıcının yapabileceği bir şey
+yok.** Bir sürüm listeyi kaçırdıysa tek çare `.env`'i elle açmak; uygulama o dosyayı
+kendi yazdığı halde bu anahtarları hiçbir panelde göstermiyor.
+
+Ve listeler şimdiden geride: Go `1.23`'te duruyor (1.24 ve 1.25 çoktan çıktı), Ruby
+`3.3`'te (3.4 çıktı), Node `23`'te (24 LTS oldu), Rust `1.84`'te (2025 Ocak sürümü).
+Burada asıl mesele hangi sürümün eksik olduğu değil — **eksikliğin ancak bir yayın
+koşusuyla kapanabilmesi.**
+
+> **Yapılacak:** `PhpPane`'e altı `v-combobox` (`multiple chips`) — `PHP_DEFAULT_TOOLS` ve
+> `PHP_DEFAULT_APT_PACKAGES` için zaten tam olarak bu bileşen kullanılıyor
+> (`PhpPane.vue:158,168`), yani desen ağaçta hazır. `useEnvEditor`'ın `setList`'i de hazır.
+> Yaklaşık 30 satır, ve bir yayına bağımlılığı ortadan kaldırıyor.
+
+### A-2. Bir klasörü "kabul et" yolu ayarların hiçbirini okumuyor
+
+`detected_spec` (`src-tauri/src/commands.rs:7405`) benimsenen bir dizinden manifest üretiyor.
+İmzası şu: `fn detected_spec(name: &str, detected: &detect::Detected)` — **`Env` almıyor**,
+yani kullanıcının kaydettiği hiçbir ayarı okuyamaz. Sonuç dört sabit değer:
+
+| Satır | Yazılan | Ayarın söylediği | Sonuç |
+| --- | --- | --- | --- |
+| `commands.rs:7409` | `format!("{name}.loc")` | `DEFAULT_TLD_SUFFIX` = `stackvo.loc` | Etki alanı ayarı yok sayılıyor |
+| `commands.rs:7442` | `"8.4"` | `SUPPORTED_LANGUAGES_PHP_DEFAULT` | PHP seçimi yok sayılıyor |
+| `commands.rs:7436` | `detected.server` → `detect.rs:205,261,337,410` hepsi `"nginx"` | `SUPPORTED_SERVERS_DEFAULT` | Sunucu seçimi yok sayılıyor |
+| `commands.rs:7419` | `"22"` (node) | `SUPPORTED_LANGUAGES_NODEJS_DEFAULT` | — (bugün aynı, yarın değil) |
+
+Yani: **Ayarlar → Varsayılan PHP sürümü**'nü 8.2 yapan bir kullanıcı, yeni proje
+sihirbazından proje açtığında 8.2 alıyor; var olan bir klasörü benimsettiğinde 8.4 alıyor.
+İkisi de "yeni proje", ikisi arasında hiçbir açıklama yok.
+
+`.loc` için sözleşmede bir gerekçe var (`env.schema.json` → `DEFAULT_TLD_SUFFIX`: "Project
+domains do NOT use it"), ve o savunulabilir. Diğer ikisi için gerekçe yok — `detected_spec`
+`Env` almadığı için tercih değil, **erişim eksikliği**.
+
+> **Yapılacak:** `detected_spec(name, detected, &env)`. Üç çağrı yeri var
+> (`commands.rs:5357`, `:6976`, `:7204`) ve üçünün de elinde `root` zaten var.
+
+### A-3. Editör / terminal / tarayıcı / veritabanı istemcisi listesi kapalı
+
+`apps.rs` sekiz platform-koşullu sabit dizi taşıyor (`:51,:77,:90` terminaller, `:121`
+editörler, `:166,:208,:218` tarayıcılar, `:393` DB istemcileri) ve her satır sabit bir
+uygulama demeti yolu: `/Applications/Zed.app`, `/Applications/TablePlus.app`…
+
+Modül başlığı tasarımı açıkça anlatıyor ve haklı: eskiden serbest metin kutusu vardı,
+kullanıcının başlatıcı adını bilmesi gerekiyordu, tespit bundan iyi. Ama **serbest metin
+kutusu kaldırılırken yerine "diğer…" seçeneği konmamış.** `PreferencesPane.vue:52-86`'daki
+üç `v-select`'in öğeleri yalnız `api.appsAvailable()`'dan geliyor; `apps.rs` içinde
+`custom` diye bir varyant yok. Listede olmayan bir editör kullanan biri — Helix, Neovim,
+Emacs, JetBrains'in listelenmeyen sekiz IDE'sinden biri — bugün **hiçbir şey seçemiyor.**
+
+> **Yapılacak:** listeye sabit bir `{ id: "custom" }` satırı ve seçildiğinde açılan bir
+> komut alanı. Tespit varsayılan kalır, kapı açılır.
+
+### A-4. Hızlı komutlar kataloğu derlenmiş
+
+`quickcmd.rs:119`: *"Everything on offer. Adding a row here is the only way to add a
+command."* — açık ve bilinçli, ve bir güvenlik gerekçesi var (`argv`, asla kabuk dizgesi).
+Ama bu karar hiçbir kullanıcıya dönük belgede yazmıyor, ve "kendi komutumu ekleyeyim"
+bir yerel geliştirme aracından beklenen ilk isteklerden biri. `hooks.rs` ve `cron.rs`
+kullanıcının yazdığı komutları zaten çalıştırıyor, yani yasak katalog için geçerli, kabuk
+için değil. Kararın kendisi savunulabilir; **yazılı olmaması** savunulabilir değil.
+
+### A-5. "Varsayılan sunucu" ayarı tek bir yerde tüketiliyor, geri kalanı `"nginx"`
+
+`SUPPORTED_SERVERS_DEFAULT` üretim kodunda **tam olarak bir** yerde okunuyor:
+`commands.rs:1073` — `Catalog.default_server` alanını doldurmak için. O alanın tek
+tüketicisi `NewProjectDrawer.vue:206`, yani sihirbazda seçili gelen değer.
+
+Manifestte `server` alanı yoksa render yolu ne yapıyor:
+
+```
+src-tauri/src/generator.rs:771    manifest.server.as_deref().unwrap_or("nginx")
+src-tauri/src/generator.rs:1285   manifest.server.as_deref().unwrap_or("nginx")
+src-tauri/src/generator.rs:1675   manifest.server.as_deref().unwrap_or("nginx")
+src-tauri/src/commands.rs:12514   m.server.as_deref().unwrap_or("nginx")
+src-tauri/src/commands.rs:12516   m.server.as_deref().unwrap_or("nginx")
+```
+
+Beş yerde sabit. `SUPPORTED_SERVERS_DEFAULT=caddy` yazan bir kullanıcı için: sihirbazdan
+açılan proje Caddy, benimsenen proje nginx, `server` alanı elle silinmiş bir manifest
+nginx.
+
+---
+
+## B. Aynı değerin birden çok yerde sabitlenmesi
+
+### B-1. Dokuz nginx yönergesi üç ayrı yerde — ve iki tanesi **sıra numarasıyla** okunuyor
+
+Aynı dokuz ayar üç bağımsız listede yaşıyor:
+
+| Nerede | Ne taşıyor |
+| --- | --- |
+| `src-tauri/src/config.rs:98-108` | anahtar + **varsayılan** |
+| `src-tauri/src/generator.rs:823` `NGINX_DIRECTIVES` | anahtar + nginx adı + **varsayılan** (ikinci kopya) |
+| `src/components/settings/ServerLimitsPane.vue:27,35` | anahtar + biçim + ikon (elle yazılmış) |
+
+İkisi de `"1m"`, `"60"`, `"75"`, `"on"`, `"off"` değerlerini ayrı ayrı yazıyor ve
+**hiçbir test ikisini karşılaştırmıyor** (`grep -rn NGINX_DIRECTIVES` üretim dışında sıfır
+sonuç). `value_of` bir değeri varsayılanına eşitse yazmıyor — yani iki kopya ayrışırsa
+sonuç bir hata değil, **sessizce fazladan ya da eksik yazılan bir yönerge**.
+
+Daha keskini `generator.rs:946` ve `:952`:
+
+```rust
+if let Some(size) = self.value_of(&NGINX_DIRECTIVES[0]) {   // client_max_body_size
+    …  request_body { max_size … }
+}
+if self.value_of(&NGINX_DIRECTIVES[4]).is_some_and(|v| v == "on") {   // gzip
+    …  encode gzip
+}
+```
+
+Caddy'nin iki yönergesi diziye **sıra numarasıyla** erişiyor. Dizi zaten alfabeye ya da
+konuya göre dizilmiş değil; araya bir yönerge eklemek — bu dosyada en olası düzenleme —
+`[0]`'ı `client_max_body_size`'dan başka bir şeye kaydırır ve Caddy `max_size 60` yazar.
+Derleme geçer, test yok, hata çalışma anında ortaya çıkar.
+
+Aynı panelde `SERVER_SUPPORT` (`ServerLimitsPane.vue:54`) beş sunucuyu adıyla sayıyor;
+`manifest.rs:30` `SERVERS` de beşini. Altıncı bir sunucu eklendiğinde harita `undefined`
+döndürür ve yeni sunucu arayüzde sessizce "desteklenmiyor" görünür.
+
+> **Yapılacak:** (1) `NGINX_DIRECTIVES[0]`/`[4]` yerine `by_key("SERVER_MAX_BODY_SIZE")`.
+> (2) `NGINX_DIRECTIVES`'in `default` alanını silip `config::SETTINGS`'ten okumak — ya da
+> en azından ikisini eşitleyen bir test. (3) Panelin anahtar listesini `contracts:check`'e
+> bağlamak; bu on anahtarın `env.schema.json`'a eklenmesi zaten öneri listesinde (P2-5) ve
+> eklendiğinde şema tek kaynak olabilir.
+
+### B-2. Beş varsayılanın literal kopyaları
+
+`Env::parse` (`config.rs:436`) `EMBEDDED`'i dosyanın **altına** seriyor, yani `env.get(K)`
+bir anahtar için asla `None` dönmüyor. Buna rağmen çağrı yerleri varsayılanı ikinci kez
+yazıyor:
+
+| Değer | Kanonik yeri | Literal tekrar |
+| --- | --- | --- |
+| `stackvo.loc` | `config.rs:97` + `certs.rs:31` **adlandırılmış sabit** | 14 (üretimde `commands.rs`'te 8) |
+| `stackvo-net` | `config.rs:113` `DOCKER_DEFAULT_NETWORK` | 9 |
+| `nginx` | `config.rs:79` `SUPPORTED_SERVERS_DEFAULT` | 7 |
+| `20` | `config.rs:115` `PHP_TOOL_NODEJS_VERSION` | 3 |
+| `latest` | `config.rs:114` `PHP_TOOL_COMPOSER_VERSION` | 3 |
+
+`certs.rs:31`'de `pub const FALLBACK_SUFFIX: &str = "stackvo.loc"` **zaten var** ve tam
+olarak bunun için yazılmış; `commands.rs` sekiz kez görmezden geliyor.
+
+Bunlar bugün zararsız — çünkü `unwrap_or` kolu normal yolda hiç çalışmıyor. Zararsız
+olmaları asıl sorun: **ölü oldukları için ayrıştıkları gün hiçbir test kırılmaz.**
+Varsayılan `.loc`'tan başka bir şeye çevrildiğinde bu sekiz satır sessizce eskiyecek.
+
+Aynı yapıda üç kopya daha: `ToolchainOptions` bloğu `commands.rs:7370`, `:12232` ve
+`:12418`'de kelimesi kelimesine tekrarlanıyor (`"latest"` + `"20"` dahil).
+
+### B-3. Varsayılan PHP sürümü dört yerde, biri uyuşmuyor
+
+| Yer | Değer |
+| --- | --- |
+| `src-tauri/src/config.rs:82` | `8.4` |
+| `contracts/env.schema.json:411` | `8.4` |
+| `src-tauri/src/commands.rs:7442` (kabul yolu) | `8.4` — sabit, ayarı okumuyor (A-2) |
+| `tools/validate-contracts.mjs:489` | **`8.2`** |
+
+Sözleşme denetleyicisinin kendi yedeği iki minör sürüm geride. `.env` bulunmayan bir
+kontrolde (`--allow-no-manifests`, yani CI'daki hal) uzantı matrisi 8.4 yerine 8.2 kurallarına
+göre doğrulanıyor: 8.3'te kaldırılmış bir uzantı sessizce geçer.
+
+### B-4. Varsayılan Python: `3.14` mü `3.13` mü
+
+```
+src-tauri/src/config.rs:86     SUPPORTED_LANGUAGES_PYTHON_DEFAULT = "3.14"   → katalog, Ayarlar paneli
+src-tauri/src/manifest.rs:120  lang_defaults("python").version    = "3.13"   → benimseme, eksik manifest
+```
+
+`manifest::lang_defaults` bir manifestte `python` bloğu yoksa devreye giriyor
+(`manifest.rs:1275`) ve benimseme yolunda manifeste yazılıyor (`commands.rs:7420`). Yani
+Ayarlar 3.14 diyor, benimsenen proje 3.13 çalışıyor. İkisini bağlayan bir test yok.
+
+(Go `1.23`/`1.23` ve Ruby `3.3`/`3.3` bugün uyuşuyor — yani bu kopyalar **çalışıyor**,
+Python'da çalışmıyor. Rust'ta `"1"` bilinçli olarak farklı ve gerekçesi yazılı.)
+
+### B-5. 28 proje şablonu dört elle yazılmış listede
+
+| Liste | Yer | Girdi |
+| --- | --- | --- |
+| `Template::ALL` | `scaffold.rs:85` | 28 |
+| `TEMPLATE_GROUPS` | `NewProjectDrawer.vue:46` | 28 + `empty` |
+| `TEMPLATE_RUNTIME` | `NewProjectDrawer.vue:70` | 28 |
+| `TEMPLATE_ICONS` | `NewProjectDrawer.vue:100` | 28 + `empty` |
+
+Karşılaştırıldı: **dördü de bugün birebir uyuşuyor.** Tek sorun, uyuşmalarını sağlayan
+şeyin disiplin olması. Karşı örnek aynı depoda: `IMPORT_SOURCES` (`Projects.vue:689`) de
+elle yazılmış bir kopya ama `foreign_import.rs` onu Rust listesine bağlıyor, ve
+`Projects.vue:684`'teki yorum bunu neden yaptığını anlatıyor — *"an id here the backend
+refuses is a button that errors"*. Şablonlar için aynı akıl yürütme yapılmamış: yeni bir
+şablon dört dosyada düzenleme demek ve üçü unutulursa arayüz ya şablonu göstermez ya da
+`mdi-folder-outline` ile gösterip yanlış runtime'a bağlar.
+
+### B-6. Ön yüz beş runtime biliyor, arka uç sekiz üretebiliyor
+
+```
+src-tauri/src/commands.rs:989   IMPLEMENTED_RUNTIMES = php, node, python, go, ruby, rust, bun, deno   (8)
+src/composables/useCatalog.js:53  RUNTIME_DEFAULTS   = python, go, ruby, rust, node                   (5)
+```
+
+`build_catalog` özellikle bun ve deno'yu `.env` bilmese de kataloğa ekliyor
+(`commands.rs:1037-1047`) ve yorumu neden yaptığını anlatıyor: *"What the app can build is
+a fact about this binary, not about a file on disk."* Ama Ayarlar panelinin ızgarası
+`RUNTIME_DEFAULTS` üzerinde dönüyor (`PhpPane.vue:57`), ve o liste beş satır. **Bun ve
+Deno'nun varsayılan sürümü arayüzden hiç görünmüyor** — kataloğun onlar için doğru cevabı
+üretmek üzere yazılmış olmasına rağmen. `SETTINGS`'te `SUPPORTED_LANGUAGES_BUN_DEFAULT`
+diye bir anahtar da yok, yani bu ızgara düzeltilse bile yazacak yeri olmayacak.
+
+---
+
+## C. Tema sabitleri: kullanıcının seçtiği renk baypas ediliyor
+
+`lib/appearance.js` örnek bir tasarım: 20 accent tonu, üç durum paleti (Okabe-Ito dahil),
+altı nötr aile, hepsi veri. Sorun bu sistemin dışında kalan üç yerde.
+
+### C-1. Grafik renkleri `primary`'yi izlemiyor
+
+```
+src/composables/useContainerStats.js:34,35   memoryPie   #1976D2 / #2A313C
+src/composables/useContainerStats.js:45,46   networkPie  #1976D2 / #2A313C
+src/composables/useContainerStats.js:57,63   diskPie     #1976D2 / #2A313C
+src/components/project/IndicatorPane.vue:49  sparkline   ['#1976D2', '#4CAF50']
+```
+
+`#1976D2` `DEFAULT_APPEARANCE.primary`'nin (`appearance.js:22`) **kopyası**, `#2A313C` da
+graphite temasının `surface-variant`'ının (`appearance.js:123`) kopyası. Kullanıcı accent'i
+mora çevirdiğinde uygulamanın tamamı morarıyor, üç pasta grafiği ve sparkline mavi kalıyor.
+Açık temada `#2A313C` (koyu kömür) beyaz kartın üstünde ikinci dilim olarak duruyor —
+temayla hiç ilgisi olmayan bir renk.
+
+Vuetify teması çalışma anında okunabilir (`useTheme().current.value.colors.primary`), yani
+düzeltme birkaç satır.
+
+### C-2. Isı ızgarasının beş yeşili
+
+`src/styles/project-panes.css:225-238` — `.heat-cell.l0` … `.l4` sabit beş yeşil ton
+(`#0e2a16` → `#66bb6a`). Ne temaya, ne accent'e, ne `statusPalette` seçimine bağlı.
+`ACCESSIBILITY.md:83` renk körlüğü paletini uygulamanın bir özelliği olarak sayıyor; bu
+ızgara o sistemin dışında. (Yoğunluk rampası ton değil parlaklık taşıdığı için 1.4.1'i
+ihlal etmiyor — hücrelerde tooltip ve altında "az/çok" göstergesi var. Bulgu erişilebilirlik
+değil, **tema tutarlılığı**: kullanıcı temayı değiştirdiğinde bu kart değişmiyor.)
+
+### C-3. `#12121a` iki yerde
+
+`TerminalPane.vue:71` (xterm teması, JS) ve `:193` (CSS arka planı) aynı rengi ayrı ayrı
+yazıyor. İkisi ayrışırsa terminalin kenarında bir çerçeve belirir.
+
+---
+
+## D. Kapsayıcı imgeleri: hareketli etiket + politika deliği
+
+### D-1. Uygulamanın kendi 10 imgesi sabit, altısı `:latest`
+
+```
+src-tauri/src/tunnel.rs:214,307   cloudflare/cloudflared:latest
+src-tauri/src/tunnel.rs:331       ngrok/ngrok:latest
+src-tauri/src/tunnel.rs:356       tailscale/tailscale:latest
+src-tauri/src/tunnel.rs:376       openziti/zrok:latest
+src-tauri/src/tunnel.rs:394       localxpose/localxpose:latest
+src-tauri/src/tunnel.rs:424       kroniak/ssh-client:latest      (SSH_IMAGE)
+src-tauri/src/tunnel.rs:274       node:22-alpine                 (localtunnel)
+src-tauri/src/landing.rs:43       nginx:alpine
+src-tauri/src/tunnelid.rs:97      nginx:alpine                   (GUARD_IMAGE)
+src-tauri/src/perf.rs:627         alpine:3                       (HELPER_IMAGE)
+```
+
+Aynı depo `pkg.rs:50`'de bir kural taşıyor:
+
+> `MOVING_TAGS: ["latest", "stable", "edge", "main", "master"]` — *"A moving tag is
+> forbidden… an image that changes under a fixed manifest has no digest the manifest can
+> pin, so it has no place in the chain of trust."*
+
+Bu kural **yalnız üçüncü taraf paketlere** uygulanıyor. Uygulamanın kendi imgeleri tam da
+yasakladığı etiketleri kullanıyor; kırık bir `cloudflared:latest` yayınlandığı gün her
+kullanıcının tünelleri bozulur ve **sabitlenecek bir yer yoktur** — bu on değer arayüzde
+de, `.env`'de de, politika dosyasında da görünmüyor.
+
+### D-2. Kayıt defteri aynası bu on imgeye hiç uygulanmıyor
+
+`policy.rs` kurumsal bir aynayı destekliyor (`registryPrefix`) ve `commands.rs:12667`'deki
+yorum kapsamın "her yer" olduğunu söylüyor:
+
+> *"Every image reference in the workspace passes through this function on its way to disk,
+> so one pass here covers the project Dockerfiles, both compose files and every service
+> template at once."*
+
+Cümledeki belirleyici kelime **`to disk`**. `policy::rewrites` (`policy.rs:824`) yalnız
+`Dockerfile`, `*.yml`, `*.yaml` uzantılarına `true` diyor. Yukarıdaki on imge ise hiçbir
+dosyaya yazılmıyor — doğrudan `docker run` argümanına gidiyorlar
+(`tunnel.rs:841,859,888,899,915,943,987,1021,1044` → `args.push(provider.image.into())`;
+`landing.rs:107`; `tunnelid.rs:459`; `perf.rs:428,482`).
+
+Sonuç: `registryPrefix` ayarlanmış, Docker Hub'a erişimi olmayan bir kurumsal makinede
+projeler ayağa kalkar, **tüneller, karşılama sayfası, tünel muhafızı ve performans
+yardımcısı sessizce Docker Hub'a gitmeye çalışır ve başarısız olur.** `policy.rs`'in
+muafiyet listesi (`:789`) yalnız yerel derlenen `stackvo-*` imgelerini sayıyor; bu on tanesi
+orada da anılmıyor, yani muafiyet değil **atlanma**.
+
+> **Yapılacak:** `docker run` argümanını kuran her yerde `policy::mirror(prefix, image)`.
+> Fonksiyon zaten `pub` ve tam bu iş için yazılmış; bugün onu yalnız `rewrite` çağırıyor.
+
+---
+
+## E. Sözleşmenin bayat yarısı
+
+`contracts/` bu deponun en güçlü fikri — ve bir yarısı ölçülmüyor.
+
+### E-1. 43 "tüketici"nin 39'u var olmayan dosya
+
+`env.schema.json` her anahtarın altında `consumers` listesi taşıyor. Ölçüldü: 43 farklı
+yolun **39'u diskte yok**, çünkü hepsi silinmiş Bash ağacına ait:
+
+```
+core/cli/lib/generators/traefik.sh                    (4 anahtarda)
+core/templates/services/mysql/docker-compose.mysql.tpl
+core/ui/server/routes/supported-languages.js          (14 anahtarda)
+core/ui/server/services/DockerService.js
+… 35 tane daha
+```
+
+Var olan dört yol: `src-tauri/src/config.rs`, `idle.rs`, `template.rs`, `workspace.rs`.
+
+Bunu üreten araç da çalışamıyor: `tools/measure-env-usage.mjs:34` `core/` dizini yoksa
+`"No core/ under … — is that a StackVo checkout?"` deyip çıkıyor. Yani `statusLegend`'in
+*"Measured by tools/measure-env-usage.mjs, not by hand — the hand-run version of this was
+wrong for 12 keys"* iddiası **bu depoda ölçülemez durumda**; sayılar 2024'ün ağacında
+donmuş. `validate-contracts.mjs` `consumers` alanına hiç bakmıyor.
+
+### E-2. `SUPPORTED_LANGUAGES_RUST_DEFAULT`: sözleşme `1.62`, kod `1.84`
+
+```
+contracts/env.schema.json:494    "default": "1.62",  "status": "conflicting"
+src-tauri/src/config.rs:92       ("SUPPORTED_LANGUAGES_RUST_DEFAULT", "1.84")
+```
+
+63 şema anahtarının varsayılanı `config::SETTINGS` ile karşılaştırıldı; **tek gerçek
+uyuşmazlık bu** (diğer beş fark şemanın `default` alanını hiç doldurmamasından geliyor:
+`*_PHP_EXTENSIONS`, `*_PHP_EXTENSIONS_DEFAULT`, `*_GO_VERSIONS`, `*_RUBY_VERSIONS`,
+`*_RUST_VERSIONS`). Denetleyici bunu göremiyor çünkü yalnız *"anahtar `.env`'de var ama
+şemada yok"* sorusunu soruyor, *"şemadaki varsayılan kodun varsayılanıyla aynı mı"*
+sorusunu sormuyor — ve bu ikincisi tam olarak sözleşmenin var oluş nedeni.
+
+> **Yapılacak:** `contracts:check`'e H suiti: her şema `default`'unu `config::SETTINGS`
+> ile karşılaştır. `generate-types.mjs` `commands.rs`'i zaten ayrıştırıyor, yani ayrıştırıcı
+> hazır. Bu tek denetim B-3, B-4 ve E-2'yi birden yakalar.
+
+### E-3. On `SERVER_*` anahtarı (önceki raporun P2-5'i doğrulandı)
+
+Ölçüm bu turda tekrarlandı: `contracts:check` 12 uyarının 10'unu bu aileye veriyor ve
+uyarılar doğru. Ek olarak: bu on anahtar B-1'deki üç kopyanın sebebi — şema onları tanımasa
+`generator.rs` ve `ServerLimitsPane.vue` varsayılanı kendileri yazmak zorunda.
+
+---
+
+## F. i18n: katalog düzyazısı iki dilli arayüze ham gidiyor
+
+Şablon taraması temiz çıktı: 259 `.vue` dosyasının şablonlarında çevrilmemiş yalnız **6**
+metin var, hepsi meşru (`Stack`, `GitHub`, `StackVo`, `MIT`, `/var/www/html`,
+`.stackvo/context.json`). `en.js`/`tr.js` 2179 anahtarda birebir; birebir aynı kalan dört
+uzun dize de doğru (`Compass, TablePlus, psql` gibi ürün adları). `hints.rs` kataloğu
+çevrilmiş ve `hint_translations.rs` ile bağlanmış.
+
+Kapatılmamış olan, **Rust kataloglarındaki düzyazı alanları**. Üretim kodunda ölçüldü:
+
+| Modül | İngilizce cümle | GUI'ye ulaşıyor mu |
+| --- | --- | --- |
+| `quickcmd.rs` `about` | 26 | ✅ `ProjectDetail.vue:616`, `ReplPane.vue:168` |
+| `oauth.rs` `note` | 9 | ✅ `OAuthPane.vue:117` |
+| `tooling.rs` `why` | 4 | ✅ `ToolingPane.vue:329` |
+| `mcp.rs` | 34 | ❌ protokol yüzeyi — İngilizce doğru |
+| `cli.rs` | 40 | ❌ CLI — İngilizce (bilinçli, ama yazılı değil) |
+
+Yani **39 cümle** iki dilli bir pencerede İngilizce görünüyor. `hints.rs`'in başlığı bu
+sorunun tam olarak neden önemli olduğunu zaten yazmış: *"The suggestion is the worst one to
+leave untranslated. It is the sentence that tells someone what to do."* `php artisan
+migrate` satırının altındaki *"Run pending migrations."* aynı sınıftan bir cümle.
+
+**İkinci yarısı 3.1.2.** `ErrorAlert.vue` Rust'ın yazdığı İngilizceyi `lang="en"` ile
+işaretliyor ve `language-of-parts.spec.js` bunu koruyor. Yukarıdaki beş bileşende
+`lang="` hiç geçmiyor — kontrol edildi, sekiz dosyanın hiçbirinde yok. Test bir **elle
+yazılmış liste** (`PASSAGES`) üzerinde çalıştığı için bu boşluğu göremiyor; testin kendi
+yorumu bunu kabul ediyor (*"A list rather than a sweep, and that is the honest shape"*),
+ama liste bu beş yeri hiç düşünmemiş.
+
+---
+
+## G. Sabit değerin doğrudan sebep olduğu bir hata
+
+### G-1. Genel Bakış her projeye `/var/www/html` diyor
+
+```
+src/components/project/OverviewPane.vue:85-92
+    <span class="field-key">{{ t('projectDetail.containerPath') }}</span>
+    <code class="field-mono">/var/www/html</code>
+    … @click="copy('/var/www/html', 'cpath')"
+```
+
+Satırın **`v-if`'i yok** — hemen üstündeki PHP ve Node satırlarının ikisi de koşullu,
+bu değil. Oysa üreteç iki farklı yol yazıyor:
+
+```
+src-tauri/src/generator.rs:388,439,529,535   WORKDIR /var/www/html     (PHP: nginx/apache/caddy/frankenphp/swoole)
+src-tauri/src/generator.rs:598               WORKDIR /app              (render_node_dockerfile)
+src-tauri/src/generator.rs:723               WORKDIR /app              (render_lang_dockerfile — python/go/ruby/rust/bun/deno)
+```
+
+Bir Node, Python, Go, Ruby, Rust, Bun veya Deno projesinin sayfasında "Kapsayıcı yolu"
+satırı `/var/www/html` gösteriyor ve kopyala düğmesi onu panoya koyuyor. Bu yol o
+kapsayıcıda **yok**. `docker exec` ile oraya `cd` etmeye çalışan kullanıcı hata alır ve
+hatanın kaynağını uygulamanın kendi ekranında bulamaz.
+
+Kök neden tam olarak bu raporun konusu: değer türetilebilirken sabit yazılmış. Manifest bu
+bilgiyi taşımıyor, IPC yüzeyinde de yok — yani düzeltme `runtime`'a bakan bir `computed`
+(iki satır) ya da manifest'e bir `containerPath` alanı.
+
+`/var/www/html` üretim Rust kodunda ayrıca **63 kez** literal olarak geçiyor; adlandırılmış
+bir sabiti yok.
+
+---
+
+## H. Önceki raporun bir maddesi yanlış
+
+**P2-5'teki *"`api.appsAvailable()` tanımlı, hiçbir view veya store çağırmıyor — silinmeli"*
+maddesi hatalı, ve öneri uygulanırsa Tercihler paneli bozulur.**
+
+Çağrı yeri: `src/components/settings/PreferencesPane.vue:32-34`
+
+```js
+apps.value = await api
+  .appsAvailable()
+  .catch(() => ({ terminals: [], editors: [], browsers: [] }));
+```
+
+Uyarıyı üreten denetim `tools/validate-contracts.mjs:779`:
+
+```js
+const used = new RegExp(`\\bapi\\.${method}\\b`).test(consumers);
+```
+
+Tek satırlık bir düzenli ifade. Prettier `api` ile `.appsAvailable()` arasına satır sonu
+koyduğu için eşleşme olmuyor. Yani bu bir **denetleyici hatası**, ölü kod değil — ve
+yanlış yönde: var olan bir çağrıyı yok sayıyor.
+
+> **Yapılacak:** `validate-contracts.mjs:779` düzenli ifadesi `api` ile noktanın arasına
+> boşluk ve satır sonu kabul etmeli (`api\s*\.\s*<method>`).
+> Aynı düzeltme, bugün var olmayan ama yarın Prettier'ın böleceği her çağrıyı da korur.
+> P2-5 listesinden `appsAvailable` maddesi çıkarılmalı.
+
+---
+
+## I. Bilerek yapılmış ve doğru olan sabitler
+
+Rapor adil olsun diye: aşağıdakiler hardcode ve **öyle kalmalı**. Hiçbiri düzeltilecek bir
+şey değil, ve her birinin gerekçesi kodun içinde yazılı.
+
+- **`signing.rs:76` `PINNED`** — kayıt defterinin içerik anahtarı. `key_ceremony.rs`
+  updater anahtarıyla aynı olan bir build'i reddediyor. Yapılandırılabilir olması güven
+  zincirini ortadan kaldırırdı.
+- **`market.rs:714` `OFFICIAL_RAW`** — resmî katalog adresi, çözülmüş biçimde yazılmış ki
+  karşılaştırma kesin olsun.
+- **`tauri.conf.json` `pubkey` ve `endpoints`** — updater kimliği.
+- **`config.rs:295-323` yer tutucu parolalar** (`root`, `minioadmin`) — dosyanın kendisi
+  bunların neden sır olmadığını açıklıyor ve `no_real_credential_is_compiled_into_the_binary`
+  gerçek bir parolanın buraya yapıştırılmasını engelliyor.
+- **`qr.rs:55-75`** — QR standardının kendi tabloları.
+- **`ports.rs:51` `STRIDE = 10`** — okunabilirlik için seçilmiş ve gerekçesi yazılı.
+- **`dns.rs:95-97` `PORT`** — platforma göre 53/15353, koşullu derleme.
+- **`hosts.rs:47` `/etc/hosts`** — işletim sisteminin sözleşmesi.
+
+Ve şu üç mekanizma bu raporda önerilen her düzeltmenin şablonu, çünkü sorunu **zaten
+çözülmüş** hâlde gösteriyorlar:
+
+| Desen | Nerede |
+| --- | --- |
+| Elle yazılmış ön yüz listesini Rust listesine bağlayan test | `foreign_import.rs` ↔ `IMPORT_SOURCES` |
+| Katalogtan türetilen seçim listesi | `useCatalog.js` ↔ `catalog_get` |
+| Katalog + çeviri anahtarı + parite testi | `hints.rs` ↔ `en.js`/`tr.js` ↔ `hint_translations.rs` |
+| Slug listesi ↔ dosya paritesi (103/103, iki dilde de tam) | `help.js` ↔ `docs/help/{en,tr}` ↔ `help-topics.spec.js` |
+
+---
+
+## J. Önerilen sıra
+
+**Ucuz ve bugün yapılabilir (yaklaşık yarım gün):**
+
+1. `NGINX_DIRECTIVES[0]`/`[4]` indeks erişimini anahtar aramasıyla değiştir. *(B-1, gizli hata)*
+2. `OverviewPane.vue`'nun kapsayıcı yolunu runtime'dan türet. *(G-1, kullanıcıya görünen hata)*
+3. `validate-contracts.mjs:779` düzenli ifadesini çok satırlı çağrıyı görecek hale getir ve
+   P2-5'ten `appsAvailable` maddesini çıkar. *(H-1)*
+4. Python varsayılanını tek kaynağa indir (`3.14`/`3.13`). *(B-4)*
+5. `validate-contracts.mjs:489`'daki `'8.2'` yedeğini `8.4` yap. *(B-3)*
+
+**Yayından önce:**
+
+6. `detected_spec`'e `Env` geçir — benimseme yolu PHP ve sunucu ayarlarını okusun. *(A-2)*
+7. `docker run` imgelerini `policy::mirror`'dan geçir. *(D-2, kurumsal kurulumu bozuyor)*
+8. `contracts:check`'e "şema varsayılanı = kod varsayılanı" denetimi ekle. *(E-2, ve B-3/B-4'ü de yakalar)*
+
+**Yayından sonra:**
+
+9. Altı `*_VERSIONS` listesine `PhpPane`'de `v-combobox`. *(A-1)*
+10. Uygulama seçicilerine "diğer…" seçeneği. *(A-3)*
+11. Grafik ve ısı ızgarası renklerini temadan oku. *(C-1, C-2)*
+12. Şablon listelerini `scaffold.rs`'e bağlayan test — `foreign_import.rs` deseniyle. *(B-5)*
+13. `quickcmd`/`oauth`/`tooling` düzyazısını `hints.rs` desenine taşı, ya da en az
+    `lang="en"` ile işaretle. *(F-1)*
+14. `stackvo.loc`, `stackvo-net`, `nginx` literallerini adlandırılmış sabitlere indir;
+    `certs::FALLBACK_SUFFIX` zaten duruyor. *(B-2)*
+15. `env.schema.json`'ın `consumers` alanını bu ağaca göre yeniden ölç ya da alanı sil —
+    ölçülemeyen bir alan sözleşmenin geri kalanına olan güveni aşındırıyor. *(E-1)*
+16. Tünel imgelerini sürüme sabitle; `pkg::MOVING_TAGS` kuralını uygulamanın kendisine de
+    uygula. *(D-1)*
+
+---
+
+## K. Ölçüm özeti
+
+| Ne | Sayı |
+| --- | --- |
+| Okunan/taranan kaynak dosya | 275 |
+| JS/Vue satır | 47.794 |
+| Rust satır | 111.843 (113 modül) |
+| Şablonlarda çevrilmemiş metin | **6** (hepsi meşru) |
+| `.env` anahtarı elle yazılmış ön yüz dosyası | 27 anahtar — **hepsi** `config::SETTINGS`'te var |
+| Arayüz denetimi olmayan `SETTINGS` anahtarı | **7 / 36** |
+| Üretimde `unwrap`/`expect` | 20 (önceki raporla aynı) |
+| Şema varsayılanı ↔ kod varsayılanı uyuşmazlığı | **1** (`RUST_DEFAULT`) |
+| `env.schema.json` tüketicisi: diskte yok | **39 / 43** |
+| Hareketli etiketli kendi imgesi | 6 (+4 sabit ama sürümsüz) |
+| Aynayı baypas eden imge | **10 / 10** |
+| GUI'ye ham giden İngilizce katalog cümlesi | 39 |
+| `vitest` | 84/84 dosya, 1275 test geçti |
+| `contracts:check` | 0 hata / 12 uyarı (1'i yanlış pozitif — H-1) |
+
+---
+
+# Ek Rapor — Rakip Analizi (17 ürün) ve Yerel Geliştirme Uygulaması Olarak Eksikler
+
+**Tarih:** 2026-08-27 (üçüncü tur)
+**Taban:** `6e56a2f` (main) + çalışma ağacı
+**Sorulan soru:** Bu kategorideki 17 üründe olan ya da olmayan neye bakılırsa, "bir yerel
+geliştirme uygulaması olarak bunun da olması gerekir" denir?
+
+**Yöntem.** İki taraf ayrı ayrı ölçüldü ve sonra karşılaştırıldı.
+
+*Rakip tarafı:* 17 adresin **14'ü doğrudan okundu**. Üçü kapalı döndü ve dolaylı
+kaynaklardan tamamlandı — `kettlecode.org` ve `larabox.org` HTTP 403, `forgekit.tools`
+kökü yalnız başlık; bunlar için ürün dokümantasyonunun alt sayfaları
+(`forgekit.tools/docs/other/faq`), karşılaştırma sayfaları ve arama sonuçları kullanıldı.
+`devilbox.org` sertifika uyuşmazlığı verdi, `devilbox.readthedocs.io` okundu.
+**Bu rapor rakiplerin *iddia ettiği* yüzeyi okur; hiçbirini kurup ölçmedi** — bir özelliğin
+sayfada yazması onun çalıştığı anlamına gelmez ve aşağıdaki her satır o kayıtla okunmalıdır.
+
+*StackVo tarafı:* ağaçtan ölçüldü, belgeden değil — 113 Rust modülü / 111.843 satır,
+309 IPC komutu, 73 olay, 41 CLI komutu, 34 MCP aracı, 28 scaffold şablonu, 16 tespit
+işareti, 31 servis paketi, 7 içe aktarma kaynağı, 9 tünel sağlayıcı, 5 web sunucusu,
+8 çalışma zamanı, 26 panel.
+
+---
+
+## L1. Kategori haritası — 17 ürün
+
+| # | Ürün | Motor | Platform | Lisans / fiyat | Konum |
+| --- | --- | --- | --- | --- | --- |
+| 1 | **Laradock** | Docker Compose, GUI yok | Linux / mac / Win | MIT | 130+ servisli "kütüphane"; 10 yıl, 450 katkıcı |
+| 2 | **Laravel Herd** | Yerel ikili (konteyner yok) | Win / mac — **Linux yok** | Ücretsiz / Pro **$99·yıl** / Teams $299 | Kategori lideri, ticari |
+| 3 | **Lerd** | **Rootless Podman + systemd** | Linux / mac / WSL2 | MIT | Herd'in açık kaynak yanıtı |
+| 4 | **ServBay** | Yerel ikili | mac 12+ / Win 10+ | Ücretsiz / Pro **$59·yıl** / Team $399 | "AI-native"; en geniş dil yelpazesi |
+| 5 | **Lando** | Docker + JS eklenti çerçevesi | Linux / mac / Win | Ücretsiz — 501(c)(3) vakıf | DevOps çerçevesi |
+| 6 | **Yerd** | **~8 MB tek Rust daemon** | mac / Linux | MIT | Minimalist Valet |
+| 7 | **DDEV** | Docker + Go | Linux / mac / Win / **bulut** | Apache-2.0 | Kurumsal ve CMS lideri |
+| 8 | **dde** | Docker + Traefik v3 + dnsmasq | mac / Linux | AGPL-3.0 | Worktree + eklenti |
+| 9 | **EnvKit** | Yerel ikili | Win 10/11, mac | Ücretsiz (public beta) | Laragon göçmeni avcısı |
+| 10 | **Laragon** | Yerel, **taşınabilir** | Windows | Ücretsiz + ticari lisans (2025) | Eski hacim lideri |
+| 11 | **FlyEnv** | Yerel ikili | Win / mac / Linux | Açık kaynak | Çok dilli + MCP |
+| 12 | **ForgeKit** | Yerel, **kapalı kaynak** | Windows | Ücretsiz, hesapsız | Çoklu izole instance |
+| 13 | **Kettle Code** | Yerel, `~/.kettle` | macOS | Tamamen ücretsiz | Apache 2.4 + **18 MCP aracı** |
+| 14 | **XAMPP** | Yerel | Win / Linux / mac | Ücretsiz | **Donmuş** — PHP 8.2, 2023 |
+| 15 | **Larabox** | Yerel | Windows | Ücretsiz | "Larabox Shell" + zamanlayıcı |
+| 16 | **Devilbox** | Docker | Linux / mac / Win | Açık kaynak | LAMP/MEAN + intranet paneli |
+| 17 | **Laraflare** | **Rust + Tauri**, yerel | Windows (mac/Linux yolda) | Ücretsiz, telemetrisiz | StackVo'nun teknoloji ikizi |
+
+**StackVo:** Docker + Rust/Tauri, mac / Linux / Win, MIT, ücretsiz.
+
+### Bu tablodan çıkan dört gerçek
+
+**1. Motor tercihi kategoriyi ikiye bölmüş ve büyüyen yarı konteynersiz.** 17 üründen
+**11'i** konteyner kullanmıyor; altısı kullanıyor (Laradock, Lando, DDEV, Devilbox, dde ve
+— Docker değil ama konteyner — Lerd). Konteyner tarafındakilerin üçü kategorinin en
+eskileri (Laradock 2015, Devilbox, Lando), biri kurumsal/CMS'e konumlanmış (DDEV), ikisi
+yeni ve niş (dde, Lerd). Son üç yılda çıkan yeni ürünlerin biri hariç hepsi — Herd,
+ServBay, Yerd, EnvKit, ForgeKit, Kettle Code, Larabox, Laraflare — **yerel ikili** ile
+geldi ve hepsi aynı cümleyi satıyor: *"konteyner yok, VM yok, sistem kirlenmiyor."*
+Tek istisna Lerd ve o da konteyneri gizlemiyor, **rootless Podman**'i ürünün başlığı
+yapıyor: *"no daemon, no sudo, no system pollution."*
+
+**2. MCP artık giriş bileti.** 17 üründen en az yedisi MCP sunucusu sevk ediyor — Lerd
+(11 araç), Kettle Code (18 araç), ServBay (50+ servise erişim), EnvKit, FlyEnv, Herd
+(Laravel Boost üzerinden), ve StackVo (34 araç). Bu, `mcp.rs`'in başlığındaki *"in 2026 it
+is the price of entry rather than a differentiator"* cümlesini doğruluyor.
+**StackVo bu alanda araç sayısıyla önde** (34 vs 18 vs 11) ve *hangi aracın hangi sözleşme
+komutunu uyguladığını build'de doğrulayan* tek ürün.
+
+**3. Ücretli özellik hep aynı şey: telemetri penceresi.** Herd Pro ($99), ServBay Pro ($59)
+ve ücretsiz rakiplerin hepsinin öne çıkardığı özellik `dump()`/`dd()` yakalama, sorgu
+kaydı, N+1 tespiti, iş/görünüm/olay akışı ve mail kutusu. Bu, StackVo'nun **zaten
+sahip olduğu** yüzeyin büyük kısmı — ve L5-R11'de tam olarak nerede yarım kaldığı yazılı.
+
+**4. Bir göç savaşı var ve iki büyük taban serbest.** XAMPP PHP 8.2'de donmuş (2023 sonu,
+sayfası hâlâ 8.2.12 diyor); Laragon 2025'te ticarileşti. Kategorinin geri kalanı bu iki
+tabanı topluyor: ForgeKit "XAMPP, WAMP veya Laragon'dan doğrudan göç", EnvKit "Laragon'dan
+toplu içe aktarma", Kettle Code MAMP/Herd/ServBay karşılaştırma sayfaları,
+ForgeKit `/guides/best-local-php-development-environments-windows`.
+**StackVo bu savaşta en geniş silaha sahip ve savaşa girmemiş** — bkz. L5-R14.
+
+---
+
+## L2. StackVo'nun bugünkü yüzeyi, rakip yüzeyine karşı
+
+### Tablo A — Temel (yerel-ikili rakipler)
+
+| | **StackVo** | Herd | Lerd | ServBay | EnvKit | Laragon | Kettle Code |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Motor | **Docker** | yerel | Podman | yerel | yerel | yerel | yerel |
+| Windows | CI'da yeşil¹ | ✅ | WSL2 | ✅ | ✅ | ✅ tek | ❌ |
+| macOS | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ tek |
+| Linux | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Fiyat | **ücretsiz** | $99·yıl | ücretsiz | $59·yıl | ücretsiz | ticari | ücretsiz |
+| PHP sürümleri | 5.6–8.5 (12) | 7.4–8.5 | 7.4–8.5 | 5.6–8.5 | 7.4+ | 8.2–8.4 | 8.0–8.5 |
+| Site başına PHP | ✅ | ✅ | ✅ | ✅ | ✅ | profil | ✅ |
+| **PHP değiştirme maliyeti** | **imaj derleme** | anında | anında | anında | anında | anında | anında |
+| Varsayılan TLD | **`.loc`** | `.test` | `.test` | seçilir | `.test` | `.test` | `.test` |
+| Yerel CA / HTTPS | ✅ mkcert | ✅ | ✅ mkcert | ✅ + ACME | ✅ | ✅ | ✅ mkcert |
+| DNS sunucusu | ✅ `dns.rs` | ✅ | ✅ | ✅ dnsmasq | ✅ | hosts | ✅ dnsmasq |
+| Taşınabilir kurulum | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+¹ `.github/workflows/ci.yml:24` matrisi `windows-latest` içeriyor ve iş yeşil. Ama
+`README.md` hâlâ *"those blocks have never been compiled"* diyor — bkz. L5-R1.
+
+### Tablo B — Temel (Docker tabanlı rakipler)
+
+| | **StackVo** | DDEV | Lando | Laradock | Devilbox | dde |
+| --- | --- | --- | --- | --- | --- | --- |
+| GUI | ✅ masaüstü | pano | ❌ | ❌ | web paneli | ❌ |
+| CLI | ✅ 41 komut | ✅ | ✅ | ❌ | ❌ | ✅ |
+| TUI | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| MCP | **✅ 34 araç** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Ters vekil | Traefik | nginx-proxy | nginx | nginx | nginx | **Traefik v3** |
+| Servis sayısı | 31 paket | eklenti kaydı | reçete | **130+** | ~15 | 4 |
+| Bulut/Codespaces | ❌ | **✅** | ❌ | ❌ | ❌ | ❌ |
+| Sağlayıcı pull/push | mekanizma² | **✅ 4 reçete** | ✅ | ❌ | ❌ | ❌ |
+| Eklenti/özel komut | ❌² | **✅** | **✅ JS** | ❌ | ❌ | **✅** |
+| Git worktree | **✅ + DB + env** | ❌ | ❌ | ❌ | ❌ | ✅ host + TLS |
+| Paket yöneticisiyle kurulum | ❌ | brew/apt/dnf | brew | git clone | git clone | brew/apt/apk/pacman |
+
+² Mekanizma bitmiş, katalog boş — L5-R5 ve L5-R6.
+
+### Tablo C — Geliştirici araçları
+
+| | **StackVo** | Herd Pro | Lerd | Yerd | EnvKit | ServBay |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dump()`/`dd()` penceresi | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Sorgu kaydı | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| N+1 tespiti | ✅ | — | ✅ | — | ✅ | — |
+| **İş / kuyruk olayları** | **❌** | ✅ | ✅ | ✅ | ✅ | — |
+| **Görünüm render** | **❌** | ✅ | — | ✅ | ✅ | — |
+| **Giden HTTP** | **❌** | — | — | ✅ | ✅ | — |
+| **Cache hit/miss** | **❌** | — | — | ✅ | — | — |
+| Xdebug adım hata ayıklama | ✅ tek anahtar | ✅ | ✅ | — | ✅ | ✅ |
+| Örnekleyici profilleyici (SPX) | ✅ | — | ✅ | — | — | — |
+| Alev grafiği | ✅ gerçek yığın | — | ✅ | — | — | — |
+| **Zaman ekseni (dump+sorgu korelasyonu)** | **✅ tek** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| REPL / Tinker | ✅ | Tinkerwell (ayrı ürün) | ✅ Monaco | — | — | — |
+| Mail yakalayıcı | ✅ + relay | ✅ | ✅ | ✅ SMTP | ✅ Mailpit | ✅ tam sunucu |
+| IDE hata ayıklama yapılandırması | ✅ yazıyor | tablo | tablo | — | — | tablo |
+
+### Tablo D — StackVo'nun tek ya da neredeyse tek olduğu yerler
+
+| Özellik | StackVo | Kategorinin geri kalanı |
+| --- | --- | --- |
+| **İmzalı servis paketi kaydı** (minisign → sha256 → sha256, anahtar rotasyonu, geri çekme) | ✅ | Hiçbiri. DDEV'in eklenti kaydı imzasız |
+| **Kurumsal politika dosyası** (MDM, kilitli anahtar, registry aynası) | ✅ | Yalnız Herd Teams (lisans yönetimi, politika değil) |
+| **Sırların OS keystore'una taşınması** | ✅ | Hiçbiri |
+| **Worktree'ye kendi veritabanı + ortam** | ✅ | dde host+TLS veriyor, DB/env vermiyor |
+| **Zaman ekseni** — dump ve sorgunun tek eksende | ✅ | Hiçbiri |
+| **Devcontainer ihracı** | ✅ | Hiçbiri (DDEV Codespaces'te *koşuyor*, ihraç etmiyor) |
+| **7 kaynaktan içe aktarma** | ✅ | ForgeKit 3, EnvKit 1 |
+| **9 sağlayıcılı tünel + parola muhafızı + kalıcı adres** | ✅ | Herd Expose (1), Laragon ngrok (1), ServBay 3 |
+| **Erişilebilirlik uyum beyanı (EN 301 549)** | ✅ | Hiçbiri |
+| **İki dilli arayüz + 103 yardım konusu iki dilde** | ✅ | EnvKit "multi-language" (kapsam yazılı değil) |
+| **Sözleşme ile doğrulanan IPC/MCP/CLI yüzeyi** | ✅ | Hiçbiri |
+| **41 CLI + TUI + MCP + pencere: dört yüzey, tek çekirdek** | ✅ | Lerd (GUI+TUI+MCP) en yakını |
+
+Bu sütun kısa değil ve rapor bunu abartmıyor: **kategoride hiçbir ürünün tedarik zinciri,
+kurumsal dağıtım ve erişilebilirlik tarafında StackVo'ya yakın bir yüzeyi yok.** Sorun bu
+sütunun boş olması değil; L5'teki on altı satırın ona rağmen açık olması.
+
+---
+
+## L3. Servis kataloğu — 31 pakete karşı ne var
+
+Ölçüldü (`stackvo-service-packages/packages/`):
+
+```
+databases   cassandra clickhouse mariadb mongo mysql postgres        (6)
+cache       dragonfly memcached redis valkey                          (4)
+search      elasticsearch kibana meilisearch solr typesense           (5)
+queue       kafka rabbitmq soketi                                     (3)
+storage     minio                                                     (1)
+monitoring  grafana graylog prometheus                                (3)
+admin-uis   adminer kafbat mongo-express pgadmin phpcacheadmin phpmyadmin (6)
+devtools    blackfire mailhog mailpit                                 (3)
+```
+
+Laradock'un 130+ servisiyle yarışmak **kasıtlı olarak reddedilmiş** ve gerekçesi
+`vector_capability.rs`'de yazılı: *"Laradock's 130 services is already written down as a
+fight not to have."* Bu doğru bir karar. Ama listede reddedilmemiş, sadece düşünülmemiş
+olanlar var:
+
+| Eksik | Neden önemli | Sınıf |
+| --- | --- | --- |
+| **MSSQL / SQL Server** | `config.rs:83` PHP uzantı listesi `sqlsrv` ve `pdo_sqlsrv` sunuyor. Bu uzantıları açan kullanıcının bağlanacağı **hiçbir servis yok**. Laradock'ta var, DDEV .NET/Umbraco için destekliyor | **İç çelişki** |
+| **Beanstalkd** | Laravel'in kutudan gelen beş kuyruk sürücüsünden biri (`QUEUE_CONNECTION=beanstalkd`). `detect.rs` `QUEUE_CONNECTION` anahtarını okuyor ama beanstalkd'yi eşleyemiyor | Boşluk |
+| **Varnish** | PHP/Magento/Drupal dünyasında yaygın; Laradock ve Devilbox'ta var | Boşluk |
+| **OpenSearch** | Elasticsearch lisans göçünün varış noktası. `env.schema.json` adı anıyor, paket yok | Boşluk |
+| **LocalStack** | AWS S3/SQS/SNS taklidi. `minio` yalnız S3'ü karşılıyor | Boşluk |
+| **Keycloak** | OIDC/SAML sağlayıcı. `oauth.rs` yönlendirme URI'sini veriyor ama karşısında bir sağlayıcı yok | Boşluk |
+| **NATS, Mosquitto (MQTT), CouchDB, Neo4j, Percona** | Laradock'ta var, talep dar | Düşük |
+
+**Ollama ve Qdrant kasıtlı olarak dışarıda** ve gerekçesi ölçülmüş: `vector_capability.rs`
+Apple Silicon'da konteynerli Ollama'nın **3–5× yavaş** olduğunu ve bunun kapanmayacak bir
+fark olduğunu yazıyor, ve kararı Ağustos 2026'da yeniden ölçtüğünü söylüyor. Bu, bu
+depodaki en iyi rekabet kaydı ve L5-R12'nin şablonu.
+
+---
+
+## L4. Şablon ve tespit listeleri birbirini tanımıyor
+
+Ölçüldü: `scaffold.rs:85` **28 şablon** üretiyor, `detect.rs:215-410` **16 işaret**
+tanıyor, ve iki liste arasında hiçbir bağ yok.
+
+| | Şablon var | Tespit var |
+| --- | --- | --- |
+| laravel, wordpress, symfony, drupal, cakephp, codeigniter, slim | ✅ | ✅ |
+| nextjs, nuxt, astro, nest | ✅ | ✅ |
+| **magento, statamic** | ❌ | ✅ |
+| **remix, sveltekit** | ❌ | ✅ |
+| **yii, laminas, typo3, prestashop** | ✅ | ❌ |
+| **django, flask, fastapi, rails, sinatra, gin, echo, rocket** | ✅ | ❌ |
+| **tina, angular, vue, react, svelte** | ✅ | kısmen (`vite`) |
+
+İki yönlü sonuç:
+
+- Var olan bir **Yii, TYPO3, Laminas veya PrestaShop** klasörünü benimseten kullanıcı
+  jenerik bir PHP projesi alıyor — oysa aynı çatı için bu uygulamada sıfırdan proje
+  açabiliyor. Bu, kullanıcıya "bu araç Yii'yi bilmiyor" gibi görünüyor; biliyor.
+- **Django, Rails, Flask, FastAPI, Gin, Echo, Sinatra, Rocket** için de aynısı — bunlar
+  Python/Go/Ruby/Rust olarak doğru tespit ediliyor ama çatısı bilinmiyor, yani
+  `manage.py`/`Gemfile`/`main.go` olan bir klasör doğru çalışma zamanını alıp yanlış
+  giriş noktasıyla geliyor olabilir.
+
+Karşılaştırma: **Lerd dokuz PHP çatısı tespit ediyor** (Laravel, Symfony, WordPress,
+Drupal, Magento, CakePHP, Statamic, CodeIgniter, Tempest) — StackVo'nun PHP tespiti de tam
+dokuz ve neredeyse aynı liste; fark Tempest'in olmaması ve Slim'in fazladan olması. Yani
+**tespit tarafı rakiple başa baş, şablon tarafı üç katı, ve ikisi birbirinden habersiz.**
+
+> **Yapılacak:** `Template::ALL` ile `detect::MARKERS` arasına `foreign_import.rs`
+> desenindeki bağ testini koy — ama parite değil, **kapsama raporu** olarak: hangi şablonun
+> tespit karşılığı yok, hangi tespitin şablonu yok. İkisinin eşit olması gerekmiyor
+> (`vite` bir çatı değil); listelerin **habersiz** olmaması gerekiyor.
+
+---
+
+## L5. Bulgular — rakiplerde var, StackVo'da yok
+
+Sıra önem sırasına göre; her satır ölçülmüş bir yerden geliyor.
+
+### R-1 (P0). Windows: hacim orada, ve README hâlâ "hiç derlenmedi" diyor
+
+17 üründen **dördü yalnız Windows** (Laragon, ForgeKit, Larabox, Laraflare — sonuncusu
+mac/Linux'u "yolda" diyor), üçü Windows + macOS (Herd — kendi sayfası Windows'u birincil
+hedef olarak anıyor —, ServBay, EnvKit), altısı üç platform (Laradock, Lando, DDEV,
+Devilbox, FlyEnv, XAMPP). **Windows'u destekleyen 13 / 17.** Windows'u desteklemeyen
+üç ürün — Yerd, dde, Kettle Code — kategorinin en küçükleri. Bu kategoride Windows
+azınlık değil, **kütlenin bulunduğu yer**.
+
+Ağaçtaki durum: `.github/workflows/ci.yml:24` matrisi `windows-latest` içeriyor, git
+geçmişinde `0b1ab2d Fix the four Windows failures one run could finally show at once`
+var, yani **Windows blokları artık derleniyor ve test ediliyor.**
+
+`README.md` ise hâlâ şunu diyor:
+
+> *"What is **not** verified: the handful of `#[cfg(target_os = "windows")]` blocks in
+> `engine.rs`, `hosts.rs` and `pty.rs`. … they have never been compiled."*
+
+İki cümle ayrışmış ve **belge kodun gerisinde**. Bu, P0-5'in (README üreteç bölümü)
+aynı sınıftan ikinci örneği ve P1-2'nin (README iddia denetimi yok) doğrudan sonucu.
+
+Ama derlenmek çalışmak değildir. Rakiplerin sattığı Windows deneyimi — hosts dosyası,
+adlandırılmış boru, PowerShell yükseltme istemi, `.test` çözümlemesi — bir CI koşusunun
+göremeyeceği şeyler.
+
+> **Yapılacak:** (1) README'nin Windows paragrafını CI'nin bugünkü haline göre yeniden
+> yaz — "derlenmedi" yerine "derleniyor ve birim testleri geçiyor; gerçek bir makinede
+> el ile doğrulanmadı". (2) Yayın öncesi bir Windows makinesinde `preflight` → proje
+> oluştur → `up` → tarayıcıda aç turunu **elle** koş ve sonucu yaz. Bu, kategorinin en
+> büyük yarısına girip girmediğinin cevabı.
+
+### R-2 (P0). Docker zorunluluğu ve onun iki görünür maliyeti
+
+Kategorinin **11/17'si konteynersiz** ve hepsi aynı şeyi satıyor. StackVo'nun Docker
+tercihi mimarinin temeli ve geri alınacak bir şey değil — ama bedeli ölçülmemiş ve
+yazılmamış:
+
+| Ne | StackVo | Yerel rakipler |
+| --- | --- | --- |
+| İlk kurulum | Docker Desktop + imaj çekme (GB) | tek kurucu (~100 MB) |
+| Bir projenin ilk `up`'ı | imaj derleme (dakikalar) | saniyeler |
+| **PHP sürümünü değiştirme** | manifest → `generator::render` → `docker compose build` | anında |
+| Boşta RAM | Docker VM + Traefik + servisler | Laraflare `< 50 MB`, Laragon 4–10 MB |
+
+**"PHP sürümünü değiştirmek yeniden derleme demek"** cümlesi bu ürünün en görünür
+farkı ve hiçbir belgede yazmıyor. Rakiplerin tamamı bunu ilk özellik olarak satıyor.
+
+**Podman desteklenmiyor.** `engine.rs:59-134` soketleri sınıflandırıyor ve Colima ile
+OrbStack'i tanıyor (ikisi de Docker API uyumlu), ama Podman'ın rootless soketi
+(`$XDG_RUNTIME_DIR/podman/podman.sock`) listede yok. Lerd tüm ürününü *"rootless Podman,
+zero daemon"* üzerine kurmuş ve Linux kullanıcıları için bu gerçek bir talep.
+Bu, önceki raporun "8. Şunlar da olsaydı" listesinde 6. madde olarak duruyor ve orada
+kalması yeterli değil: Podman'ın Docker uyumlu soketi zaten var, iş bir yol eklemek ve
+bir uyumluluk testi yazmak.
+
+> **Yapılacak:** (1) `engine.rs`'in soket arama listesine Podman'ın rootless soketini
+> ekle ve `daemon.rs`'in cevabı yorumlamasını Podman'a karşı bir fikstürle test et.
+> (2) Yukarıdaki tabloyu README'ye koy. Bir kullanıcının bu ürünü seçme ya da seçmeme
+> kararını en çok etkileyen dört satır bu ve bugün hiçbiri yazılı değil.
+
+### R-3 (P1). Varsayılan TLD `.loc` — ayrılmış bir ad değil
+
+Ölçüldü: `config.rs:97` `DEFAULT_TLD_SUFFIX = "stackvo.loc"`, `commands.rs:7409` benimseme
+yolunda `format!("{name}.loc")`, `certs.rs:31` `FALLBACK_SUFFIX = "stackvo.loc"`.
+
+Rakiplerin varsayılanları: Herd `.test`, Lerd `.test`, Yerd `.test`, dde `.test`,
+EnvKit `.test`, Laragon `.test`, Kettle Code `.test`, Larabox `.test`, Laraflare `.test`,
+ForgeKit `.test`/`.local`/`.localhost`, DDEV `.ddev.site` (gerçek bir alan adı,
+127.0.0.1'e çözümleniyor).
+
+**`.test` RFC 6761'de özel amaçlı üst düzey alan adı olarak ayrılmıştır ve asla delege
+edilmeyecektir.** `.loc` ayrılmamıştır. Bugünkü sonucu iki tane:
+
+- Bir StackVo alan adı çözümlenemediğinde (hosts satırı yok, DNS sunucusu kapalı) sorgu
+  **yukarı çıkar** ve kullanıcının ISS'sinin çözümleyicisine `shop.loc` diye bir soru
+  gider. `.test` bunu tanımı gereği yapmaz.
+- ICANN `.loc`'u bir gün delege ederse her StackVo alan adı gerçek bir siteyle çakışır.
+
+`env.schema.json` `DEFAULT_TLD_SUFFIX` için *"Project domains do NOT use it"* diyor, yani
+proje alan adları `<ad>.loc` biçiminde ve bu anahtardan bağımsız — dolayısıyla ayarı
+`.test` yapan bir kullanıcı bile projelerinde `.loc` alıyor. Bu, A-2'nin (kabul yolu
+ayarları okumuyor) daha geniş hali.
+
+> **Yapılacak:** varsayılanı `.test`e çevir; var olan kurulumlarda `.loc`'u koru (bir
+> alan adını değiştirmek herkesin yer imlerini bozar) ve `doctor`'a bir satır ekle.
+> Yeni kurulumun `.test` alması geriye dönük uyumluluk sorunu değil.
+
+### R-4 (P1). Şablon ve tespit listeleri habersiz
+
+Tam ölçüm L4'te. Özet: 28 şablon, 16 işaret, sıfır bağ; dört PHP çatısı ve sekiz
+PHP-dışı çatı yalnız bir yönde biliniyor.
+
+### R-5 (P1). Sağlayıcı mekanizması bitmiş, katalog boş
+
+`provider.rs` DDEV'in `pull`/`push`'unu **daha sıkı** bir tehdit modeliyle uygulamış:
+argv dizisi (kabuk yok), yalnız konteyner (host varyantı yok ve olmayacak), yön başına
+onam, keystore'dan gelen sırlar, sembolik bağ reddi, `push` denetim kaydına yazılıyor.
+Bu tasarım DDEV'inkinden iyi ve modülün başlığı bunu gerekçesiyle yazmış.
+
+Ama reçeteler **projenin kendi `stackvo.json`'ından** okunuyor (`provider.rs:242` —
+`json.get("providers")`) ve depoda **sevk edilen tek bir reçete yok.** DDEV'de
+`.ddev/providers` her projede Upsun, Acquia ve Lagoon reçeteleriyle **hazır geliyor**;
+Pantheon, git, rsync ve yerel dosya için örnekler var.
+
+Sonuç: StackVo'da bu özelliği kullanmak için önce reçete formatını öğrenip elle yazmak
+gerekiyor. *"Kategorinin bulduğu en büyük boşluk"* diye nitelenen özellik, kullanıcının
+karşısına boş bir alanla çıkıyor.
+
+> **Yapılacak:** üç reçeteyi sevk et — SSH+mysqldump (en yaygın, hiçbir sağlayıcıya
+> bağlı değil), Upsun ve Pantheon. Servis paketi kaydı zaten imzalı dağıtım için var;
+> reçeteler de oradan gelebilir, bu da katalogun ikinci içerik türü olur.
+
+### R-6 (P1). Kullanıcı ve paket düzeyinde komut/eklenti yüzeyi yok
+
+Karşılaştırma:
+
+| Ürün | Kullanıcı kendi komutunu nasıl ekler |
+| --- | --- |
+| **DDEV** | `.ddev/commands/{host,web}/<ad>` — dosya bırak, komut olsun; ayrıca eklenti kaydı |
+| **Lando** | `.lando.yml` `tooling:` bloğu + JS eklenti çerçevesi |
+| **dde** | proje-yerel ve global eklentiler, özel komutlar |
+| **Laragon** | `Procfile` ile herhangi bir servis (MeiliSearch örneği), oto-başlatma |
+| **StackVo** | Proje `stackvo.json` → `commands` ✅ … ve başka hiçbir yol |
+
+StackVo'nun proje-başına `commands` alanı doğru tasarlanmış ve README'de gerekçesi yazılı
+(*"they run in the project's container and nowhere else"*). Kapalı olan iki yüzey:
+
+- **Makine geneli komut yok.** `quickcmd.rs:119` — *"Adding a row here is the only way to
+  add a command."* Bu, önceki raporun A-4'ü ve orada "bilinçli ama yazılı değil" olarak
+  sınıflandırılmış. Rekabet bağlamında sınıf değişiyor: dört rakip bunu **ilk sırada**
+  satıyor.
+- **Bir paket komut getiremiyor.** Servis paketi kaydı bir compose parçası ve
+  yapılandırma taşıyabiliyor; bir komut taşıyamıyor. DDEV'in eklenti kaydının cazibesinin
+  yarısı bu — `ddev-redis` sadece Redis'i değil, `ddev redis-cli`'yi de getiriyor.
+
+Güvenlik gerekçesi geçerli ve terk edilmemeli: kabuk dizgesi yok, argv var. Ama
+`hooks.rs` ve `cron.rs` kullanıcının yazdığı komutları **zaten çalıştırıyor**, yani yasak
+kataloğun kapalılığından geliyor, argv kuralından değil.
+
+> **Yapılacak:** (1) `<root>/commands.json` — makine geneli, `stackvo.json`'ın `commands`
+> şemasının aynısı, aynı argv kuralı, aynı konteyner sınırı. Yeni bir tehdit modeli
+> gerekmiyor, var olan iki tanenin birleşimi. (2) Paket manifestine `commands` alanı,
+> aynı imza zincirinden geçerek.
+
+### R-7 (P2). Servis kataloğunda dört gerçek eksik
+
+Tam ölçüm L3'te. Öncelikli: **MSSQL** (PHP uzantı listesi `sqlsrv` sunuyor, bağlanacak
+servis yok — iç çelişki), **Beanstalkd** (Laravel'in kutudan gelen kuyruk sürücüsü,
+`detect.rs` `QUEUE_CONNECTION`'ı okuyor ama eşleyemiyor), **OpenSearch**, **Varnish**.
+
+### R-8 (P2). Telemetri penceresi yarım — ve alan zaten açılmış
+
+`debugbridge.rs:144` `Event` bir `kind` alanı taşıyor ve `timeline.rs:12` o alanın doğuş
+gerekçesini alıntılıyor: *"so queries and jobs do not need a second file and a second
+reader when they arrive."*
+
+Ölçüldü: üretim kodunda `kind` alanına yazılan tek değer **`"dump"`**
+(`timeline.rs:235`, `debugbridge.rs:727` — köprü yalnız `dump`, `dd` ve
+`__stackvo_emit`'i sarıyor). Yani alan hazır, mekanizma hazır, tek olay türü var.
+
+Rakiplerin akıttığı, StackVo'nun akıtmadığı: **kuyruk işleri** (Herd Pro, Lerd, Yerd,
+EnvKit), **görünüm render** (Herd Pro, Yerd, EnvKit), **giden HTTP istekleri** (Yerd,
+EnvKit), **cache hit/miss** (Yerd), **olay gönderimi** (EnvKit).
+
+Bunlar Herd Pro'nun $99'unun ve EnvKit'in tüm konumlanmasının içeriği. StackVo'da
+`worker.rs` kuyruk **işçisini** yönetiyor ve `SchedulerPane` zamanlanmış işleri
+gösteriyor — ama bir işin *ne zaman alındığı, ne kadar sürdüğü, başarısız olup olmadığı*
+akmıyor.
+
+> **Yapılacak:** `__stackvo_emit`'in yanına Laravel için dört olay dinleyicisi
+> (`JobProcessed`, `QueryExecuted` zaten var, `RequestHandled`, `MessageSent`) —
+> `kind` alanı ve `timeline.rs`'in ekseni ikisi de bunu bekliyor. Bu, tek bir modülde
+> ücretli rakiplerin ana satış kalemini kapatıyor.
+
+### R-9 (P2). Paket yöneticisiyle kurulum yok
+
+`tools/check-installers.mjs:64-69` altı biçim tanıyor: `deb`, `rpm`, `AppImage`, `dmg`,
+`msi`, `nsis`. Hepsi doğrudan indirme.
+
+| Rakip | Kurulum yolu |
+| --- | --- |
+| dde | `brew`, `apt`, `apk`, `pacman` |
+| DDEV | `brew`, `apt`, `yum`/`dnf`, WSL2 |
+| Lando | `brew` |
+| StackVo | **yalnız indirme** |
+
+Homebrew cask ve winget, ikisi de bir manifest PR'ı ve otomatik güncellenebiliyor.
+Kategoride kurulumun kolaylığı satılan ilk şey ("one liner install" — Lando'nun kendi
+ifadesi).
+
+> **Yapılacak:** yayın etiketlendikten sonra Homebrew cask + winget manifesti. `release.yml`
+> zaten altı hedefin sha256'sını üretiyor, yani girdi hazır.
+
+### R-10 (P2). Java, .NET ve iki web sunucusu yok — ve karar yazılı değil
+
+| | StackVo | ServBay | FlyEnv | Laradock |
+| --- | --- | --- | --- | --- |
+| Çalışma zamanları | php, node, python, go, ruby, rust, bun, deno (8) | + **Java 7–24**, **.NET 2.0–10**, Mono | + Java | + Java (Tomcat) |
+| Web sunucuları | nginx, apache, caddy, frankenphp, swoole (5) | + Tomcat | + Tomcat | + **OpenResty**, **RoadRunner**, Tomcat |
+
+İki not:
+
+- **RoadRunner özellikle eksik.** Laravel Octane'ın iki sürücüsü Swoole ve RoadRunner;
+  StackVo Swoole'u destekliyor, RoadRunner'ı desteklemiyor. Bu bir çiftin yarısı ve
+  Octane kullanan bir Laravel projesi için ikili bir seçim.
+- **Java/.NET bir konum sorusu.** StackVo kendini "PHP ve Node projeleri" olarak
+  tanımlıyor (ARCHITECTURE.md §1) ama sekiz çalışma zamanı üretiyor. Sekiz mi, on mu
+  olacağı bir karar; kararın **yazılı olmaması** sorun. `manifest::LANG_RUNTIMES`'in
+  başlığı hangi çalışma zamanının neden listede olmadığını söylemiyor.
+
+### R-11 (P2). Takım paylaşımı yarım kalıyor
+
+| Ürün | Takıma ne gidiyor |
+| --- | --- |
+| DDEV | `.ddev/config.yaml` repoda — klonlayan aynı ortamı alıyor |
+| Lando | `.lando.yml` repoda |
+| Herd | `herd.yml` repoda (Pro) |
+| dde | proje dosyası repoda |
+| **StackVo** | `stackvo.json` repoda ✅ **+** `preset` — ama preset repoda değil |
+
+`preset.rs` doğru sorunu bulmuş ve gerekçesi kusursuz: klonlayan `stackvo.json`'ı zaten
+alıyor, almadığı şey **hangi servislerin hangi sürümde açık olduğu**, çünkü o `.env`'de.
+`preset::save` bunu bir dosyaya yazıyor ve `apply_file` uyguluyor.
+
+Eksik olan tek şey **yerleşim kuralı**: preset dosyasının nereye konacağı ve klonlayanın
+onu nasıl bulacağı hiçbir yerde yazmıyor. DDEV'de bu soru yok — dosya `.ddev/` içinde ve
+`ddev start` onu okuyor. StackVo'da kullanıcı dosyayı dışa aktarıyor, bir yere koyuyor,
+takım arkadaşı buluyorsa açıyor.
+
+> **Yapılacak:** kurallı bir yol — `<proje>/stackvo.preset.json`, ve proje açılırken
+> uygulanmamış bir preset varsa bir satırlık bildirim. `MigrationGate`/`CatalogueGate`
+> deseni zaten ağaçta.
+
+### R-12 (P3). Koddaki üç rekabet iddiası bayat
+
+Bu depo iddialarını testle koruyor — ama bir dış dünya iddiası test edilemez, tarihlenir.
+`vector_capability.rs` bunu doğru yapıyor: *"Re-measured August 2026, against a
+competitive review that listed Ollama in Laradock, ServBay and FlyEnv."* Diğer üçü
+tarihsiz ve üçü de artık yanlış:
+
+| Yer | İddia | Bugün |
+| --- | --- | --- |
+| `worktree.rs:9` | *"the one thing in the competitive review that nothing else in this space does"* | **dde** her worktree'ye kendi hostname'i ve TLS sertifikasını veriyor. StackVo'nunki hâlâ daha ileri (kendi veritabanı + ortam değişkenleri) ama "nothing else" yanlış |
+| `imports.rs:3` | *"**Two** of them, and the reason is a window rather than a feature list"* | `ALL` **yedi** kaynak taşıyor: Xampp, Laragon, Mamp, Valet, Sail, Herd, **Ddev** |
+| `mcp.rs:3` | *"**Five of the eight** competitors ship one"* | Bu turda ölçülen 17 üründen en az yedisi MCP sevk ediyor; "sekiz rakip" tabanı da artık dar |
+
+> **Yapılacak:** üçünü de `vector_capability.rs` desenine getir — iddiayı **tarihle**
+> yaz ("Ağustos 2026'da ölçüldü: …"). Tarihli bir iddia eskidiğinde yanlış olmaz,
+> *eski* olur; tarihsiz olan sessizce yanlışa döner. Bu, §7a'nın "gerekçe kodun yanında
+> yaşar" kararının doğal uzantısı.
+
+### R-13 (P3). Göç savaşı kazanılabilir durumda ve görünmüyor
+
+StackVo **yedi kaynaktan** içe aktarıyor — kategorinin en genişi. En yakını ForgeKit (3),
+sonra EnvKit (1, yalnız Laragon). Herd yalnız kılavuz yayınlıyor.
+
+Ve `imports.rs`'in tasarımı rakiplerinkinden dikkatli: kopyalama varsayılan, taşıma
+seçenek, **diğer kuruluma tek bayt yazılmıyor** — modülün kendi ifadesiyle *"EnvKit takes
+Laragon out of PATH as part of importing it; that is a decision about somebody else's
+machine made on their behalf, and it is exactly what this module does not do."*
+
+README'de bu özellikten **tek satır yok**. Karşılaştırma sayfası yok. Ekran görüntüsü yok.
+Rakiplerin hepsinde var: Kettle Code'un `/compare/servbay`, `/compare/mamp`,
+`/compare/laravel-herd` sayfaları; ForgeKit'in `/guides/best-local-php-development-
+environments-windows`'u; EnvKit'in Herd/Laragon/AppServ/XAMPP karşılaştırma tablosu.
+
+Bu bir pazarlama notu değil, **keşfedilebilirlik** notu: bu kategoride kullanıcı ürünü
+karşılaştırma sayfasından buluyor ve XAMPP'tan/Laragon'dan çıkmak isteyen kişi tam olarak
+bunu arıyor. P0-4 (README bir son kullanıcıya hitap etmiyor) bu maddeyle birleşiyor.
+
+### R-14 (P3). Bulut/uzak geliştirme ortamı desteklenmiyor
+
+DDEV **GitHub Codespaces** ve Gitpod içinde çalışıyor, devcontainer desteğiyle geliyor ve
+bunu ana sayfasında "cloud environments" olarak sayıyor.
+
+StackVo devcontainer **ihraç ediyor** (`devcontainer.rs`) — bu, DDEV'in yapmadığı bir şey
+ve doğru yönde. Ama StackVo'nun kendisi bir masaüstü uygulaması: bir Codespace içinde
+çalışmıyor ve çalışamaz. `websurface.rs` (loopback HTTP yüzeyi) ve `cli.rs` teoride
+başsız bir kullanımı mümkün kılıyor, ama bu bir ürün olarak konumlanmamış.
+
+Bu bir eksik değil, bir **sınır** — ve sınırın yazılı olması gerekiyor, çünkü kurumsal
+alıcının ilk sorularından biri.
+
+### R-15 (P3). Sürdürülebilirlik modeli yazılı değil
+
+| Ürün | Model |
+| --- | --- |
+| Herd | Pro $99·yıl, Teams $299 |
+| ServBay | Pro $59·yıl, Team $399·yıl |
+| Laragon | 2025'te ticarileşti |
+| DDEV | Sponsorluk — "iki tam zamanlı bakımcıyı finanse ediyor", 100+ kurumsal sponsor |
+| Lando | 501(c)(3) kâr amacı gütmeyen kuruluş |
+| Laradock | Sponsorluk ($478/ay, hedef $1.000) |
+| **StackVo** | MIT, ücretsiz — **model yazılı değil** |
+
+Ücretsiz olmak bir avantaj ve bu raporun onu küçültmesi gerekmiyor. Ama DDEV ve Lando'nun
+sponsorluk/vakıf cümlelerini ana sayfalarına koymalarının sebebi var: kurumsal bir alıcı
+"bu proje iki yıl sonra duruyor mu" diye soruyor ve cevabı olmayan projeyi almıyor.
+P4'ün (`SUPPORT.md`, `CODE_OF_CONDUCT.md`) eksik komşusu bu.
+
+### R-16 (P4). Taşınabilir kurulum yok — ve olamaz
+
+Laragon (tek klasör, kayıt defteri kaydı yok, kopyalayıp taşı), ForgeKit (her şey kendi
+dizininde), Laraflare (portable .zip), XAMPP. Bu, Windows tarafında satılan gerçek bir
+özellik.
+
+Docker mimarisinde imkânsız: imajlar ve volume'ler Docker'ın kendi deposunda. `STACKVO_ROOT`
+yarı bir cevap (workspace taşınabilir, motor değil).
+
+Bilinçli ve doğru bir sınır; **yazılı olması** gereken bir sınır.
+
+---
+
+## L6. Rakiplerin sattığı, StackVo'nun ölçüp reddettiği
+
+Rapor adil olsun diye: aşağıdakiler eksik değil, **verilmiş karar** — ve her birinin
+gerekçesi kodun içinde, ölçümle birlikte yazılı.
+
+| Ne | Nerede reddedildi | Gerekçe |
+| --- | --- | --- |
+| **Ollama / yerel LLM** | `tests/vector_capability.rs:16-29` | Docker Desktop macOS'ta Apple GPU'yu konteynere geçiremiyor; konteynerli Ollama Apple Silicon'da **3–5× yavaş**. "İstenen paket hiçbir şey yapmamaktan ölçülebilir biçimde kötü olurdu." M1'den M5'e kadar geçerli, Ağustos 2026'da yeniden ölçüldü |
+| **Qdrant** | aynı dosya | Zaten dört veritabanı var; beşincisi bir kategori açar |
+| **pgvector ayrı servis olarak** | aynı dosya | PostgreSQL'in kendisi — aynı protokol, port, volume, istemci. **Sürüm** olarak çözüldü (`16-pgvector`), servis olarak değil |
+| **Laradock'un 130 servisi** | aynı dosya | "a fight not to have" |
+| **Mutagen paketleme** | `perf.rs:15` | DDEV'in yaptığı; ikinci bir ikili ve ikinci bir hata yüzeyi |
+| **Sağlayıcı reçetesine ssh-agent** | `provider.rs:33-39` | DDEV geliştiricinin ssh agent'ını konteynere bağlıyor. Burada kural: "depo tarafından tanımlanmış bir konteyner host yolu almaz, ve bir ssh agent imza atan bir host yoludur." **Not:** projenin *kendi* konteyneri için ssh agent iletimi **var** (`site.rs:184-263`) ve macOS/Windows'ta VM sorununu doğru çözüyor. Reddedilen yalnız sağlayıcı reçetesi |
+| **Serbest metin editör/terminal kutusu** | `apps.rs` başlığı | Tespit daha iyi — ama "diğer…" seçeneği konmamış (A-3, hâlâ açık) |
+
+Bu tablo, önceki iki raporun "I. Bilerek yapılmış ve doğru olan sabitler" bölümünün
+rekabet karşılığı ve aynı işi görüyor: **bir eksik ile bir karar arasındaki fark, kararın
+yazılı olmasıdır.**
+
+---
+
+## L7. Ölçüm özeti
+
+| Ne | Sayı |
+| --- | --- |
+| İncelenen rakip ürün | 17 |
+| Doğrudan okunan site | 14 (3'ü 403/boş → doküman ve arama ile tamamlandı) |
+| Konteynersiz rakip | **11 / 17** (konteynerli 6, biri Podman) |
+| Windows'u destekleyen rakip | **13 / 17** (dördü yalnız Windows) |
+| MCP sevk eden rakip | ≥ 7 |
+| Ücretli katman taşıyan rakip | 3 (Herd, ServBay, Laragon) |
+| StackVo'nun tek olduğu ölçülen özellik | 12 (Tablo D) |
+| **Rakipte var, StackVo'da yok** | **16 bulgu** (R-1 … R-16) |
+| Bunların P0'ı | 2 (Windows doğrulaması, Docker maliyetinin yazılmaması) |
+| StackVo'nun ölçüp reddettiği | 7 (L6) |
+| Bayat rekabet iddiası (kodda) | **3** (`worktree.rs`, `imports.rs`, `mcp.rs`) |
+| Şablon (28) ↔ tespit (16) arasında bağ | **0** |
+| Servis paketi | 31 |
+| Katalogda olmayan ve gerçekten istenen servis | 4 (MSSQL, Beanstalkd, OpenSearch, Varnish) |
+| Sevk edilen sağlayıcı reçetesi | **0** (DDEV: 4 + 4 örnek) |
+| `debugbridge` olay türü — tanımlı alan / kullanılan | 1 (`"dump"`) |
+
+---
+
+## L8. Önerilen sıra
+
+**Yayından önce (rekabet bağlamında P0):**
+
+1. **Windows'u gerçek bir makinede elden geçir** ve README'nin "hiç derlenmedi"
+   paragrafını CI'nin bugünkü haline göre yeniden yaz. *(R-1 — kategorinin 13/17'si orada)*
+2. **Docker'ın dört maliyetini README'ye yaz** — kurulum boyutu, ilk `up`, PHP sürümü
+   değiştirme, boşta RAM. Bir kullanıcının bu ürünü seçme kararını en çok etkileyen
+   satırlar ve hiçbiri yazılı değil. *(R-2)*
+3. **Varsayılan TLD'yi `.test` yap** (var olan kurulumları koruyarak). Bir satırlık
+   varsayılan değişikliği, gerçek bir DNS sızıntısını kapatıyor. *(R-3)*
+4. **Yedi kaynaktan içe aktarmayı README'nin görünür yerine koy** ve bir karşılaştırma
+   sayfası aç. Kategorinin en geniş göç silahı bugün belgede yok. *(R-13, P0-4 ile birlikte)*
+5. **Koddaki üç bayat rekabet iddiasını tarihle.** `vector_capability.rs` deseni.
+   *(R-12)*
+
+**Yayından hemen sonra:**
+
+6. Şablon ↔ tespit kapsama testi; Magento ve Statamic'e şablon, Yii/TYPO3/Laminas/
+   PrestaShop'a tespit. *(R-4)*
+7. Üç sağlayıcı reçetesi sevk et (SSH+mysqldump, Upsun, Pantheon). *(R-5)*
+8. `debugbridge`'e kuyruk işi ve istek olayları — `kind` alanı ve zaman ekseni ikisi de
+   bekliyor; ücretli rakiplerin ana satış kalemi. *(R-8)*
+9. Homebrew cask + winget manifesti. *(R-9)*
+10. MSSQL ve Beanstalkd paketleri; MSSQL'inki iç çelişkiyi de kapatıyor. *(R-7)*
+
+**Sonra:**
+
+11. `<root>/commands.json` — makine geneli komut, aynı argv kuralı; ve paket manifestine
+    `commands` alanı. *(R-6)*
+12. Podman soketi + uyumluluk testi. *(R-2 ikinci yarısı)*
+13. `<proje>/stackvo.preset.json` yerleşim kuralı. *(R-11)*
+14. RoadRunner sürücüsü — Octane'ın ikinci yarısı. *(R-10)*
+15. Sürdürülebilirlik cümlesi (`SUPPORT.md` ile birlikte) ve taşınabilirlik/bulut
+    sınırlarının yazılması. *(R-15, R-14, R-16)*
+
+---
+
+## L9. Tek cümlelik hüküm
+
+Bu ürün, rakiplerinin hiçbirinde bulunmayan bir tedarik zinciri, kurumsal dağıtım ve
+erişilebilirlik yüzeyi taşıyor ve kategorinin en geniş göç, tünel ve MCP silahlarına
+sahip — onu bugün rakiplerinin gerisine düşüren şey bir özellik açığı değil,
+**kategorinin kütlesinin bulunduğu platformda elden doğrulanmamış olması, Docker
+tercihinin bedelinin hiçbir yerde yazılı olmaması ve elindeki en güçlü on iki özelliğin
+kullanıcının göreceği tek bir belgede sayılmaması** — üçü de kod yazmayı değil, söylemeyi
+gerektiren işler.
+
+---
+
+# Ek Rapor — Artı Kazandıracak Özellikler: Rakiplerde Olmayan ve Bu Mimarinin Ucuza Çıkardığı İşler
+
+**Tarih:** 2026-08-27 (dördüncü tur)
+**Taban:** `6e56a2f` (main)
+**Sorulan soru:** Rakiplerde *olmayan*, bu ürüne artı kazandıracak hangi özellikler var?
+
+---
+
+## M0. Bu raporun filtresi ve stratejik çerçevesi
+
+Bir özellik fikri ucuzdur; işe yarayanı bulmak değil. Aşağıdaki her madde **üç kapıdan**
+geçti ve geçemeyen yazılmadı:
+
+| Kapı | Ne soruyor |
+| --- | --- |
+| **Rakip kanıtı** | 17 üründen hiçbirinde var mı? Nasıl doğrulandı? |
+| **Ağaç kanıtı** | Bunu ucuza çıkaran mekanizma **bugün hangi dosyada** duruyor? |
+| **Hendek** | Rakip bunu kopyalayabilir mi, yoksa **mimarisi mi engelliyor**? |
+
+Üçüncü kapı bu raporun asıl fikri. Önceki tur şunu ölçtü: kategorinin 11/17'si
+konteynersiz ve hepsi aynı cümleyi satıyor. Buna verilecek doğru cevap **konteynersiz
+olmak değil** — bunu bu depo zaten yazmış. `release.rs`'in başlığı, üretim imajı özelliğini
+anlatırken:
+
+> *"the container lineage makes it possible and **no native-binary competitor can
+> follow**."*
+
+Bu cümle bir modül notu olarak yazılmış; bu rapor onu bir **stratejiye** çeviriyor.
+Docker bir maliyet (R-2) ve o maliyet yazılmalı — ama bir maliyet ancak karşılığında
+alınamayacak bir şey varsa savunulabilir. Aşağıdaki sekiz maddeyi Herd, ServBay, EnvKit,
+Laragon, Yerd, Kettle Code, Larabox, Laraflare, ForgeKit ve FlyEnv **isteseler de
+yapamazlar**, çünkü PHP'yi host'ta çalıştırıyorlar: paylaşılan bir dosya sistemi, tek bir
+MySQL instance'ı ve izole edilemeyen bir süreç ağacı.
+
+---
+
+## M1. Dış dünyanın 2026'da nerede olduğu — beş ölçüm
+
+**1. AI ajan izolasyonu kategorinin çözülmemiş problemi ve pazarı bulutta.** 2026 başında
+Cloudflare, Vercel, Ramp ve Modal sandbox özelliği çıkardı; tam geliştirme ortamı için
+E2B ve Daytona microVM satıyor. Şikayet **fiyat**: bazı ekipler sandbox'a tüm hesaplama
+bütçesinden fazla harcıyor. Sektörün kendi ifadesi: *"isolation is the unsolved problem
+when using AI agents — everyone focuses on making agents smarter, few on making them safe
+to run."*
+**Yerel, ücretsiz, tek tık bir ajan kum havuzu yok. Hiçbir yerde.**
+
+**2. Kategori lideri AI stratejisi olmadığını yazıyor.** DDEV'in Şubat 2026 bülteni %72
+Drupal pazar payını duyuruyor; 2026 plan yazısı ise şunu diyor: *"considering a general AI
+strategy for DDEV users."* Yani **düşünüyor.** Aynı plan iki şey daha içeriyor ve bunlar
+kapanan pencereler: **mkcert CA yerine gerçek sertifikalar** ve **ek servisler için ayrı
+port yerine alt alan adları**.
+
+**3. Dal başına ortam bir bulut kategorisi ve kimse memnun değil.** Preview environment
+araçları (Preevy, Okteto, Northflank, Qovery) Kubernetes ya da VPS istiyor. Port'un 2025
+anketi: geliştiricilerin **%6'sı** ortam açma araçlarından memnun. **Yerel karşılığı yok
+— ve StackVo'nun `worktree.rs`'i tam olarak odur.**
+
+**4. Bir numaralı şikayet hâlâ aynı ve hiçbir ürün ölçmüyor.** "Bende çalışıyor" ve
+onboarding: node sürümü uyuşmazlığı, PostgreSQL çalışmıyor, Redis bağlantı reddi.
+Konteyner bunu *azaltıyor* ama DDEV/Lando dahil hiçbiri **iki makinenin farkını
+gösteremiyor.**
+
+**5. İstek tekrarı / geriye doğru hata ayıklama bu kategoride hiç yok.** PHP'de bunu
+yapan tek şey `dontbug` adlı bağımsız bir ters hata ayıklayıcı. Herd, DDEV, Lando ve
+diğer on dördünün hiçbirinde yok; hepsi ileri adımlayan Xdebug'da duruyor.
+
+---
+
+## M2. Hendek haritası
+
+| Sınıf | Neye dayanıyor | Rakip neden kopyalayamaz | Fikir |
+| --- | --- | --- | --- |
+| **K — Kale** | Konteyner soyağacı | Yerel ikilide izolasyon yok: paylaşılan FS, tek MySQL, izole edilemeyen süreç ağacı | 8 |
+| **Z — Zincir** | İmzalı kayıt + politika + keystore | Hiçbirinde imza zinciri, MDM katmanı ya da keystore yok | 3 |
+| **S — Sözleşme** | `contracts/ipc.json` + MCP çapraz denetimi | MCP'leri var, hangi aracın hangi komutu uyguladığını doğrulayan gate yok | 4 |
+| **U — Ucuz ve tek** | Var olan modüllerin birleşimi | Kopyalanabilir — ama bugün kimsede yok, ilk olan alır | 6 |
+
+---
+
+## M3. Kale sınıfı — konteyner soyağacının mümkün kıldığı
+
+### K-1. Ajan kum havuzu ⭐ *(en yüksek etki)*
+
+**Ne.** Bir AI ajanına "şu hatayı düzelt" dendiğinde migration koşuyor, tablo düşürüyor,
+paket kuruyor, `.env` yazıyor. Bugün bunların hepsi geliştiricinin **canlı veritabanında**
+oluyor. `stackvo sandbox <ad>` bunun yerine şunu verir: kendi dizini, kendi hostname'i,
+**ana veritabanının bir kopyası**, kendi ortam değişkenleri, ve o worktree'ye kapsanmış
+bir MCP yüzeyi. Ajan ana veritabanını göremez — konteynerinde yok. Başarılıysa çıktı bir
+`git diff`; değilse `worktree_remove`.
+
+**Rakip.** Bulut sandbox'ları var (Cloudflare, Vercel, Modal, E2B, Daytona) ve hepsi
+ücretli ve uzak. Bu kategorideki 17 üründen **hiçbirinde** ajan izolasyonu yok — Lerd 11
+araç, Kettle Code 18 araç, ServBay 50+ servis veriyor ve **hepsi canlı ortam üzerinde
+çalışıyor.**
+
+**Ağaçta zaten var — bu maddenin tamamı bir fiil eksikliği:**
+
+| Parça | Nerede |
+| --- | --- |
+| Dal → kendi dizin + hostname + DB + env | `worktree.rs` (`worktree_create`, `worktree_env_set`, 6 IPC komutu) |
+| Veritabanı kopyalama | `db.rs:1115` `copy_database`, `db.rs:983` `create_database` |
+| Geri dönüş noktası | `snapshot.rs` (`db_snapshot_take`/`_restore`) |
+| Konteyner içindeki ajana bağlam | `agentctx.rs` |
+| Host yolu yok / host portu yok kuralı | `sidecar.rs` |
+| Tek özne tek işlem | `inflight.rs` |
+| Geri alınamayanın kaydı | `audit.rs` |
+
+**Hendek.** Yerel ikili rakipte PHP host'ta koşuyor, dosya sistemi paylaşılıyor ve MySQL
+tek instance. Ajanı bundan izole etmenin yolu yok. **Kopyalanamaz.**
+
+**Maliyet.** Yeni modül yok. `worktree::create` + `db::copy_database` + bir TTL + MCP
+kapsamı. `worktree.rs` zaten `prune`'u (`:851`) taşıyor.
+
+> Bu tek özellik ürünün konumunu değiştirir: *"yerel geliştirme ortamı"*dan
+> *"ajanların güvenle koşabildiği yerel geliştirme ortamı"*na. 2026'da ikincisinin
+> yerelde sahibi yok.
+
+### K-2. Ortam kilit dosyası — `stackvo.lock` ⭐
+
+**Ne.** Bugün bir depoyu klonlayan `stackvo.json`'ı alıyor: `php: 8.4`, `mysql: 8.0`.
+Yarın `8.4` demek `8.4.7`; geçen ay `8.4.3` demekti. Kilit dosyası **imaj digest'lerini,
+uzantı sürümlerini, servis paketi hash'lerini** dondurur: `stackvo up --locked` iki
+makinede **byte olarak aynı** konteyneri kurar.
+
+**Rakip.** Hiçbirinde yok. DDEV'in satış cümlesi *"your dev setup committed to Git"* —
+ama commit edilen bir **yapılandırma**, kilit değil. Lando `.lando.yml`, Herd `herd.yml`
+aynı sınıf. Kategoride "npm ci" karşılığı **yok**.
+
+**Ağaçta zaten var — ve bu maddenin en zor yarısı çoktan bitmiş:**
+
+| Parça | Nerede |
+| --- | --- |
+| Üreteç belirlenimci ve **byte-for-byte doğrulanmış** | `tests/fixtures_differential.rs`, `npm run diagnose` |
+| Hareketli etiket yasağı | `pkg.rs:50` `MOVING_TAGS` |
+| Manifest başına + dosya başına sha256 | `market.rs`, `pkg::verify` |
+| İmzalı indeks → manifest → dosya zinciri | `signing.rs` `PINNED` |
+| Paylaşılabilir stack yarısı | `preset.rs` (`SHAREABLE` allow-list) |
+
+**Hendek.** Yerel ikilide kilitlenecek bir şey yok: host'a kurulmuş PHP'nin digest'i
+yoktur ve kullanıcı onu `brew upgrade` ile değiştirebilir. **Kopyalanamaz.**
+
+**Maliyet.** Manifest'e digest alanları + `stackvo lock` + `up --locked`. Doğrulama
+mekanizması (`pkg::verify`) aynen kullanılıyor.
+
+> Bu, M1'in dördüncü ölçümünün — onboarding ve "bende çalışıyor" — kategorideki **tek
+> gerçek cevabı**. Ve D-1'i (kendi imgelerinin altısı `:latest`) kapatmayı zorunlu kılıyor,
+> yani iki bulguyu birden kapatıyor.
+
+### K-3. Ortam farkı — "bende çalışıyor"un ölçülmüş cevabı
+
+**Ne.** İki geliştiricinin teşhis paketini karşılaştır ve farkı say: *"sende Docker 27,
+onda 25; senin `php.ini`'n `memory_limit`'i ezmiş; redis digest'iniz farklı; onda
+`SERVICE_REDIS_ENABLE=false`."*
+
+**Rakip.** Hiçbiri. Bu, kategorinin en eski şikayeti ve **hiçbir ürün ölçmüyor** — hepsi
+"konteyner bunu çözer" diyerek geçiyor, ki çözmüyor (aynı compose iki farklı Docker
+sürümünde iki farklı şey).
+
+**Ağaçta zaten var.** `diagnostics.rs` her şeyi tek dosyada paketliyor (log + preflight +
+doctor + motor durumu + sürüm, iki kez maskelenmiş). `doctor.rs` adlandırılmış suçlular
+üretiyor. `preflight.rs` ön koşulları. Eksik olan **iki paketi karşılaştıran fonksiyon**.
+
+**Hendek.** Kopyalanabilir — ama teşhis paketi zaten olan tek ürün bu.
+
+**Maliyet.** Bir karşılaştırma fonksiyonu + bir panel. Yeni ölçüm yok.
+
+### K-4. İstek tekrarı (request replay)
+
+**Ne.** Bir isteği yakala — yöntem, yol, başlıklar, gövde, oturum — ve kod
+değiştikten sonra konteynere **yeniden çal**. "Bu hata yalnız o sepette oluyordu"nun
+sonu.
+
+**Rakip.** Bu kategoride hiçbir üründe yok (ölçüldü: M1-5). PHP dünyasında karşılığı
+`dontbug` adlı bağımsız bir ters hata ayıklayıcı; hiçbir yerel ortam ürünü onu
+paketlemiyor.
+
+**Ağaçta zaten var — ve anahtar parça beklenmedik bir yerde:**
+
+| Parça | Nerede |
+| --- | --- |
+| **Bir isteği adlandıran tek artefakt** | `spx::Report` — `GET /checkout`, başlangıç anı, süre (`explain.rs` bunu "the key" diye adlandırıyor) |
+| Veritabanının o isteğe ne sorduğu | `querylog.rs` (+ N+1 tespiti) |
+| Dump'ın hangi istekte olduğu | `debugbridge.rs` `request` alanı |
+| Üçünü tek eksende birleştiren | `timeline.rs`, `explain.rs` (`request_explain`, `request_timeline` IPC komutları) |
+
+`explain.rs`'in başlığı bu maddenin gerekçesini zaten yazmış: *"no new measurement is
+needed."* Eksik olan **fiil**.
+
+**Hendek.** Yerel ikilide de teknik olarak mümkün — ama kimse yapmadı ve StackVo'da
+gereken dört parçanın dördü de duruyor.
+
+### K-5. Anlık görüntüye bağlı tekrar — hata raporunun tekrarlanabilir hali
+
+**Ne.** K-4 + `snapshot.rs`: kaydedilen isteğin **başında** otomatik bir anlık görüntü
+alınır; tekrar, veritabanının tam o andaki hâline karşı koşar. "Bende üretemiyorum"un
+sonu — ve bir hata raporunun eki artık bir metin değil, **bir durum**.
+
+**Rakip.** Hiçbiri. Bulut tarafında bile nadir.
+
+**Ağaçta.** `snapshot.rs` (adlandırılmış anlık görüntü + zamanlanmış olan + "bir insanın
+adlandırdığını asla silme" kuralı), `db::restore` güvenlik ağıyla (`provider.rs`:
+*"restoring the wrong file is recoverable"*).
+
+### K-6. Ortamla birlikte bisect
+
+**Ne.** `git bisect` kodu geri alıyor; ortamı almıyor. Üç ay önceki commit'te PHP 8.3
+vardı ve bugünkü konteynerde 8.4 var — yani bisect'in yarısı yalan. K-2'nin kilidi varsa
+`stackvo bisect` her commit'in **ortamını da** kurar.
+
+**Rakip.** Hiçbiri — çünkü hiçbirinde kilit yok (K-2).
+
+**Hendek.** K-2'ye bağımlı, dolayısıyla aynı hendeği devralıyor. **Kopyalanamaz.**
+
+### K-7. Çok dilli tek repo (polyglot monorepo)
+
+**Ne.** Bir depoda `api/` (Go), `web/` (Next.js), `worker/` (Python) → üç konteyner, üç
+hostname, tek proje, tek `up`.
+
+**Rakip.** ServBay ve FlyEnv çok dil destekliyor ama hepsinde birim **"site"** ve bir
+sitenin bir çalışma zamanı var. Monorepo'yu tek özne olarak ele alan yok.
+
+**Ağaçta zaten var.** `manifest::LANG_RUNTIMES` (6) + php + node = **8 çalışma zamanı**,
+`generator.rs` her biri için Dockerfile üretiyor, `sidecar.rs` proje-kapsamlı konteyner
+kuralını taşıyor, Traefik router üretimi hostname başına çalışıyor.
+
+**Hendek.** Yerel ikilide bir dizinin iki çalışma zamanı olamaz. **Kopyalanamaz.**
+
+### K-8. Çıkış görünürlüğü (egress)
+
+**Ne.** Hangi konteyner internete konuştu, nereye. Kurumsal alıcının sorusu ve
+`policy.rs`'in doğal tamamlayıcısı — `registryPrefix` ile aynayı zorlayan bir yönetici,
+aynayı **kimin baypas ettiğini** de görmek ister (ki D-2'de on imgenin baypas ettiği
+ölçüldü).
+
+**Rakip.** Hiçbiri.
+
+**Hendek.** Yerel ikilide konteyner yok, dolayısıyla ağ isimlendirmesi de yok — host
+süreçlerinin trafiğini ayırmak için işletim sistemi seviyesinde iş gerekir.
+**Kopyalanamaz.**
+
+---
+
+## M4. Zincir sınıfı — imzalı kayıt ve politikanın mümkün kıldığı
+
+### Z-1. Projenin kendi bağımlılıkları için tedarik zinciri raporu
+
+**Ne.** `pkg.rs` **paketleri** doğruluyor; aynı disiplin projenin kendi
+`composer.lock` / `package-lock.json`'una uzatılabilir: *"bu projenin üç güvenlik
+danışmanı var, ikisi doğrudan bağımlılıkta."*
+
+**Rakip.** Hiçbiri. Herd, ServBay, DDEV — hiçbiri projenin bağımlılıklarına bakmıyor.
+
+**Ağaçta.** `doctor.rs` deseni (adlandırılmış suçlu + önerilen düzeltme), `market.rs`
+`HttpSource` (`http://` reddi dahil), `signing.rs`.
+
+**Uyarı.** Bu bir **ağ çağrısıdır** ve `PRIVACY.md` telemetri yokluğunu bir testle
+(`privacy_claims.rs`) koruyor. Dolayısıyla: kullanıcının açık isteğiyle, hangi hostun
+çağrıldığı `PRIVACY.md`'nin "erişilebilir hostlar" listesine yazılarak. Sözü bozmadan
+yapılabilir — `market.rs`'in kataloğu çekmesi zaten aynı sınıfta.
+
+### Z-2. Sır sızıntı taraması
+
+**Ne.** `secrets.rs` bir parolayı `.env`'den keystore'a taşıyor. **Ters yön yok:**
+"`.env`'inde keystore'da olmayan bir AWS anahtarı var" ve daha sertçe *"bu anahtar
+`git log`'da görünüyor."*
+
+**Rakip.** Hiçbiri.
+
+**Ağaçta.** `config::Env::is_secret` (sonek eşlemesi), `logging.rs`'in maskeleme kuralları
+(zaten her satırda çalışıyor), `git.rs`, `doctor.rs`'in bulgu şekli.
+
+**Not.** `preset.rs` bu işin **doğru şeklini** zaten göstermiş: deny-list değil
+allow-list, *"a key added upstream tomorrow called `SERVICE_FOO_APIKEY` would sail
+straight through"* gerekçesiyle. Tarayıcı da aynı asimetriyi almalı.
+
+### Z-3. Politika uyum raporu
+
+**Ne.** Bir yönetici `policy.json` yazıyor ve bugün öğrenebileceği tek şey dosyanın
+ayrıştığı. Eksik olan: *"bu makinede politikanın hangi maddesi fiilen uygulanıyor"* —
+kilitli anahtarlar tutuyor mu, ayna hangi imgelere uygulandı, hangileri baypas etti
+(D-2'de ölçülen on tanesi), hangi paket imzasız kabul edildi.
+
+**Rakip.** Hiçbirinde politika katmanı **yok**, dolayısıyla raporu da yok. En yakını
+Herd Teams ve o bir lisans yönetimi.
+
+**Ağaçta.** `policy.rs`, `audit.rs`, `market.rs`'in doğrulama sonucu, `doctor.rs` biçimi.
+
+---
+
+## M5. Sözleşme sınıfı — IPC/MCP disiplininin mümkün kıldığı
+
+### S-1. Ajan eylem defteri ve geri alma ⭐
+
+**Ne.** Her MCP **yazma** aracı ne yaptığını *ve telafi eylemini* kaydetsin.
+*"14:32'de `stackvo_stack_down` çağrıldı, Claude Code tarafından"* → **tek tık geri al.**
+
+**Rakip.** Hiçbiri. Lerd 11 araç, Kettle Code 18, ServBay 50+ servis erişimi veriyor ve
+**hiçbirinde kim ne yaptı sorusunun cevabı yok.** README'nin kendi uyarısı bu boşluğun
+adını koyuyor: `--allow-writes` bir ajana **tüm stack'i durdurma** yetkisi veriyor.
+
+**Ağaçta.** `audit.rs` tam olarak bu şey için yazılmış — döndürülmeyen, geri alınamayan
+işlerin kaydı, *"whoever has to account for the machine"* için. `contracts/ipc.json` her
+komutun `query` mi `mutation` mı olduğunu **zaten biliyor** ve üç test bunu MCP tarafında
+çapraz denetliyor.
+
+**Ve bir bulgu:** `audit.rs` yazıyor ama **okunamıyor.** 309 IPC komutu içinde adı `audit`
+geçen **sıfır** komut var. Yani bugün bu defter yalnızca dosyayı elle açan biri için var.
+Bu maddenin ilk adımı yeni bir özellik değil, **var olanın önünü açmak**.
+
+### S-2. Kapsamlı ajan yetkisi
+
+**Ne.** Bugün `--allow-writes` hepsi-ya-hiç: 12 araç birden açılıyor ve içinde
+`stack_down` ile `service_stop` var. Yerine: *"bu ajan yalnız `shop` projesini yeniden
+başlatabilir, 30 dakika boyunca."*
+
+**Rakip.** Hiçbirinde kapsam yok — hepsinde MCP ya açık ya kapalı.
+
+**Ağaçta.** `websurface.rs` bu sorunun **aynısını zaten çözmüş**: loopback + koşu başına
+üretilen ve workspace'e hiç yazılmayan bir token + salt-okuma. Üç kural ve her birinin
+neden diğer ikisi yetmediği için orada olduğu yazılı. Kapsamlı yetki aynı desenin
+genişletilmesi.
+
+### S-3. Yapılandırılmış "son hata + önerilen düzeltme", MCP kaynağı olarak
+
+**Ne.** Bir ajan bugün başarısızlığı **stderr'den tahmin ediyor.** Oysa `explain.rs`,
+`doctor.rs` ve `hints.rs` yapılandırılmış teşhis üretiyor: kod, suçlu, ve **ne yapılacağını
+söyleyen cümle** (`hint_key`, iki dilde).
+
+**Ağaçta.** Üçü de cevabı zaten üretiyor. `error.rs`'in tek şekli (`code`, `message`,
+`hint`, `hint_key`, `details`) bunun için biçilmiş kaftan.
+
+### S-4. Ölçüm araçlarının MCP'de olmaması — bugünkü en somut boşluk
+
+**Ölçüldü.** 34 MCP aracı arasında `stackvo_hotspots` ve `stackvo_profiler` var. Ama IPC
+yüzeyinde duran şu komutların MCP karşılığı **yok**:
+
+| IPC komutu | Ne cevaplıyor | MCP'de |
+| --- | --- | --- |
+| `request_explain` | "Bu istek neden yavaştı" — üç enstrüman bir istek etrafında | ❌ |
+| `request_timeline` | dump + sorgu, tek eksende | ❌ |
+| `query_log` | Veritabanına ne soruldu, aynı soru kaç kez (N+1) | ❌ |
+| `profiler_flame` / `profiler_tree` | Gerçek yığınlardan alev grafiği | ❌ |
+| `worktree_list` / `worktree_create` | Dal başına ortam | ❌ |
+| `release_plan` / `release_build` | Üretim imajı | ❌ |
+
+Yani **ürünün en farklılaşmış dört enstrümanı** — zaman ekseni, açıklama, sorgu kaydı,
+alev grafiği — bir ajanın erişemeyeceği yerde duruyor. README *"why is shop.loc not
+loading?"* sorusunu MCP'nin cevaplayabildiğini anlatıyor; *"neden yavaş"* sorusunu
+cevaplayamıyor, oysa cevabı üreten kod yazılmış ve test edilmiş durumda.
+
+**Rakip.** Lerd MCP'sinden SPX'e erişilebiliyor. Ama **hiçbir rakipte** dump+sorgu
+korelasyonu yok, dolayısıyla MCP'sinde de olamaz.
+
+**Maliyet.** Araç başına bir satır dispatch + bir şema. Üç test zaten çapraz denetliyor.
+Bu, bu raporun **en ucuz maddesi** ve etkisi K sınıfına yakın.
+
+---
+
+## M6. Ucuz ve tek — kopyalanabilir, ama bugün kimsede yok
+
+### U-1. Kaynak bütçesi ve proje başına atıf
+
+**Ne.** *"`shop` bugün 4,2 GB·saat ve 38 dakika CPU tüketti."* Ve bir bütçe: bir projenin
+eşiği aşması bir bildirim.
+
+**Rakip.** Hiçbiri. Docker tabanlılar dahil — DDEV, Lando, Laradock hiçbiri kaynak
+muhasebesi yapmıyor.
+
+**Ağaçta.** `stats_store.rs` konteyner başına örnek geçmişini **yeniden başlatmalar
+arasında** tutuyor (ve zamanın yalanı konusunu çözmüş: yaşa göre filtreli yükleme).
+`idle.rs` kullanılmayanı zaten durduruyor ve sinyal olarak Traefik erişim kaydını
+kullanıyor — *"a router that has served nothing for an hour is a fact rather than an
+inference."*
+
+**Neden önemli.** Bu, **R-2'yi savunmaya çevirir.** Docker pahalı; pahalı olduğunu ölçen
+ve yöneten tek ürün olmak, ölçmeyip inkâr etmekten iyi bir konumdur.
+
+### U-2. Odak modu
+
+**Ne.** *"Yalnız bu projenin ihtiyacı olanı çalıştır, gerisini durdur."* Dizüstü
+bilgisayarda en çok istenen tek fiil.
+
+**Ağaçta.** `manifest.services` projenin ihtiyacını **beyan ediyor**, `idle.rs`
+durdurmayı biliyor, `inflight.rs` çakışmayı engelliyor. Eksik olan tek şey fiil.
+
+**Rakip.** Herd/ServBay servisleri tek tek açıp kapatıyor; "bu projenin ihtiyacı" diye
+bir kavram yok çünkü manifest yok.
+
+### U-3. Paylaşılabilir teşhis bağlantısı
+
+**Ne.** Bir meslektaşın açacağı, parolalı, geçici bir URL — teşhis paketinin okunabilir
+hâli. Zip'i e-postayla göndermenin yerine.
+
+**Ağaçta üç parça da var:** `diagnostics.rs` (paket, iki kez maskelenmiş), `tunnel.rs`
+(9 sağlayıcı), `tunnelid.rs` (**parola muhafızı ve kalıcı adres**), `landing.rs`
+(sayfa üretimi). Birleştiren fiil yok.
+
+**Rakip.** Hiçbiri.
+
+### U-4. Onboarding doğrulaması
+
+**Ne.** Depo *"bu projede çalışmak için şunlar gerekir"* diyor; `stackvo verify` *"senin
+kurulumun beyan edilene uyuyor mu"* diye cevap veriyor — ve uymuyorsa **hangi satır**.
+
+**Rakip.** DDEV `.ddev/config.yaml` + hooks ile işin **kurma** yarısını yapıyor;
+**doğrulama** yarısını hiçbiri yapmıyor.
+
+**Ağaçta.** `preset.rs` (`plan_file`/`apply_file` — plan zaten ayrı bir kavram!),
+`doctor.rs`, `manifest::validate`. K-2 ile birleşince cevap kesinleşiyor.
+
+### U-5. Sürüm başına yükseltme notu ve ikinci kanal
+
+**Ne.** Önceki raporun "8. Şunlar da olsaydı" listesinin 3. ve 5. maddeleri; rekabet
+bağlamında sınıf değişiyor: Herd ve ServBay ikisi de sürüm notunu ürünün içinde
+gösteriyor, `channel.rs` zaten yazılmış ve `tauri.conf.json` tek uç tanımlıyor.
+
+### U-6. İlk açılış turu
+
+**Ne.** 309 komutluk, 26 panelli bir yüzeyde keşif rakiplerinkinden **daha zor**, çünkü
+yüzey daha geniş. `BootstrapGate`, `RequirementsGate`, `MigrationGate`, `CatalogueGate`
+var — ama bunlar engel, tanıtım değil.
+
+**Rakip.** Herd, ServBay ve EnvKit'in hepsi karşılama akışı gösteriyor.
+
+---
+
+## M7. Zaten var, sayılmıyor — sıfır kod, tam kazanç
+
+Bu bölüm en yüksek getirili olanı, çünkü maliyeti yazmak.
+
+| Özellik | Ağaçta | Rakip durumu | Kullanıcıya görünürlük |
+| --- | --- | --- | --- |
+| **Üretim imajı üretimi** | `release.rs` + **7 IPC komutu** (`release_build`, `release_push`, `release_push_plan`, `release_recipe`, `release_plan`, `release_save`, `release_load`) | **Hiçbiri.** Modülün kendi başlığı: *"no native-binary competitor can follow"* | README'de **sıfır satır** — "release" kelimesinin 7 geçişi de uygulamanın kendi yayın süreciyle ilgili |
+| **Dal başına tam ortam** | `worktree.rs` + 6 IPC komutu — kendi hostname, **kendi veritabanı**, kendi env | dde host+TLS veriyor, DB/env vermiyor. Geri kalanı bulut kategorisi ve ücretli (M1-3) | README'de sıfır satır |
+| **İstek açıklaması + zaman ekseni** | `request_explain`, `request_timeline`, `explain.rs`, `timeline.rs`, `trace.rs` (gerçek yığın alev grafiği) | Hiçbirinde korelasyon yok | README'de sıfır satır |
+| **7 kaynaktan içe aktarma** | `imports.rs`, `ALL: [Source; 7]` | En yakını 3 | R-13 |
+| **Denetim kaydı** | `audit.rs` | Hiçbiri | **Okuma yüzeyi bile yok** (S-1) |
+| **Devcontainer ihracı** | `devcontainer.rs` | Hiçbiri | README'de sıfır satır |
+
+Altı özellik, hepsi yazılmış ve test edilmiş, ve **dördü hiçbir kullanıcı belgesinde
+geçmiyor.** Bu, R-13'ün (göç savaşı görünmüyor) genelleştirilmiş hâli ve bu raporun en
+ucuz maddesi: **kod yazmayı değil, saymayı gerektiriyor.**
+
+---
+
+## M8. Rakibin ilan ettiği plan — kapanan pencereler
+
+DDEV'in 2026 plan yazısı üç şey söylüyor ve üçü de bu rapor için birer saat:
+
+| DDEV planı | StackVo'da bugün | Pencere |
+| --- | --- | --- |
+| *"considering a general AI strategy"* | 34 MCP aracı, 6 kural dosyası, 8 istemci kaydı, `agentctx.rs` | **Açık ve geniş** — %72 pazar paylı lider henüz düşünüyor. K-1 ve S-1 bu pencereden girer |
+| *"exploring using real certificates instead of mkcert CA"* | mkcert wildcard; `tunnel.rs` var, ACME yok | **Kapanıyor.** ServBay Pro bunu zaten satıyor (Let's Encrypt, ZeroSSL, Google Trust) |
+| *"subdomains for extra ports/services instead of separate ports"* | Traefik + `routes.rs` bunu yapabilecek yerde | **Kapanıyor** — ve StackVo'nun altyapısı zaten uygun |
+
+Ve Herd'in 2026 sürümleri (servis klonlama, `herd php:update all`, RustFS, JSON çıktılı
+CLI) bir şey daha söylüyor: **lider artırımlı gidiyor.** Kategoride sıçrama yapacak yer
+boş.
+
+---
+
+## M9. Etki × maliyet
+
+| | **Düşük maliyet** | **Orta maliyet** | **Yüksek maliyet** |
+| --- | --- | --- | --- |
+| **Çok yüksek etki** | **M7** (say, kod yazma)<br>**S-4** (dört enstrümanı MCP'ye) | **K-1** ajan kum havuzu<br>**S-1** ajan defteri + geri al | **K-2** kilit dosyası |
+| **Yüksek etki** | **S-3** yapılandırılmış hata<br>**U-2** odak modu | **K-3** ortam farkı<br>**S-2** kapsamlı yetki<br>**U-1** kaynak bütçesi | **K-4** istek tekrarı |
+| **Orta etki** | **U-5** sürüm notu<br>**U-3** teşhis bağlantısı | **Z-2** sır taraması<br>**U-4** onboarding doğrulama<br>**U-6** açılış turu | **K-5** anlık görüntülü tekrar<br>**K-7** monorepo<br>**Z-1** tedarik zinciri raporu |
+| **Niş / uzun vadeli** | | **Z-3** politika uyum raporu | **K-6** ortamla bisect<br>**K-8** egress |
+
+Sol üst köşe bu raporun cevabı: **M7 ve S-4 hem en ucuz hem en yüksek etkili, ve ikisi de
+yeni özellik değil — var olanın önünü açmak.**
+
+---
+
+## M10. Önerilen sıra
+
+**Sıfır risk, yayınla birlikte (kod yazmayı gerektirmeyen):**
+
+1. **M7'nin altı satırını say.** `release.rs`, `worktree.rs`, `request_explain`,
+   `devcontainer.rs`, `imports.rs`, `audit.rs` — dördü hiçbir kullanıcı belgesinde
+   geçmiyor. Bu, R-13 ve P0-4 ile aynı düzenlemede yapılır.
+2. **Dal başına ortamı adıyla konumlandır.** Bulut tarafında bu kategorinin adı *preview
+   environment* ve ücretli; StackVo'da yerel, ücretsiz ve yazılmış. Kullanılan kelime
+   ürünün nerede aranacağını belirliyor.
+
+**Yayından hemen sonra (ucuz, yüksek etki):**
+
+3. **S-4 — dört enstrümanı MCP'ye koy.** `request_explain`, `request_timeline`,
+   `query_log`, `profiler_flame`. Araç başına bir dispatch satırı + bir şema; üç test
+   zaten çapraz denetliyor. Ürünün en farklılaşmış yüzeyi bugün ajana kapalı.
+4. **S-1'in ilk yarısı — `audit`'e bir okuma komutu.** Bugün defter yazılıyor ve
+   okunamıyor. Bir IPC komutu + bir panel.
+5. **S-3** — son hatayı yapılandırılmış olarak MCP kaynağı yap. `error.rs` şekli hazır.
+6. **U-2 odak modu** — tek fiil, `manifest.services` + `idle.rs`.
+
+**Bir sonraki büyük iş — sırayla, ikisi birbirine bağlı:**
+
+7. **K-1 ajan kum havuzu.** `worktree::create` + `db::copy_database` + TTL + kapsamlı MCP.
+   Yeni modül yok. 2026'da yerelde sahipsiz olan tek konum.
+8. **S-1'in ikinci yarısı — telafi eylemi ve geri alma.** K-1'i güvenli yapan şey; ikisi
+   bir arada "ajanların güvenle koşabildiği ortam" cümlesini tamamlıyor.
+9. **S-2 kapsamlı yetki.** `websurface.rs`'in token deseni.
+
+**Orta vade:**
+
+10. **K-2 kilit dosyası.** En zor yarısı (belirlenimci üreteç, digest zinciri) çoktan
+    bitmiş. D-1'i (kendi imgelerinin altısı `:latest`) kapatmayı zorunlu kılıyor.
+11. **K-3 ortam farkı.** `diagnostics.rs` üzerine bir karşılaştırma.
+12. **U-1 kaynak bütçesi.** Docker'ın maliyetini ölçülen bir şeye çevirir.
+13. **K-4 istek tekrarı**, sonra **K-5** anlık görüntüyle.
+
+**Uzun vade / fırsat penceresine göre:**
+
+14. ACME seçeneği — DDEV planında yazılı, ServBay satıyor (M8).
+15. **K-7** monorepo, **Z-1/Z-2** tedarik zinciri ve sır taraması, **K-6** bisect,
+    **K-8** egress.
+
+---
+
+## M11. Ölçüm özeti
+
+| Ne | Sayı |
+| --- | --- |
+| Önerilen özellik | **21** (K 8, Z 3, S 4, U 6) |
+| Yerel-ikili rakibin **kopyalayamayacağı** (kale + zincir) | **11** |
+| Yeni modül gerektirmeyen (var olanın birleşimi ya da önünün açılması) | **14 / 21** |
+| Sıfır kod — yalnız belgede sayılmayı bekleyen özellik | **6** (M7) |
+| Ajana kapalı olan farklılaşmış enstrüman | **4** (`request_explain`, `request_timeline`, `query_log`, `profiler_flame`) |
+| `audit.rs`'i okuyan IPC komutu | **0 / 309** |
+| Toplam IPC komutu | 309 |
+| Toplam MCP aracı | 34 (12'si yazma) |
+| DDEV'in ilan ettiği ve StackVo'nun önde olduğu alan | AI stratejisi (*"considering"*) |
+| DDEV'in ilan ettiği ve StackVo'da olmayan | gerçek sertifika (ACME), alt alan adları |
+
+---
+
+## M12. Tek cümlelik hüküm
+
+Bu ürünün elinde, kategorinin **hiçbir rakibinin mimarisinin izin vermediği** on bir
+özellik için gereken parçaların neredeyse tamamı zaten yazılmış ve test edilmiş
+durumda — ve 2026'nın en büyük boşluğu, yani **bir AI ajanının canlı veritabanına
+dokunmadan çalışabileceği yerel ve ücretsiz bir ortam**, bu depoda `worktree.rs`,
+`db::copy_database`, `snapshot.rs` ve `agentctx.rs` olarak halihazırda duruyor ve
+yalnızca **onları birleştiren bir fiil ile onları sayan bir paragraf** eksik.

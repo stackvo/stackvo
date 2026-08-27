@@ -129,7 +129,7 @@ Stated plainly, because a statement without them is a marketing page.
   before was never unwillingness. It was that the job meant installing a screen reader, learning
   its rotor and driving it blind across thirty screens in two languages, then
   repeating that after every change. `npm run a11y:transcript` writes
-  `docs/accessibility-transcript.md`: every page's headings and controls, in the
+  `reports/accessibility-transcript.md`: every page's headings and controls, in the
   order the markup puts them, under the name a screen reader announces, in both
   languages. What is left after it is narrower and cannot be closed from here:
   **nobody has used this application with a screen reader.** A transcript says
