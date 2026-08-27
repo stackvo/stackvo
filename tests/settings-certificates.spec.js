@@ -12,7 +12,7 @@ import * as directives from 'vuetify/directives';
  * bridge, a router and five stores. So it rebuilt a *copy* of the markup and
  * kept the copy honest by reading `Settings.vue` as text and asserting the two
  * still matched — a creative answer to an untestable component, and the exact
- * thing the readiness review's §2.3 objected to: behaviour verified in the
+ * thing an earlier review objected to: behaviour verified in the
  * copy, not in the product, with a `toContain` string match holding them
  * together. A whitespace change broke it; a real regression escaped unless
  * somebody remembered to mirror it.

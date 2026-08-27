@@ -1,8 +1,8 @@
 //! A snippet, the application it runs inside, and what came back.
 //!
-//! F-5 in `docs/durum.md`, and the row that named it also named the objection:
-//! `tinker` over the PTY is "honest 90%, but not a workbench". §5.5 held the
-//! remaining tenth as a **decision** rather than a task, because
+//! The objection to building this was recorded before it was built: `tinker`
+//! over the PTY is "honest 90%, but not a workbench". The remaining tenth was
+//! held as a **decision** rather than a task, because
 //! [`crate::quickcmd`] had refused this in writing — "an in-app pane would be a
 //! second, worse REPL next to the one they already have configured" — and
 //! reversing a refusal is not something a commit should do quietly.

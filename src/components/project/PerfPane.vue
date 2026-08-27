@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * The performance layer (I-1): the heavy directories, off the host filesystem.
+ * The performance layer: the heavy directories, off the host filesystem.
  *
  * ## Why this is a list of directories and not a switch
  *

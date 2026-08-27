@@ -320,7 +320,7 @@ describe('the Dockerfile preview', () => {
 });
 
 /**
- * `stackvo.local.json`, the pane below the manifest editor (B-2).
+ * `stackvo.local.json`, the pane below the manifest editor.
  *
  * Unlike the manifest pane this one *does* own its file — nothing else in the
  * app writes it — so it fetches, and the three things worth asserting are the
@@ -406,7 +406,7 @@ describe('the machine-local override pane', () => {
 });
 
 /**
- * The hooks pane (B-3).
+ * The hooks pane.
  *
  * The whole point of this screen is that somebody can read the commands before
  * they run on their machine, so the assertions are about exactly that: the

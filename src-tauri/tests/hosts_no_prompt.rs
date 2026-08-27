@@ -3,7 +3,7 @@
 //! `hosts::apply` falls back to an elevated copy when it cannot write the file,
 //! and on macOS that is `osascript`'s administrator prompt — a window behind
 //! every other window, with nobody to answer it. It cost a hung `cargo test`
-//! sitting at 0% CPU once, which is §3 #37's failure exactly: a hanging suite
+//! sitting at 0% CPU once, which is the failure exactly: a hanging suite
 //! looks like a slow one.
 //!
 //! The comment above `write_in_place` claimed the unelevated branch "is the one

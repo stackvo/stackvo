@@ -9,7 +9,7 @@ import { api } from '@/lib/ipc';
  * default — the user is shown the name the build will actually use rather than
  * an empty box that silently means "whatever the plan says".
  *
- * Lifted out of `ProjectDetail.vue` with the Release pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the Release pane in the pane split.
  */
 export function useRelease(name) {
   const plan = ref(null);

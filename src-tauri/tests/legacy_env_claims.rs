@@ -1,6 +1,6 @@
 //! What has to change on the day `LEGACY_SERVICES` is deleted.
 //!
-//! §3 #36 of `docs/durum.md` is not blocked on code. `config::LEGACY_SERVICES`
+//! This one is not blocked on code. `config::LEGACY_SERVICES`
 //! — 150 of the 186 embedded defaults — exists so [`handover`] can read a
 //! pre-market `.env` and turn `SERVICE_MYSQL_ENABLE=true` into an instance with
 //! a version, a port and a volume. It goes when no supported workspace still
@@ -54,11 +54,6 @@ fn repo_root() -> PathBuf {
 
 fn read(relative: &str) -> String {
     let path = repo_root().join(relative);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
-}
-
-fn durum() -> String {
-    let path = repo_root().join("../docs/durum.md");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
 }
 
@@ -342,7 +337,7 @@ fn only_the_declared_modules_read_a_legacy_service_default() {
         found, declared,
         "the set of modules reading a `SERVICE_*` default has changed.\n\
          Every one of them is work on the day `config::LEGACY_SERVICES` is \
-         deleted (§3 #36), so the list in this file is the checklist for that \
+         deleted, so the list in this file is the checklist for that \
          day — add or remove the row, with the sentence that says why."
     );
 }
@@ -356,7 +351,7 @@ fn only_the_declared_modules_read_a_legacy_service_default() {
 ///
 /// `mail.rs` is now the other half of the same lesson and is asserted from the
 /// opposite side. It *was* a reader, on `SERVICE_MAILPIT_ENABLE`, until the
-/// decision in §5 pointed `detect` at the catalogue and those keys left the
+/// The decision to point `detect` at the catalogue took those keys out of the
 /// constant. A prefix rule loose enough to catch it originally went on calling
 /// it a reader afterwards — `SERVICE_MAILPIT_URL` is still in the legacy half
 /// and `"SERVICE_MAILPIT"` is a prefix of it — which is a module handed to
@@ -402,7 +397,7 @@ fn naming_a_key_counts_as_reading_one() {
     assert!(
         !builds_a_legacy_key(&mail, &keys),
         "mail.rs is building a legacy key again. Either `detect` went back to \
-         reading `.env` presence — the thing §5 decided against — or a key it \
+         reading `.env` presence — the thing decided against — or a key it \
          completes has returned to `LEGACY_SERVICES`. Add its row back."
     );
 
@@ -455,88 +450,9 @@ fn the_migration_still_reads_the_defaults() {
     }
 }
 
-/// The two halves are named where the deletion will be planned.
-///
-/// The measurement itself is §7's and `platform_matrix_claims.rs` holds the
-/// numbers. This holds something smaller and easier to lose: that §3's row
-/// names the constant, so a reader who arrives at the item can find the code
-/// without grepping for a phrase.
-#[test]
-fn the_document_names_the_constant_it_is_waiting_to_delete() {
-    let doc = durum();
-
-    assert!(
-        doc.contains("LEGACY_SERVICES"),
-        "docs/durum.md never names `config::LEGACY_SERVICES`, which is the \
-         constant §3 #36 is about"
-    );
-}
-
-// ------------------------------------------------------------ what §3 #36 says
-
-/// The §3 row for #36, as one line.
-fn item_36_row(doc: &str) -> &str {
-    doc.lines()
-        .find(|line| line.starts_with("| 36 |"))
-        .expect("docs/durum.md §3 still has a row for #36")
-}
-
-/// The §4 bullet for #36, all of it.
-///
-/// Not the first line. §4's bullets are wrapped prose and a claim can sit on
-/// the third line as easily as the first — reading one line found the marker
-/// and then failed on a version stated two lines below it, which is a gate
-/// failing for its own reason rather than the document's.
-fn item_36_bullet(doc: &str) -> String {
-    let lines: Vec<&str> = doc.lines().collect();
-    let start = lines
-        .iter()
-        .position(|line| line.starts_with("* **#36**"))
-        .expect("docs/durum.md §4 still has a bullet for #36");
-    let mut bullet = vec![lines[start]];
-    for line in &lines[start + 1..] {
-        if line.starts_with("* ") || line.trim().is_empty() || line.starts_with('#') {
-            break;
-        }
-        bullet.push(line);
-    }
-    bullet.join("\n")
-}
-
-/// The §5 line that answered the question #36 was waiting on.
-fn item_36_answer(doc: &str) -> &str {
-    doc.lines()
-        .find(|line| line.contains("`LEGACY_SERVICES` hangi sürümde"))
-        .expect("docs/durum.md §5 still carries the version question for #36")
-}
-
-/// The size of the deletion, where the deletion is described.
-///
-/// §7's measurement table holds how many *keys* go; this holds how many
-/// *modules* have work on the day, which is the number a person planning it
-/// reads off §3. It said four while the tree held six — the same drift §7 was
-/// built to stop, one table over. A count is a property of the code even
-/// though "not done" is not (§8), so this one is gated too.
-///
-/// The digit rather than the Turkish word, and the failure message says so: a
-/// gate cannot recompute `dört`.
-#[test]
-fn the_document_states_how_many_modules_the_deletion_touches() {
-    let doc = durum();
-    let row = item_36_row(&doc);
-    let expected = format!("**{}** modül", READERS.len());
-
-    assert!(
-        row.contains(&expected),
-        "§3 #36 does not say `{expected}`, and READERS lists {} module(s). \
-         Anyone planning the deletion reads the size off that row.\nRow:\n{row}",
-        READERS.len()
-    );
-}
-
 // ------------------------------------------------------------ the deletion date
 
-/// The release by which the question has to be answered (§5).
+/// The release by which the question has to be answered.
 ///
 /// This was set as "the release migration support ends", and that is not what
 /// it is any more. `npm run legacy:rehearse` deletes the constant and runs the
@@ -546,12 +462,11 @@ fn the_document_states_how_many_modules_the_deletion_touches() {
 /// know about" — `mail.rs` reads exactly that — and whether the catalogue
 /// should be that answer instead is a product decision, not a schedule.
 ///
-/// The vocabulary question has since been answered (ADR 0037) and took
-/// seventy-two keys with it. What is left is a smaller thing and a real one:
-/// roughly twenty-seven of the seventy-eight are live credentials `db.rs` reads
-/// for instances that already migrated, so the constant still cannot be deleted
-/// wholesale, and separating them costs `SETTINGS` its prefix-only membership
-/// rule.
+/// The vocabulary question has since been answered and took seventy-two keys
+/// with it. What is left is a smaller thing and a real one: roughly twenty-seven
+/// of the seventy-eight are live credentials `db.rs` reads for instances that
+/// already migrated, so the constant still cannot be deleted wholesale, and
+/// separating them costs `SETTINGS` its prefix-only membership rule.
 ///
 /// The date stays because that trade still needs deciding. Never deciding means
 /// carrying seventy-eight keys, five reader modules and six test sites
@@ -562,11 +477,12 @@ const LEGACY_SERVICES_GO_AT: (u64, u64) = (0, 4);
 
 /// The date, as a build failure.
 ///
-/// A date written only in prose is a date that passes. This fails the build on
-/// the first commit that bumps the app to 0.4.0 while `LEGACY_SERVICES` is
-/// still there — which is exactly when somebody has to decide whether to delete
-/// it or to move the date on purpose, and either is fine as long as it is a
-/// decision rather than a thing that did not happen.
+/// A date written only in prose is a date that passes — and the prose is now
+/// gone, which leaves this constant as the whole of the promise. It fails the
+/// build on the first commit that bumps the app to 0.4.0 while
+/// `LEGACY_SERVICES` is still there, which is exactly when somebody has to
+/// decide whether to delete it or to move the date on purpose. Either is fine
+/// as long as it is a decision rather than a thing that did not happen.
 #[test]
 fn the_constant_is_gone_by_the_version_that_was_named_for_it() {
     let conf: serde_json::Value =
@@ -585,7 +501,7 @@ fn the_constant_is_gone_by_the_version_that_was_named_for_it() {
     assert!(
         !(due && still_here),
         "the app is at {version} and `config::LEGACY_SERVICES` is still \
-         declared. §5 answered §3 #36 with {go_major}.{go_minor}: from that \
+         declared. LEGACY_SERVICES_GO_AT is {go_major}.{go_minor}: from that \
          release a workspace waiting to be migrated is no longer supported.\n\n\
          The checklist is the READERS table above — {} module(s), each with the \
          sentence saying why it reads a legacy default. Delete them, or move \
@@ -598,45 +514,10 @@ fn the_constant_is_gone_by_the_version_that_was_named_for_it() {
     assert!(
         (go_major, go_minor) < (1, 0) || !still_here,
         "the deletion was pushed to {go_major}.{go_minor}, at or past 1.0.0. \
-         Carrying the second catalogue into a stable release is the outcome §5 \
-         chose against — if it is now the right answer, it needs the paragraph, \
-         not the constant."
+         Carrying the second catalogue into a stable release is the outcome \
+         this gate was set against — if it is now the right answer, it needs a \
+         paragraph saying why, not a moved constant."
     );
-}
-
-/// The gate and the three places that promise it say the same version.
-///
-/// This is the half that was missing, and it is the half the item's own
-/// argument turns on: §3 #36 says "not prose but a gate", and yet the gate was
-/// `LEGACY_SERVICES_GO_AT` in one file and `0.4.0` in three paragraphs of
-/// another, with nothing between them. Moving the constant to `(0, 9)` left
-/// every sentence in the document saying 0.4.0 and every test green — the
-/// deletion would simply have stopped being due, silently, which is the exact
-/// outcome the version was introduced to make impossible.
-///
-/// All three places, not one. §3 is the item, §4 is the order somebody plans
-/// from, and §5 is where the question was answered; a document that fixed one
-/// and left the others is how #35's stale sentence survived
-/// (`durum_sections_agree.rs`).
-#[test]
-fn the_document_states_the_version_the_gate_is_set_to() {
-    let doc = durum();
-    let (go_major, go_minor) = LEGACY_SERVICES_GO_AT;
-    let version = format!("{go_major}.{go_minor}.0");
-
-    for (where_, line) in [
-        ("§3, the item's row", item_36_row(&doc)),
-        ("§4, the suggested order", &item_36_bullet(&doc)),
-        ("§5, where the question was answered", item_36_answer(&doc)),
-    ] {
-        assert!(
-            line.contains(&version),
-            "{where_} does not say {version}, which is what \
-             LEGACY_SERVICES_GO_AT is set to. The gate and the promise have to \
-             be one fact — a document naming a different release is a date \
-             nobody is held to.\nLine:\n{line}"
-        );
-    }
 }
 
 // ------------------------------------------------- what the deletion actually costs

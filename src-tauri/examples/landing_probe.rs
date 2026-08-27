@@ -1,4 +1,4 @@
-//! Does the name the stack already claims actually serve the page? (M-4)
+//! Does the name the stack already claims actually serve the page?
 //!
 //! `landing.rs` is unit-tested on the two things a string can be checked for:
 //! that a project name cannot become markup, and that the `docker run`

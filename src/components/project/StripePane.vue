@@ -7,7 +7,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * Stripe's own events, forwarded into this project (M-11).
+ * Stripe's own events, forwarded into this project.
  *
  * ## Why this is not the tunnel with a different label
  *

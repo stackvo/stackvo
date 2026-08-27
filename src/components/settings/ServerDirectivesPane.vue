@@ -8,10 +8,10 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 /**
  * The extra-directives editor, one file per server.
  *
- * The third slice of the §14.16 split. Only this half of the Servers tab came
+ * The third slice of the pane split. Only this half of the Servers tab came
  * out: the limits form above it drives the shared `.env` editor that six panes
  * use, and pulling that apart is its own change (`useEnvEditor` in the review's
- * §2.3). This half owns its own file, its own dirty check and its own tab.
+ * This half owns its own file, its own dirty check and its own tab.
  */
 const { t } = useI18n();
 

@@ -81,7 +81,7 @@ export function trayLabels(t) {
     noWorkspace: t('tray.noWorkspace'),
     noProjects: t('tray.noProjects'),
 
-    // The rows inside a project's own submenu (M-8). No `{name}` in any of
+    // The rows inside a project's own submenu. No `{name}` in any of
     // them any more: the project is the row they hang under, so the verb is a
     // word rather than a sentence repeating what the menu already says.
     openProject: t('tray.openProject'),

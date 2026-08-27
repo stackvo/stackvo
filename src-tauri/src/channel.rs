@@ -1,9 +1,9 @@
 //! Which update this install is offered, and whether it is offered at all.
 //!
-//! §3 #21 — release channels, staged rollout, rollback — sat behind #2 for a
+//! Release channels, staged rollout and rollback sat behind the endpoint for a
 //! reason that turned out to be arithmetic rather than engineering: none of it
 //! means anything until there is a place to publish to and a key to sign with.
-//! ADR 0025 answered both, so this is now ordinary work.
+//! Both now exist, so this is ordinary work.
 //!
 //! ## What the updater plugin does and does not do
 //!
@@ -63,7 +63,7 @@ impl Channel {
     /// The name this channel's manifest is published under.
     ///
     /// Stable keeps `latest.json` because that is the name `tauri-action`
-    /// writes and ADR 0025 pointed the endpoint at; a beta manifest sits beside
+    /// writes and the endpoint points at; a beta manifest sits beside
     /// it under its own name rather than in a second release, so one publish
     /// produces both and they cannot drift apart.
     pub fn manifest_name(self) -> &'static str {

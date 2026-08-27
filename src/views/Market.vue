@@ -518,8 +518,8 @@ function supportLabel(version) {
     <div class="market-scroll">
       <ErrorAlert :error="market.error.value" class="mb-4" />
 
-      <!-- Never fetched is not the same as empty, and ADR 0011 makes the first
-           one the state a fresh install is genuinely in: nothing is embedded, so
+      <!-- Never fetched is not the same as empty, and the first one is the
+           state a fresh install is genuinely in: nothing is embedded, so
            "no services found" would be a lie about why the list is blank. -->
       <v-empty-state
         v-if="!market.fetched.value && !market.loading.value"
@@ -1155,7 +1155,7 @@ function supportLabel(version) {
                        this asks nothing before switching off, where the
                        Services page opens a dialog: the command it calls there
                        deletes the volume and the image, and this one does not
-                       (ADR 0012). -->
+                      . -->
                   <td class="text-center text-no-wrap">
                     <!-- Beside the switch rather than instead of it: ON/OFF is
                          a decision the user made and health is what the

@@ -387,7 +387,7 @@ pub fn resolve_terminal(
 /// carries `CFBundleURLTypes`, so what it opens is answerable from disk;
 /// Windows keeps the same fact in the registry under a different key per app
 /// and Linux in `.desktop` files spread over three directories. On those the
-/// system handler below is the whole offer, which is still the thing G-3 was
+/// system handler below is the whole offer, which is still the thing this was
 /// missing — something that opens.
 #[cfg(target_os = "macos")]
 const DB_CLIENTS: &[(&str, &str, &str)] = &[

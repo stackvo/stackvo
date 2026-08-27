@@ -230,7 +230,7 @@ describe('unmanaged code, behind the overflow button', () => {
   });
 
   /**
-   * Adopting the whole park in one press (A-5).
+   * Adopting the whole park in one press.
    *
    * The three things worth holding, and every one of them is a thing a `for`
    * loop in JavaScript would have got wrong:
@@ -366,7 +366,7 @@ describe('unmanaged code, behind the overflow button', () => {
 });
 
 /**
- * Favourites (M-1).
+ * Favourites.
  *
  * The composable rather than the page: what matters is the two rules the
  * feature is built on, and both are invisible from a mounted table. A favourite

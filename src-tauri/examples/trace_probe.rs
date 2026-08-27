@@ -1,4 +1,4 @@
-//! Does the flame graph come out of a **real** Xdebug trace? (F-3)
+//! Does the flame graph come out of a **real** Xdebug trace?
 //!
 //! `trace.rs` is tested against a fixture — lines somebody typed to look like
 //! what `xdebug.trace_format=1` produces. That is the same arrangement that let
@@ -21,7 +21,7 @@
 //! The PHP it runs is built around the one case that separates a flame graph
 //! from a call tree: `slow()` called from two different parents. Cachegrind
 //! sums those into one edge and cannot say which caller was expensive; the
-//! whole point of F-3 is that the trace can.
+//! whole point of the trace mode is that it can.
 
 use stackvo_desktop_lib::{profile, trace, workspace};
 use std::process::Command;

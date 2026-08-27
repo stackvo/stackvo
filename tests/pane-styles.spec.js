@@ -5,7 +5,7 @@ import { join } from 'node:path';
 /**
  * Does every class the panes use actually resolve?
  *
- * This is the test that was missing. §14.16 moved fourteen sections of
+ * This is the test that was missing. The pane split moved fourteen sections of
  * `ProjectDetail.vue` into child components and left the rules behind in the
  * view's `<style scoped>` block — which only ever reaches the elements its own
  * component renders. Every extracted pane rendered unstyled: cards with no

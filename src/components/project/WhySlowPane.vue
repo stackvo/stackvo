@@ -9,7 +9,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * Why this request was slow — the three instruments on one request.
  *
- * B-1. SPX, the query log and the axis were three panes on this same tab, and
+ * SPX, the query log and the axis were three panes on this same tab, and
  * each of them answers a different third of one question: where the code's time
  * went, what the database was asked, and what else happened while it ran.
  * Answering the question they were all built for meant opening three of them

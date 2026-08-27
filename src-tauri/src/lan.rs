@@ -1,6 +1,6 @@
 //! The address a phone on the same Wi-Fi can reach the project at.
 //!
-//! E-3. `shop.loc` exists in exactly one place — this machine's `/etc/hosts` —
+//! `shop.loc` exists in exactly one place — this machine's `/etc/hosts` —
 //! so testing a layout on a real phone, or showing a colleague across the desk,
 //! means either editing a file on their device or not doing it. Neither is what
 //! anybody does; what they do is give up and use the desktop browser's device
@@ -12,7 +12,7 @@
 //! `sslip.io` answers `anything.192-168-1-5.sslip.io` with `192.168.1.5`. It is
 //! a public resolver doing arithmetic on the name, so **nothing is registered,
 //! nothing is published, and no packet from the visiting device leaves the LAN
-//! except the DNS lookup itself**. The alternative is E-1 — running a real
+//! except the DNS lookup itself**. The alternative is a real DNS server —
 //! resolver here and pointing other devices at it — which is a bigger item that
 //! this one does not block and is not blocked by.
 //!

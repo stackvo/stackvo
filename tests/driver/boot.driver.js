@@ -1,5 +1,5 @@
 /**
- * The whole binary, under a driver. §3 #12's other half.
+ * The whole binary, under a driver.
  *
  * Every assertion in this file is one no other suite in this repository can
  * make, and the list is short on purpose. The Playwright suite already owns
@@ -16,7 +16,7 @@
  *    than the global the Playwright stage replaces;
  * 3. a command named in `contracts/ipc.json` is actually registered and
  *    answers in its declared shape;
- * 4. a failure comes back as ADR 0004's `{code, message}` with a code from the
+ * 4. a failure comes back as `{code, message}` with a code from the
  *    contract's closed set — end to end, through serde and through Tauri.
  *
  * Run: `npm run test:driver`, on Linux, with `tauri-driver` on PATH and the
@@ -175,8 +175,7 @@ test('a contract command is registered and answers in its shape', { skip: blocke
 
 test('a failure arrives as a code, not a string', { skip: blocked }, async () => {
   // Read-only and certain to fail on a machine with no workspace and no such
-  // project — whichever of the two it hits, ADR 0004 says the answer has the
-  // same shape, and the shape is what is under test.
+  // project — whichever of the two it hits, the answer has the same shape, and the shape is what is under test.
   const box = await app.session.evaluate(
     `() => window.__TAURI_INTERNALS__.invoke('project_get', { name: 'no-such-project-e6f2' })`
   );

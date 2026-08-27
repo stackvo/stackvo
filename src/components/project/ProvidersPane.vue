@@ -6,7 +6,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
- * Where this project's data really lives (A-1).
+ * Where this project's data really lives.
  *
  * ## The card is a review screen, not a button
  *

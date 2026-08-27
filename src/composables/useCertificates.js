@@ -6,7 +6,7 @@ import { api } from '@/lib/ipc';
  * user can do about it.
  *
  * Lifted out of `Settings.vue`, which was 3,433 lines and **0% covered**. The
- * readiness review's §2.3 named this: behaviour was verified in a *copy* of the
+ * An earlier review named this: behaviour was verified in a *copy* of the
  * pane inside `tests/certificates-pane.spec.js`, kept honest by reading the
  * real file as text and asserting the copy still matched. That was a creative
  * answer to an untestable component and it had the cost creative answers have —

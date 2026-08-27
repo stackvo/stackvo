@@ -134,7 +134,7 @@ pub struct DbTarget {
     pub extension: String,
 }
 
-/// One database **instance**, which is what a move names (G-4).
+/// One database **instance**, which is what a move names.
 ///
 /// Separate from [`DbTarget`] rather than a field added to it. `targets` answers
 /// "which engines can this workspace dump", one row per engine, and four callers
@@ -378,8 +378,8 @@ struct Settings {
 ///
 /// `stackvo-<service>` was right while every service was single-instance and
 /// named after itself. It stopped being right the moment the instance table
-/// arrived: an instance is `stackvo-mysql-9-7`, and after ADR 0016 there is no
-/// other kind of workspace. So this reads the table first and only falls back
+/// arrived: an instance is `stackvo-mysql-9-7`, and there is no other kind of
+/// workspace any more. So this reads the table first and only falls back
 /// to the old shape when there is none — which today means a workspace that has
 /// not migrated, and those are refused by the renderer before they get here.
 ///
@@ -410,7 +410,7 @@ pub fn container_of(root: &Path, service: &str) -> String {
 ///
 /// `settings` resolves a service to whichever instance the table happens to
 /// list first, which was correct while a service meant one container and is
-/// exactly wrong for G-4: moving `mysql-8-0` into `mysql-8-4` has to name two
+/// exactly wrong for a move: taking `mysql-8-0` into `mysql-8-4` has to name two
 /// containers, and both of them answer to `mysql`.
 ///
 /// Credentials still come from the same place. An instance carries its own
@@ -482,7 +482,7 @@ impl Value {
 
 /// What the package and the instance table say this service is running with.
 ///
-/// The whole reason this exists: after ADR 0016 a workspace is installed from
+/// The whole reason this exists: a workspace is installed from
 /// packages, and a package does not write `SERVICE_POSTGRES_USER` into `.env` —
 /// it stores `USER` on the instance and renders it into the compose file. So
 /// `.env` holds nothing for it, and every caller of [`run_sql`] was falling
@@ -1164,7 +1164,7 @@ where
     dump_with(settings(root, service)?, service, path, on_line).await
 }
 
-/// The same, naming an instance rather than a service (G-4).
+/// The same, naming an instance rather than a service.
 pub async fn dump_instance<F>(root: &Path, id: &str, path: &Path, on_line: F) -> Result<u64>
 where
     F: FnMut(String) + Send + 'static,
@@ -1219,7 +1219,7 @@ where
     restore_with(settings(root, service)?, service, path, on_line).await
 }
 
-/// The same, naming an instance rather than a service (G-4).
+/// The same, naming an instance rather than a service.
 pub async fn restore_instance<F>(root: &Path, id: &str, path: &Path, on_line: F) -> Result<u64>
 where
     F: FnMut(String) + Send + 'static,
@@ -1323,7 +1323,7 @@ mod tests {
     /// leaves the real password in `.env` while the manifest declares a
     /// placeholder, so preferring the manifest would hand a dump the wrong
     /// password with no readable error. Nothing pinned that rule, which is the
-    /// same state `mail::detect` was in before ADR 0037 went looking.
+    /// same state `mail::detect` was in before anybody went looking.
     ///
     /// Writing it down is what showed the defect. `env` used to be read with
     /// `Env::get`, which lays `config::EMBEDDED` under the file — so on a

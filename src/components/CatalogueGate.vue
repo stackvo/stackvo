@@ -8,7 +8,7 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
 /**
  * The third of the pattern, after requirements and bootstrap.
  *
- * ADR 0011 is why it exists. StackVo ships **no** service definitions inside
+ * It exists because StackVo ships **no** service definitions inside
  * itself — not a template, not a config, not even a snapshot of the index — so
  * a machine that has never fetched a catalogue does not have an empty one. It
  * has none, and those are different states with different answers.
@@ -76,7 +76,7 @@ const decided = computed(() => !!bundle.value || !!mirror.value);
 /**
  * Signatures required and not available is its own state and gets its own
  * sentence. It is not a failure to fetch: it is a refusal to pretend, and until
- * ADR 0015's key exists it is the state a managed machine that asked for
+ * a pinned registry key exists it is the state a managed machine that asked for
  * verification is permanently in. Saying "could not reach the catalogue" here
  * would send an administrator to look at their network.
  */

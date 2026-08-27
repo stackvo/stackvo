@@ -1,6 +1,6 @@
 //! A rehearsal publishes nothing, and stays that way.
 //!
-//! §3 #22 — the two ARM rows — could not be verified because no tag had ever
+//! The two ARM rows could not be verified because no tag had ever
 //! been pushed, and no tag could be pushed because the signing preflight fails
 //! without a secret that is somebody's decision to add. The `rehearsal` input
 //! cut that knot: it builds all six targets, runs the suite on each, drops the
@@ -476,7 +476,7 @@ fn the_pinned_toolchain_is_given_the_matrix_target() {
 
 /// Six targets, and the two ARM rows on native ARM runners.
 ///
-/// §7 says six. Cross-compiling the ARM rows on x86 runners would be a
+/// The matrix is six. Cross-compiling the ARM rows on x86 runners would be a
 /// different claim wearing the same number: the bundler runs native tools, and
 /// "it cross-compiled" is not "it produced a package on that architecture".
 #[test]
@@ -490,8 +490,7 @@ fn the_matrix_is_six_targets_with_the_arm_rows_on_arm_runners() {
     assert_eq!(
         targets.len(),
         6,
-        "release.yml builds {} target(s); docs/durum.md §3 #22 and §7 both say \
-         six:\n{targets:#?}",
+        "release.yml builds {} target(s); README.md says six:\n{targets:#?}",
         targets.len()
     );
 

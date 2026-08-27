@@ -7,7 +7,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Release pane, mounted, and the plan behind it.
  *
- * Second pane out of `ProjectDetail.vue` under §14.16. The interesting half is
+ * Second pane out of `ProjectDetail.vue` in the pane split. The interesting half is
  * `useRelease`: three verbs over one plan, where two of them can be told apart
  * only by *which* button spins, and where a project with nothing to release
  * answers an error code that is not a failure.
@@ -218,7 +218,7 @@ describe('the pane', () => {
 });
 
 /**
- * Pushing, and the refusals that make it safe (H-1).
+ * Pushing, and the refusals that make it safe.
  *
  * The property worth a test is that a refusal is *readable and disabling*: a
  * pane that showed the reason and left the button live would be worse than one

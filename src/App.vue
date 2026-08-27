@@ -57,7 +57,7 @@ const { t, locale } = useI18n();
 const gated = computed(() => !app.booting && !!app.preflight && !app.preflight.ready);
 
 /**
- * The catalogue, which this app ships none of (ADR 0011).
+ * The catalogue, which this app ships none of.
  *
  * Between the requirements and the bootstrap on purpose. Bootstrap writes the
  * compose files and brings the stack up; on a machine with no catalogue there
@@ -80,7 +80,7 @@ const needsCatalogue = computed(
 );
 
 /**
- * The handover from `.env` to the instance table (ADR 0016).
+ * The handover from `.env` to the instance table.
  *
  * After the catalogue and before the bootstrap, and both halves of that
  * position are load-bearing. It needs the catalogue, because a migration
@@ -256,7 +256,7 @@ function onFocus() {
 }
 
 /**
- * The command palette, and where its shortcut lives (A-2).
+ * The command palette, and where its shortcut lives.
  *
  * ## Window-scoped, not an operating-system shortcut
  *
@@ -357,7 +357,7 @@ onMounted(async () => {
   // two come to disagree.
   /**
    * Start or stop a project from the tray, without the window coming forward
-   * (M-8).
+   *.
    *
    * Handled here rather than in Rust for the same reason routing is: the
    * commands, the store and the refresh all live on this side, and a second
@@ -1004,7 +1004,7 @@ onUnmounted(() => {
            launch the compose files have never been written and nothing is
            running, so the dashboard would open behind a proxy that is not
            there. This does that once, in front of the person waiting. -->
-      <!-- Nothing is embedded (ADR 0011), so a machine that has never fetched
+      <!-- Nothing is embedded, so a machine that has never fetched
            has no catalogue rather than an empty one — and "no internet" and
            "no catalogue here yet" get different sentences, because only the
            second one has an offline bundle as its answer. Skippable: without
@@ -1015,7 +1015,7 @@ onUnmounted(() => {
         @skip="catalogueDone = true"
       />
 
-      <!-- ADR 0016. The `.env` branch of the renderer is gone, so a workspace
+      <!-- The `.env` branch of the renderer is gone, so a workspace
            that still keeps its services there cannot build a stack at all —
            this is a wall where the catalogue screen is a door. Leaving it
            opens the app with no services, which is still a proxy, a CA and a

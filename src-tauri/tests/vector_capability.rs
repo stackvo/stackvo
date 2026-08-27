@@ -1,7 +1,7 @@
-//! Local AI, answered as a package question (§5 · D-1).
+//! Local AI, answered as a package question.
 //!
-//! §2's D-1 row asked whether Ollama, Qdrant and pgvector should be catalogue
-//! services. §5 answered: **pgvector only, and not as a service.**
+//! The question was whether Ollama, Qdrant and pgvector should be catalogue
+//! services. The answer: **pgvector only, and not as a service.**
 //!
 //! ## Why the other two are out
 //!
@@ -9,7 +9,7 @@
 //! it may not find; Qdrant is a third database beside the four already here.
 //! Neither resembles anything in this catalogue, and "Laradock's 130 services"
 //! is already written down as a fight not to have. Somebody who wants either
-//! writes a `sidecars` block — ADR 0023 made exactly that possible, which is
+//! writes a `sidecars` block — exactly what that mechanism is for, which is
 //! part of why the answer can be no without being a refusal.
 //!
 //! ## Ollama: the softest half of that reason is now the hardest
@@ -37,7 +37,8 @@
 //!
 //! ## What this repository had to do about it: nothing
 //!
-//! That is the finding, and it is ADR 0011 being right. The app ships no
+//! That is the finding, and it is what carrying no service definitions buys.
+//! The app ships no
 //! service definitions, so a new service is a *package*, and a package this app
 //! can already express costs no code here. This file is the proof of that
 //! sentence rather than a restatement of it: the fixture is a real postgres
@@ -81,7 +82,7 @@ fn pgvector_is_a_version_of_postgres_and_not_a_service_of_its_own() {
             manifest(version)["service"],
             "postgres",
             "version `{version}` no longer belongs to the postgres package. \
-             §5 answered D-1 with pgvector as a VERSION: same protocol, same \
+             the answer was pgvector as a VERSION: same protocol, same \
              port, same volume, same client — a second service id would give \
              the catalogue two rows for one database."
         );
@@ -144,7 +145,7 @@ fn the_vector_capability_is_what_separates_them() {
 
 /// The image is pinned, and it is the one that carries the extension.
 ///
-/// ADR 0014: a moving tag is forbidden in a manifest. `pgvector/pgvector:pg16`
+/// A moving tag is forbidden in a manifest. `pgvector/pgvector:pg16`
 /// is the upstream build of postgres 16 with the extension compiled in — the
 /// point of the version existing at all, and the one thing a reader cannot
 /// verify from the version string.
@@ -165,7 +166,7 @@ fn the_pgvector_version_runs_the_image_that_actually_has_pgvector() {
             .to_string();
         assert!(
             !["latest", "stable", "edge", "main", "master"].contains(&tag.as_str()),
-            "version `{version}` runs a moving tag. ADR 0014: an image that can \
+            "version `{version}` runs a moving tag: an image that can \
              change under somebody who pulled it last month is not a version."
         );
     }

@@ -25,7 +25,7 @@ import { api } from '@/lib/ipc';
  * emits it with `success: false` when the run failed, so the flag is what is
  * read rather than the event's name.
  *
- * The DNS responder (E-1) answers for the whole suffix, which is what makes a
+ * The DNS responder answers for the whole suffix, which is what makes a
  * per-project hosts line unnecessary in the first place — and wildcards, which
  * the hosts file cannot express at all. Where it is listening *and* the machine
  * is actually asking it, there is nothing to fix and nothing to offer. A

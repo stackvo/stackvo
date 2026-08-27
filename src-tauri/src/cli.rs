@@ -1,11 +1,11 @@
-//! `stackvo` — the same core, from a terminal (A-1).
+//! `stackvo` — the same core, from a terminal.
 //!
-//! Eight of the ten tools measured in `docs/durum.md` §2 ship a CLI. This one
-//! sat unbuilt not because it was expensive but because it is a **third
-//! surface**: the desktop reaches the core through `commands.rs`, the assistant
-//! through `mcp.rs`, and a third consumer is a third thing that can drift away
-//! from `contracts/ipc.json` while every test still passes. §5's second
-//! question was whether to accept that, and the answer is the one `mcp.rs`
+//! Eight of the ten comparable tools ship a CLI. This one sat unbuilt not
+//! because it was expensive but because it is a **third surface**: the desktop
+//! reaches the core through `commands.rs`, the assistant through `mcp.rs`, and
+//! a third consumer is a third thing that can drift away from
+//! `contracts/ipc.json` while every test still passes. Whether to accept that
+//! was the question, and the answer is the one `mcp.rs`
 //! already demonstrated — accept it, and hold it the same way.
 //!
 //! ## How this is held to the contract
@@ -26,7 +26,7 @@
 //!
 //! ## The two pieces that were missing
 //!
-//! `docs/durum.md` named them: an argument parser and a progress writer.
+//! Two: an argument parser and a progress writer.
 //!
 //! **The parser** is [`parse`], and it is hand-rolled. `clap` is the obvious
 //! answer and would be a dependency, which in this repository is a measured
@@ -36,8 +36,8 @@
 //! that code is that an unrecognised flag is an **error**: a CLI that ignores
 //! `--tial 50` and quietly gives you the default has lied about what it did.
 //!
-//! **The progress writer** is [`Narrate`], the `ProgressSink` ADR 0005 left
-//! room for. `Sink::App` posts to a window, `Null` drops, `Recording` keeps —
+//! **The progress writer** is [`Narrate`], the fourth `ProgressSink` the trait
+//! left room for. `Sink::App` posts to a window, `Null` drops, `Recording` keeps —
 //! this one prints. It writes to **stderr**, and that split is the whole
 //! discipline of this binary: stdout carries the answer, stderr carries the
 //! narration, so `stackvo doctor --json | jq` works while a build is still
@@ -47,8 +47,8 @@
 //!
 //! It does not shell out to the desktop app, and it does not start one. Every
 //! command here calls the same domain function the window calls, which is what
-//! ADR 0001 bought: `&Path` and `&dyn ProgressSink` instead of `State` and
-//! `AppHandle`. Nothing in this file names a Tauri type.
+//! the band structure bought: `&Path` and `&dyn ProgressSink` instead of
+//! `State` and `AppHandle`. Nothing in this file names a Tauri type.
 //!
 //! Writes go through the same audit trail as the window's. A person who runs
 //! `stackvo down` and a person who clicks the button leave the same record;
@@ -119,18 +119,18 @@ pub enum Action {
     SpxBuild,
     SpxRecord,
     /// `stackvo market-bundle <dir>` — the catalogue, for a machine with no
-    /// network (§3 #31).
+    /// network.
     MarketBundle,
     /// `stackvo artisan migrate` — a fixed program, the rest of the line handed
-    /// to it (A-3).
+    /// to it.
     Passthrough,
     /// `stackvo exec <program> …` — the program named by the caller.
     Exec,
     /// `stackvo shell` — an interactive shell in the project's container.
     Shell,
-    /// `stackvo tui` — the full-screen surface (M-8).
+    /// `stackvo tui` — the full-screen surface.
     Tui,
-    /// `stackvo commands` — what this project offers (B-4).
+    /// `stackvo commands` — what this project offers.
     Commands,
     /// `stackvo run <id>` — one of them.
     Run,
@@ -153,7 +153,7 @@ pub struct Flag {
 ///
 /// Nineteen commands implement a command the contract declares, and the whole
 /// argument for a third surface is that the pair is checked. The shell
-/// commands (A-3) do not, and **cannot**, so rather than inventing a contract
+/// commands do not, and **cannot**, so rather than inventing a contract
 /// entry for them the exception is named here and given a gate of its own.
 ///
 /// The reason they cannot is [`crate::quickcmd`]'s: the webview may never name
@@ -818,7 +818,7 @@ pub const COMMANDS: &[Command] = &[
         summary: "Compile php-spx for that project's PHP version, in a throwaway \
                   container of its own image. Minutes, once per PHP version.",
     },
-    // §3 #31. A terminal command rather than a button, and the reason is who
+    // A terminal command rather than a button, and the reason is who
     // does it: somebody at a connected machine writing a catalogue onto a
     // removable disk to carry to one that has no network. That is an operator's
     // errand — scriptable, repeatable, run over ssh as often as not — and the
@@ -847,7 +847,7 @@ pub const COMMANDS: &[Command] = &[
         summary: "The commands this project offers: the built-in ones its files \
                   support, then the ones its own stackvo.json declares.",
     },
-    // ---- a screen (M-8) ----------------------------------------------------
+    // ---- a screen ----------------------------------------------------
     Command {
         name: "tui",
         action: Action::Tui,
@@ -880,7 +880,7 @@ pub const COMMANDS: &[Command] = &[
         summary: "Run one of them by id. `stackvo commands` lists the ids; a \
                   project declares its own in stackvo.json.",
     },
-    // ---- in the project's container (A-3) ---------------------------------
+    // ---- in the project's container ---------------------------------
     shell_command!(
         "php",
         Action::Passthrough,
@@ -1324,7 +1324,7 @@ fn distance(a: &str, b: &str) -> usize {
 
 // -------------------------------------------------------------- narration
 
-/// The progress writer ADR 0005 left room for: prints, to stderr.
+/// The progress writer the `ProgressSink` trait left room for: prints, to stderr.
 ///
 /// stderr rather than stdout so `stackvo up --json > out` keeps the answer
 /// clean while the build scrolls past on the terminal — and so a pipeline that
@@ -1639,7 +1639,7 @@ pub enum Outcome {
 
 // ------------------------------------------------- the project's container
 //
-// A-3. `stackvo php -v` in a project directory runs the PHP that project
+// `stackvo php -v` in a project directory runs the PHP that project
 // declares, in the container it declares it in — which is the whole of what
 // "host shell integration" means here. The competitors that do this put a
 // shim on `PATH` and rewrite `php` itself; this does not, because the version
@@ -1909,8 +1909,8 @@ async fn run_in_container(
 /// Run one parsed command line.
 ///
 /// Every arm calls the same domain function the window's command calls. The
-/// `&dyn ProgressSink` is what makes that possible without a running app —
-/// ADR 0005 — and `sink` is [`Narrate`] in a terminal.
+/// `&dyn ProgressSink` is what makes that possible without a running app, and
+/// `sink` is [`Narrate`] in a terminal.
 pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Result<Outcome> {
     let command = parsed
         .resolved()
@@ -1941,12 +1941,12 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
     let root = workspace.require_root()?;
 
     match command.action {
-        // ---- in the project's container (A-3) -----------------------------
+        // ---- in the project's container -----------------------------
         Action::Passthrough | Action::Exec | Action::Shell => {
             run_in_container(command, parsed, &root, style).await
         }
 
-        // ---- the project's own commands (B-4) -----------------------------
+        // ---- the project's own commands -----------------------------
         Action::Commands => {
             let cwd = std::env::current_dir()
                 .map_err(|e| Error::io("reading the working directory", e))?;
@@ -1997,7 +1997,7 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
             Ok(Outcome::Exit(status.code().unwrap_or(0)))
         }
 
-        // ---- a screen (M-8) -----------------------------------------------
+        // ---- a screen -----------------------------------------------
         //
         // Returns only when the person leaves it, and has already drawn
         // everything it had to say — so there is nothing left to print and
@@ -4639,7 +4639,7 @@ mod tests {
         assert!(text.contains("--bin stackvo-mcp"), "{text}");
     }
 
-    // ---------------------------------------------- the shell commands (A-3)
+    // ---------------------------------------------- the shell commands
 
     fn target() -> Target {
         Target {

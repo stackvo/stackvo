@@ -7,7 +7,7 @@ import SettingsGroup from '@/components/SettingsGroup.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 
 /**
- * Stopping projects nothing has asked for (I-2).
+ * Stopping projects nothing has asked for.
  *
  * ## The idle times are shown whether or not the feature is on
  *

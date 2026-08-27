@@ -1,6 +1,6 @@
 //! Telling an assistant working inside a project what it is working inside.
 //!
-//! K-2. `agents.rs` registers `stackvo-mcp` with the assistants on the *host*,
+//! `agents.rs` registers `stackvo-mcp` with the assistants on the *host*,
 //! and that covers the case where somebody is running Claude Code or Cursor on
 //! their machine. It does nothing for an agent running **in the container** —
 //! a `claude` invocation from inside `stackvo-shop`, an agent in a devcontainer

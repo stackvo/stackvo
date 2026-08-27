@@ -10,8 +10,8 @@ import ServerDirectivesPane from '@/components/settings/ServerDirectivesPane.vue
  * The request limits every generated server config carries, and which servers
  * can take extra directives at all.
  *
- * Ninth pane out of `Settings.vue` under §14.16. The directives editor below it
- * came out first (§24) because it owned its own file; this half is the one that
+ * Ninth pane out of `Settings.vue` in the pane split. The directives editor below it
+ * came out first because it owned its own file; this half is the one that
  * drives the shared `.env` editor, which is why it had to wait for
  * `useEnvEditor`.
  */

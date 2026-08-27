@@ -124,7 +124,7 @@ describe('the hosts offer a finished build makes', () => {
   });
 
   it('says nothing while the DNS responder is answering for the suffix', async () => {
-    // E-1 answers for every name under the suffix, which is what makes the
+    // The responder answers for every name under the suffix, which is what makes the
     // per-project line unnecessary — and it is not even worth asking the
     // backend about the project, because the answer cannot change the outcome.
     replies.dnsStatus = { listening: true, configured: true };

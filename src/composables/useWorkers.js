@@ -8,7 +8,7 @@ import { api, asList } from '@/lib/ipc';
  * from the engine. Docker itself does the healing — this only starts, stops,
  * and surfaces the restart count that healing produces.
  *
- * Lifted out of `ProjectDetail.vue` with the Workers pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the Workers pane in the pane split.
  */
 export function useWorkers(name) {
   const kinds = ref([]);

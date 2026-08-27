@@ -8,7 +8,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Appearance pane, mounted.
  *
- * Sixth out of `Settings.vue` under §14.16 and the cleanest seam so far: the
+ * Sixth out of `Settings.vue` in the pane split and the cleanest seam so far: the
  * only pane that touches neither the `.env` editor nor the operation console.
  * Everything it changes lives in `useAppearanceStore`, which persists and
  * applies on its own.

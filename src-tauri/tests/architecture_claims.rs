@@ -1,6 +1,6 @@
 //! Does `ARCHITECTURE.md` still describe this tree?
 //!
-//! The document exists because §12 of the readiness review measured this
+//! The document exists because an earlier review measured this
 //! repository's bus factor at one and named the absence of an architecture
 //! document as the first reason. A map that no longer matches the ground is
 //! worse than no map: the second person trusts it, and it sends them somewhere
@@ -12,7 +12,7 @@
 //! review because a number in prose is not checked by anything.
 //!
 //! So the checkable claims are checked. `readme_claims.rs` does this for
-//! `README.md`; this does it for `ARCHITECTURE.md` and the ADRs it points at.
+//! `README.md`; this does it for `ARCHITECTURE.md`.
 //!
 //! What is *not* checked is the prose, and that is not an oversight — "the
 //! dependency arrows only ever point downward" is a claim about intent that a
@@ -83,60 +83,6 @@ fn every_link_points_at_a_file_that_exists() {
     );
 }
 
-/// The decisions carry the three parts that make one worth reading.
-///
-/// `docs/durum.md` §6 replaced `docs/adr/`, one file per decision, when the
-/// five documents under `docs/` became one. The numbering survived the move on
-/// purpose — comments through the codebase say "ADR 0005" and "ADR 0009", and a
-/// reference that resolves to nothing is worse than no reference.
-///
-/// A decision without a status is a draft somebody forgot; without a decision
-/// it is a description of a problem; without consequences it is the half that
-/// reads well and the half nobody needs is missing.
-#[test]
-fn every_decision_carries_a_status_a_decision_and_its_consequences() {
-    let text = read(&repo_root().join("docs/durum.md"));
-
-    let numbers: Vec<&str> = text
-        .lines()
-        .filter_map(|line| line.strip_prefix("### "))
-        .filter(|rest| rest.starts_with("00"))
-        .filter_map(|rest| rest.split_whitespace().next())
-        .collect();
-
-    assert!(
-        numbers.len() >= 10,
-        "only {} decisions found in §6 — the heading format has changed and this \
-         gate has stopped reading them",
-        numbers.len()
-    );
-
-    // Each block runs from its own heading to the next `###` or `---`.
-    for number in &numbers {
-        let start = text
-            .find(&format!("### {number} "))
-            .expect("the heading was just read out of this text");
-        let rest = &text[start..];
-        let end = rest[4..]
-            .find("\n### ")
-            .map(|i| i + 4)
-            .or_else(|| rest.find("\n---"))
-            .unwrap_or(rest.len());
-        let block = &rest[..end];
-
-        for part in ["**Status:**", "**Decision:**", "**Consequences:**"] {
-            assert!(block.contains(part), "decision {number} has no {part} line");
-        }
-    }
-
-    // And ARCHITECTURE.md points at them rather than carrying a second table
-    // that can disagree.
-    assert!(
-        architecture().contains("docs/durum.md"),
-        "ARCHITECTURE.md no longer points at the decisions"
-    );
-}
-
 /// The counts in the document, against the tree.
 ///
 /// Only the ones a parser can settle. `54 modules` and `144 commands` are
@@ -187,13 +133,13 @@ fn the_counts_match_the_tree() {
 /// The one structural claim that *is* checkable, and the rule the whole layer
 /// diagram exists to state: only `commands.rs` names a Tauri handle.
 ///
-/// This is ADR 0001 with a test behind it. Without one the rule is a comment,
+/// This is the band rule with a test behind it. Without one it is a comment,
 /// and comments do not fail builds.
 #[test]
 fn only_the_command_layer_names_a_tauri_handle() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     // The entry band builds the app, so it holds the handle by definition, and
-    // `events` is the Tauri-side implementation of the sink ADR 0005 defines.
+    // `events` is the Tauri-side implementation of the `ProgressSink` trait.
     let allowed = [
         "commands.rs",
         "lib.rs",
@@ -221,7 +167,7 @@ fn only_the_command_layer_names_a_tauri_handle() {
 
     assert!(
         offenders.is_empty(),
-        "these modules take Tauri's managed state, which ADR 0001 puts in \
+        "these modules take Tauri's managed state, which belongs in \
          `commands.rs` alone — a function holding it cannot be called from a \
          test, the `diagnose` example, or the MCP surface: {offenders:?}"
     );

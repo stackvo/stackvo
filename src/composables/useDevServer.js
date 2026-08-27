@@ -10,7 +10,7 @@ import { api } from '@/lib/ipc';
  * instead of the composable reading the project, because the pane is mounted
  * inside a view that has already loaded it.
  *
- * Lifted out of `ProjectDetail.vue` with the Dev Server pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the Dev Server pane in the pane split.
  */
 export function useDevServer(name) {
   const status = ref(null);

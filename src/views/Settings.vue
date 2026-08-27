@@ -38,7 +38,7 @@ const app = useAppStore();
 /**
  * The `.env` editor, shared by six panes on this screen.
  *
- * Lifted into `useEnvEditor` under §14.16: it is the machinery that kept those
+ * Lifted into `useEnvEditor` in the pane split: it is the machinery that kept those
  * panes from being extracted one at a time, because they all edit one file
  * through one set of refs. Destructured here so the existing template bindings
  * keep their names.

@@ -1,4 +1,4 @@
-//! `stackvo` — the helper CLI (A-1).
+//! `stackvo` — the helper CLI.
 //!
 //!   stackvo status
 //!   stackvo logs shop --follow

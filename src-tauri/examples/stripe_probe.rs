@@ -1,4 +1,4 @@
-//! How far can the Stripe listener be checked without a Stripe account? (M-11)
+//! How far can the Stripe listener be checked without a Stripe account?
 //!
 //! This is the item on the list whose stated cost was "depends on the Stripe
 //! CLI and an account; it cannot be verified on this machine". Half of that is

@@ -1,8 +1,8 @@
 /**
  * The process boundary, replaced at the seam the architecture already draws.
  *
- * `ipc.js` → `call()` is the one function the data layer passes through — §7 of
- * `docs/durum.md` measures that and a test enforces it — and underneath it
+ * `ipc.js` → `call()` is the one function the data layer passes through —
+ * `web_build_invariants.rs` enforces that — and underneath it
  * there is exactly one global: `window.__TAURI_INTERNALS__.invoke`. Everything
  * here replaces that global and nothing else. No component is reached into, no
  * store is pre-filled, no module is mocked: the app boots the way it boots and

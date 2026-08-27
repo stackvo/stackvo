@@ -597,7 +597,7 @@ pub fn render_node_dockerfile(project_name: &str, node: &crate::manifest::NodeCo
     out.push_str(&format!("FROM {}\n\n", node_base_image(&node.version)));
     out.push_str("WORKDIR /app\n\n");
 
-    // J-2. Emitted only when the manifest names a package manager, so a project
+    // Emitted only when the manifest names a package manager, so a project
     // that never asked builds the image it has always built — byte for byte,
     // which `fixtures_differential.rs` checks.
     //
@@ -981,7 +981,7 @@ pub struct ServerExtras {
 }
 
 impl ServerExtras {
-    /// A copy with one server's block extended (M-6).
+    /// A copy with one server's block extended.
     ///
     /// The workspace's directives stay first and the appended ones follow, so a
     /// per-project switch adds to what somebody wrote rather than arguing with
@@ -1345,7 +1345,7 @@ pub struct ComposeProject<'a> {
     /// Swoole, which is its own HTTP server).
     pub node_port: Option<u16>,
     pub php_version: Option<&'a str>,
-    /// Containers this repository declared (§5.1), in the order it declared
+    /// Containers this repository declared, in the order it declared
     /// them. Empty for every project that has not asked for one, which is
     /// every project that existed before the field did.
     pub sidecars: &'a crate::sidecar::Declared,
@@ -1709,7 +1709,7 @@ pub struct TraefikOptions<'a> {
     pub redirect_to_https: bool,
     /// service id -> (enabled, subdomain override)
     pub services: Vec<(&'a str, bool, Option<&'a str>)>,
-    /// Names the user pointed at something this app did not start (E-4).
+    /// Names the user pointed at something this app did not start.
     ///
     /// Already checked and normalised by [`crate::routes`], so the renderer
     /// does no validation of its own — a second opinion about what a target
@@ -1832,7 +1832,7 @@ pub fn traefik_routing_warning(opts: &TraefikOptions) -> Option<String> {
 mod tests {
     use super::*;
 
-    // ------------------------------------------------ extra hostnames (E-2)
+    // ------------------------------------------------ extra hostnames
 
     /// A project with no aliases renders the rule it has always rendered.
     ///
@@ -2072,7 +2072,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// J-2, and the assertion the whole design of the field rests on: a node
+    /// And the assertion the whole design of the field rests on: a node
     /// project that named no package manager produces the bytes it always did.
     ///
     /// `fixtures_differential.rs` compares the generated tree against output
@@ -2428,7 +2428,7 @@ mod tests {
         assert!(resolve("8.4", &exts(&["mbstirng"]), true).is_err());
     }
 
-    // ------------------------------------------------ declared sidecars (§5.1)
+    // ------------------------------------------------ declared sidecars
 
     /// Build a manifest with the given `sidecars` block, through the real
     /// parser — so this test cannot pass against a shape `sidecar::parse` would

@@ -1,4 +1,4 @@
-//! Exporting a project as a devcontainer (A-7).
+//! Exporting a project as a devcontainer.
 //!
 //! ## The report said this was the generator's little sibling. It is not.
 //!
@@ -59,9 +59,8 @@
 //! **The services are their own packages' fragments**, rendered through
 //! [`crate::render::substitute`] — the same strict substituter, where an
 //! unknown name is a refusal rather than an empty string. Not a table of image
-//! names written here: ADR 0011 is that this application carries no service
-//! definitions, and "except in the exporter" is how that decision would have
-//! been lost. It also could not have been done by hand and be correct — the
+//! names written here: this application carries no service definitions, and
+//! "except in the exporter" is how that would have been lost. It also could not have been done by hand and be correct — the
 //! mapping from StackVo's `settings.ROOT_PASSWORD` to MySQL's
 //! `MYSQL_ROOT_PASSWORD` exists only in that package's template, and a compose
 //! file that starts `mysql` with no root password set does not start at all.
@@ -73,7 +72,7 @@
 //! | --- | --- | --- |
 //! | `file.*` | `./configs/<slug>/<name>` | the host path is under `~/.stackvo` |
 //! | `instance.logs` | a named volume | same |
-//! | `settings.*` (secret) | `${DEV_…}` | ADR 0010, and this file is committed |
+//! | `settings.*` (secret) | `${DEV_…}` | the value stays out, and this file is committed |
 //! | `network` | `default` | `stackvo-net` belongs to another compose file |
 //! | `instance.domain` | `localhost` | there is no Traefik and no certificate |
 //! | `port.*` | the host port this machine allocated | see below |

@@ -13,7 +13,7 @@
 //! The rotation row is the whole point, and it is why a second file exists
 //! rather than a log level. A record that deletes itself after seven days
 //! cannot answer "when was this host entry added", which is precisely the
-//! question asked three weeks later. §13 of the readiness review asked for a
+//! question asked three weeks later. An earlier review asked for a
 //! separate, unrotated trail; a filter over a rotating one would have been the
 //! same file with a different name.
 //!

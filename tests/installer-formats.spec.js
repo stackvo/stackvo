@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 /**
  * The judgement half of `npm run installers:check`, exercised without a bundler.
  *
- * §3 #22's open question is whether the bundler produces a package on ARM, and
+ * The open question is whether the bundler produces a package on ARM, and
  * nothing on this machine can answer it — there is no ARM Linux runner here and
  * no Windows one at all. What can be settled here is the other half: whether a
  * run that *did* bundle on ARM would be recognised as having done so, and
@@ -219,7 +219,7 @@ describe('every row of the release matrix', () => {
   });
 
   /**
-   * The two rows §3 #22 is about. Named rather than merely counted, because
+   * The two ARM rows. Named rather than merely counted, because
    * "six targets" stays true when one ARM row is swapped for a second x86 one,
    * and that swap is the quiet way this item gets closed without being done.
    */

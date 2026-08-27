@@ -11,7 +11,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * The public URL this project can be reached at while it is running.
  *
- * One of three panes out of the Container section under §14.16. `running` is a
+ * One of three panes out of the Container section in the pane split. `running` is a
  * prop rather than a fetch: a tunnel to a stopped container resolves to
  * nothing, and the view already knows the state.
  *
@@ -207,7 +207,7 @@ const unprotectedLink = computed(
         </v-btn>
       </div>
 
-      <!-- The name that was asked for and not granted (B-7). Measured on a
+      <!-- The name that was asked for and not granted. Measured on a
            real provider: the tunnel is up, the pane is green, and the address
            registered in somebody's dashboard points nowhere. -->
       <v-alert v-if="tunnel.reservedHonoured === false" type="warning" variant="tonal" class="mb-3">
@@ -360,7 +360,7 @@ const unprotectedLink = computed(
       </template>
 
       <!-- Who else can open the link, before it exists rather than after it
-           has been pasted somewhere (B-7). -->
+           has been pasted somewhere. -->
       <div class="mb-3">
         <div class="text-caption text-medium-emphasis mb-1">{{ t('tunnel.authTitle') }}</div>
 

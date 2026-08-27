@@ -161,7 +161,7 @@ pub fn run(argv: &[&str]) -> Result<bool> {
 
 /// What polkit's exit code means, as a value rather than as a control flow.
 ///
-/// Split out of [`run`] for the reason §3 #35 exists: the dialog needs a human,
+/// Split out of [`run`] for one reason: the dialog needs a human,
 /// and *this* does not. Inline, the one part of the Linux path that decides
 /// whether a cancelled prompt is an error could only ever be exercised by
 /// somebody sitting in front of a polkit agent — so it never was, on a platform
@@ -406,7 +406,7 @@ pub fn base64_utf16(script: &str) -> String {
 
 /// The parts of the two branches this machine cannot show a dialog for.
 ///
-/// §3 #35 says the remaining half of the Windows and Linux paths "needs a
+/// The remaining half of the Windows and Linux paths "needs a
 /// human", and for the *prompt* that is true and permanent. It was never true
 /// of everything around the prompt: which exit code means "cancelled", whether
 /// the outer PowerShell line still carries `-Wait`, whether a machine without

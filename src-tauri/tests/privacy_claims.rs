@@ -1,6 +1,6 @@
 //! Every host this app can reach is named in `PRIVACY.md`.
 //!
-//! The readiness review's §4.3 asked for a decision rather than a silence: a
+//! An earlier review asked for a decision rather than a silence: a
 //! tool that collects nothing and a tool that collects something look identical
 //! from the outside, so "there is no telemetry" is not a property of a build —
 //! it is a claim about one. `PRIVACY.md` makes the claim. This file is what

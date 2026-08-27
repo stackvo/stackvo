@@ -1,6 +1,6 @@
 //! Commands a project asks to have run when it starts, stops or is rebuilt.
 //!
-//! B-3. Every comparable tool has these and they are genuinely useful: after a
+//! Every comparable tool has these and they are genuinely useful: after a
 //! rebuild you want `composer install`, after a start you want `artisan
 //! migrate`, and doing it by hand every time is how a stack that "works" is one
 //! nobody trusts.
@@ -638,7 +638,7 @@ pub async fn run(sink: &dyn crate::progress::ProgressSink, run: Run<'_>) -> Resu
 ///
 /// This was the body of `commands::run_hooks`, which needed an `AppHandle` for
 /// one reason — building the sink to report into. Taking the sink instead is
-/// ADR 0001's rule applied to the last thing in the lifecycle path that still
+/// the band rule applied to the last thing in the lifecycle path that still
 /// named a Tauri type, and it is what lets `stackvo start` and the start button
 /// run the same hooks rather than two things wearing one name.
 ///
@@ -659,7 +659,7 @@ pub async fn run_for_project(
 
     // The effective manifest, deliberately: `stackvo.local.json` may override
     // hooks the same way it overrides anything else, and a machine that wants
-    // a different post-start step is exactly the case B-2 exists for.
+    // a different post-start step is exactly the case the overlay exists for.
     let Ok(manifest) = crate::manifest::read(&dir.join("stackvo.json"), name) else {
         return;
     };

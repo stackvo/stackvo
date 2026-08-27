@@ -7,7 +7,7 @@ import * as directives from 'vuetify/directives';
 /**
  * The Indicator pane, mounted.
  *
- * First pane out of `ProjectDetail.vue` under §14.16 — 3,007 lines at 0%
+ * First pane out of `ProjectDetail.vue` in the pane split — 3,007 lines at 0%
  * coverage, and the last view still there.
  *
  * It takes every number as a prop, which is the design worth pinning: the

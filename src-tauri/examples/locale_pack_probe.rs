@@ -1,6 +1,6 @@
-//! Does a language pack survive the round trip? (M-7)
+//! Does a language pack survive the round trip?
 //!
-//! The claim M-7 makes is that adding a language is now a **file**, not a code
+//! The claim is that adding a language is now a **file**, not a code
 //! change. The unit tests check the tag rule and the string count; what they
 //! cannot check is the part that decides whether the claim is true — that a
 //! pack written to the real config directory is found there again, read back

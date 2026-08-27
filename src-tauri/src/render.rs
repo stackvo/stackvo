@@ -5,7 +5,7 @@
 //! same job from the other end: it walks [`instances::Table`] and renders each
 //! instance's package fragment. The compiled-in array is gone (decision 0016).
 //!
-//! ADR 0002 is untouched and is the reason that swap was safe: the file has
+//! One invariant is untouched and is the reason that swap was safe: the file has
 //! always been rendered from scratch on every run and never edited in place, so
 //! changing what it is rendered *from* changed no invariant anybody depends on.
 //!
@@ -148,7 +148,7 @@ fn context(
 
     for setting in &manifest.settings {
         // The value, then what the keystore holds, then the manifest's default.
-        // ADR 0010: a secret lives in the keystore and is rendered into
+        // A secret lives in the keystore and is still rendered into
         // `generated/`, which is output rewritten on every run rather than a
         // file anybody keeps.
         let value = instance
@@ -919,7 +919,7 @@ networks:
 
     // ---------------------------------------------------------- healthcheck
 
-    /// S-11. The manifest declares readiness and the compose file carries it —
+    /// The manifest declares readiness and the compose file carries it —
     /// the half of that item that lives in this repository. Every package in
     /// the catalogue shipped with `health` empty, so `--wait` and
     /// `condition: service_healthy` both meant "the process exists".

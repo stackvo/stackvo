@@ -1,7 +1,7 @@
 /**
  * GENERATED — do not edit. `node tools/generate-types.mjs`
  *
- * The IPC surface as types, from `contracts/ipc.json`. §3 #10.
+ * The IPC surface as types, from `contracts/ipc.json`.
  *
  * Applies to plain JavaScript: an editor reads this beside `ipc.js` and offers
  * the argument names, the return shape and a complaint about a method that does
@@ -1201,7 +1201,7 @@ export interface MarketStatus {
      */
     verifiedBy: string | null;
     /**
-     * string | null — the bundle policy.market.offlineBundle points at, which wins over the path the user chose. ADR 0011 makes this the only way an air-gapped machine ever gets a catalogue.
+     * string | null — the bundle policy.market.offlineBundle points at, which wins over the path the user chose. Nothing is embedded, so this is the only way an air-gapped machine ever gets a catalogue.
      */
     offlineBundle: string | null;
     /**
@@ -1388,11 +1388,11 @@ export interface PolicyMarket {
     /** string | null — a mirror the organisation runs; read by the HTTPS source */
     registryUrl: string | null;
     /**
-     * string | null — a directory to install from with no network. ADR 0011 makes this the only way an air-gapped machine gets a catalogue, so it is a first-class install path rather than an enterprise extra
+     * string | null — a directory to install from with no network. Nothing is embedded, so this is the only way an air-gapped machine gets a catalogue, so it is a first-class install path rather than an enterprise extra
      */
     offlineBundle: string | null;
     /**
-     * boolean — the one key in the block that is a lock rather than a note: it can only turn verification ON, and there is no value of it that turns a check off (ADR 0009). Raises market::Trust to Signed, which refuses today because no key is pinned
+     * boolean — the one key in the block that is a lock rather than a note: it can only turn verification ON, and there is no value of it that turns a check off. Raises market::Trust to Signed, which refuses today because no key is pinned
      */
     requireSignature: boolean;
     /** string[] — services that may be installed. EMPTY MEANS NO OPINION, not 'none' */
@@ -2475,11 +2475,11 @@ export interface StackvoApi {
    */
   serviceReveal(service: string, key: string): Promise<string>;
   /**
-   * A machine that has never fetched a catalogue has none at all — ADR 0011 embeds nothing — so 'not fetched yet' and 'the catalogue is empty' are different sentences and the market page shows a different thing for each.
+   * A machine that has never fetched a catalogue has none at all — nothing is embedded — so 'not fetched yet' and 'the catalogue is empty' are different sentences and the market page shows a different thing for each.
    */
   marketStatus(): Promise<MarketStatus>;
   /**
-   * Read a catalogue from wherever this machine gets one — an https:// address, an offline bundle, or a directory the user picked. Which one comes from the string. The signature is checked before the index is parsed when a signature is asked for; a signature the publisher published is checked without anybody asking, a source that stops signing is refused, and policy.market.requireSignature only tightens further (ADR 0034).
+   * Read a catalogue from wherever this machine gets one — an https:// address, an offline bundle, or a directory the user picked. Which one comes from the string. The signature is checked before the index is parsed when a signature is asked for; a signature the publisher published is checked without anybody asking, a source that stops signing is refused, and policy.market.requireSignature only tightens further.
    */
   marketRefresh(location: string): Promise<MarketStatus>;
   /**
@@ -2509,7 +2509,7 @@ export interface StackvoApi {
   /** Fetch one package, verify it whole, and put it where the renderer looks. */
   marketInstall(service: string, version: string): Promise<MarketStatus>;
   /**
-   * Remove a package's files. Data is not touched — ADR 0012 puts that behind purgeData on a command that also stops containers.
+   * Remove a package's files. Data is not touched — that is behind purgeData on a command that also stops containers.
    */
   marketUninstall(service: string, version: string): Promise<MarketStatus>;
   /**
@@ -2517,7 +2517,7 @@ export interface StackvoApi {
    */
   marketProbe(location: string): Promise<SourceProbe>;
   /**
-   * Write everything an air-gapped machine needs into one directory, on a machine that still has a network. ADR 0011 makes market.offlineBundle the only way a catalogue reaches a machine with no network, and until now nothing could produce one — the consuming half shipped without the producing half (§3 #31).
+   * Write everything an air-gapped machine needs into one directory, on a machine that still has a network. market.offlineBundle is the only way a catalogue reaches a machine with no network, and until now nothing could produce one — the consuming half shipped without the producing half.
    */
   marketBundle(destination: string): Promise<Bundled>;
   /**
@@ -2536,7 +2536,7 @@ export interface StackvoApi {
    * Create an instance of an installed package. Returns its id — the slug of service@version, which every derived name comes from.
    */
   instanceCreate(service: string, version: string, settings?: Record<string, unknown>, ports?: Record<string, unknown>): Promise<string>;
-  /** Forget an instance. Volumes are left alone (ADR 0012). */
+  /** Forget an instance. Volumes are left alone. */
   instanceRemove(id: string): Promise<void>;
   /** Move the pre-package name — `stackvo-mysql` — to another version of the same service. */
   instancePromote(id: string): Promise<void>;
@@ -2544,7 +2544,7 @@ export interface StackvoApi {
    * Write the instance down as on, regenerate, then bring its compose profile up. The order is the one service_enable uses: the compose file has to describe the container before compose is asked to start it.
    */
   instanceEnable(id: string): Promise<OperationId>;
-  /** Switch an instance off. NOTHING IS DELETED (ADR 0012) — not the volume, not the image. */
+  /** Switch an instance off. NOTHING IS DELETED — not the volume, not the image. */
   instanceDisable(id: string): Promise<OperationId>;
   /**
    * The container, without touching what the instance table says. Distinct from enable/disable, which change whether the instance is part of the stack at all.
@@ -2605,10 +2605,10 @@ export interface StackvoApi {
    * `stackvo down` existed only in the CLI — the web UI could never stop the stack, because doing so would have killed the UI itself.
    */
   composeDown(): Promise<OperationId>;
-  /** G-4. A move names two instances, and `mysql-8-0` and `mysql-8-4` both answer to `mysql`. */
+  /** A move names two instances, and `mysql-8-0` and `mysql-8-4` both answer to `mysql`. */
   dbInstances(): Promise<DbInstance[]>;
   /**
-   * I-2. Reports the idle time even with the threshold off — the number is worth seeing before somebody chooses what to set it to.
+   * Reports the idle time even with the threshold off — the number is worth seeing before somebody chooses what to set it to.
    */
   projectsIdle(): Promise<IdleProject[]>;
   /**
@@ -2616,7 +2616,7 @@ export interface StackvoApi {
    */
   projectsSuspendIdle(): Promise<string[]>;
   /**
-   * G-4. Plan-then-apply, the same shape as hosts_plan/hosts_apply, because the target is EMPTIED and that sentence has to be on screen before anybody presses anything. MUST touch no container.
+   * Plan-then-apply, the same shape as hosts_plan/hosts_apply, because the target is EMPTIED and that sentence has to be on screen before anybody presses anything. MUST touch no container.
    */
   dbMovePlan(from: string, to: string): Promise<DbMovePlan>;
   /**
@@ -2624,7 +2624,7 @@ export interface StackvoApi {
    */
   dbMoveApply(from: string, to: string): Promise<DbMoved>;
   /**
-   * E-4. A route the renderer skips MUST still appear here, or the screen shows a route the proxy does not have.
+   * A route the renderer skips MUST still appear here, or the screen shows a route the proxy does not have.
    */
   routesList(): Promise<UserRoute[]>;
   /**
@@ -2632,7 +2632,7 @@ export interface StackvoApi {
    */
   routesSave(routes: UserRoute[]): Promise<UserRoute[]>;
   /**
-   * E-1. /etc/hosts needs a password per project and cannot express a wildcard at all, which is why E-2 was left half-done.
+   * /etc/hosts needs a password per project and cannot express a wildcard at all, which is why the wildcard half was left undone.
    */
   dnsStatus(): Promise<DnsStatus>;
   /**
@@ -2675,12 +2675,12 @@ export interface StackvoApi {
   mailMessage(id: string): Promise<MailBody>;
   mailClear(): Promise<void>;
   /**
-   * M-2. The catcher catches everything, which is right, and it is not the whole job: the message somebody actually needs to check is the one that renders differently in Outlook, or the invoice a colleague has to look at — both of which mean THIS ONE MESSAGE, TO A REAL ADDRESS. Every rival calls that release and StackVo could not do it. Deliberately not the other shape: pointing the application at a real SMTP server would send the forty password resets a test suite generates in an hour to whatever addresses the fixtures happen to contain.
+   * The catcher catches everything, which is right, and it is not the whole job: the message somebody actually needs to check is the one that renders differently in Outlook, or the invoice a colleague has to look at — both of which mean THIS ONE MESSAGE, TO A REAL ADDRESS. Every rival calls that release and StackVo could not do it. Deliberately not the other shape: pointing the application at a real SMTP server would send the forty password resets a test suite generates in an hour to whatever addresses the fixtures happen to contain.
    */
   mailRelayGet(): Promise<Record<string, unknown>>;
   /** Somewhere to put the relay, once somebody has been told a release was refused. */
   mailRelaySet(config: RelayConfig, password: string | null): Promise<RelayStatus>;
-  /** The whole point of M-2: one caught message, sent on to a real person. */
+  /** The whole point of a relay: one caught message, sent on to a real person. */
   mailRelease(id: string, to: string[]): Promise<void>;
   mailDelete(id: string): Promise<void>;
   /**
@@ -2706,7 +2706,7 @@ export interface StackvoApi {
   /** A backup nobody has restored is a file, not a backup. */
   dbRestore(service: string, path: string, snapshotFirst: boolean): Promise<OperationId>;
   /**
-   * Competitive review G-2: `ddev snapshot` and `lerd db:snapshot` name a point in time and restore it by that name. db_dump could already write a file to a path chosen in a save dialog, which is raw material — a dump in Downloads is not something anybody comes back to.
+   * `ddev snapshot` and `lerd db:snapshot` name a point in time and restore it by that name. db_dump could already write a file to a path chosen in a save dialog, which is raw material — a dump in Downloads is not something anybody comes back to.
    */
   dbSnapshots(): Promise<Record<string, unknown>[]>;
   /**
@@ -2718,23 +2718,23 @@ export interface StackvoApi {
   /** Removes one copy. The way out of a directory that would otherwise only grow. */
   dbSnapshotDelete(service: string, name: string): Promise<void>;
   /**
-   * F-2, whose note read 'dump/mail/log three separate screens, no correlation'. What the code thought it had (dd()) and what it actually asked the database for are two halves of one question, and reading them meant comparing clocks by eye across two panes.
+   * The row read 'dump/mail/log three separate screens, no correlation'. What the code thought it had (dd()) and what it actually asked the database for are two halves of one question, and reading them meant comparing clocks by eye across two panes.
    */
   requestTimeline(project: string, service?: string): Promise<Timeline>;
   /**
-   * B-1. The three instruments already existed and each was its own pane: SPX says where the code's time went, the query log says what the database was asked, the timeline says what else happened. Reading them about ONE request meant opening three panes and comparing clocks by eye. No new measurement was needed — a common request key was, and a recording is one.
+   * The three instruments already existed and each was its own pane: SPX says where the code's time went, the query log says what the database was asked, the timeline says what else happened. Reading them about ONE request meant opening three panes and comparing clocks by eye. No new measurement was needed — a common request key was, and a recording is one.
    */
   requestExplain(project: string, key: string, service?: string): Promise<RequestExplanation>;
   /**
-   * F-3. `profiler_read` answers where the time went — a table of the costliest functions — and cannot answer what called that, which is the question a flame view exists for. The parser was already reading caller→callee edges to attribute inclusive cost and was discarding the caller.
+   * `profiler_read` answers where the time went — a table of the costliest functions — and cannot answer what called that, which is the question a flame view exists for. The parser was already reading caller→callee edges to attribute inclusive cost and was discarding the caller.
    */
   profilerTree(name: string, id: string): Promise<Frame[]>;
   /**
-   * F-3, and the reason the word flame graph can now be used. profiler_tree draws what cachegrind holds — the SUMMED cost of "A called B" over every place A called B — so a function reached from two callers is one box carrying both, and no arrangement of those edges recovers which caller was expensive. An Xdebug trace holds every entry and exit with its depth, which is a stack: folding those gives one box per distinct path, with its own measured width. MUST be a separate command from profiler_tree rather than a flag on it, because the two are different claims about the same picture and a reader cannot tell them apart by looking.
+   * And the reason the word flame graph can now be used. profiler_tree draws what cachegrind holds — the SUMMED cost of "A called B" over every place A called B — so a function reached from two callers is one box carrying both, and no arrangement of those edges recovers which caller was expensive. An Xdebug trace holds every entry and exit with its depth, which is a stack: folding those gives one box per distinct path, with its own measured width. MUST be a separate command from profiler_tree rather than a flag on it, because the two are different claims about the same picture and a reader cannot tell them apart by looking.
    */
   profilerFlame(name: string, id: string): Promise<Flame>;
   /**
-   * M-5, M-6 and M-10 in one document, because they are one kind of thing: a per-project setting the generator cannot read from the manifest (project.schema.json is additionalProperties:false and frozen), kept in .stackvo/site.json so it travels with the project. listingSupported and agentAvailable are answered by the machine rather than assumed by the screen: Apache and Swoole have no configuration file for a directory index, and an agent cannot be forwarded when none is running - a control drawn for either would do nothing.
+   * Three settings in one document, because they are one kind of thing: a per-project setting the generator cannot read from the manifest (project.schema.json is additionalProperties:false and frozen), kept in .stackvo/site.json so it travels with the project. listingSupported and agentAvailable are answered by the machine rather than assumed by the screen: Apache and Swoole have no configuration file for a directory index, and an agent cannot be forwarded when none is running - a control drawn for either would do nothing.
    */
   siteSettings(name: string): Promise<SiteSettings>;
   /**
@@ -2742,7 +2742,7 @@ export interface StackvoApi {
    */
   siteSave(name: string, env: Record<string, unknown>, directoryListing: boolean, sshAgent: boolean): Promise<SiteSettings>;
   /**
-   * I-1. A bind mount costs 2-3x a named volume on metadata and writes, which is the measured reason a Docker workflow feels slow on macOS and Windows. This lists the directories worth moving off the host filesystem for one project, whether each is currently in a volume, how big that volume is, and whether the host still has a copy for an editor to index. Suggestions describe the project in front of them — vendor for PHP, storage/framework and bootstrap/cache when it is a Laravel, node_modules when there is a package.json — and are never applied on their own.
+   * A bind mount costs 2-3x a named volume on metadata and writes, which is the measured reason a Docker workflow feels slow on macOS and Windows. This lists the directories worth moving off the host filesystem for one project, whether each is currently in a volume, how big that volume is, and whether the host still has a copy for an editor to index. Suggestions describe the project in front of them — vendor for PHP, storage/framework and bootstrap/cache when it is a Laravel, node_modules when there is a package.json — and are never applied on their own.
    */
   perfStatus(name: string): Promise<PerfLayer[]>;
   /**
@@ -2758,7 +2758,7 @@ export interface StackvoApi {
    */
   perfForget(name: string, path: string): Promise<PerfLayer[]>;
   /**
-   * F-1, and §2 called it the largest product gap: three competitors sell query logging and N+1 detection, and this stack could not say what the database had been asked. The row also said it needed a collector inside the container — for MySQL and MariaDB that is wrong, and this is why.
+   * The largest product gap this stack had: three competitors sell query logging and N+1 detection, and this stack could not say what the database had been asked. The row also said it needed a collector inside the container — for MySQL and MariaDB that is wrong, and this is why.
    */
   queryLog(service: string): Promise<QueryLogSession>;
   /**
@@ -2778,7 +2778,7 @@ export interface StackvoApi {
    */
   serviceDbClients(service: string): Promise<App[]>;
   /**
-   * G-3. The correct connection string has existed since connect.rs was written and the sheet has offered to copy it since; what was missing was the step that pastes it, which everybody was doing by hand.
+   * The correct connection string has existed since connect.rs was written and the sheet has offered to copy it since; what was missing was the step that pastes it, which everybody was doing by hand.
    */
   serviceOpenInClient(service: string, client: string): Promise<void>;
   /**
@@ -2873,7 +2873,7 @@ export interface StackvoApi {
   releasePlan(name: string, tag?: string): Promise<ReleasePlan>;
   releaseBuild(name: string, tag?: string): Promise<ReleaseResult>;
   /**
-   * H-1. MUST re-run the verification rather than remember it from the build: the interval between building and pushing is exactly where somebody could retag something else onto the name.
+   * MUST re-run the verification rather than remember it from the build: the interval between building and pushing is exactly where somebody could retag something else onto the name.
    */
   releasePushPlan(name: string, tag?: string): Promise<PushPlan>;
   /**
@@ -2904,7 +2904,7 @@ export interface StackvoApi {
   /** Runs one, by id. */
   quickCommandRun(name: string, id: string): Promise<OperationId>;
   /**
-   * F-5, and §5.5 held it as a decision rather than a task: quickcmd refused an in-app REPL in writing — "a second, worse REPL next to the one they already have configured" — and reversing a refusal is not something a commit does quietly. The refusal stands for a LINE repl and this is not one. A snippet is twenty lines you edit: write a query, run it, change line three, run it again. In tinker that is retyping. `tinker` still opens the user's own terminal, and the two are split by what the person is doing rather than ranked.
+   * Held as a decision rather than a task, because quickcmd refused an in-app REPL in writing — "a second, worse REPL next to the one they already have configured" — and reversing a refusal is not something a commit does quietly. The refusal stands for a LINE repl and this is not one. A snippet is twenty lines you edit: write a query, run it, change line three, run it again. In tinker that is retyping. `tinker` still opens the user's own terminal, and the two are split by what the person is doing rather than ranked.
    */
   replRunners(name: string): Promise<ReplRunner[]>;
   /**
@@ -3013,7 +3013,7 @@ export interface StackvoApi {
    */
   tunnelTokenSet(provider: string, token: string | null): Promise<boolean>;
   /**
-   * B-7. Two questions are asked of every link the moment it is pasted somewhere — who else can open it, and will it still be this address tomorrow — and the pane had an answer to neither. This is the state behind both, without the password.
+   * Two questions are asked of every link the moment it is pasted somewhere — who else can open it, and will it still be this address tomorrow — and the pane had an answer to neither. This is the state behind both, without the password.
    */
   tunnelIdentity(name: string): Promise<TunnelIdentity>;
   /**
@@ -3029,15 +3029,15 @@ export interface StackvoApi {
    */
   tunnelNameSet(name: string, provider: string, reserved: string | null): Promise<void>;
   /**
-   * M-3. Two features hand out an address whose whole point is that it is opened on ANOTHER device — the LAN name from lan_status and the public URL from tunnel_status — and both are long, both contain either a dashed IP address or four random Cloudflare words, and the only way to get one onto a phone was to type it. That is the moment somebody gives up and uses the desktop browser's device emulation instead, which is not the same thing and is exactly the class of bug it fails to show.
+   * Two features hand out an address whose whole point is that it is opened on ANOTHER device — the LAN name from lan_status and the public URL from tunnel_status — and both are long, both contain either a dashed IP address or four random Cloudflare words, and the only way to get one onto a phone was to type it. That is the moment somebody gives up and uses the desktop browser's device emulation instead, which is not the same thing and is exactly the class of bug it fails to show.
    */
   qrEncode(text: string): Promise<Record<string, unknown>>;
   /**
-   * M-12, which sat on the list as 'an OAuth callback for .loc' and was not defined enough to build. Reading what the providers require settles it: a redirect URI is a BROWSER REDIRECT, not a fetch — the provider sends a 302 and never resolves the hostname — so https://shop.loc/auth/callback works for the flow, because the browser is on this machine, the name is in this machine's hosts file and the certificate is issued by a CA it trusts. What varies is whether the provider will accept the string at REGISTRATION time, and that is a per-provider rule that is invisible at their console.
+   * This sat on the list as 'an OAuth callback for .loc' and was not defined enough to build. Reading what the providers require settles it: a redirect URI is a BROWSER REDIRECT, not a fetch — the provider sends a 302 and never resolves the hostname — so https://shop.loc/auth/callback works for the flow, because the browser is on this machine, the name is in this machine's hosts file and the certificate is issued by a CA it trusts. What varies is whether the provider will accept the string at REGISTRATION time, and that is a per-provider rule that is invisible at their console.
    */
   oauthCallbacks(name: string, path: string): Promise<Record<string, unknown>>;
   /**
-   * M-11. Testing a payment flow means Stripe reaching the application, and shop.loc does not exist on the internet.
+   * Testing a payment flow means Stripe reaching the application, and shop.loc does not exist on the internet.
    */
   stripeStatus(): Promise<Record<string, unknown>[]>;
   /**
@@ -3053,7 +3053,7 @@ export interface StackvoApi {
    */
   helpDoc(topic: string, locale: string): Promise<string>;
   /**
-   * M-4. Every rival in the category ships one and it is the address people bookmark. StackVo has had the NAME for it since the beginning with nothing answering on it: core_domains already writes the bare suffix into the hosts file and certs::required_domains already issues for it, so opening https://<suffix> got Traefik's own 404 — a name the app went out of its way to make resolve, serving nothing.
+   * Every rival in the category ships one and it is the address people bookmark. StackVo has had the NAME for it since the beginning with nothing answering on it: core_domains already writes the bare suffix into the hosts file and certs::required_domains already issues for it, so opening https://<suffix> got Traefik's own 404 — a name the app went out of its way to make resolve, serving nothing.
    */
   landingStatus(): Promise<Record<string, unknown>>;
   /**
@@ -3138,13 +3138,13 @@ export interface StackvoApi {
    */
   projectAdoptMany(names: string[]): Promise<AdoptBatch>;
   /**
-   * A-7. The competitor row read "the generator already renders compose, and .devcontainer/devcontainer.json is a small sibling of it" — and that was written without reading render_compose_service. What the generator writes is bound to THIS machine in five ways, every one load-bearing: absolute paths under the user's home, a `context:` relative to `generated/`, the shared `stackvo-net`, Traefik labels in a file with no Traefik in it, and the backing services in a different compose file rendered with values pulled from the OS keystore. Copied into a repository it cannot start anywhere. So this is a second rendering of the same manifest, not the first one relabelled.
+   * The competitor row read "the generator already renders compose, and .devcontainer/devcontainer.json is a small sibling of it" — and that was written without reading render_compose_service. What the generator writes is bound to THIS machine in five ways, every one load-bearing: absolute paths under the user's home, a `context:` relative to `generated/`, the shared `stackvo-net`, Traefik labels in a file with no Traefik in it, and the backing services in a different compose file rendered with values pulled from the OS keystore. Copied into a repository it cannot start anywhere. So this is a second rendering of the same manifest, not the first one relabelled.
    */
   projectDevcontainerPlan(name: string): Promise<DevcontainerPlan>;
   /** The other half. The plan is what the user reads; this is what puts it in the repository. */
   projectDevcontainerWrite(name: string): Promise<string[]>;
   /**
-   * A-1, and the largest gap the competitor review found: DDEV ships `ddev pull`/`ddev push` with recipes for Upsun, Acquia, Lagoon and Pantheon, Lando and Herd have their own, and the concept did not exist here at all — `grep -rn 'fn pull|pull_db|remote_db|rsync' src-tauri/src` returned nothing.
+   * And the largest gap the competitor review found: DDEV ships `ddev pull`/`ddev push` with recipes for Upsun, Acquia, Lagoon and Pantheon, Lando and Herd have their own, and the concept did not exist here at all — `grep -rn 'fn pull|pull_db|remote_db|rsync' src-tauri/src` returned nothing.
    */
   projectProviders(name: string): Promise<ProviderSet>;
   /**
@@ -3165,7 +3165,7 @@ export interface StackvoApi {
    */
   projectManifestWrite(name: string, manifest: ProjectManifest): Promise<void>;
   /**
-   * B-2. A committed manifest is what makes a checkout reproducible and is exactly why there was nowhere to say “on this machine, PHP 8.3”. Reads the overlay beside it.
+   * A committed manifest is what makes a checkout reproducible and is exactly why there was nowhere to say “on this machine, PHP 8.3”. Reads the overlay beside it.
    */
   projectLocalRead(name: string): Promise<LocalOverride>;
   /**
@@ -3173,11 +3173,11 @@ export interface StackvoApi {
    */
   projectLocalWrite(name: string, text: string): Promise<LocalOverride>;
   /**
-   * B-3. A hook is a command from a repository somebody cloned, so what would run has to be readable before it does.
+   * A hook is a command from a repository somebody cloned, so what would run has to be readable before it does.
    */
   projectHooksPlan(name: string): Promise<HookPlan[]>;
   /**
-   * ADR 0023 let a repository declare a container of its own, and ADR 0027 answers 'can I have Ollama or Qdrant' with 'write a sidecars block'. Both were true and neither was reachable: the block was parsed, validated and rendered into the project's compose file, and NOTHING showed it. `hooks` — the sibling block, from the same manifest — has had a pane since it was written. So the answer an ADR points at was a feature nobody could find, which is the same as not having it.
+   * A repository may declare a container of its own, which answers 'can I have Ollama or Qdrant' with 'write a sidecars block'. Both were true and neither was reachable: the block was parsed, validated and rendered into the project's compose file, and NOTHING showed it. `hooks` — the sibling block, from the same manifest — has had a pane since it was written. So the answer an ADR points at was a feature nobody could find, which is the same as not having it.
    */
   projectSidecars(name: string): Promise<DeclaredSidecar[]>;
   /**
@@ -3187,7 +3187,7 @@ export interface StackvoApi {
   /** Withdraws approval. Takes no digest — you may always revoke. */
   projectHooksRevoke(name: string): Promise<HookPlan[]>;
   /**
-   * E-3. `shop.loc` exists in exactly one place — this machine's /etc/hosts — so opening the site on a real phone has never been possible without editing a file on that phone. This writes the intent; `lan_status` derives the name.
+   * `shop.loc` exists in exactly one place — this machine's /etc/hosts — so opening the site on a real phone has never been possible without editing a file on that phone. This writes the intent; `lan_status` derives the name.
    */
   projectLanShare(name: string, enabled: boolean): Promise<ProjectManifest>;
   /**
@@ -3195,7 +3195,7 @@ export interface StackvoApi {
    */
   lanStatus(): Promise<LanStatus>;
   /**
-   * Competitive review B-1: herd.yml, .lerd.yaml and .ddev/config.yaml all describe the whole environment and are committed, so a teammate clones and runs one command. stackvo.json carried the project and a preset carried the stack, and the two never met. `services` in the manifest is the missing half; this reports what the repository declares, what this machine gives it, and the diff.
+   * herd.yml, .lerd.yaml and .ddev/config.yaml all describe the whole environment and are committed, so a teammate clones and runs one command. stackvo.json carried the project and a preset carried the stack, and the two never met. `services` in the manifest is the missing half; this reports what the repository declares, what this machine gives it, and the diff.
    */
   projectRequirements(name: string): Promise<Record<string, unknown>>;
   /**
@@ -3208,11 +3208,11 @@ export interface StackvoApi {
   projectRequirementsDeclare(name: string, services: string[]): Promise<Manifest>;
   updaterStatus(): Promise<Record<string, unknown>>;
   /**
-   * §3 #21. `tauri-plugin-updater` fetches a manifest, compares versions, verifies a signature and installs — that is the whole of it. It has no notion of a channel, no notion of a percentage, and no way to STOP: a release found to be broken cannot be recalled, because every running copy keeps asking the same endpoint and getting the same answer. Channels, staged rollout and rollback are therefore four extra fields in the manifest and one decision made BEFORE the plugin is asked, and this is that decision.
+   * `tauri-plugin-updater` fetches a manifest, compares versions, verifies a signature and installs — that is the whole of it. It has no notion of a channel, no notion of a percentage, and no way to STOP: a release found to be broken cannot be recalled, because every running copy keeps asking the same endpoint and getting the same answer. Channels, staged rollout and rollback are therefore four extra fields in the manifest and one decision made BEFORE the plugin is asked, and this is that decision.
    */
   updaterOffer(manifest: Record<string, unknown>, channel?: 'stable' | 'beta' | null): Promise<UpdaterOffer>;
   /**
-   * §3 #34 / ADR 0026. The loopback API is OFF until somebody asks. Not because loopback is dangerous by itself, but because a listener nobody knows about is a listener nobody turns off — and the honest default for a surface answering questions about somebody's workspace is that it is not answering them.
+   * The loopback API is OFF until somebody asks. Not because loopback is dangerous by itself, but because a listener nobody knows about is a listener nobody turns off — and the honest default for a surface answering questions about somebody's workspace is that it is not answering them.
    */
   websurfaceStart(port?: number): Promise<Record<string, unknown>>;
   websurfaceStatus(): Promise<Record<string, unknown>>;
@@ -3230,7 +3230,7 @@ export interface StackvoApi {
    */
   secretsStatus(): Promise<Record<string, unknown>>;
   /**
-   * On a company machine ~/.stackvo/.env is backed up, synced and DLP-scanned, and it holds database passwords in plain text (readiness review §5.2). This moves one into Keychain / Credential Manager / Secret Service and leaves `keychain:<entry>` in its place.
+   * On a company machine ~/.stackvo/.env is backed up, synced and DLP-scanned, and it holds database passwords in plain text. This moves one into Keychain / Credential Manager / Secret Service and leaves `keychain:<entry>` in its place.
    */
   secretMove(key: string): Promise<void>;
   /**
@@ -3238,7 +3238,7 @@ export interface StackvoApi {
    */
   secretRestore(key: string): Promise<void>;
   /**
-   * The README asked the reader to find their assistant's configuration file, work out its shape and paste a JSON block into it with a path they had to supply themselves. Competitive review K-1 — every rival with an MCP server installs itself. This is the read half: which clients are on this machine, which already point at the server, and whether the binary exists to point at.
+   * The README asked the reader to find their assistant's configuration file, work out its shape and paste a JSON block into it with a path they had to supply themselves. Every rival with an MCP server installs itself. This is the read half: which clients are on this machine, which already point at the server, and whether the binary exists to point at.
    */
   agentsStatus(): Promise<Record<string, unknown>>;
   /**
@@ -3291,7 +3291,7 @@ export interface StackvoApi {
    */
   localeGet(): Promise<'en' | 'tr'>;
   /**
-   * The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why M-7 sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was. The progress figure counted the strings a pack HELD, and the seed is the whole English catalogue — so an untouched pack read `2000 of 2000 (100%)` the moment it was created. It counts what differs from English now.
+   * The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why this sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was. The progress figure counted the strings a pack HELD, and the seed is the whole English catalogue — so an untouched pack read `2000 of 2000 (100%)` the moment it was created. It counts what differs from English now.
    */
   localePacks(): Promise<Record<string, unknown>[]>;
   /** The messages, for the front end to merge over English. */

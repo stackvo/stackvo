@@ -6,8 +6,8 @@
 //! change is undefined*. A version number nobody can derive is decoration — it
 //! moves when someone remembers, which is the same as not moving.
 //!
-//! Decision 0008 in [`docs/durum.md`](../../docs/durum.md) §6 gives
-//! the rule. This file is the rule as a build failure.
+//! So the rule is written here, as a build failure, and nowhere else — a rule
+//! stated in prose and enforced in code is two rules that will disagree.
 //!
 //! ## How it works
 //!
@@ -324,7 +324,7 @@ fn compare_events(was: &Surface, now: &Surface, out: &mut Vec<Change>) {
 
 /// Named types, field by field.
 ///
-/// This is the half ADR 0006 admitted was on trust: `contract_agreement.rs`
+/// This is the half a hand-written contract leaves on trust: `contract_agreement.rs`
 /// checks that the *set* of commands agrees with the code, and nothing checked
 /// the shapes. A field dropped from `Project` does not change any command's
 /// `returns`, so nothing else here would see it — and the front end reads
@@ -430,7 +430,7 @@ fn lock_document(version: &str, surface: &Surface) -> Value {
     json!({
         "_note": "The last RELEASED call surface, and the version it went out as. \
                   Generated: UPDATE_CONTRACT_LOCK=1 cargo test --test contract_version. \
-                  Refresh it at a release and at no other time — see docs/durum.md §6, decision 0008.",
+                  Refresh it at a release and at no other time — the rule is in contract_version.rs.",
         "contractVersion": version,
         "commands": surface.commands.clone().into_iter().collect::<Map<_, _>>(),
         "events": surface.events.clone().into_iter().collect::<Map<_, _>>(),
@@ -483,8 +483,8 @@ fn the_contract_version_describes_the_change_since_the_last_release() {
         "contractVersion is {declared}, and the surface has moved past what that \
          says.\n\nThe last released contract was {released}. Since then, {} \
          change{} of severity {:?}:\n  {}\n\nSo contractVersion must be at least \
-         {required}. Raise it in contracts/ipc.json — the rule is in \
-         docs/durum.md §6, decision 0008.",
+         {required}. Raise it in contracts/ipc.json — the rule this is \
+         applying is at the top of this file.",
         reasons.len(),
         if reasons.len() == 1 { "" } else { "s" },
         severity,

@@ -1,6 +1,6 @@
 //! Where CI is green and the release is red on the same commit.
 //!
-//! §3 #2 spent three rounds on a sentence that was wrong: the tag ran, **six of
+//! Three rounds were spent on a sentence that was wrong: the tag ran, **six of
 //! six targets failed at `Verify the contract surface`**, and the remaining
 //! work is item W — Windows tests — going green.
 //!
@@ -210,7 +210,7 @@ fn the_local_container_installs_every_linux_package_the_release_installs() {
 
 /// The bundling half is answerable without a runner.
 ///
-/// §3 #22 spent a round using a release run as a test environment, and the
+/// A round was spent using a release run as a test environment, and the
 /// reason was narrow: every mode in `tools/linux/run.sh` compiled or tested,
 /// none of them bundled. On an Apple Silicon machine that container **is**
 /// `aarch64-unknown-linux-gnu` — the row that failed — so the failure was
@@ -250,7 +250,7 @@ fn the_bundle_can_be_built_and_judged_without_a_runner() {
 
 /// A failed release leaves its failures behind, in a file.
 ///
-/// What §3 #2 actually recorded after the first real run was "how many failures
+/// What was actually recorded after the first real run was "how many failures
 /// remain was not read from the log". Six live logs in a browser is why. The
 /// suite runs with `--no-fail-fast` so the log reaches the end rather than
 /// stopping at the first crate, and the log is uploaded when the step fails.
@@ -278,7 +278,7 @@ fn a_failed_release_run_keeps_the_test_output() {
 
     // And it has to be keyed on the suite rather than on the job. A rehearsal
     // runs the suite with `continue-on-error`, so that a red suite still lets
-    // the run answer §3 #22's question about the bundler — and while that is
+    // the run answer the question about the bundler — and while that is
     // true the job status is not `failure()`. An upload written `if: failure()`
     // would skip on exactly the run whose log is hardest to reach: the one
     // where the job goes on for another fifteen minutes afterwards.

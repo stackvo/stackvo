@@ -122,7 +122,7 @@ fn probe(provider: &Provider) -> (bool, String) {
 
     // The real arguments, from the real function. Only the container name is
     // changed, so a probe cannot collide with a tunnel somebody is using.
-    // B-7 added a reserved name to the plan, and the probe sends one wherever
+    // A reserved name was added to the plan, and the probe sends one wherever
     // the provider can take it: a flag the client has removed or renamed shows
     // up here as a usage error, which is the whole reason this file exists.
     let reserved = provider.reserved.map(|shape| {

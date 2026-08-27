@@ -1,10 +1,9 @@
 //! What the database was actually asked, and where the same question was asked
 //! a hundred times.
 //!
-//! F-1 in `docs/durum.md`, listed there as the largest product gap and as the
-//! most-cited feature of the three competitors that sell it. That row also said
-//! it "needs a collector inside the container", which is why it kept being
-//! deferred — and that turned out to be wrong for the databases this stack runs
+//! The largest product gap this application had, and the most-cited feature of
+//! the three competitors that sell it. It was assumed to "need a collector
+//! inside the container", which is why it kept being deferred — and that turned out to be wrong for the databases this stack runs
 //! most. MySQL and MariaDB have a collector: their own general query log, which
 //! can be switched to a **table** and turned on at runtime with two `SET GLOBAL`
 //! statements. No image change, no restart, no agent, no code in anybody's

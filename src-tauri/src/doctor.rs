@@ -806,7 +806,7 @@ pub struct Doctor {
     /// Project domains with no hosts entry. Repaired through the reviewed
     /// `hosts_plan` / `hosts_apply` flow, never blindly.
     pub hosts_missing: Vec<String>,
-    /// The machine asks a local responder that is not answering (E-1).
+    /// The machine asks a local responder that is not answering.
     ///
     /// `None` in every ordinary state, including the feature being switched
     /// off, because a doctor that lists what is *fine* is one people stop
@@ -824,7 +824,7 @@ pub struct Doctor {
     pub extensions: Vec<ExtensionProblem>,
     /// Credentials in the keystore that the Bash CLI would misread.
     pub keystore: KeystoreCheck,
-    /// Installed package versions the publisher has since withdrawn (ADR 0014).
+    /// Installed package versions the publisher has since withdrawn.
     ///
     /// The other half of a takedown. `market::install` refuses a withdrawn
     /// version, which stops the *next* machine; this is what tells the ones
@@ -951,7 +951,8 @@ pub struct DnsTrouble {
 
 /// What a workspace with keystore-backed credentials means for the other tool.
 ///
-/// This is the one consequence of ADR 0010 that nothing in the app can fix.
+/// This is the one consequence of moving a secret to the keystore that nothing
+/// in the app can fix.
 /// `stackvo.sh` reads `.env` line by line and would take the literal string
 /// `keychain:SERVICE_MYSQL_ROOT_PASSWORD@a1b2c3d4` for the password — so a
 /// fresh MySQL container comes up on a root password nobody chose, and the only

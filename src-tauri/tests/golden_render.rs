@@ -9,7 +9,7 @@
 //! StackVo, was simply absent: seventeen tests returned `ok` without asserting
 //! anything.
 //!
-//! **ADR 0016 deleted what those goldens froze.** `skeleton/core/templates/
+//! **What those goldens froze is gone.** `skeleton/core/templates/
 //! services/` left the binary with the `.env` render branch, so
 //! `docker-compose.dynamic.yml` is no longer assembled from templates at all —
 //! it comes from the instance table and the package tree, whose own hashes
@@ -81,7 +81,7 @@ fn the_render_carries_nothing_from_this_machine() {
     assert_eq!(vars.get("HOST_GID").map(String::as_str), Some("1000"));
 
     // Asserted against a config render rather than the assembled services file:
-    // that file is no longer produced (ADR 0016), and these three variables are
+    // that file is no longer produced, and these three variables are
     // the ones every remaining template still interpolates.
     let text = skeleton::read_template(Path::new(NO_WORKSPACE), "core/compose/base.yml")
         .expect("base.yml is compiled in");

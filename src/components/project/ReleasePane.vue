@@ -9,7 +9,7 @@ import PaneHeader from '@/components/PaneHeader.vue';
 /**
  * The production image this project can be shipped as.
  *
- * Second pane out of `ProjectDetail.vue` under §14.16, and one of the two that
+ * Second pane out of `ProjectDetail.vue` in the pane split, and one of the two that
  * came out as a single contiguous block — most of this view's sections are
  * split across three places in the file.
  */
@@ -54,7 +54,7 @@ async function loadFrom() {
 }
 
 /**
- * Pushing it, and something to run it with (H-1).
+ * Pushing it, and something to run it with.
  *
  * The push plan is fetched after a successful build rather than offered
  * alongside the save button, because the two refusals it carries — an

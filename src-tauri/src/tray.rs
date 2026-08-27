@@ -23,7 +23,7 @@ pub const MENU_QUIT: &str = "quit";
 pub const MENU_PROJECT: &str = "project:";
 
 /// Prefix for the entries that start or stop a project **without opening the
-/// window** (M-8).
+/// window**.
 ///
 /// This is what turns the tray from a launcher into a surface. Every other id
 /// here raises the window and hands the click to the front end; these do the
@@ -437,7 +437,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, snap: &Snapshot) -> tauri::Result<
         // project it belongs to.
         //
         // It was one shared `Start / stop` submenu holding a second copy of the
-        // whole project list (M-8). That put the verb a menu away from the noun
+        // whole project list. That put the verb a menu away from the noun
         // it applies to — the list had to be read twice to act on one row, and
         // the second reading was against rows labelled `shop: durdur` because
         // out there the name had to be repeated to say which project was meant.
@@ -581,7 +581,7 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
             // waits for the workspace are both its, and duplicating either
             // here would be a second answer to "can this page open yet".
             // Start or stop, and deliberately WITHOUT raising the window
-            // (M-8). Hiding a window does not destroy its webview, so the
+            //. Hiding a window does not destroy its webview, so the
             // front end is alive to handle this — which means the tray runs
             // the same store action the button in the window runs, rather than
             // a second implementation of "start a project" that would sooner
@@ -713,7 +713,7 @@ mod tests {
     ///
     /// Without this, a test that seeds a catalog would change what `tr` answers
     /// for every other test running at that instant — and only sometimes, which
-    /// is the failure mode §36.6 of the readiness report spent a round chasing.
+    /// is the failure mode an earlier report spent a round chasing.
     /// Every test that reads or writes the catalog takes this, and the seeding
     /// helper always puts it back.
     static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());

@@ -141,7 +141,7 @@ watch(
           <v-btn value="profile" :disabled="locked" prepend-icon="mdi-speedometer">
             {{ t('profiler.modeProfile') }}
           </v-btn>
-          <!-- F-3. A third mode rather than a checkbox on profiling: it writes
+          <!-- A third mode rather than a checkbox on profiling: it writes
                a different file, read by a different parser, and it is the only
                one of the three that can produce a real flame graph. -->
           <v-btn value="trace" :disabled="locked" prepend-icon="mdi-fire">
@@ -278,7 +278,7 @@ watch(
         </v-btn>
       </div>
 
-      <!-- Traces (F-3). A second list rather than rows mixed into the first:
+      <!-- Traces. A second list rather than rows mixed into the first:
            they are read by a different parser and open a different view, and a
            combined list would make somebody read the file name to know which. -->
       <template v-if="status.traces?.length">
@@ -369,7 +369,7 @@ watch(
             })
           }}
         </div>
-        <!-- F-3. The table says where the time went; this says what called it.
+        <!-- The table says where the time went; this says what called it.
              Behind a button rather than open, because the tree is thousands of
              nodes and most visits to this pane want the top of the table. -->
         <div class="d-flex align-center ga-2 mb-2">

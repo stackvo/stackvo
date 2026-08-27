@@ -1,4 +1,4 @@
-//! Does registering the server give the file back? (K-1)
+//! Does registering the server give the file back?
 //!
 //! `agents.rs` edits configuration files it does not own, and its first rule is
 //! that everything already in them survives. The unit tests drive that rule with

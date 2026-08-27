@@ -179,7 +179,7 @@ pub fn connect() -> Result<Docker> {
     // dead with `no associated function named connect_with_unix`.
     //
     // It had been that way for as long as the function existed, and it was
-    // invisible for the reason §3 #35 keeps finding: a platform nobody compiles
+    // invisible for the reason that keeps recurring: a platform nobody compiles
     // for is a platform whose code is only read.
     #[cfg(windows)]
     {
@@ -1321,7 +1321,7 @@ pub struct LogLine {
 ///
 /// `logs_stream` follows; this reads once and stops, which is what a caller
 /// that wants to *parse* the tail needs. Written for the Postgres half of the
-/// query log (F-1): that server writes its statements to stderr, and with
+/// query log: that server writes its statements to stderr, and with
 /// `logging_collector` off — the default in the official image — stderr is the
 /// container's log.
 ///

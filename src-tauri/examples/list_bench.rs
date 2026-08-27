@@ -1,6 +1,6 @@
 //! What `projects_list` actually costs, split into its two halves.
 //!
-//! §3 #27 has stood at half done with the note "the hidden-window slowdown was
+//! This stood at half done with the note "the hidden-window slowdown was
 //! closed; no cache". A cache is the kind of thing that is obviously worth
 //! adding until somebody measures the thing it would avoid — and the field this
 //! one would have to cache is `running`, which is the single field on the row

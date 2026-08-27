@@ -1,6 +1,6 @@
 //! The one link `dns_probe` cannot reach: does the **machine** ask us?
 //!
-//! E-1. `dns_probe` asks the responder with `dig @127.0.0.1 -p 15353`, which
+//! `dns_probe` asks the responder with `dig @127.0.0.1 -p 15353`, which
 //! proves the replies are DNS and proves nothing about whether anything on this
 //! machine would ever send that query. The step between the two is a file only
 //! root can write, so it cannot live in a unit test — and it is exactly the

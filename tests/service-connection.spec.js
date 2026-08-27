@@ -33,7 +33,7 @@ const api = vi.hoisted(() => ({
 }));
 
 // `asList` is the real guard, not a stub — see views-render.spec.js. The sheet
-// reads it since the instance list arrived (G-4), and a mock without it fails
+// reads it since the instance list arrived, and a mock without it fails
 // at import rather than in an assertion.
 vi.mock('@/lib/ipc', () => ({ api, asList: (v) => (Array.isArray(v) ? v : []) }));
 vi.mock('@/lib/events', () => ({ listenAll: vi.fn(async () => () => {}) }));
@@ -243,7 +243,7 @@ describe('the password', () => {
 });
 
 /**
- * G-3. The string had been right and copyable since this section was written;
+ * The string had been right and copyable since this section was written;
  * what nobody had written was the step that hands it to the application it was
  * built for.
  */

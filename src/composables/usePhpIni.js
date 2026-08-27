@@ -8,7 +8,7 @@ import { api } from '@/lib/ipc';
  * become them (the schema is `additionalProperties: false`), and they land in a
  * real ini file mounted into the container.
  *
- * Lifted out of `ProjectDetail.vue` with the PHP pane under §14.16.
+ * Lifted out of `ProjectDetail.vue` with the PHP pane in the pane split.
  */
 export const PHP_INI_FIELDS = [
   'memory_limit',

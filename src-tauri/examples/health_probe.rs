@@ -3,7 +3,7 @@
 //!   cargo run --example health_probe -- --packages ../stackvo-service-packages
 //!   cargo run --example health_probe -- --packages ../pkgs --only mysql,redis
 //!
-//! S-11 in `docs/durum.md`. Every one of the 101 packages shipped with an empty
+//! Every one of the 101 packages shipped with an empty
 //! `health` block, and the cost of that was measured rather than argued: in Faz
 //! 3 `docker compose up --wait` reported two MySQL instances ready and both
 //! refused the connection. With no healthcheck declared, `--wait` and

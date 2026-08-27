@@ -173,7 +173,7 @@ fn unquote(text: &str) -> String {
 /// What the app rendered from `.env` and the templates compiled into the
 /// binary — read from a frozen file, because that renderer no longer exists.
 ///
-/// ADR 0016 removed it. This test is the proof that the migration keeps every
+/// That branch is gone. This test is the proof that the migration keeps every
 /// image, port and volume, and it made that proof by rendering *both* sides;
 /// with one side gone the choice was to delete the proof or to keep its output.
 /// The output is kept. `tests/fixtures/golden/handover-before.yml` is what
@@ -418,7 +418,7 @@ fn a_port_the_machine_has_since_taken_moves_and_is_reported() {
 /// What a workspace that has not migrated gets now.
 ///
 /// This module used to assert the opposite property, and the change is the
-/// whole of ADR 0016. `render_generated` had two sources — `.env` and the
+/// whole of the package takeover. `render_generated` had two sources — `.env` and the
 /// templates compiled into the binary when there was no instance table, the
 /// table and the package tree when there was — and the test that mattered was
 /// that the *old* path stayed byte for byte identical, because every install in
@@ -591,7 +591,7 @@ fn the_services_page_lists_instances_once_the_table_exists() {
     assert_eq!(mysql.version.as_deref(), Some("8.0"));
     assert!(mysql.enabled);
     // A secret setting is masked here as it is everywhere else: the value lives
-    // in the keystore and the table holds a reference (ADR 0010).
+    // in the keystore and the table holds a reference.
     let root_password = mysql
         .credentials
         .iter()

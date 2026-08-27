@@ -5,7 +5,7 @@ import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
 
 /**
- * E-3: the name a phone on the same Wi-Fi can open the project at.
+ * The name a phone on the same Wi-Fi can open the project at.
  *
  * The pane is small and most of it is one switch, so what these cover is the
  * part that is not obvious from looking at it: three different absences that

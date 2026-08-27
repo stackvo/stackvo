@@ -5,9 +5,9 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      # §3 #22. The six-target matrix was "unverified until a tag runs it", and
+      # The six-target matrix was "unverified until a tag runs it", and
       # a tag could not run it: `preflight` fails without the signing secrets,
-      # and those are §5.3's decision rather than anybody's afternoon. So the
+      # and those are a decision about key custody rather than anybody's afternoon. So the
       # two ARM rows — whose only open question is whether the runner label
       # exists and the bundler is happy on it — were waiting behind a question
       # about key custody they have nothing to do with.
@@ -100,7 +100,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          # §3 #22. Native ARM runners rather than cross-compilation: a Tauri
+          # Native ARM runners rather than cross-compilation: a Tauri
           # bundle is a platform installer — a .deb, an AppImage, an MSI — and
           # cross-building one means a second toolchain and a second set of
           # bundler quirks to keep working, for a machine GitHub already
@@ -109,7 +109,7 @@ jobs:
           # Nothing on a developer's machine can prove a runner label exists or
           # that the bundler is happy on it. What used to follow from that was
           # "unverified until a tag runs it" — and a tag could not run it,
-          # because `preflight` refuses without signing secrets that are §5.3's
+          # because `preflight` refuses without signing secrets that are somebody's
           # decision. The `rehearsal` input above is the way out: it builds all
           # six and publishes nothing, so these two rows can be answered without
           # anybody deciding where a private key lives.
@@ -174,7 +174,7 @@ jobs:
       # one and `xdg-open binary not found` on the other, after the `.deb` and
       # the `.rpm` had already been written.
       #
-      # This is §3 #22's whole shape in one line: not "does ARM compile" but
+      # This is the whole shape in one line: not "does ARM compile" but
       # "are the two runner images the same machine", and the answer was no in a
       # place nothing could have predicted.
       - name: Install Linux dependencies
@@ -220,7 +220,7 @@ jobs:
         # A rehearsal exists to answer one question — does the bundler produce a
         # package on `ubuntu-24.04-arm` and `windows-11-arm` — and until now that
         # question sat behind this step. The first real run died here on all six
-        # targets and reached no bundler at all, so §3 #22 learned nothing from a
+        # targets and reached no bundler at all, so the ARM question learned nothing from a
         # run that took eighteen minutes on the machine it was about.
         #
         # The two questions are independent and are now asked independently: a
@@ -241,7 +241,7 @@ jobs:
         # `bash` on every runner, so one line works on all six. `--no-fail-fast`
         # so the log lists every failing test binary rather than stopping at the
         # first: the previous run of this step failed on all six targets and
-        # what §3 #2 recorded afterwards was "how many failures remain was not
+        # what was recorded afterwards was "how many failures remain was not
         # read from the log", because the log ends at the first crate to stop.
         #
         # `PIPESTATUS[0]` because a pipe reports the exit code of `tee`, which
@@ -398,7 +398,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           # `--no-sign` in a rehearsal, and it is the difference between a
-          # rehearsal that answers §3 #22 and one that cannot.
+          # rehearsal that answers the ARM question and one that cannot.
           #
           # `bundle.createUpdaterArtifacts` is true and `plugins.updater.pubkey`
           # is set, so tauri signs the updater-enabled bundles after building
@@ -439,7 +439,7 @@ jobs:
       # The endpoint is `releases/latest/download/latest.json`. GitHub resolves
       # `releases/latest` to the latest **published**, non-prerelease release
       # and never to a draft, so a run in which all six targets go green still
-      # leaves that URL answering 404. §3 #2 read that 404 as a failed build for
+      # leaves that URL answering 404. That 404 was read as a failed build for
       # three rounds; it is a release nobody pressed Publish on.
       #
       # The draft stays, and stays deliberately: `fail-fast: false` means a
@@ -498,7 +498,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # ------------------------------------------------- what §3 #22 asked for
+      # ---------------------------------------------- what the ARM rows asked for
       #
       # The rehearsal used to end at the upload above, which makes the answer to
       # "is the bundler happy on ARM" a zip file somebody downloads once and
@@ -518,7 +518,7 @@ jobs:
       # and which the first rehearsal disproved. On `ubuntu-24.04-arm` the
       # bundler wrote `StackVo_0.1.0_arm64.deb` and
       # `StackVo-0.1.0-1.aarch64.rpm`, then failed on the AppImage — the two
-      # packages §3 #22 had been waiting three rounds to see existed on disk,
+      # packages that had been waited on for three rounds existed on disk,
       # named for the right architecture, and this step skipped itself and said
       # nothing about them. A check that runs only when nothing went wrong is a
       # check that never speaks when it matters.

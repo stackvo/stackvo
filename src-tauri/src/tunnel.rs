@@ -25,7 +25,7 @@
 //! The ninth is here now, and it was added as a row: `cloudflare_named` is the
 //! same client as `cloudflare`, told to run a tunnel that already exists
 //! instead of inventing one — because the two halves of that trade, "an
-//! address in ten seconds" and "the same address tomorrow", are what B-7 is
+//! address in ten seconds" and "the same address tomorrow", are what this is
 //! about.
 //!
 //! ## The second question about a link you just pasted
@@ -301,7 +301,7 @@ pub const PROVIDERS: &[Provider] = &[
         // the same address for as long as it exists.
         //
         // The ninth row, and it is a row: the module note said adding a
-        // provider should be data rather than a branch, and B-7 is where that
+        // provider should be data rather than a branch, and this is where that
         // was collected on.
         id: "cloudflare_named",
         image: "cloudflare/cloudflared:latest",
@@ -727,7 +727,7 @@ pub fn providers() -> Vec<ProviderStatus> {
 /// Everything about one start that is not the provider.
 ///
 /// A struct rather than five positional arguments, and it earned that when
-/// B-7 added the sixth and seventh: `run_args(p, "shop", Some("shop.loc"), 80,
+/// The identity work added the sixth and seventh: `run_args(p, "shop", Some("shop.loc"), 80,
 /// net, false, None)` is a line where two neighbouring booleans can be swapped
 /// and every test still passes.
 #[derive(Debug, Clone)]
@@ -752,7 +752,7 @@ pub struct Plan<'a> {
 
 impl<'a> Plan<'a> {
     /// A tunnel straight to the project's own container — no guard, no
-    /// reserved name. What every start was before B-7.
+    /// reserved name. What every start was before named tunnels.
     pub fn direct(project: &'a str, domain: Option<&'a str>, port: u16, network: &'a str) -> Self {
         Self {
             project,
@@ -1587,8 +1587,6 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
         }
     }
 
-    // ------------------------------------------------------------ B-7
-
     /// With the guard on, every provider forwards to it — including the one
     /// that joins a network namespace rather than a network.
     ///
@@ -1655,7 +1653,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
         assert!(line.contains("tailscale funnel --bg --yes 8080"), "{line}");
     }
 
-    /// An unguarded plan is exactly what it was before B-7, and says so.
+    /// An unguarded plan is exactly what it was before the guard, and says so.
     #[test]
     fn an_unguarded_plan_still_goes_straight_at_the_project() {
         for p in PROVIDERS {

@@ -1,10 +1,9 @@
 //! Why this request was slow — the three instruments on one request.
 //!
-//! B-1 in `docs/durum.md`, whose note read: three separate panes exist — SPX
-//! (`crate::spx`), the query log (`crate::querylog`) and the axis
-//! (`crate::timeline`) — and what is missing is the view that puts them around
-//! **one request**, plus N+1 detection. The same row says the thing this module
-//! is built on: *no new measurement is needed*. Every number here was already
+//! Three separate panes already existed — SPX (`crate::spx`), the query log
+//! (`crate::querylog`) and the axis (`crate::timeline`) — and what was missing
+//! was the view that puts them around **one request**, plus N+1 detection. The
+//! thing this module is built on: *no new measurement is needed*. Every number here was already
 //! being recorded, by instruments that already exist, and was readable only by
 //! opening three panes and comparing clocks by eye.
 //!
@@ -296,8 +295,8 @@ pub fn split(analysis: &Analysis) -> Split {
 ///
 /// A kind and its numbers, never a sentence. The three surfaces render these in
 /// their own words and two of them render them in two languages; a sentence
-/// built here would be English in a Turkish window, which is the exact defect
-/// `docs/durum.md` Y-3 is still open on.
+/// built here would be English in a Turkish window, which is the defect
+/// `tests/language-of-parts.spec.js` exists to keep out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Kind {

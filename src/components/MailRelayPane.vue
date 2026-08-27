@@ -5,7 +5,7 @@ import { api } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 
 /**
- * Where a released message is sent through (M-2).
+ * Where a released message is sent through.
  *
  * On the Mail page rather than in Settings, because it is only ever configured
  * for a reason that happens here: somebody has a message they need a real

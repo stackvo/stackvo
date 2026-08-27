@@ -133,7 +133,7 @@ const PAGES = [
   ['Dashboard', Dashboard],
   ['Mail', Mail],
   ['Projects', Projects],
-  // Added once §14.16 finished: this took a `name` prop, so it is mounted with
+  // Added once the split finished: this took a `name` prop, so it is mounted with
   // one below rather than in this list.
 ];
 
@@ -291,7 +291,7 @@ describe('what the pages show once there is data', () => {
 /**
  * `ProjectDetail.vue`, mounted at last.
  *
- * This is the finish line for §14.16. The page was 3,007 lines and could not be
+ * This is the finish line for the pane split. The page was 3,007 lines and could not be
  * mounted at all: one `<script setup>` holding every section's state, so any
  * mount executed all of it. Fourteen panes and their composables later it is
  * 1,092, and the sections it now composes each have their own suite.

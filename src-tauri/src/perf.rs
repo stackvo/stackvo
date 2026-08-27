@@ -1,4 +1,4 @@
-//! Taking the heavy directories off the host filesystem (I-1).
+//! Taking the heavy directories off the host filesystem.
 //!
 //! ## The measurement this starts from
 //!

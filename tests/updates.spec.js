@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * The update a person is shown, and the ones they are not. §3 #21.
+ * The update a person is shown, and the ones they are not.
  *
  * `check()` from the plugin answers one question: is there a newer version.
  * Whether **this** install should take it is a different question, and the

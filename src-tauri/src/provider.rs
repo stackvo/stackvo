@@ -1,6 +1,6 @@
 //! Fetching this project's data from where it really runs, and sending it back.
 //!
-//! A-1. DDEV ships `ddev pull` and `ddev push` with recipes for Upsun, Acquia,
+//! DDEV ships `ddev pull` and `ddev push` with recipes for Upsun, Acquia,
 //! Lagoon and Pantheon; Lando and Herd have their own. It is the largest gap
 //! the competitor review found and the only one that is a whole category rather
 //! than a feature.
@@ -33,11 +33,11 @@
 //! DDEV mounts the developer's ssh agent into the container that runs the pull.
 //! That is a coherent choice for a tool whose recipes are curated, and it is
 //! the wrong one here: this application's rule is that a repository-declared
-//! container gets no host path (ADR 0023), and an ssh agent is a host path that
+//! container gets no host path, and an ssh agent is a host path that
 //! signs things.
 //!
 //! So a recipe **names** what it needs and never carries it. The values come
-//! out of the keystore (ADR 0010) and arrive as environment variables in the
+//! out of the keystore and arrive as environment variables in the
 //! container, for the length of one run. A recipe that wants a key it was not
 //! given is refused before anything is spawned, by name, rather than failing
 //! inside a container with somebody else's error message.
