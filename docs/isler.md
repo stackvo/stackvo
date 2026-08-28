@@ -2198,6 +2198,39 @@ bir kapı olarak tutuyor. Blok içindeki sıra bağımlılıktan geliyor, takvim
 
 ---
 
+## N. Durum — 28 Ağustos 2026
+
+Bu blok tek bakışta nerede olunduğunu söylüyor. Her satırın gerekçesi kendi maddesinde;
+burada yalnız sayı var, çünkü bir yol haritasının en çok bayatlayan yeri bu ve bayat bir
+"tamamlandı" işareti hiç işaret olmamasından kötü.
+
+| Blok | Yapıldı | Yarım | Açık | Yapılmayacak |
+| --- | --- | --- | --- | --- |
+| **N1** — yarım günlük blok | 7 / 7 | — | — | — |
+| **N2** — yayın bloklayıcıları | 9 | 1 (#4 README) | — | 1 (#8 TLD) |
+| **N3** — yayın koşusu | — | 1 (#0 anahtarlar) | 5 | — |
+| **N4** — yayından sonra | 9 | — | 2 (#6, #11) | — |
+| **N5** — bakım borcu | — | — | 5 | — |
+| **N6** — arayüz/hardcode borcu | — | — | 14 | — |
+| **N7** — stratejik | — | — | 10 | — |
+
+**Ölçülen durum.** Rust 1786 → **1868** test, vitest 1275 → **1297**,
+`contracts:check` 12 uyarı → **1** (beklenen `NO_MANIFESTS`), IPC yüzeyi 309 → **314**
+komut, MCP 34 → **38** araç, servis kataloğu 31 → **33**, şablon 28 → **29**.
+
+**Yayını tutan şey hâlâ kod değil.** N1 ve N2'nin kod tarafı bitti; N3'ün beş maddesi
+dışsal — kimlikler, bir sürüm numarası kararı, bir Publish tuşu ve bir Windows makinesi.
+
+**Bu turların bulduğu ve raporun bulmadığı hatalar** — her biri kendi maddesinde yazılı,
+burada yalnız sınıfları: bir ölü tespit kuralı (`statamic/cms`, `artisan`'ın altında
+kalmış), bir yanlış çatı cevabı (PrestaShop → symfony), var olmayan bir belge kökü
+(Magento `pub/`, CakePHP `webroot/`), yarım düşen bir hata yolu (`details` ve `hintKey`
+düşüyordu), iki farklı ana bilgisayar adı üreten iki benimseme yolu, ve rotasyonun
+ortaya çıkardığı elle kopyalanmış ikinci bir sabitlenmiş anahtar. Üçü rapordaki teşhisin
+**yanlış** olduğu yerlerdi ve her biri maddesinde ölçümüyle duruyor.
+
+---
+
 ## N0. Raporlar arası çakışmalar
 
 Bunlar tek iş sayılmazsa aynı dosya dört kez açılır.
@@ -2222,6 +2255,12 @@ yanlışlıyor — çağrı `PreferencesPane.vue:32`'de duruyor, Prettier satır
 uygulansaydı Tercihler paneli bozulacaktı.** Bu yüzden silme değil regex düzeltmesi olarak
 sıraya girdi — ve **kapatıldı** (N1 #3). Geriye kalan on bir uyarının onu `SERVER_*`
 ailesi, biri beklenen.
+
+**Durum: on bir birleşmenin sekizi kapandı.** README yeniden yazımı (satır 1) bir madde
+eksikle, iddia gate'i (2), `SERVER_*` (3), `contracts:check` denetimi (4), şablon kapsama
+testi (11) ve `.loc` kararı (10) yapıldı; A-4+R-6 (makine geneli komut), Podman,
+kanal/sürüm notu, ilk açılış turu ve D-1→K-2 N6 ile N7'ye taşındı — birleşmeleri geçerli,
+işleri açık.
 
 ---
 
@@ -2281,7 +2320,8 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
    Desktop'a karşı adlandırılmış boru, tarayıcıda alan adı çözümlemesi) ayrıca sayıldı.
    **Yeni gate:** `the_readme_does_not_deny_a_windows_build_the_matrix_performs` —
    `ci.yml` `windows-latest` içeriyorsa README "hiç derlenmedi" diyemiyor. *(R-1a)*
-4. **README'yi son kullanıcıya çevir** — **büyük ölçüde yapıldı**, tek eksikle:
+4. **README'yi son kullanıcıya çevir** — **YARIM.** Dört bölümün dördü yazıldı, iki
+   madde açık kaldı:
    - ✅ **Installing it** — altı kurulum biçimi, platform başına sistem gereksinimi,
      Docker gereksinimi. Yayın henüz yok, ve bunu söylüyor. *(P0-4)*
    - ✅ **What Docker costs you** — dört maliyet tablosu, karşılığında ne alındığı, ve
@@ -2290,8 +2330,12 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
    - ✅ **Coming from something else** — yedi kaynak adıyla, ve diğer kuruluma tek bayt
      yazılmadığı. *(R-13)*
    - ✅ **What it does that gets missed** — altı özellik tabloyla. *(M7)*
-   - ❌ **Ekran görüntüsü ve rozet yok.** Görüntü üretilemiyor; bu madde açık kalıyor.
-   - ❌ **Türkçe README yok.** Açık.
+   - ❌ **Ekran görüntüsü ve rozet yok.** Bir ekran görüntüsü çalışan bir yapı ve bir
+     insan gerektiriyor; buradan üretilemez. **Açık, ve sahibi kullanıcı.**
+   - ❌ **Türkçe README yok.** Yazılabilir ama ikinci bir README ikinci bir bayatlama
+     yüzeyi: `readme_claims.rs` yalnız İngilizcesini denetliyor, ve denetlenmeyen bir
+     çeviri altı ay sonra farklı bir ürünü anlatır. Yazılacaksa gate'in iki dosyayı da
+     sayması gerekiyor. **Açık.**
 
    **Yeni gate:** `the_readme_counts_the_surfaces_it_advertises` — yedi `release_*`, altı
    `worktree_*` ve `imports::ALL`'un yedi kaynağını ağaçtan sayıp README'yle
@@ -2371,17 +2415,37 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
 
 ## N3. Yayın koşusu — kod değil, sıraya koyma
 
-0. **İmzalama kimliklerini bugün başlat** — Apple Developer Program + Authenticode günler
-   alıyor; takvimin kritik yolu bu ve N1/N2 ile **paralel** yürümeli. *(P0-3)*
-1. Sürümü yükselt (ör. `0.2.0`), `CHANGELOG.md`'de sürüm başlığını aç, 4300 satırlık
-   `Unreleased`'i oraya taşı, etiketle. *(P0-1)*
-2. Kullanıcıya dönük **kısa** sürüm notu yaz — mevcut CHANGELOG bir mühendislik günlüğü ve
-   sürüm notu olarak kullanılamaz.
-3. Yayın koşusunu rehearsal'da uçtan uca doğrula, sonra **Publish** et; `releaseDraft: true`
-   olduğu için basılmadıkça `latest.json` 404 verir. *(P0-2)*
-4. `npm run updates:check` ile ucu doğrula.
-5. **Windows makinede elle tur:** `preflight` → proje oluştur → `up` → tarayıcıda aç.
-   Kategorinin 13/17'si Windows'ta ve bir CI koşusu bu soruyu cevaplamıyor. *(R-1b)*
+Bu blok bilerek kod değil. Ama içindeki bir madde bu turda **kısmen** ilerledi, ve
+ilerlemeyen kısmın neden ilerlemediği de yazılı.
+
+0. **İmzalama kimlikleri — YARIM.**
+   - ✅ **StackVo'nun kendi iki anahtarı yapıldı.** `tools/keys.sh generate`, ikisi ayrı:
+     güncelleyici anahtarı ikiliyi imzalıyor, içerik anahtarı paket indeksini. Ayrı
+     olmalarının bedeli iki sır, karşılığı birinin sızmasının **bir** sahtecilik olması —
+     sahte kurulum **ya da** sahte paket, asla sahte kurulum içinde sahte paket.
+   - ✅ **İçerik anahtarı döndürüldü ve indeks imzalandı.** Eskisinin özel yarısı başka bir
+     makinedeydi. Döndürmek mümkündü çünkü **v0.1.0 hiçbir ikili taşımıyor** — eski anahtarı
+     sabitleyen kurulu tek bir kopya yok. **Bu pencere, içinde bir varlık olan ilk sürüme
+     kadar açık;** ondan sonra rotasyon bir yayın işi olur, bir düzeltme değil.
+     Rotasyon ayrıca elle kopyalanmış **ikinci** bir sabitlenmiş anahtar ortaya çıkardı
+     (`stackvo-service-packages/tools/verify-signature.mjs`) — doğru imzalanmış bir indeksi
+     yanlış anahtarla imzalanmış diye raporluyordu. Kopya kaldı (uygulamanın sabitini okumak
+     çevrimdışı çalışması gereken bir gate'e ağ bağımlılığı katardı), ama satır artık
+     döndürmenin orayı da kapsadığını söylüyor.
+   - ❌ **Apple Developer Program ve Authenticode alınmadı.** Bunlar kurumsal kayıt, kimlik
+     doğrulama ve ödeme — günler alıyor, dışsal, ve buradan başlatılamaz. **Takvimin kritik
+     yolu hâlâ bu.** *(P0-3)*
+1. ❌ Sürümü yükselt (ör. `0.2.0`), `CHANGELOG.md`'de sürüm başlığını aç, 4300 satırlık
+   `Unreleased`'i oraya taşı, etiketle. **Numarayı seçmek kullanıcının kararı**; seçildiği
+   an üç dosyadaki yükseltme ve CHANGELOG bölümlemesi buradan yapılabilir. *(P0-1)*
+2. ❌ Kullanıcıya dönük **kısa** sürüm notu yaz — mevcut CHANGELOG bir mühendislik günlüğü ve
+   sürüm notu olarak kullanılamaz. Bu buradan yazılabilir, #1'e bağlı.
+3. ❌ Yayın koşusunu rehearsal'da uçtan uca doğrula, sonra **Publish** et; `releaseDraft: true`
+   olduğu için basılmadıkça `latest.json` 404 verir. **Publish bir insanın tuşu.** *(P0-2)*
+4. ❌ `npm run updates:check` ile ucu doğrula. #3'ten sonra anlamlı.
+5. ❌ **Windows makinede elle tur:** `preflight` → proje oluştur → `up` → tarayıcıda aç.
+   Kategorinin 13/17'si Windows'ta ve bir CI koşusu bu soruyu cevaplamıyor. **Bir Windows
+   makinesi gerekiyor.** *(R-1b)*
 
 ---
 
@@ -2441,8 +2505,10 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    sonuna dördünü sayan bir bölüm kondu — yoksa GitHub bulur, okuyucu bulmaz. Aynı
    turda README'nin bayat `contracts:check` sayısı da düzeltildi: "altı uyarı" diyordu,
    bire düşmüştü. *(P4 + R-15)*
-6. **Homebrew cask + winget manifesti** — `release.yml` altı hedefin sha256'sını zaten
-   üretiyor. *(R-9)*
+6. **Homebrew cask + winget manifesti — AÇIK, ve bilerek sıradan sonra.** `release.yml`
+   altı hedefin sha256'sını zaten üretiyor, ama bir cask **gerçek bir indirme URL'si ve
+   gerçek bir sha256** istiyor: ikisi de N3 #3 etiketlendikten sonra var olur. Şimdi
+   yazılan bir manifest, doğrulanamayacak iki alan taşıyan bir dosya olurdu. *(R-9)*
 7. ~~**`installers:check` script'ini düzelt.**~~ **Yapıldı — ama teşhis düzeltilerek.**
    Ölçüldü: CI aracı **doğrudan** çağırıyor (`release.yml:534`), npm script'ini değil.
    Yani script'in hiç çağıranı yok ve kırık olan CI değil, script'in kendisi.
@@ -2583,13 +2649,17 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
     düşürülmez, **reddedilir**. Yan iş olarak `schema/` kopyalarındaki mevcut sapma da
     giderildi (uygulama deposu ADR atıflarını temizlemişti, kopyalar eskimişti) — o
     gate zaten kırmızıydı. *(R-7)*
-11. **`debugbridge`'e kuyruk işi ve istek olayları** — `kind` alanı ve `timeline.rs`'in
-    ekseni ikisi de bekliyor; bugün tek değer `"dump"`. Ücretli rakiplerin ana satış kalemi.
+11. **`debugbridge`'e kuyruk işi ve istek olayları — AÇIK, ve N4'ün sıradaki işi.**
+    `kind` alanı ve `timeline.rs`'in ekseni ikisi de bekliyor; bugün tek değer `"dump"`.
+    Ücretli rakiplerin ana satış kalemi, ve #6'nın aksine hiçbir dışsal önkoşulu yok.
     *(R-8)*
 
 ---
 
 ## N5. Bakım borcu
+
+**Durum: beş maddenin beşi açık.** Hiçbiri yayını tutmuyor; hepsi
+yayından sonra ölçülebilir hâle gelen ya da yayın sonrası maliyeti düşüren işler.
 
 1. Rust kapsam tabanını ölçülen değere yaklaştır — %64,05 ölçülüyor, taban %60, yani dört
    puanlık bir gerileme bugün sessizce geçer. *(P2-1)*
@@ -2603,6 +2673,8 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
 ---
 
 ## N6. Arayüz ve hardcode borcu
+
+**Durum: on dört maddenin on dördü açık.**
 
 Kendi içinde sıra: kullanıcının bugün yapamadığı şeyler → tema tutarlılığı → sürüklenme
 kapıları → yazılmamış kararlar.
@@ -2650,6 +2722,9 @@ kapıları → yazılmamış kararlar.
 
 ## N7. Stratejik — hendek
 
+**Durum: on maddenin onu açık.** Bu blok bilerek en sona konmuş: her maddesi
+yayınlanmış bir ürünün üzerine kuruluyor.
+
 Kendi içinde sıra bağımlılığa göre: ilk üçü bir arada bir cümleyi tamamlıyor, dördüncüsü
 kendi önkoşulunu taşıyor.
 
@@ -2690,3 +2765,15 @@ N2'nin içinde de yalnız iki gerçek bağımlılık var — gate (#1) diğerler
 işi** var ve üçü de "yayından sonra" diye etiketlenmemeli — `NGINX_DIRECTIVES` indeksi
 (sessiz yanlış yapılandırma), `OverviewPane` yolu (kullanıcıya görünen tek hata) ve
 `policy::mirror` (kurumsal kurulumu tamamen bozuyor). İlki ve ikincisi toplam yirmi dakika.
+
+**Durum: zincirin kod tarafı bitti.** N1'in yedisi, N2'nin dokuzu (biri karar, biri yarım)
+ve yukarıdaki üç kod işi kapandı. Kalan kritik yol tamamen dışsal ve sırası şu:
+
+1. **Apple Developer Program + Authenticode** — gün sayılı, paralel yürüyebilir, ve hiçbir
+   şey onu beklemeden ilerleyemiyor değil: 2 ve 3 bugün yapılabilir.
+2. **Sürüm numarası kararı** → üç dosyada yükseltme, CHANGELOG bölümlemesi, sürüm notu.
+3. **Publish** → `updates:check` → **Windows'ta elle tur**.
+
+İmzalama anahtarlarının kendi töreni bu turda tamamlandı ve **içerik anahtarının
+döndürülebildiği pencere ilk varlıklı sürümde kapanıyor** — yani rotasyon gerekiyorsa
+1'den önce yapılmalı, sonra değil.
