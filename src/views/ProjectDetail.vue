@@ -343,6 +343,48 @@ watch(section, () =>
  * and picks up whatever is already true; the watcher below is what re-reads
  * once the work has actually finished.
  */
+/**
+ * Focus: stop every service instance this project does not declare.
+ *
+ * Two steps rather than one button, and the reason is on the Rust side too —
+ * the plan is a list somebody has to be able to read before pressing anything.
+ * A project that declares nothing declares *nothing*, not "nothing needed", and
+ * on that project the honest answer is a refusal with the field named.
+ *
+ * The plan is fetched fresh each time the dialog opens and made again by
+ * `focus_apply` on the other side; this copy is what to show, never what to act
+ * on.
+ */
+const focusPlan = ref(null);
+const focusOpen = ref(false);
+const focusBusy = ref(false);
+
+async function openFocus() {
+  error.value = null;
+  focusPlan.value = null;
+  focusOpen.value = true;
+  try {
+    focusPlan.value = await api.focusPlan(props.name);
+  } catch (e) {
+    error.value = e;
+    focusOpen.value = false;
+  }
+}
+
+async function applyFocus() {
+  focusBusy.value = true;
+  try {
+    await api.focusApply(props.name);
+    focusOpen.value = false;
+    await load();
+  } catch (e) {
+    error.value = e;
+    focusOpen.value = false;
+  } finally {
+    focusBusy.value = false;
+  }
+}
+
 async function act(fn) {
   error.value = null;
   ops.markBusy(props.name, true);
@@ -678,6 +720,24 @@ onUnmounted(() => {
       >
         <v-icon>mdi-folder-open</v-icon>
         <v-tooltip activator="parent" location="bottom">{{ t('detail.openFolder') }}</v-tooltip>
+      </v-btn>
+      <!-- The most-wanted verb on a laptop, and the one no competitor in this
+           category can offer: `services` in stackvo.json declares what this
+           project needs, so "stop the rest" is arithmetic rather than a guess.
+           Beside stop rather than in the quick-commands menu — that menu runs
+           things inside this container, and this one acts on the stack. -->
+      <v-btn
+        icon
+        variant="tonal"
+        size="small"
+        elevation="0"
+        class="mr-2"
+        :aria-label="t('focus.action')"
+        :disabled="!app.engineUp"
+        @click="openFocus"
+      >
+        <v-icon>mdi-target</v-icon>
+        <v-tooltip activator="parent" location="bottom">{{ t('focus.action') }}</v-tooltip>
       </v-btn>
       <v-btn
         v-if="running"
@@ -1126,6 +1186,89 @@ onUnmounted(() => {
       @saved="load"
       @apply="applyManifest"
     />
+
+    <!-- The plan, before anything stops. The same shape MigrationGate uses and
+         for the same reason: a change that showed its list first is one
+         somebody can decline. -->
+    <v-dialog v-model="focusOpen" max-width="560">
+      <v-card>
+        <v-card-title class="text-h6">{{ t('focus.title') }}</v-card-title>
+        <v-card-text>
+          <v-progress-circular v-if="!focusPlan" indeterminate size="24" />
+
+          <template v-else>
+            <!-- The refusal, said with the field named. Acting on an empty
+                 `services` list would stop the whole workspace on the strength
+                 of something nobody filled in. -->
+            <v-alert
+              v-if="focusPlan.declaresNothing"
+              type="warning"
+              variant="tonal"
+              density="compact"
+            >
+              {{ t('focus.declaresNothing') }}
+            </v-alert>
+
+            <!-- Already focused is a real state and reads as one. -->
+            <v-alert
+              v-else-if="!focusPlan.stop.length"
+              type="info"
+              variant="tonal"
+              density="compact"
+            >
+              {{ t('focus.nothingToStop') }}
+            </v-alert>
+
+            <template v-else>
+              <p class="text-body-2 mb-2">
+                {{ t('focus.willStop', { count: focusPlan.stop.length }) }}
+              </p>
+              <v-chip
+                v-for="verdict in focusPlan.stop"
+                :key="verdict.id"
+                size="small"
+                class="mr-1 mb-1"
+                color="warning"
+                variant="tonal"
+              >
+                {{ verdict.id }}
+              </v-chip>
+
+              <p class="text-body-2 mt-4 mb-2">{{ t('focus.willKeep') }}</p>
+              <!-- The reason is on the chip, because "your project asks for
+                   this" and "something your project asks for needs this" are
+                   different sentences and the second is the surprising one. -->
+              <v-chip
+                v-for="verdict in focusPlan.keep"
+                :key="verdict.id"
+                size="small"
+                class="mr-1 mb-1"
+                variant="tonal"
+                :color="verdict.reason === 'declared' ? 'success' : undefined"
+              >
+                {{ verdict.id }}
+                <span v-if="verdict.reason === 'dependency'" class="ml-1 text-caption">
+                  · {{ t('focus.becauseDependency') }}
+                </span>
+              </v-chip>
+            </template>
+          </template>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="focusOpen = false">{{ t('app.cancel') }}</v-btn>
+          <v-btn
+            v-if="focusPlan && !focusPlan.declaresNothing && focusPlan.stop.length"
+            color="primary"
+            variant="flat"
+            :loading="focusBusy"
+            @click="applyFocus"
+          >
+            {{ t('focus.apply') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </PageLayout>
 </template>
 

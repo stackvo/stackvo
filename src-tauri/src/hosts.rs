@@ -330,10 +330,16 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
 
     // Write the new contents to a temp file first, so the elevated step is a
     // plain copy rather than a shell heredoc carrying user-supplied domains.
-    let staged = std::env::temp_dir().join("stackvo-hosts-staged");
+    //
+    // Into a private directory, not onto a fixed name in a shared `/tmp`: root
+    // copies this file over `/etc/hosts`, so whoever can put bytes at that path
+    // in the window before the copy chooses what `/etc/hosts` says. See
+    // `elevate::staging_dir`.
+    let stage = crate::elevate::staging_dir("hosts")?;
+    let staged = stage.join("hosts");
     std::fs::write(&staged, &plan.preview).map_err(|e| Error::io("staging the hosts file", e))?;
 
-    let backup = std::env::temp_dir().join("stackvo-hosts-backup");
+    let backup = stage.join("backup");
     if let Ok(original) = std::fs::read_to_string(&path) {
         let _ = std::fs::write(&backup, original);
     }
@@ -351,7 +357,7 @@ pub fn apply(add: &[String], remove: &[String]) -> crate::error::Result<HostsPla
     // pointing at a temporary file, this branch is the one that runs, on every
     // platform, without a prompt nobody could answer in CI.
     let ok = write_in_place(&path, &plan.preview) || elevated_here(&staged, &path)?;
-    let _ = std::fs::remove_file(&staged);
+    let _ = std::fs::remove_dir_all(&stage);
 
     if !ok {
         return Err(

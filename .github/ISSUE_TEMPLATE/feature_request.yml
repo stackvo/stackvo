@@ -1,0 +1,67 @@
+name: Feature request
+description: Something it should do and does not
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: a fair number of the obvious requests have already been
+        measured and turned down **with a reason** — a bundled Ollama, a fifth
+        database, Mutagen. Those reasons live in the code beside what they
+        explain, and a request that answers one of them is far more interesting
+        than one that does not know it exists.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: |
+        The situation, not the feature. "I keep having to X" says more than
+        "add a button for X" — the button may not be the best answer, and it
+        cannot be judged without knowing what it is for.
+    validations: { required: true }
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+      description: |
+        The workaround, however ugly. This is the single most useful field on
+        this form: it says how much the gap actually costs, which is the thing
+        no feature description carries.
+    validations: { required: true }
+
+  - type: textarea
+    id: elsewhere
+    attributes:
+      label: Does something else do this
+      description: |
+        Name it if so — Herd, DDEV, Lando, Laragon, ServBay, anything. Not to
+        copy it, but because a working example settles arguments about whether
+        a thing is possible that would otherwise take a week.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of the app
+      options:
+        - Projects
+        - Services and packages
+        - Terminals, logs and debugging
+        - Profiling and performance
+        - Certificates, DNS and hosts
+        - Settings
+        - The CLI
+        - The MCP server
+        - Something else
+    validations: { required: true }
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and discussions.
+          required: true
+        - label: This is one request rather than several. Separate ones can be judged separately.
+          required: true

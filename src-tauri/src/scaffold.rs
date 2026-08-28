@@ -16,6 +16,25 @@
 //! On Linux the container would otherwise write root-owned files into the
 //! user's checkout, so the invocation carries `--user <uid>:<gid>` on unix.
 //! (Docker Desktop on macOS maps ownership anyway; the flag is harmless.)
+//!
+//! ## What is deliberately not here: Magento
+//!
+//! Detection knows `magento/product-community-edition` and there is no template
+//! to match it, which the coverage test in `tests/scaffold_coverage.rs` requires
+//! to be declared rather than merely true. The reason is that Magento Open
+//! Source cannot be installed by a command this module could run:
+//! `composer create-project magento/project-community-edition` resolves against
+//! `repo.magento.com`, which authenticates with a public/private key pair the
+//! user creates in their own Adobe Commerce account and writes into an
+//! `auth.json`.
+//!
+//! Every other template here is a button that works with nothing but Docker. A
+//! Magento button would be one that always fails until the user has been
+//! somewhere else and obtained a credential this app has no place holding — and
+//! failing *inside* a throwaway container, where the composer error about a 401
+//! from a domain nobody mentioned is the only thing that comes back. Adoption
+//! still works: clone or copy a Magento checkout in and detection identifies it,
+//! `pub/` and all. Creating one is the ecosystem's job.
 
 use crate::error::{Error, Result};
 use serde::Serialize;
@@ -63,6 +82,7 @@ pub enum Template {
     Laminas,
     Drupal,
     Prestashop,
+    Statamic,
     // The lang runtimes, now that they have generators.
     Django,
     Rails,
@@ -81,7 +101,7 @@ pub enum Template {
 }
 
 impl Template {
-    pub const ALL: [Template; 28] = [
+    pub const ALL: [Template; 29] = [
         Template::Laravel,
         Template::Wordpress,
         Template::Symfony,
@@ -97,6 +117,7 @@ impl Template {
         Template::Laminas,
         Template::Drupal,
         Template::Prestashop,
+        Template::Statamic,
         Template::Django,
         Template::Rails,
         Template::Slim,
@@ -129,6 +150,7 @@ impl Template {
             Template::Laminas => "laminas",
             Template::Drupal => "drupal",
             Template::Prestashop => "prestashop",
+            Template::Statamic => "statamic",
             Template::Django => "django",
             Template::Rails => "rails",
             Template::Slim => "slim",
@@ -316,6 +338,21 @@ impl Template {
                     "--no-interaction",
                     "--ignore-platform-reqs",
                     "prestashop/prestashop",
+                    ".",
+                ],
+            ),
+            // Statamic is a Laravel application with a flat-file CMS on top,
+            // and detection knew the `statamic/cms` marker before there was
+            // any way to create one — the catalogue could recognise a Statamic
+            // site nobody could scaffold here.
+            Template::Statamic => Installer::Container(
+                "composer:2",
+                &[
+                    "create-project",
+                    "--prefer-dist",
+                    "--no-interaction",
+                    "--ignore-platform-reqs",
+                    "statamic/statamic",
                     ".",
                 ],
             ),
@@ -691,8 +728,10 @@ mod tests {
         // Rails became real in the meantime; the unknown case needs a name
         // that is still not one of ours.
         assert_eq!(Template::parse("spring-boot"), None);
-        // Nine, and each one is a different installer contract.
-        assert_eq!(Template::ALL.len(), 28);
+        // Each one is a different installer contract, and the count is here so
+        // that adding an enum variant without adding it to `ALL` fails rather
+        // than producing a template nothing can offer.
+        assert_eq!(Template::ALL.len(), 29);
     }
 
     #[test]

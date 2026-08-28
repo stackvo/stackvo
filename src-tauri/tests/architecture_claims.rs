@@ -60,26 +60,55 @@ fn local_links(markdown: &str) -> Vec<String> {
     out
 }
 
-/// `ARCHITECTURE.md` sits at the repository root, so its relative links are
-/// resolved from there.
+/// The documents a stranger reads before they read any code, all of which sit
+/// at the repository root — so their relative links resolve from there.
+///
+/// This check used to cover `ARCHITECTURE.md` alone, and the omission was not
+/// theoretical: `PRIVACY.md` carried a link to `docs/adr/0010-…md`, a file that
+/// had never existed, for as long as the link had. Nothing looked. A dead link
+/// in a security or privacy document is worse than a dead link in a design
+/// note, because the reader followed it to check a claim and cannot.
+const LINKED_DOCUMENTS: [&str; 8] = [
+    "ARCHITECTURE.md",
+    "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "PRIVACY.md",
+    "ACCESSIBILITY.md",
+    "SUPPORT.md",
+    "CODE_OF_CONDUCT.md",
+];
+
 #[test]
 fn every_link_points_at_a_file_that_exists() {
-    let links = local_links(&architecture());
-    assert!(
-        links.len() > 5,
-        "only {} local links found — the link parser has stopped matching",
-        links.len()
-    );
-
     let root = repo_root();
-    let broken: Vec<_> = links
-        .iter()
-        .filter(|target| !root.join(target).exists())
-        .collect();
+    let mut total = 0;
+    let mut broken: Vec<String> = Vec::new();
 
+    for name in LINKED_DOCUMENTS {
+        let path = root.join(name);
+        assert!(path.exists(), "{name} is listed here but not in the tree");
+
+        for target in local_links(&read(&path)) {
+            total += 1;
+            if !root.join(&target).exists() {
+                broken.push(format!("{name} → {target}"));
+            }
+        }
+    }
+
+    // The guard is on the total rather than per document, because some of these
+    // legitimately link to nothing: a count of zero there is a fact about that
+    // document, while a count of zero across all of them would mean the parser
+    // had stopped matching and this test had started passing for free.
+    assert!(
+        total > 15,
+        "only {total} local links across {} documents — the link parser has stopped matching",
+        LINKED_DOCUMENTS.len()
+    );
     assert!(
         broken.is_empty(),
-        "ARCHITECTURE.md points at files that do not exist: {broken:?}"
+        "these documents point at files that do not exist: {broken:?}"
     );
 }
 

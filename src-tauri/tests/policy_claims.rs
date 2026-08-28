@@ -315,3 +315,58 @@ fn the_env_writer_refuses_locked_keys() {
          no and can be answered by elevating, which this never can"
     );
 }
+
+/// Every image this app hands to `docker run` must pass through the mirror.
+///
+/// The module comment above already names the failure this guards: "a generated
+/// file with images in it that nobody added to `policy::rewrites` is silently
+/// left pointing at Docker Hub on a network that cannot reach it". The rewrite
+/// pass covered files. It did not cover the ten images this app never writes
+/// down — nine tunnel providers, the landing page, the tunnel guard and the
+/// perf helper — because those go straight into an argument list.
+///
+/// So the scan is for the *shape*: a module that owns a `docker run` image
+/// constant must reach `policy::run_image` somewhere. That is coarser than
+/// checking each call site and it is the right coarseness — it fails when a new
+/// module starts running an image and forgets, which is the way this returns.
+#[test]
+fn every_module_that_runs_an_image_asks_the_policy_first() {
+    // The four modules that hand an image reference to `docker run`, and the
+    // constant or field each one uses. A fifth added later is caught by the
+    // sweep below rather than by this list.
+    let owners = ["tunnel.rs", "landing.rs", "tunnelid.rs", "perf.rs"];
+
+    for name in owners {
+        let source = read(&format!("src/{name}"));
+        assert!(
+            source.contains("policy::run_image"),
+            "{name} runs a container image and never asks policy::run_image; \
+             on a machine with registryPrefix set it will reach for Docker Hub"
+        );
+    }
+
+    // And the sweep: any *other* production module that names an image literal
+    // in a `docker run` shape has to be added above with a decision, not left
+    // to be found on somebody's air-gapped machine.
+    let src = repo_root().join("src");
+    let mut unlisted = Vec::new();
+    for entry in std::fs::read_dir(&src).expect("src/ is readable") {
+        let path = entry.expect("a directory entry").path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".rs") || owners.contains(&name) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).unwrap_or_default();
+        // A constant whose name ends in `_IMAGE` is this repository's own
+        // spelling for "an image this module runs" — all four owners use it.
+        if source.contains("_IMAGE: &str = \"") && !source.contains("policy::run_image") {
+            unlisted.push(name.to_string());
+        }
+    }
+    assert!(
+        unlisted.is_empty(),
+        "these declare a container image and do not mirror it: {unlisted:?}"
+    );
+}

@@ -91,3 +91,53 @@ fn the_version_is_a_plain_semantic_version() {
         );
     }
 }
+
+/// The name on the crate has to be the name on the licence.
+///
+/// It was not: `authors = ["StackVo"]` named the product, `LICENSE` names a
+/// person, and the two files were the only places anyone would look to answer
+/// "who holds the copyright". `CARGO_PKG_AUTHORS` is the resolved field rather
+/// than a re-read of the file, for the reason `cargo()` above gives.
+#[test]
+fn the_crate_credits_whoever_the_licence_credits() {
+    let author = env!("CARGO_PKG_AUTHORS");
+    let licence = std::fs::read_to_string(repo_root().join("LICENSE")).expect("a LICENSE");
+
+    assert!(
+        licence.contains(author),
+        "Cargo.toml credits {author:?} and LICENSE does not mention them"
+    );
+}
+
+/// Both manifests have to point at the same repository.
+///
+/// `package.json` had no `repository` at all, which is what Dependabot and
+/// `npm` read to find the source; a tool that cannot find it reports nothing
+/// rather than reporting a problem, so the absence was silent in the direction
+/// that matters.
+#[test]
+fn both_manifests_name_the_same_repository() {
+    let cargo = env!("CARGO_PKG_REPOSITORY");
+    assert!(!cargo.is_empty(), "Cargo.toml has no `repository`");
+
+    let text = std::fs::read_to_string(repo_root().join("package.json")).expect("a package.json");
+    let value: serde_json::Value = serde_json::from_str(&text).expect("valid package.json");
+    let package = value
+        .pointer("/repository/url")
+        .and_then(|v| v.as_str())
+        .expect("package.json has no `repository.url` — Dependabot reads that field");
+
+    // npm spells a git remote `git+https://…​.git`; Cargo wants the plain page.
+    // Comparing the trimmed forms keeps both spellings legal and still catches
+    // the case that matters, which is the two pointing at different repos.
+    let strip = |s: &str| {
+        s.trim_start_matches("git+")
+            .trim_end_matches(".git")
+            .to_string()
+    };
+    assert_eq!(
+        strip(cargo),
+        strip(package),
+        "Cargo.toml and package.json point at different repositories"
+    );
+}

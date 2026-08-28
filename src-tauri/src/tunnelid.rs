@@ -456,7 +456,7 @@ pub fn guard_args(
         AUTH_ENV,
         "--entrypoint",
         "sh",
-        GUARD_IMAGE,
+        &crate::policy::run_image(GUARD_IMAGE),
         "-c",
         &script,
     ]

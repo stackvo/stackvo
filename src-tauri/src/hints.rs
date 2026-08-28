@@ -329,6 +329,9 @@ hints! {
          stackvo.json; they are not arbitrary.";
     IMAGE_REFERENCE_CHARSET = "imageReferenceCharset",
         "Lowercase letters, digits, and . _ - / : only.";
+    FOCUS_NEEDS_SERVICES = "focusNeedsServices",
+        "Add a `services` list to this project's stackvo.json first — focus stops \
+         everything that is not on it, and an empty list would stop the whole stack.";
     COMPOSE_FILE_NOT_FOUND = "composeFileNotFound",
         "Looked for compose.yaml, compose.yml, docker-compose.yaml and docker-compose.yml.";
     COMPOSE_FILE_MUST_BE_VALID = "composeFileMustBeValid",

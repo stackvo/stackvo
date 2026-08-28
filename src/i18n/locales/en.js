@@ -1295,6 +1295,9 @@ export default {
     saveSecret: 'Save',
     snapshotFirst: 'Copy what this replaces first',
     revoke: 'Withdraw approval',
+    recipesIntro:
+      "This project declares no recipe yet. These are starting points, not connections — each one is written into this project's stackvo.json, where the placeholders below have to be replaced before it will work. Adding one approves nothing.",
+    addRecipe: 'Add to this project',
   },
   release: {
     pushExplain:
@@ -2136,6 +2139,17 @@ export default {
     // ones is a list nobody can navigate by.
     primaryNav: 'Main navigation',
   },
+  focus: {
+    action: 'Focus on this project',
+    title: 'Run only what this project needs',
+    willStop: 'These {count} service instance(s) will be stopped:',
+    willKeep: 'These stay up:',
+    becauseDependency: 'needed by one of them',
+    nothingToStop: 'Nothing else is running. This project is already focused.',
+    declaresNothing:
+      'This project does not declare any services, so there is nothing to focus on. Add a `services` list to its stackvo.json — focus stops everything that is not on it, and an empty list would stop the whole stack.',
+    apply: 'Stop the rest',
+  },
   actions: {
     start: 'Start the container',
     stop: 'Stop the container',
@@ -2659,6 +2673,16 @@ export default {
       '{host} is written into the generated files, and this machine is no longer on that network. Regenerate — until then that name resolves to whichever machine took the address.',
   },
 
+  audit: {
+    title: 'Audit trail',
+    sectionDesc: 'What was done to this machine that cannot be taken back.',
+    description:
+      'Only the acts that change something outside this app and cannot be undone by pressing the button again — an elevated write to the hosts file, a change to certificate trust, a deleted project, a restored database, a credential moved into the keystore. Starting a container is not here, and neither is reading anything. This file is never rotated: it is the one record that can still answer "when was this done" three weeks later.',
+    empty: 'Nothing irreversible has been done yet.',
+    truncated: 'Showing the most recent {shown} of {total} entries.',
+    unreadable:
+      '{count} line(s) in the trail could not be read and were skipped. The rest is intact.',
+  },
   doctor: {
     title: 'Doctor',
     sectionDesc: 'What is wrong, said with names — and the repair beside each finding.',
@@ -2780,6 +2804,7 @@ export default {
       laminas: 'Laminas (Zend)',
       drupal: 'Drupal',
       prestashop: 'PrestaShop',
+      statamic: 'Statamic',
       django: 'Django',
       rails: 'Ruby on Rails',
       slim: 'Slim',
@@ -3044,6 +3069,8 @@ export default {
     quickCommandsAreFixed:
       "Ids come from the built-in catalogue or from this project's own stackvo.json; they are not arbitrary.",
     imageReferenceCharset: 'Lowercase letters, digits, and . _ - / : only.',
+    focusNeedsServices:
+      "Add a `services` list to this project's stackvo.json first — focus stops everything that is not on it, and an empty list would stop the whole stack.",
     composeFileNotFound:
       'Looked for compose.yaml, compose.yml, docker-compose.yaml and docker-compose.yml.',
     composeFileMustBeValid:

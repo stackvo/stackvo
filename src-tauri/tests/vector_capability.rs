@@ -213,3 +213,107 @@ fn the_fixture_carries_every_field_a_version_manifest_must() {
         }
     }
 }
+
+/// A claim about the outside world has to carry the date it was measured.
+///
+/// This file already does it — "Re-measured August 2026, against a competitive
+/// review that listed Ollama in Laradock, ServBay and FlyEnv" — and the reason
+/// is in that sentence's shape. A dated claim that ages becomes *old*, which a
+/// reader can weigh. An undated one becomes *wrong*, silently, and three did:
+///
+///   * `worktree.rs` said branch environments were "the one thing … that
+///     nothing else in this space does" after dde shipped per-worktree
+///     hostnames and certificates;
+///   * `imports.rs` said "**Two** of them" while `ALL` carried seven;
+///   * `mcp.rs` said "five of the eight competitors" against a survey of
+///     seventeen products, at least seven of which ship one.
+///
+/// None of the three was checkable, because none said when it was true. This
+/// requires the date rather than the truth — the measurement is review's job,
+/// and the date is what makes review possible.
+///
+/// ## The ten below are declared debt, not exemptions
+///
+/// Writing this test found ten more module headers making a claim about
+/// somebody else's product, where the review that prompted it had found three.
+/// They are listed rather than dated because dating one means *measuring* it,
+/// and a date written without a measurement is the same defect wearing a
+/// timestamp. The list is here so the number is visible and shrinking it is a
+/// task; a module that leaves it must carry a real date, and a new module has
+/// to be dated or added deliberately — which is the point.
+///
+/// This is `published_urls.rs`'s arrangement: a declared list with a reason
+/// attached, rather than a check narrow enough to always pass.
+const UNDATED: [&str; 10] = [
+    "agents.rs",
+    "db.rs",
+    "debugbridge.rs",
+    "devcontainer.rs",
+    "ide.rs",
+    "phpini.rs",
+    "provider.rs",
+    "querylog.rs",
+    "release.rs",
+    "spx.rs",
+];
+
+#[test]
+fn every_competitive_claim_names_when_it_was_measured() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+
+    // Words that only appear when a module is comparing itself to something
+    // outside this repository.
+    const COMPARATIVE: [&str; 4] = [
+        "competitor",
+        "competitive review",
+        "rivals",
+        "in this space",
+    ];
+
+    let mut undated = Vec::new();
+    for entry in std::fs::read_dir(&root).expect("src/ is readable") {
+        let path = entry.expect("a directory entry").path();
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+
+        // The module header only — a claim buried in a function body is not the
+        // one a reader takes on trust.
+        let header: String = text
+            .lines()
+            .take_while(|l| l.starts_with("//!") || l.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let name = path
+            .file_name()
+            .expect("a file name")
+            .to_string_lossy()
+            .to_string();
+
+        if !COMPARATIVE.iter().any(|w| header.contains(w)) {
+            assert!(
+                !UNDATED.contains(&name.as_str()),
+                "{name} is on the undated list and no longer makes a comparative claim —                  take it off the list rather than leaving a name nobody can act on"
+            );
+            continue;
+        }
+        if UNDATED.contains(&name.as_str()) {
+            continue;
+        }
+        // "Measured August 2026", "Re-measured August 2026", "measured in 2026".
+        let dated = header.contains("easured") && header.contains("202");
+        if !dated {
+            undated.push(name);
+        }
+    }
+
+    assert!(
+        undated.is_empty(),
+        "these compare this product to others and do not say when they last looked: {undated:?}\n\
+         Write the date beside the claim, the way this file does. An undated claim about \
+         somebody else's product does not age — it goes quietly wrong. If it genuinely \
+         cannot be measured now, add it to UNDATED above, where it is at least counted."
+    );
+}

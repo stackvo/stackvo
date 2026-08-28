@@ -1,0 +1,19 @@
+# A blank issue is the one that arrives with no version, no platform and no
+# reproduction, and then costs three round trips to become answerable. The
+# templates exist to ask those things once; turning the blank option off is what
+# makes them the path rather than the longer alternative.
+blank_issues_enabled: false
+
+contact_links:
+  # First, because it is the one that must never arrive as a public issue.
+  - name: Security vulnerability
+    url: https://github.com/stackvo/stackvo/security/advisories/new
+    about: Report privately. Please do not open a public issue — see SECURITY.md.
+
+  - name: Question about using it
+    url: https://github.com/stackvo/stackvo/discussions
+    about: "How do I…" and "should it…" belong here rather than in the issue tracker.
+
+  - name: Something is wrong on this machine
+    url: https://github.com/stackvo/stackvo/blob/main/SUPPORT.md
+    about: Settings → Doctor names most of it, and the diagnostics bundle answers the rest.

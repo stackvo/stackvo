@@ -32,7 +32,7 @@ const form = ref(blankForm());
  */
 const template = ref('empty');
 /**
- * Which group is expanded. Twenty-eight templates in one column was a scroll
+ * Which group is expanded. Twenty-nine templates in one column was a scroll
  * with no landmarks; as an accordion the panel opens to six headings, and the
  * chosen one is named on its heading so a closed panel still answers "what did
  * I pick".
@@ -49,7 +49,7 @@ const TEMPLATE_GROUPS = [
     key: 'php',
     items: ['laravel', 'symfony', 'cakephp', 'yii', 'codeigniter', 'laminas', 'slim'],
   },
-  { key: 'cms', items: ['wordpress', 'drupal', 'prestashop', 'typo3', 'tina'] },
+  { key: 'cms', items: ['wordpress', 'drupal', 'prestashop', 'statamic', 'typo3', 'tina'] },
   {
     key: 'node',
     items: ['nextjs', 'nuxt', 'vue', 'react', 'svelte', 'astro', 'nest', 'angular'],
@@ -78,6 +78,7 @@ const TEMPLATE_RUNTIME = {
   wordpress: 'php',
   drupal: 'php',
   prestashop: 'php',
+  statamic: 'php',
   typo3: 'php',
   tina: 'node',
   nextjs: 'node',
@@ -114,6 +115,7 @@ const TEMPLATE_ICONS = {
   laminas: 'mdi-alpha-l-box-outline',
   drupal: 'mdi-water',
   prestashop: 'mdi-cart-outline',
+  statamic: 'mdi-feather',
   django: 'mdi-language-python',
   rails: 'mdi-language-ruby',
   slim: 'mdi-alpha-s-circle-outline',
@@ -133,7 +135,7 @@ const TEMPLATE_ICONS = {
  *
  * A pseudo-template rather than a fourth control, because it answers the same
  * question the others do — what fills the directory — and a separate toggle
- * beside a list of twenty-eight choices would be a second place to look for
+ * beside a list of twenty-nine choices would be a second place to look for
  * one answer.
  */
 const CLONE = 'git';

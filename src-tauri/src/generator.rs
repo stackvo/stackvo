@@ -877,6 +877,27 @@ pub const NGINX_DIRECTIVES: [Directive; 9] = [
     },
 ];
 
+/// The directive with this `.env` key.
+///
+/// Callers that want one directive out of the table ask for it by key rather
+/// than by position. The table is not sorted by anything a reader could rely
+/// on, so a position is a claim about the order of a list whose most likely
+/// edit — adding a directive — is exactly what breaks it: an insert would slide
+/// `[0]` off `client_max_body_size` and Caddy would emit `max_size 60` from the
+/// body timeout. That version compiles and no test covers it.
+///
+/// The panic is the point. Every caller passes a literal that appears in the
+/// table above, so a `None` here means the key was renamed in one place and not
+/// the other, and the two unit tests below fail rather than the generator
+/// quietly dropping a directive a workspace had set.
+pub fn directive(key: &str) -> &'static Directive {
+    NGINX_DIRECTIVES
+        .iter()
+        .chain(std::iter::once(&FASTCGI_READ))
+        .find(|d| d.key == key)
+        .unwrap_or_else(|| panic!("no server directive is keyed {key}"))
+}
+
 /// The read timeout is separate only because it shipped first, under a name
 /// without `READ` in it. Renaming it would move somebody's setting silently.
 pub const FASTCGI_READ: Directive = Directive {
@@ -943,13 +964,13 @@ impl ServerSettings {
     /// have an equivalent rather than a translation of all nine.
     fn caddy(&self) -> String {
         let mut out = String::new();
-        if let Some(size) = self.value_of(&NGINX_DIRECTIVES[0]) {
+        if let Some(size) = self.value_of(directive("SERVER_MAX_BODY_SIZE")) {
             out.push_str(&format!(
                 "\x20   request_body {{\n\x20       max_size {size}\n\x20   }}\n"
             ));
         }
         if self
-            .value_of(&NGINX_DIRECTIVES[4])
+            .value_of(directive("SERVER_GZIP"))
             .is_some_and(|v| v == "on")
         {
             out.push_str("\x20   encode gzip\n");
@@ -2016,6 +2037,79 @@ mod tests {
         );
     }
 
+    /// Caddy's two directives used to be `NGINX_DIRECTIVES[0]` and `[4]`. The
+    /// table is sorted by nothing, so those positions were a claim about an
+    /// order no reader could check, and the most likely edit to this file —
+    /// adding a directive — would have moved `max_size` onto whatever landed at
+    /// the front. That version compiled, and the assertion above would still
+    /// have passed, because it only ever set one server-scope value Caddy
+    /// looks at.
+    ///
+    /// This one sets the body *timeout* to a value that would be visibly wrong
+    /// in a `max_size`, so a lookup that drifted off its key fails here instead
+    /// of at somebody's request.
+    #[test]
+    fn caddy_takes_its_two_directives_by_key_rather_than_by_position() {
+        assert_eq!(
+            directive("SERVER_MAX_BODY_SIZE").name,
+            "client_max_body_size"
+        );
+        assert_eq!(directive("SERVER_GZIP").name, "gzip");
+
+        let settings = ServerSettings::from_env(&crate::config::Env::parse(
+            "SERVER_MAX_BODY_SIZE=256M\n\
+             SERVER_CLIENT_BODY_TIMEOUT=99\n\
+             SERVER_TCP_NODELAY=off\n\
+             SERVER_GZIP=on\n",
+        ));
+        let caddy = render_caddyfile_with("public", &settings, "");
+        assert!(caddy.contains("max_size 256M"), "{caddy}");
+        assert!(
+            !caddy.contains("max_size 99") && !caddy.contains("max_size off"),
+            "the body-size lookup drifted onto another directive: {caddy}"
+        );
+        assert!(caddy.contains("encode gzip"), "{caddy}");
+    }
+
+    /// Every key in the table resolves back to its own row. A rename in one
+    /// place and not the other turns `directive()` into a panic, and this is
+    /// where that shows up rather than in a generate.
+    #[test]
+    fn every_directive_is_reachable_by_its_own_key() {
+        for d in NGINX_DIRECTIVES
+            .iter()
+            .chain(std::iter::once(&FASTCGI_READ))
+        {
+            assert_eq!(directive(d.key).name, d.name, "{} drifted", d.key);
+        }
+    }
+
+    /// The table carries a second copy of nine defaults that `config::SETTINGS`
+    /// already holds, and `value_of` emits nothing when a value equals the
+    /// default. So a drift between the two copies is not an error: it is a
+    /// directive silently written that should have been left out, or left out
+    /// that should have been written. Nothing compared them until this test.
+    #[test]
+    fn the_shipped_default_of_every_directive_matches_the_settings_table() {
+        for d in NGINX_DIRECTIVES
+            .iter()
+            .chain(std::iter::once(&FASTCGI_READ))
+        {
+            let settings = crate::config::SETTINGS
+                .iter()
+                .find(|(k, _)| *k == d.key)
+                .map(|(_, v)| *v);
+            assert_eq!(
+                settings,
+                Some(d.default),
+                "{} defaults to {:?} here and {:?} in config::SETTINGS",
+                d.key,
+                d.default,
+                settings
+            );
+        }
+    }
+
     #[test]
     fn a_server_snippet_of_comments_adds_nothing() {
         let dir = std::env::temp_dir().join("stackvo-server-extra-comments");
@@ -2111,18 +2205,28 @@ mod tests {
 
     #[test]
     fn each_lang_dockerfile_is_the_node_templates_sibling() {
-        for (runtime, image_line, must_contain) in [
-            ("python", "FROM python:3.13-slim", "RUN pip install"),
-            ("go", "FROM golang:1.23", "RUN go build -o /app/server ."),
-            ("ruby", "FROM ruby:3.3-slim", "RUN bundle install"),
-            ("rust", "FROM rust:1", "RUN cargo build --release"),
-            ("bun", "FROM oven/bun:1-alpine", "RUN bun install"),
-            // No suffix and the whole tag in the version — see `lang_image`.
-            ("deno", "FROM denoland/deno:2.9.5", "RUN deno install"),
+        // The expected tag is built from the default rather than restated. It
+        // used to be spelled out — `FROM python:3.13-slim` — which made this a
+        // fourth copy of a version already written in `lang_defaults`,
+        // `config::SETTINGS` and `env.schema.json`, and it duly disagreed with
+        // the first two. What this test is actually about is the shape of the
+        // template, so the version comes from the same place the renderer reads
+        // it and `manifest`'s own tests hold the agreement between the tables.
+        for (runtime, must_contain) in [
+            ("python", "RUN pip install"),
+            ("go", "RUN go build -o /app/server ."),
+            ("ruby", "RUN bundle install"),
+            ("rust", "RUN cargo build --release"),
+            ("bun", "RUN bun install"),
+            ("deno", "RUN deno install"),
         ] {
             let lang = crate::manifest::lang_defaults(runtime).unwrap();
+            let image_line = format!(
+                "FROM {}",
+                lang_base_image(runtime, &lang.version).expect("a base image")
+            );
             let text = render_lang_dockerfile(runtime, "svc", &lang).unwrap();
-            assert!(text.contains(image_line), "{runtime}: {text}");
+            assert!(text.contains(&image_line), "{runtime}: {text}");
             assert!(text.contains(must_contain), "{runtime}: {text}");
             // The Traefik contract every snapshot runtime shares.
             assert!(text.contains("ENV HOST=0.0.0.0"));

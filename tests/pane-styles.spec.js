@@ -56,7 +56,12 @@ const FAMILIES = [
  */
 const NOT_OURS = [
   /^v-/,
-  /^(d|ga|ma|pa|mx|my|px|py|mt|mb|ml|mr|pt|pb|pl|pr)-/,
+  // `ms`/`me`/`ps`/`pe` are the direction-aware halves of the same scale —
+  // start and end rather than left and right. They were missing here while
+  // `ErrorAlert.vue` already used one, so the omission was a gap in the list
+  // rather than a rule: a pane picking the RTL-correct class was the one that
+  // failed.
+  /^(d|ga|ma|pa|mx|my|px|py|mt|mb|ml|mr|ms|me|pt|pb|pl|pr|ps|pe)-/,
   /^(text|bg|justify|align|flex|font|rounded|border|elevation|position|overflow|w|h)-/,
   /^(mono|gap)$/,
 ];

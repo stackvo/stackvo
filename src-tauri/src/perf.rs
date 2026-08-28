@@ -425,7 +425,7 @@ pub async fn seed(root: &Path, project: &str, path: &str) -> Result<()> {
         format!("{mount}:/from:ro"),
         "-v".to_string(),
         format!("{volume}:/to"),
-        HELPER_IMAGE.to_string(),
+        crate::policy::run_image(HELPER_IMAGE),
         "sh".to_string(),
         "-c".to_string(),
         // The trailing `/.` copies the *contents*, not the directory itself —
@@ -479,7 +479,7 @@ pub async fn export(root: &Path, project: &str, path: &str) -> Result<u64> {
             &format!("{volume}:/from:ro"),
             "-v",
             &format!("{mount}:/to"),
-            HELPER_IMAGE,
+            &crate::policy::run_image(HELPER_IMAGE),
             "sh",
             "-c",
             // Emptied first, for the reason above. `/to/.` so the mount point
