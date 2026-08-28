@@ -112,26 +112,52 @@ pub struct LangConfig {
     pub port: u16,
 }
 
+/// The version `config::SETTINGS` offers for a runtime, under the key the
+/// settings pane and the catalogue both read.
+///
+/// Three runtimes below take their version from that table instead of holding a
+/// literal, because the pane already presents it as *the* default and a second
+/// copy is a copy that drifts. Python's did: the table said `3.14` and this
+/// function said `3.13`, so a project opened from the wizard and the same
+/// project adopted from a folder ran two different interpreters, with nothing
+/// on either screen saying why. Nothing compared them.
+///
+/// The other three keep literals deliberately, and their reasons are written
+/// beside them: Rust and Bun float on a major tag the table does not spell, and
+/// Deno is pinned to a patch because its publisher ships no shorter one.
+///
+/// The panic is the point — the key is a compile-time constant in a table in
+/// this same crate, so a `None` means it was renamed in one place and not the
+/// other, and the test below is where that surfaces.
+fn settings_version(runtime: &str) -> String {
+    let key = format!("SUPPORTED_LANGUAGES_{}_DEFAULT", runtime.to_uppercase());
+    crate::config::SETTINGS
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| (*v).to_string())
+        .unwrap_or_else(|| panic!("config::SETTINGS has no {key}"))
+}
+
 /// What a runtime's block defaults to when a field is omitted — the working
 /// convention of each ecosystem, not an invention.
 pub fn lang_defaults(runtime: &str) -> Option<LangConfig> {
     match runtime {
         "python" => Some(LangConfig {
-            version: "3.13".into(),
+            version: settings_version("python"),
             install: Some("pip install --no-cache-dir -r requirements.txt".into()),
             build: None,
             start: "python main.py".into(),
             port: 8000,
         }),
         "go" => Some(LangConfig {
-            version: "1.23".into(),
+            version: settings_version("go"),
             install: None,
             build: Some("go build -o /app/server .".into()),
             start: "/app/server".into(),
             port: 8080,
         }),
         "ruby" => Some(LangConfig {
-            version: "3.3".into(),
+            version: settings_version("ruby"),
             install: Some("bundle install".into()),
             build: None,
             start: "bundle exec ruby app.rb".into(),
@@ -2437,6 +2463,46 @@ mod write_tests {
         );
     }
 
+    /// The settings pane, the new-project wizard and an adopted folder have to
+    /// agree on what version a runtime gets when nobody said.
+    ///
+    /// They did not. `SUPPORTED_LANGUAGES_PYTHON_DEFAULT` was `3.14` and this
+    /// table said `3.13`; the wizard reads the first and adoption the second, so
+    /// two projects made minutes apart ran two interpreters. Go and Ruby matched
+    /// by luck, which is the same arrangement one edit away from not matching.
+    #[test]
+    fn the_runtimes_that_track_the_settings_table_read_it_rather_than_copy_it() {
+        for runtime in ["python", "go", "ruby"] {
+            let key = format!("SUPPORTED_LANGUAGES_{}_DEFAULT", runtime.to_uppercase());
+            let settings = crate::config::SETTINGS
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| *v);
+            assert_eq!(
+                lang_defaults(runtime).unwrap().version.as_str(),
+                settings.unwrap_or_else(|| panic!("no {key} in config::SETTINGS")),
+                "{runtime} disagrees with the table the settings pane shows"
+            );
+        }
+    }
+
+    /// And the three that deliberately do not track it must keep not tracking
+    /// it. Rust and Bun float on a major tag, Deno is pinned to a patch, and all
+    /// three reasons are written beside the values. A later "consistency" pass
+    /// that pointed these at the table too would build Rust against `1.84`
+    /// instead of `1` and Deno against a tag its registry does not carry.
+    #[test]
+    fn the_three_deliberate_exceptions_stay_off_the_settings_table() {
+        assert_eq!(lang_defaults("rust").unwrap().version, "1");
+        assert_eq!(lang_defaults("bun").unwrap().version, "1");
+        assert!(
+            !crate::config::SETTINGS
+                .iter()
+                .any(|(k, _)| *k == "SUPPORTED_LANGUAGES_DENO_DEFAULT"),
+            "Deno now has a settings key; decide which one wins before this test is deleted"
+        );
+    }
+
     #[test]
     fn lang_block_fields_override_defaults_and_empty_string_means_no_step() {
         let json = serde_json::json!({
@@ -2743,6 +2809,45 @@ mod write_tests {
             "{text}"
         );
         assert!(again.valid, "{:?}", again.errors);
+    }
+
+    /// Every shipped starter recipe survives being written into a manifest and
+    /// read back out of it.
+    ///
+    /// `provider_recipe_add` writes through this serialiser rather than
+    /// splicing an object into the file, so the shipped catalogue and the
+    /// manifest writer have to agree about every field a recipe uses. They are
+    /// two hand-written lists — the recipe JSON and the `providers` block above
+    /// — and a field one of them stops carrying is a recipe that comes back
+    /// quietly different from the one somebody added.
+    ///
+    /// The block's own comment says what that costs: "a project losing the
+    /// recipe that fetches staging is the same class of loss as one losing its
+    /// commands — and worse to notice, because the button it removes is one
+    /// nobody presses daily."
+    #[test]
+    fn every_shipped_recipe_survives_being_written_into_a_manifest() {
+        for shipped in &crate::provider::RECIPES {
+            let provider = crate::provider::as_provider(shipped).expect("the shipped text parses");
+
+            let mut manifest = read_text(
+                r#"{ "name": "shop", "domain": "shop.loc", "runtime": "php",
+                     "php": { "version": "8.4" } }"#,
+                "shop",
+            );
+            manifest.providers.push(provider.clone());
+
+            let text = to_json(&manifest);
+            let again = read_text(&text, "shop");
+
+            assert!(again.valid, "{}: {:?}", shipped.name, again.errors);
+            assert_eq!(again.providers.len(), 1, "{}: {text}", shipped.name);
+            assert_eq!(
+                again.providers[0], provider,
+                "{} comes back different from what was added:\n{text}",
+                shipped.name
+            );
+        }
     }
 
     /// The other half of the same round trip, and the half that actually bit.

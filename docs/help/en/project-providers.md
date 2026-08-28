@@ -16,6 +16,23 @@ A recipe is written in `stackvo.json`, so it travels with the repository and a t
 }
 ```
 
+## Starting points
+
+A project that declares no recipe is offered the three this build ships, on the card itself:
+
+| Recipe | What it reaches | Both directions? |
+| --- | --- | --- |
+| `mysql-remote` | A MySQL or MariaDB server this machine can reach directly | Yes |
+| `postgres-remote` | A PostgreSQL server this machine can reach directly | Yes |
+| `upsun` | An Upsun (Platform.sh) environment, through its own CLI | Fetch only — its CLI's `db:sql` takes a query, not a file |
+
+**Adding one approves nothing.** It is written into your `stackvo.json` and then goes through the same approval as a recipe you typed. Every one of them carries a placeholder host, database or project id, so the version you approve is by definition not the version that was added — and the card lists the words you have to replace.
+
+Two recipes people ask for are not here, and the reasons are worth knowing before you go looking:
+
+- **SSH plus `mysqldump`** — a recipe's container gets no path from your machine, so it has no agent socket and no key file, and `ssh` authenticates with neither an environment variable nor a command-line word. The missing shell is not the obstacle; `mysqldump --result-file` needs no pipe.
+- **Pantheon** — there is no Terminus image to run, and `terminus backup:get` answers with a URL that then has to be downloaded, which is a second command and therefore a shell.
+
 ## The rules, and why each one is there
 
 **A command is a list of words, not a command line.** There is no shell, so no pipes, no redirection and no `$VARIABLE`. Write `["pg_dump", "-Fc"]`, not `"pg_dump -Fc | gzip"`.

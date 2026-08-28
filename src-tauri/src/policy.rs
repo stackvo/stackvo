@@ -803,6 +803,35 @@ pub fn mirror(prefix: &str, reference: &str) -> String {
     format!("{prefix}/{trimmed}")
 }
 
+/// The image this machine should actually pull, for a `docker run` this app
+/// builds itself.
+///
+/// [`mirror`] existed and was applied in exactly one place: the rewrite pass
+/// over generated files. `commands.rs` said the scope was "every image
+/// reference in the workspace … on its way to disk", and that was true — the
+/// word doing the work was **disk**. [`rewrites`] answers `true` only for
+/// `Dockerfile`, `*.yml` and `*.yaml`, so the ten images this app runs *without*
+/// writing them anywhere went straight past it: the nine tunnel providers, the
+/// landing page, the tunnel guard and the perf helper all hand their image to
+/// `docker run` as an argument.
+///
+/// The effect on a managed machine was precise and silent. An administrator
+/// sets `registryPrefix` because Docker Hub is unreachable; projects come up,
+/// because their compose files were rewritten — and then tunnels, the landing
+/// page, the guard and the perf helper each try Docker Hub and fail, one at a
+/// time, with an error about the network rather than about the policy. The
+/// exemption list in [`mirror`] names locally-built `stackvo-*` images; these
+/// ten were never in it, so this was not an exemption but an omission.
+///
+/// Same rules as [`mirror`] — this only reads the prefix for the caller, so
+/// there is one place the policy is consulted rather than eleven.
+pub fn run_image(reference: &str) -> String {
+    match current().registry_prefix() {
+        Some(prefix) => mirror(prefix, reference),
+        None => reference.to_string(),
+    }
+}
+
 /// Docker's rule for "the first component is a registry host, not a namespace".
 ///
 /// `mysql:8.0` has a colon and no host; `docker.io/library/mysql` has one. The
@@ -1211,6 +1240,44 @@ mod tests {
             rewrite("image: mysql:8.0\r\n", PREFIX),
             "image: registry.corp.example/proxy/mysql:8.0\r\n"
         );
+    }
+
+    /// `run_image` is `mirror` plus "read the prefix once", so what is worth
+    /// holding is that it keeps every one of `mirror`'s exemptions — the two
+    /// were written a year apart and a second copy of the rules would be the
+    /// copy that drifts.
+    #[test]
+    fn a_run_image_keeps_every_exemption_a_written_one_has() {
+        for reference in [
+            // Already names a registry: a deliberate choice, not ours to move.
+            "ghcr.io/cloudflare/cloudflared:latest",
+            "localhost:5000/zrok",
+            // Built on this machine and in no registry at all.
+            "stackvo-shop:latest",
+        ] {
+            assert_eq!(
+                mirror(PREFIX, reference),
+                reference,
+                "{reference} should have been left alone"
+            );
+        }
+
+        // And the ones that were bypassing the mirror entirely are exactly the
+        // ones a prefix has to reach.
+        for reference in ["cloudflare/cloudflared:latest", "nginx:alpine", "alpine:3"] {
+            assert_eq!(
+                mirror(PREFIX, reference),
+                format!("{PREFIX}/{reference}"),
+                "{reference} still goes to Docker Hub on a mirrored machine"
+            );
+        }
+    }
+
+    /// With no policy file there is no prefix, and `run_image` has to be the
+    /// identity — every unmanaged machine takes this path on every tunnel.
+    #[test]
+    fn without_a_registry_prefix_an_image_is_untouched() {
+        assert_eq!(run_image("nginx:alpine"), "nginx:alpine");
     }
 
     /// Which files the rewrite is allowed near.

@@ -486,7 +486,25 @@ if (manifestCount === 0)
 
 const catalog = list(env.SUPPORTED_LANGUAGES_PHP_EXTENSIONS);
 const defaultSet = list(env.SUPPORTED_LANGUAGES_PHP_EXTENSIONS_DEFAULT);
-const defaultPhp = env.SUPPORTED_LANGUAGES_PHP_DEFAULT || env.DEFAULT_PHP_VERSION || '8.2';
+// The last resort is the schema's own default, not a literal. It used to be
+// `'8.2'`, two minor releases behind by the time anyone looked: nothing read it
+// while a `.env` was present, so it only ever applied under
+// `--allow-no-manifests` — which is how CI runs — and there it validated the
+// extension matrix against the rules of a PHP nobody ships. An extension
+// removed in 8.3 sailed through. Reading `envSpec` keeps the fallback tied to
+// the same value the schema hands everything else.
+const defaultPhp =
+  env.SUPPORTED_LANGUAGES_PHP_DEFAULT ||
+  env.DEFAULT_PHP_VERSION ||
+  envSpec.SUPPORTED_LANGUAGES_PHP_DEFAULT?.default;
+
+if (!defaultPhp)
+  err(
+    'B',
+    'contracts/env.schema.json',
+    'NO_DEFAULT_PHP',
+    'SUPPORTED_LANGUAGES_PHP_DEFAULT has no default in the schema, so the extension matrix has no PHP version to validate against'
+  );
 
 for (const e of catalog) {
   if (!phpExt.extensions[e])
@@ -652,6 +670,37 @@ for (const [key, spec] of Object.entries(envSpec)) {
     warn('D', '.env', 'MISSING_KEY', `"${key}" is absent; readers fall back to "${spec.default}"`);
 }
 
+/**
+ * The schema's default against the one the binary actually ships.
+ *
+ * This is the question the contract exists to answer and the one nothing asked.
+ * Suite D above asks "is this key described?" — a key can be described, active,
+ * and describing a value the code stopped holding two releases ago, and every
+ * check passes. `SUPPORTED_LANGUAGES_RUST_DEFAULT` said `1.62` in the schema
+ * while `config::SETTINGS` said `1.84`; the schema even marked it
+ * `"status": "conflicting"`, which is a note to a human rather than a gate.
+ *
+ * `EMBEDDED_VALUES` already parses `SETTINGS` for key *and* value, so this
+ * costs a loop. It is the check that would have caught the PHP fallback, the
+ * Python default and the Rust version together, which is what makes it worth
+ * more than the three fixes it duplicates.
+ *
+ * Only keys the schema states a default for are compared. An absent `default`
+ * is a gap in the schema, not a disagreement, and saying so here would drown
+ * the real ones.
+ */
+for (const [key, spec] of Object.entries(envSpec)) {
+  if (spec.default === undefined || !(key in EMBEDDED_VALUES)) continue;
+  if (String(spec.default) !== String(EMBEDDED_VALUES[key]))
+    err(
+      'D',
+      'contracts/env.schema.json',
+      'DEFAULT_DISAGREES',
+      `"${key}" defaults to "${spec.default}" in the schema and "${EMBEDDED_VALUES[key]}" in config::SETTINGS — ` +
+        `the contract is describing a value this binary does not ship`
+    );
+}
+
 // Secrets that look real in a committed example file.
 if (envPath && basename(envPath) === '.env.example') {
   for (const [k, v] of Object.entries(env)) {
@@ -776,7 +825,11 @@ if (existsSync(jsApiPath)) {
 
   for (const method of methods) {
     // `api.foo(` or destructured `foo(` after an import from lib/ipc.
-    const used = new RegExp(`\\bapi\\.${method}\\b`).test(consumers);
+    // The whitespace is not cosmetic: Prettier breaks a long chain after the
+    // receiver, so `api\n  .appsAvailable()` is how a real call can look. A
+    // pattern that only matched the unbroken form reported a live call as dead
+    // and the suggested fix was to delete it.
+    const used = new RegExp(`\\bapi\\s*\\.\\s*${method}\\b`).test(consumers);
     if (!used) {
       warn('F', 'src/', 'UNUSED_API', `api.${method}() is defined but no view or store calls it`);
     }

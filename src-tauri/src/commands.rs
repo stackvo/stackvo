@@ -3426,11 +3426,26 @@ pub async fn request_timeline(
     project: String,
     service: Option<String>,
 ) -> Result<crate::timeline::Timeline> {
-    let root = state.root()?;
-    let dumps = crate::debugbridge::read_events(&root, &project);
+    build_timeline(&state.root()?, &project, service.as_deref()).await
+}
+
+/// The command's logic, free of Tauri `State`.
+///
+/// Split out for the same reason `verify_generator` was: a second caller that
+/// needs the same answer must not reimplement it. The MCP server is that
+/// caller — the axis is one of the four instruments an assistant could not
+/// reach — and a copy of these twenty lines in `mcp.rs` would be a copy that
+/// answers a slightly different question by next release.
+pub async fn build_timeline(
+    root: &std::path::Path,
+    project: &str,
+    service: Option<&str>,
+) -> Result<crate::timeline::Timeline> {
+    let root = root.to_path_buf();
+    let dumps = crate::debugbridge::read_events(&root, project);
 
     let (queries, recording) = match service {
-        Some(service) => match crate::querylog::read(&root, &service).await {
+        Some(service) => match crate::querylog::read(&root, service).await {
             Ok(session) => (session.entries, session.recording),
             // A database that cannot be reached is not a reason to withhold the
             // dumps: half a timeline is worth more than an error page, and the
@@ -3481,11 +3496,21 @@ pub async fn request_explain(
     key: String,
     service: Option<String>,
 ) -> Result<crate::explain::Explanation> {
-    let root = state.root()?;
-    workspace::project_dir(&root, &project)?;
-    crate::spx::check_key(&key)?;
+    explain_request(&state.root()?, &project, &key, service.as_deref()).await
+}
 
-    let reports = crate::spx::list(&root, &project);
+/// The command's logic, free of Tauri `State` — see [`build_timeline`].
+pub async fn explain_request(
+    root: &std::path::Path,
+    project: &str,
+    key: &str,
+    service: Option<&str>,
+) -> Result<crate::explain::Explanation> {
+    let root = root.to_path_buf();
+    workspace::project_dir(&root, project)?;
+    crate::spx::check_key(key)?;
+
+    let reports = crate::spx::list(&root, project);
     let report = reports
         .iter()
         .find(|report| report.key == key)
@@ -3495,29 +3520,29 @@ pub async fn request_explain(
     // whose driver frames all sit below the top of the list is exactly the one
     // the split exists for, and computing it from a trimmed list would report
     // it as pure PHP. `explain` does the trimming for the boundary.
-    let analysis = crate::spx::analyse(&root, &project, &key, usize::MAX).ok();
+    let analysis = crate::spx::analyse(&root, project, key, usize::MAX).ok();
 
     let (queries, recording) = match service {
-        Some(service) => match crate::querylog::read(&root, &service).await {
+        Some(service) => match crate::querylog::read(&root, service).await {
             Ok(session) => (session.entries, session.recording),
             Err(_) => (Vec::new(), false),
         },
         None => (Vec::new(), false),
     };
 
-    let dumps = crate::debugbridge::read_events(&root, &project);
+    let dumps = crate::debugbridge::read_events(&root, project);
     let mail = crate::mail::messages(&root, 100).await.unwrap_or_default();
-    let builtins = crate::spx::read_config(&root, &project).builtins;
+    let builtins = crate::spx::read_config(&root, project).builtins;
 
     // The stretch this app watched, if it was this app that sent the request.
     // Where there is one it replaces the arithmetic — see `explain::Window::of`
     // for the premise it makes unnecessary.
-    let observed = crate::spx::read_observed(&root, &project);
+    let observed = crate::spx::read_observed(&root, project);
 
     Ok(crate::explain::explain(
         report,
         analysis.as_ref(),
-        observed.get(&key),
+        observed.get(key),
         &queries,
         recording,
         &dumps,
@@ -5353,8 +5378,10 @@ fn migrated_spec(
     name: &str,
     detected: &detect::Detected,
     m: &crate::migrate::Migration,
+    env: &Env,
+    suffix: &str,
 ) -> serde_json::Value {
-    let mut spec = detected_spec(name, detected);
+    let mut spec = detected_spec(name, detected, env, suffix);
 
     if let Some(domain) = &m.domain {
         spec["domain"] = serde_json::json!(domain);
@@ -5437,7 +5464,13 @@ pub async fn migrate_scan(state: State<'_, AppState>, name: String) -> Result<Mi
 
     let migration = crate::migrate::read(&compose).await?;
     let detected = detect::detect(&dir);
-    let spec = migrated_spec(&name, &detected, &migration);
+    let spec = migrated_spec(
+        &name,
+        &detected,
+        &migration,
+        &Env::load(&root)?,
+        &crate::certs::suffix(&root),
+    );
 
     // Validated here rather than at adopt time: a review of a spec that would
     // then be refused is a review of nothing.
@@ -6573,6 +6606,117 @@ pub fn project_providers(
     })
 }
 
+/// One shipped starter recipe, as the pane shows it before adding it.
+///
+/// The image and the words are in here for the same reason
+/// [`crate::provider::Plan`] carries them: the decision is the command, and a
+/// list that named recipes without showing what they run would be a list of
+/// buttons whose consequences are one click further away than the click that
+/// commits to them.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeCard {
+    pub name: &'static str,
+    pub about: &'static str,
+    /// What has to be edited before it will work. Never empty — every shipped
+    /// recipe carries a placeholder host or project id.
+    pub edit: &'static [&'static str],
+    pub image: String,
+    pub pull: Vec<String>,
+    pub push: Vec<String>,
+    /// Names only. A shipped recipe has no values in it to leak.
+    pub secrets: Vec<String>,
+}
+
+/// The starter recipes this build ships.
+///
+/// Answers the same for every project and takes no workspace, so it is a plain
+/// function: the catalogue is in the binary, and asking about it must work in a
+/// window that has not opened a workspace yet.
+#[tauri::command]
+pub fn provider_recipes() -> Result<Vec<RecipeCard>> {
+    Ok(crate::provider::RECIPES
+        .iter()
+        .filter_map(|shipped| {
+            // A shipped recipe the parser refuses is a build failure in
+            // `provider`'s own tests, so this cannot drop one in practice.
+            // Skipping rather than erroring is still the right shape: one bad
+            // entry must not take a whole catalogue off the screen.
+            let provider = crate::provider::as_provider(shipped)?;
+            Some(RecipeCard {
+                name: shipped.name,
+                about: shipped.about,
+                edit: shipped.edit,
+                image: provider.image,
+                pull: provider.pull,
+                push: provider.push,
+                secrets: provider.secrets,
+            })
+        })
+        .collect())
+}
+
+/// Write one shipped recipe into this project's `stackvo.json`.
+///
+/// ## Nothing is approved by being added
+///
+/// The recipe lands in the manifest as text the user owns, and then goes
+/// through the same consent digest as one somebody typed. That is not a
+/// formality: every shipped recipe carries a placeholder host and a placeholder
+/// database, so the version that gets approved is by definition not the version
+/// that was added — and the digest covering the edit is what makes those two
+/// different acts.
+///
+/// ## Written through the manifest serialiser, not by patching JSON
+///
+/// `manifest::write` is what the form save uses, so a recipe added here comes
+/// back through exactly the reader and writer that everything else does. The
+/// alternative — splicing an object into the file — would have been the second
+/// writer for one file, and the first divergence between them would show up as
+/// a project that opens with a `Problem` nobody wrote.
+#[tauri::command]
+pub fn provider_recipe_add(
+    state: State<'_, AppState>,
+    name: String,
+    recipe: String,
+) -> Result<Manifest> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    if !dir.is_dir() {
+        return Err(Error::not_found(format!("project {name}")));
+    }
+
+    let shipped = crate::provider::recipe(&recipe)
+        .ok_or_else(|| Error::not_found(format!("recipe {recipe}")))?;
+    let provider = crate::provider::as_provider(shipped).ok_or_else(|| {
+        Error::new(
+            Code::InvalidManifest,
+            format!("the shipped recipe {recipe} does not parse"),
+        )
+    })?;
+
+    let _busy = state.inflight.acquire(format!("project:{name}"))?;
+
+    let path = dir.join("stackvo.json");
+    let mut manifest = manifest::read(&path, &name)?;
+    // Refused rather than replaced. The recipe on disk has been edited by
+    // definition — it is the only version that can ever have worked — and
+    // overwriting it would discard a host name somebody looked up, silently,
+    // in response to a button labelled "add".
+    if manifest.providers.iter().any(|p| p.name == provider.name) {
+        return Err(Error::new(
+            Code::AlreadyExists,
+            format!(
+                "this project already declares a provider called {}",
+                provider.name
+            ),
+        ));
+    }
+    manifest.providers.push(provider);
+    manifest::write(&path, &manifest)?;
+    Ok(manifest)
+}
+
 /// Agree to one recipe, in one direction, on this machine.
 ///
 /// The digest is re-derived here rather than taken from the caller. A digest
@@ -6973,7 +7117,12 @@ pub async fn project_adopt(
     // project has to satisfy exactly the contract a created one does.
     let mut spec = match spec {
         Some(spec) => spec,
-        None => detected_spec(&name, &detect::detect(&dir)),
+        None => detected_spec(
+            &name,
+            &detect::detect(&dir),
+            &Env::load(&root)?,
+            &crate::certs::suffix(&root),
+        ),
     };
 
     // Overrides on top of detection, not a replacement for it: everything the
@@ -7161,6 +7310,11 @@ pub async fn project_adopt_many(
         ));
     }
 
+    // Loaded once for the batch rather than once per folder: adopting twenty
+    // directories is one operation and the settings cannot change during it.
+    let env = Env::load(&root)?;
+    let suffix = crate::certs::suffix(&root);
+
     let mut results: Vec<AdoptOutcome> = Vec::with_capacity(names.len());
     let mut written: Vec<(String, std::path::PathBuf, Manifest)> = Vec::new();
     // Held for the whole batch, so a single adoption of one of these folders
@@ -7201,7 +7355,7 @@ pub async fn project_adopt_many(
             }
         };
 
-        let spec = detected_spec(&name, &detect::detect(&dir));
+        let spec = detected_spec(&name, &detect::detect(&dir), &env, &suffix);
         let m = match parse_spec(&spec, &name) {
             Ok(m) => m,
             Err(e) => {
@@ -7402,17 +7556,63 @@ pub fn project_devcontainer_write(state: State<'_, AppState>, name: String) -> R
 }
 
 /// Turn a detection into a manifest the schema accepts.
-fn detected_spec(name: &str, detected: &detect::Detected) -> serde_json::Value {
+/// Turn a detected folder into a manifest.
+///
+/// ## Why this takes an `Env`
+///
+/// It did not, and that was not a decision — it was the reason three settings
+/// were ignored. A folder adopted here got `"8.4"` for PHP and `"nginx"` for the
+/// server no matter what **Settings → Defaults** said, while the same person
+/// creating the same project from the wizard got what they had chosen. Two
+/// routes to "a new project", two answers, and nothing on either screen
+/// explaining the difference. The signature was the whole cause: with no `Env`
+/// there was nothing to read, so a literal was the only thing left to write.
+///
+/// All three call sites already hold `root`, so this cost them a load each.
+///
+/// `detected.server` is gone from here for the same reason and one more: it is
+/// `"nginx"` at every one of the four places `detect.rs` sets it, so it was
+/// never a detection — it was this setting, spelled somewhere it could not be
+/// changed.
+///
+/// ## The domain, and a note that was out of date
+///
+/// `env.schema.json` said of `DEFAULT_TLD_SUFFIX`: *"Project domains do NOT use
+/// it — those are written literally into stackvo.json"*. That was true once and
+/// has not been since `formToSpec` started taking the suffix as an argument;
+/// `src/lib/manifest.js` records why, and says the literal `.loc` it replaced
+/// "is not what the stack is configured with", so a project created without a
+/// typed domain "got an address that nothing served".
+///
+/// The wizard was fixed. This was not, and the two drifted apart into different
+/// *hostnames* rather than different defaults: the wizard produced
+/// `shop.stackvo.loc` and adoption produced `shop.loc`. Only one of those has a
+/// router, a certificate and a hosts entry. Reading the suffix here is what
+/// makes the two routes agree, and `certs::suffix` is the reader the rest of
+/// the app already uses — including the certificate that has to cover whatever
+/// this writes.
+fn detected_spec(
+    name: &str,
+    detected: &detect::Detected,
+    env: &Env,
+    suffix: &str,
+) -> serde_json::Value {
     let mut spec = serde_json::json!({
         "name": name,
-        // The convention the generator and the hosts helper both assume.
-        "domain": format!("{name}.loc"),
+        "domain": format!("{name}.{suffix}"),
         "runtime": detected.runtime,
     });
 
     if detected.runtime == "node" {
         spec["node"] = serde_json::json!({
-            "version": detected.node_version.clone().unwrap_or_else(|| "22".into()),
+            // What the folder says beats the setting — a `package.json` naming
+            // a version is a declaration, and the setting is only the answer
+            // for a folder that made none.
+            "version": detected
+                .node_version
+                .clone()
+                .or_else(|| env.get("SUPPORTED_LANGUAGES_NODEJS_DEFAULT").map(str::to_string))
+                .unwrap_or_else(|| "22".into()),
             "install": "npm install",
             "start": detected.node_start.clone().unwrap_or_else(|| "npm run dev".into()),
             "port": detected.node_port.unwrap_or(3000),
@@ -7433,13 +7633,21 @@ fn detected_spec(name: &str, detected: &detect::Detected) -> serde_json::Value {
         block.insert("port".into(), serde_json::json!(defaults.port));
         spec[detected.runtime] = serde_json::Value::Object(block);
     } else {
-        spec["server"] = serde_json::json!(detected.server);
+        spec["server"] = serde_json::json!(env
+            .get("SUPPORTED_SERVERS_DEFAULT")
+            .unwrap_or(detected.server));
         spec["document_root"] = serde_json::json!(detected
             .document_root
             .clone()
             .unwrap_or_else(|| "public".into()));
         spec["php"] = serde_json::json!({
-            "version": detected.php_version.clone().unwrap_or_else(|| "8.4".into()),
+            // Same order as node above: a version the folder declares wins, and
+            // the setting answers for one that declares nothing.
+            "version": detected
+                .php_version
+                .clone()
+                .or_else(|| env.get("SUPPORTED_LANGUAGES_PHP_DEFAULT").map(str::to_string))
+                .unwrap_or_else(|| "8.4".into()),
         });
     }
 
@@ -11680,6 +11888,27 @@ pub fn licences_notice() -> &'static str {
     crate::licences::NOTICE
 }
 
+/// The record of what cannot be taken back, so somebody can be shown it.
+///
+/// `audit.rs` was written from eighteen call sites and read from none — of 309
+/// commands here, not one named it. A record that only a person who knows the
+/// file format and the log directory can produce is most of the cost of a
+/// record and none of the benefit, and the module's own stated audience is
+/// "whoever has to account for the machine", which is usually not the person
+/// who wrote it.
+///
+/// Newest first, and capped: the file is the one thing in this app that never
+/// rotates, so an uncapped read is the wrong shape on exactly the machine where
+/// the trail matters most. The total is returned alongside so a screen showing
+/// fifty of nine thousand can say so instead of implying it is the history.
+#[tauri::command]
+pub fn audit_trail(limit: Option<usize>) -> crate::audit::Trail {
+    // Two hundred is a screenful of scrolling rather than a guess about
+    // storage: it is what a person reads before they reach for a filter, and a
+    // caller that wants more says so.
+    crate::audit::tail(limit.unwrap_or(200).min(2000))
+}
+
 /// What an administrator has decided on this machine, if anything.
 ///
 /// Every field here exists so a Settings pane can explain itself rather than
@@ -11851,13 +12080,25 @@ mod migrate_tests {
         }
     }
 
+    /// The settings an adopted folder is supposed to inherit.
+    ///
+    /// `Env::parse` lays `EMBEDDED` under whatever it is given, so this is the
+    /// shipped defaults with nothing overridden — which is what these tests
+    /// were implicitly asserting back when `detected_spec` held literals.
+    fn settings() -> Env {
+        Env::parse("")
+    }
+
+    /// What `certs::suffix` returns for a default workspace.
+    const SUFFIX: &str = crate::certs::FALLBACK_SUFFIX;
+
     /// The whole point of the merge, and the thing that decides whether the
     /// import is worth anything: where both have an answer, the compose file
     /// wins. Detection *guesses* from the shape of the code; the compose file
     /// records what its author decided.
     #[test]
     fn a_declaration_beats_a_guess() {
-        let spec = migrated_spec("shop", &detected("php"), &migration());
+        let spec = migrated_spec("shop", &detected("php"), &migration(), &settings(), SUFFIX);
 
         assert_eq!(spec["domain"], "shop.test");
         assert_eq!(spec["server"], "apache");
@@ -11875,7 +12116,7 @@ mod migrate_tests {
     /// assertion here rather than a discovery at apply time.
     #[test]
     fn the_merged_spec_satisfies_the_same_contract_a_created_project_does() {
-        let spec = migrated_spec("shop", &detected("php"), &migration());
+        let spec = migrated_spec("shop", &detected("php"), &migration(), &settings(), SUFFIX);
         parse_spec(&spec, "shop").expect("the merged spec must validate");
     }
 
@@ -11894,7 +12135,7 @@ mod migrate_tests {
             ..Default::default()
         };
 
-        let spec = migrated_spec("app", &detected("php"), &node);
+        let spec = migrated_spec("app", &detected("php"), &node, &settings(), SUFFIX);
 
         assert_eq!(spec["runtime"], "node");
         assert!(spec.get("php").is_none(), "php block survived: {spec}");
@@ -11906,12 +12147,80 @@ mod migrate_tests {
         parse_spec(&spec, "app").expect("the switched spec must validate");
     }
 
+    /// The bug this signature change was made for.
+    ///
+    /// A person sets **Settings → Default PHP version** to 8.2 and **Default
+    /// server** to caddy. The new-project wizard reads both, through the
+    /// catalogue. Adoption read neither — it wrote `"8.4"` and `"nginx"` from
+    /// literals — so the same person, on the same machine, got two different
+    /// projects depending on which of the two routes they took, and nothing on
+    /// either screen said why.
+    ///
+    /// The settings here are deliberately *not* the shipped defaults: a test
+    /// that used them would pass against the old literals too.
+    #[test]
+    fn an_adopted_folder_inherits_the_settings_the_wizard_reads() {
+        let env = Env::parse(
+            "SUPPORTED_LANGUAGES_PHP_DEFAULT=8.2\n\
+             SUPPORTED_SERVERS_DEFAULT=caddy\n",
+        );
+        let spec = detected_spec("shop", &detected("php"), &env, SUFFIX);
+
+        assert_eq!(spec["php"]["version"], "8.2", "the PHP setting was ignored");
+        assert_eq!(spec["server"], "caddy", "the server setting was ignored");
+        parse_spec(&spec, "shop").expect("the adopted spec must validate");
+    }
+
+    /// And the folder still outranks the setting, which is the order that makes
+    /// detection worth running at all: a repository that states its own PHP
+    /// version has made a decision, and a default is only an answer for a
+    /// folder that made none.
+    #[test]
+    fn what_the_folder_declares_still_beats_the_setting() {
+        let env = Env::parse("SUPPORTED_LANGUAGES_PHP_DEFAULT=8.2\n");
+        let mut found = detected("php");
+        found.php_version = Some("7.4".into());
+
+        let spec = detected_spec("shop", &found, &env, SUFFIX);
+        assert_eq!(spec["php"]["version"], "7.4");
+    }
+
+    /// The two routes to "a new project" have to produce the same hostname.
+    ///
+    /// They did not, and the gap was wider than the settings above: the wizard
+    /// builds `<name>.<DEFAULT_TLD_SUFFIX>` — `formToSpec` takes the suffix as
+    /// an argument and its comment explains that the literal `.loc` it replaced
+    /// "is not what the stack is configured with" — while adoption wrote
+    /// `<name>.loc`. On a default workspace that is `shop.stackvo.loc` against
+    /// `shop.loc`: two different names, and only the first one has a router, a
+    /// certificate and a hosts entry.
+    ///
+    /// The schema still described the old arrangement, which is how the note
+    /// outlived the code. Correcting the note without correcting this would
+    /// have left the adopted project unreachable and documented as intended.
+    #[test]
+    fn an_adopted_project_gets_the_same_hostname_the_wizard_would_give_it() {
+        let env = Env::parse("");
+        let spec = detected_spec("shop", &detected("php"), &env, "stackvo.loc");
+        assert_eq!(spec["domain"], "shop.stackvo.loc");
+
+        // And it follows the setting, exactly as the wizard does.
+        let moved = detected_spec("shop", &detected("php"), &env, "example.test");
+        assert_eq!(moved["domain"], "shop.example.test");
+    }
+
     /// A compose file that states nothing extra must leave detection alone
     /// rather than overwrite it with nulls.
     #[test]
     fn an_empty_migration_changes_nothing() {
-        let plain = detected_spec("shop", &detected("php"));
-        let merged = migrated_spec("shop", &detected("php"), &Default::default());
+        let plain = detected_spec("shop", &detected("php"), &settings(), SUFFIX);
+        let merged = migrated_spec(
+            "shop",
+            &detected("php"),
+            &Default::default(),
+            &settings(),
+            SUFFIX,
+        );
         assert_eq!(plain, merged);
     }
 }
@@ -14289,6 +14598,121 @@ pub async fn instance_remove(state: State<'_, AppState>, id: String) -> Result<(
 }
 
 /// Look an instance up, or say which one is missing.
+/// The installed instances, with their required dependencies resolved to
+/// service ids — the shape [`crate::focus::plan`] does arithmetic on.
+///
+/// Only **required** dependencies are followed. An optional one that happens to
+/// be running is exactly what a focus is for: kafka works without a schema
+/// registry, so keeping the registry because kafka mentions it would be the
+/// feature declining to do the thing it was asked to do.
+async fn focus_candidates(root: &std::path::Path) -> Result<Vec<crate::focus::Candidate>> {
+    let table = crate::instances::Table::load(root)?;
+    let tree = crate::market::catalogue(root)?;
+    // A dead engine must not turn this into an error: the plan is still worth
+    // reading, and every instance simply reports as not running — which makes
+    // the `stop` list empty rather than wrong.
+    let containers = engine::stackvo_containers().await.unwrap_or_default();
+
+    Ok(table
+        .instances
+        .iter()
+        .map(|instance| {
+            let manifest = tree.load(&instance.service, &instance.version).ok();
+            let depends_on = manifest
+                .as_ref()
+                .map(|m| {
+                    m.depends_on
+                        .iter()
+                        .filter(|d| d.required)
+                        // Resolved through the same function the dependency
+                        // panel uses, then read back as a service id: a
+                        // capability names what is needed, and only the table
+                        // knows which installed thing provides it.
+                        .filter_map(|d| provider_instance(&table, &tree, d))
+                        .filter_map(|id| {
+                            table
+                                .instances
+                                .iter()
+                                .find(|other| other.id == id)
+                                .map(|other| other.service.clone())
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            crate::focus::Candidate {
+                running: containers
+                    .get(&instance.id)
+                    .is_some_and(|container| container.running),
+                id: instance.id.clone(),
+                service: instance.service.clone(),
+                depends_on,
+            }
+        })
+        .collect())
+}
+
+/// What focusing on this project would stop, before anything is stopped.
+///
+/// A query, and the half a screen shows. The list is short by design and the
+/// reasons are on it: "your project asks for this" and "something your project
+/// asks for needs this" are different sentences, and the second is the one
+/// people are surprised by.
+#[tauri::command]
+pub async fn focus_plan(state: State<'_, AppState>, project: String) -> Result<crate::focus::Plan> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &project)?;
+    let manifest = manifest::read(&dir.join("stackvo.json"), &project)?;
+    Ok(crate::focus::plan(
+        &manifest.services,
+        &focus_candidates(&root).await?,
+    ))
+}
+
+/// Stop everything this project does not need.
+///
+/// The plan is **made again here** rather than taken from the caller, which is
+/// the rule `provider` states for the same shape: the screen that offered the
+/// button may be minutes old, and a service somebody started in between must
+/// not be stopped by an approval given before it existed.
+///
+/// A project that declares nothing is refused rather than obeyed. `services`
+/// documents its empty state as "nothing declared, not nothing needed", so
+/// acting on it would stop the whole workspace on the strength of a field
+/// nobody filled in — and the person who pressed the button would have no way
+/// to know that is what they asked for.
+#[tauri::command]
+pub async fn focus_apply(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    project: String,
+) -> Result<crate::focus::Plan> {
+    let _busy = state.inflight.acquire("stack")?;
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &project)?;
+    let manifest = manifest::read(&dir.join("stackvo.json"), &project)?;
+
+    let plan = crate::focus::plan(&manifest.services, &focus_candidates(&root).await?);
+
+    if plan.declares_nothing {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("\"{project}\" does not declare any services, so there is nothing to focus on"),
+        )
+        .with_hint(crate::hints::FOCUS_NEEDS_SERVICES));
+    }
+
+    let sink = events::sink(&app);
+    for verdict in &plan.stop {
+        // One failure does not abandon the rest. Stopping four of five
+        // containers and reporting the fifth is a better outcome than stopping
+        // none, and the plan that comes back says what was attempted.
+        let _ = lifecycle(&sink, "instance", &verdict.id, events::STOP).await;
+    }
+
+    Ok(plan)
+}
+
 fn instance_of(root: &std::path::Path, id: &str) -> Result<crate::instances::Instance> {
     crate::instances::Table::load(root)?
         .get(id)

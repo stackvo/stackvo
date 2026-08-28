@@ -292,3 +292,180 @@ fn every_mcp_tool_declares_whether_it_writes() {
         "the write gate and the `writes` flag disagree"
     );
 }
+
+/// What the README says about the generator, against what `generate_with` does.
+///
+/// Both of the claims below were wrong at once, and had been for as long as the
+/// takeover was finished. The README said the Rust generator "runs _alongside_
+/// the Bash one; it does not replace it", listed `bash` as **the default**, and
+/// closed with "Bash runs in every mode" — while `GeneratorEngine::Bash`
+/// returns `Unsupported` to every caller and `#[default]` sits on `Rust`.
+///
+/// This is the class the numbers were already guarded against, one step out: a
+/// count is checkable and so is "which variant carries `#[default]`". The prose
+/// around it is still review's problem. What this settles is that the README
+/// cannot name a default the enum does not have, or promise a mode that errors.
+#[test]
+fn the_readme_names_the_generator_default_the_enum_actually_carries() {
+    let commands = include_str!("../src/commands.rs");
+    let enum_start = commands
+        .find("pub enum GeneratorEngine")
+        .expect("commands.rs declares GeneratorEngine");
+    let body = &commands[enum_start..enum_start + 800];
+
+    // The variant that follows `#[default]` is the one a caller gets when it
+    // sends no mode at all — which is what "the default" means in the README.
+    let after_default = body
+        .split_once("#[default]")
+        .map(|(_, rest)| rest)
+        .expect("one GeneratorEngine variant is #[default]");
+    let default_variant = after_default
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with('#'))
+        .expect("a variant after #[default]")
+        .trim_end_matches(',')
+        .to_string();
+    assert_eq!(
+        default_variant, "Rust",
+        "the enum's default moved; the README's mode table has to move with it"
+    );
+
+    let readme = readme();
+    assert!(
+        !readme.contains("Bash runs in every mode"),
+        "the README says Bash runs in every mode; `GeneratorEngine::Bash` returns Unsupported"
+    );
+    assert!(
+        !readme.contains("`bash`   | What StackVo does today. The default."),
+        "the README still lists `bash` as the default"
+    );
+    assert!(
+        readme.contains("**The default**, and the only writer."),
+        "the README no longer says which mode writes; `rust` is the one that does"
+    );
+}
+
+/// The README's Windows paragraph, against the CI matrix.
+///
+/// It said those blocks "have never been compiled" long after `windows-latest`
+/// joined the matrix and the four failures that run surfaced were fixed. A
+/// reader deciding whether this app is worth trying on Windows was reading the
+/// state of the tree from before the work, which is the same defect class as
+/// the `--allow-writes` count above: the document understated what shipped.
+///
+/// Only the compiled/not-compiled half is checkable. Whether anybody has *run*
+/// it on a Windows machine is not a fact in this tree, so the README says so in
+/// prose and this test stays out of it.
+#[test]
+fn the_readme_does_not_deny_a_windows_build_the_matrix_performs() {
+    let workflow = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("a repository root")
+            .join(".github/workflows/ci.yml"),
+    )
+    .expect("a CI workflow");
+
+    if workflow.contains("windows-latest") {
+        assert!(
+            !readme().contains("have never been compiled"),
+            "CI builds on windows-latest; the README still says those blocks have never been compiled"
+        );
+    }
+}
+
+/// The README now counts six things that were finished and undocumented, and a
+/// count in prose is exactly what this file exists to hold.
+///
+/// Each row names a surface by size — seven release commands, six worktree
+/// commands, seven import sources — and every one of those is a fact this tree
+/// can settle. The import count in particular has drifted before: `imports.rs`
+/// still had a header calling it "**Two** of them" when `ALL` carried seven.
+#[test]
+fn the_readme_counts_the_surfaces_it_advertises() {
+    let readme = readme();
+    let commands = include_str!("../src/commands.rs");
+
+    let count = |prefix: &str| {
+        commands
+            .match_indices(&format!("pub fn {prefix}"))
+            .count()
+            .saturating_add(
+                commands
+                    .match_indices(&format!("pub async fn {prefix}"))
+                    .count(),
+            )
+    };
+
+    let release = count("release_");
+    assert_eq!(
+        release, 7,
+        "commands.rs now has {release} release_* commands"
+    );
+    assert!(
+        readme.contains("seven IPC commands"),
+        "the README no longer says how many release commands there are"
+    );
+
+    let worktree = count("worktree_");
+    assert_eq!(
+        worktree, 6,
+        "commands.rs now has {worktree} worktree_* commands"
+    );
+    assert!(
+        readme.contains("six commands"),
+        "the README no longer says how many worktree commands there are"
+    );
+
+    // `imports::ALL` is the declared list; its length is the number a reader is
+    // told, and the two have disagreed before.
+    let imports = include_str!("../src/imports.rs");
+    let declared = imports
+        .split_once("pub const ALL: [Source; ")
+        .and_then(|(_, rest)| rest.split_once(']'))
+        .map(|(n, _)| n.trim().to_string())
+        .expect("imports.rs declares ALL with a length");
+    assert_eq!(declared, "7", "imports::ALL now holds {declared} sources");
+    assert!(
+        readme.contains("imports from **seven** other local environments"),
+        "the README no longer states the import count"
+    );
+}
+
+/// The instruments that separate this product have to be reachable from an
+/// assistant, not just from the window.
+///
+/// A review counted the surface and found the gap precisely: `request_explain`,
+/// `request_timeline`, `query_log` and `profiler_flame` were written, tested,
+/// registered as IPC commands and exposed on no MCP tool. So the README could
+/// truthfully say the server answers "why is shop.loc not loading?" while "why
+/// is it slow" — the harder question, whose answer this repository is unusual
+/// for having — could not be asked at all.
+///
+/// This holds the four by the command they implement rather than by tool name,
+/// because the tool can be renamed and the gap would be the same gap.
+#[test]
+fn the_four_measuring_commands_are_reachable_from_an_assistant() {
+    let mcp = include_str!("../src/mcp.rs");
+
+    // The tool table is the authority: `command:` and `also:` together are what
+    // `Tool::commands()` reports, and what the websurface intersects over.
+    let table = mcp
+        .split_once("pub const TOOLS: &[Tool] = &[")
+        .map(|(_, rest)| rest)
+        .expect("mcp.rs declares a tool table");
+
+    for command in [
+        "request_explain",
+        "request_timeline",
+        "query_log",
+        "profiler_flame",
+    ] {
+        assert!(
+            table.contains(&format!("command: \"{command}\"")),
+            "no MCP tool implements {command}; it is one of the four instruments \
+             that were built and unreachable"
+        );
+    }
+}

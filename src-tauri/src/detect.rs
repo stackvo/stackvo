@@ -45,6 +45,15 @@ pub struct Fingerprint {
     pub html_dir: bool,
     /// Package names seen in `composer.json` require blocks.
     pub composer_requires: Vec<String>,
+    /// The `name` field of `composer.json`, if it has one.
+    ///
+    /// `composer create-project` copies the package's own manifest into the
+    /// directory it fills, so a distribution installed that way keeps its own
+    /// name in the checkout. That is the only honest marker some of them have:
+    /// PrestaShop's requires are `prestashop/*` modules that a partial install
+    /// may not have finished writing, while the name is there from the first
+    /// file.
+    pub composer_name: Option<String>,
     /// Package names seen in `package.json` dependencies.
     pub node_dependencies: Vec<String>,
     /// The `php` constraint from composer.json, verbatim.
@@ -174,6 +183,42 @@ fn document_root(print: &Fingerprint) -> Option<String> {
     None
 }
 
+/// Every framework name [`infer`] can return.
+///
+/// Written down rather than derived, because the rules that produce these are
+/// three shapes — a marker file, a composer require, a node dependency — and no
+/// one of them can be enumerated into the others. What keeps the list honest is
+/// [`tests::every_framework_name_is_reachable_from_some_real_project_shape`],
+/// which drives `infer` with a fingerprint per name: a rule that has been made
+/// unreachable by one placed above it fails here rather than going quiet.
+///
+/// The scaffold catalogue is bound to this list by
+/// `tests/scaffold_coverage.rs`, so a template with nothing to detect it — or a
+/// detection with no way to create the thing it detects — has to be declared as
+/// a gap rather than simply being one.
+pub const FRAMEWORKS: [&str; 20] = [
+    "statamic",
+    "prestashop",
+    "laravel",
+    "wordpress",
+    "symfony",
+    "drupal",
+    "magento",
+    "cakephp",
+    "codeigniter",
+    "slim",
+    "yii",
+    "typo3",
+    "laminas",
+    "next",
+    "nuxt",
+    "remix",
+    "sveltekit",
+    "astro",
+    "nestjs",
+    "vite",
+];
+
 /// Read a fingerprint and say what should run it.
 ///
 /// Order is load-bearing. A Laravel repository has a `package.json` for its
@@ -211,6 +256,43 @@ pub fn infer(print: &Fingerprint) -> Detected {
         confidence,
         evidence,
     };
+
+    // ---- distributions built on another framework --------------------------
+    //
+    // These are asked *before* the framework they are built on, because they
+    // carry its markers too. Statamic ships Laravel's `artisan`; PrestaShop
+    // ships Symfony's `bin/console` and requires `symfony/*`. Measured: the
+    // `statamic/cms` rule further down was unreachable — every real Statamic
+    // site has an `artisan`, so the Laravel rule answered first and the
+    // Statamic rule could only have fired on a repository that is not a
+    // Statamic site. PrestaShop was answering as Symfony for the same reason.
+    //
+    // A more specific answer is not a nicety here. The document root differs
+    // (`.` for PrestaShop, `public` for Symfony) and getting it wrong produces
+    // a project that builds, starts, and serves a 404 — the failure with no
+    // error attached that this whole module exists to avoid.
+    for (package, name, root) in [("statamic/cms", "statamic", "public")] {
+        if has(&print.composer_requires, package) {
+            return php(
+                Some(name),
+                root,
+                Confidence::Certain,
+                vec!["composer.json".into()],
+            );
+        }
+    }
+
+    // By the name rather than by a require: see `Fingerprint::composer_name`.
+    for (package, name, root) in [("prestashop/prestashop", "prestashop", ".")] {
+        if print.composer_name.as_deref() == Some(package) {
+            return php(
+                Some(name),
+                root,
+                Confidence::Certain,
+                vec!["composer.json".into()],
+            );
+        }
+    }
 
     // ---- PHP frameworks, by a marker only they have ------------------------
 
@@ -306,16 +388,28 @@ pub fn infer(print: &Fingerprint) -> Detected {
         );
     }
 
-    for (package, name) in [
-        ("statamic/cms", "statamic"),
-        ("drupal/core", "drupal"),
-        ("magento/product-community-edition", "magento"),
-        ("cakephp/cakephp", "cakephp"),
-        ("codeigniter4/framework", "codeigniter"),
-        ("slim/slim", "slim"),
+    // (package, framework, the root that framework serves from).
+    //
+    // The third column used to be a shared `public` fallback, which is only
+    // right for five of these. Magento serves from `pub/` and CakePHP from
+    // `webroot/`; neither directory is called `public`, so the fallback named
+    // a path that is not in the checkout — and it was reached, because
+    // `document_root` finds nothing in either tree to go on. What the
+    // directory says still wins: a Drupal 7 install serving from its own root
+    // is answered by the `index.php` that is there, not by the convention the
+    // current major follows.
+    for (package, name, root) in [
+        ("drupal/core", "drupal", "web"),
+        ("magento/product-community-edition", "magento", "pub"),
+        ("cakephp/cakephp", "cakephp", "webroot"),
+        ("codeigniter4/framework", "codeigniter", "public"),
+        ("slim/slim", "slim", "public"),
+        ("yiisoft/yii2", "yii", "web"),
+        ("typo3/cms-core", "typo3", "public"),
+        ("laminas/laminas-mvc", "laminas", "public"),
     ] {
         if has(&print.composer_requires, package) {
-            let doc = document_root(print).unwrap_or_else(|| "public".into());
+            let doc = document_root(print).unwrap_or_else(|| root.to_string());
             return php(
                 Some(name),
                 &doc,
@@ -423,6 +517,8 @@ pub fn infer(print: &Fingerprint) -> Detected {
 #[derive(Deserialize)]
 struct ComposerJson {
     #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
     require: std::collections::BTreeMap<String, String>,
     #[serde(default, rename = "require-dev")]
     require_dev: std::collections::BTreeMap<String, String>,
@@ -512,6 +608,12 @@ pub fn services_from_env(text: &str) -> Vec<ServiceHint> {
                 ("postgres", "postgres"),
                 ("postgresql", "postgres"),
                 ("mongodb", "mongo"),
+                // Laravel's driver name for SQL Server, and the reason the
+                // catalogue grew one: the PHP extension list has offered
+                // `sqlsrv` and `pdo_sqlsrv` since the beginning with nothing
+                // in the catalogue to connect them to. A project that had
+                // already chosen it was read as declaring no database at all.
+                ("sqlsrv", "mssql"),
             ],
         ),
         (
@@ -528,7 +630,14 @@ pub fn services_from_env(text: &str) -> Vec<ServiceHint> {
         ),
         (
             "QUEUE_CONNECTION",
-            &[("redis", "redis"), ("rabbitmq", "rabbitmq")],
+            &[
+                ("redis", "redis"),
+                ("rabbitmq", "rabbitmq"),
+                // One of the five drivers Laravel ships with. This key was
+                // already being read and this value was the one it could not
+                // match — the rule existed, the service did not.
+                ("beanstalkd", "beanstalkd"),
+            ],
         ),
         (
             "SCOUT_DRIVER",
@@ -665,6 +774,7 @@ pub fn fingerprint(dir: &Path) -> Fingerprint {
 
     if let Ok(text) = std::fs::read_to_string(dir.join("composer.json")) {
         if let Ok(composer) = serde_json::from_str::<ComposerJson>(&text) {
+            print.composer_name = composer.name;
             print.php_constraint = composer.require.get("php").cloned();
             print.composer_requires = composer
                 .require
@@ -800,6 +910,16 @@ pub fn adoptable(root: &Path) -> Vec<Adoptable> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A `package.json` whose only interesting fact is one dependency.
+    fn node_print(package: &str) -> Fingerprint {
+        Fingerprint {
+            package_json: true,
+            node_dependencies: s(&[package]),
+            node_scripts: s(&["dev", "build"]),
+            ..Default::default()
+        }
+    }
 
     fn s(items: &[&str]) -> Vec<String> {
         items.iter().map(|x| x.to_string()).collect()
@@ -1148,6 +1268,24 @@ MAIL_MAILER=log
         assert_eq!(ids("QUEUE_CONNECTION=rabbitmq\n"), ["rabbitmq"]);
     }
 
+    /// The two values this reader could see and not name.
+    ///
+    /// Both were the same shape of gap and neither was a bug in this function:
+    /// the rule was here, the service was not, and a value that resolves to a
+    /// service the catalogue does not carry is dropped by
+    /// `every_service_a_rule_can_produce_is_in_the_catalog`'s own reason —
+    /// a rule must not invent an id nothing can install. So adopting a project
+    /// that had already chosen SQL Server or Beanstalkd read as a project that
+    /// had declared no database and no queue.
+    #[test]
+    fn the_two_drivers_the_catalogue_could_not_answer_are_answered() {
+        // Laravel's driver name for SQL Server. The PHP image has offered
+        // `sqlsrv` and `pdo_sqlsrv` all along.
+        assert_eq!(ids("DB_CONNECTION=sqlsrv\n"), ["mssql"]);
+        // One of the five queue drivers Laravel ships with.
+        assert_eq!(ids("QUEUE_CONNECTION=beanstalkd\n"), ["beanstalkd"]);
+    }
+
     /// Quoting, spacing, case and comments are all things a real `.env` has.
     #[test]
     fn the_reader_handles_a_file_a_person_wrote() {
@@ -1206,5 +1344,250 @@ TYPESENSE_HOST=search
                 hint.service
             );
         }
+    }
+    /// Every name in [`FRAMEWORKS`] is reachable, and lands on the document
+    /// root that framework actually serves from.
+    ///
+    /// The bug this was written for was already in the tree. `statamic/cms` sat
+    /// in the composer-require table below the `artisan` rule — and every real
+    /// Statamic site ships Laravel's `artisan`, so the rule could only ever
+    /// have fired on a repository that was not a Statamic site. It read as
+    /// support for Statamic and was support for nothing. PrestaShop had the
+    /// same shape against Symfony's `bin/console`.
+    ///
+    /// A rule made unreachable by one above it is invisible to every other kind
+    /// of test here: the fingerprints are hand-built, so a test written for one
+    /// rule sets exactly the fields that rule needs and never collides with its
+    /// neighbours. Only asking for *all* of them at once finds it.
+    ///
+    /// The document root is checked in the same pass because it is the other
+    /// half of the same answer. Naming a directory the checkout does not have
+    /// produces a project that builds, starts and serves a 404 — and Magento
+    /// (`pub/`) and CakePHP (`webroot/`) were both getting `public/` from a
+    /// fallback that was only right for the frameworks it had been written
+    /// against.
+    #[test]
+    fn every_framework_name_is_reachable_from_some_real_project_shape() {
+        // (framework, the shape of a checkout that is one, its document root).
+        // `None` where the framework is not a PHP one and so has no root.
+        let shapes: Vec<(&str, Fingerprint, Option<&str>)> = vec![
+            (
+                "statamic",
+                Fingerprint {
+                    artisan: true,
+                    composer_json: true,
+                    composer_requires: s(&["statamic/cms", "laravel/framework"]),
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            (
+                "prestashop",
+                Fingerprint {
+                    composer_json: true,
+                    composer_name: Some("prestashop/prestashop".into()),
+                    bin_console: true,
+                    index_php_root: true,
+                    composer_requires: s(&["symfony/console"]),
+                    ..Default::default()
+                },
+                Some("."),
+            ),
+            (
+                "laravel",
+                Fingerprint {
+                    artisan: true,
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            (
+                "wordpress",
+                Fingerprint {
+                    wp_includes: true,
+                    ..Default::default()
+                },
+                Some("."),
+            ),
+            (
+                "symfony",
+                Fingerprint {
+                    bin_console: true,
+                    composer_json: true,
+                    composer_requires: s(&["symfony/framework-bundle"]),
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            (
+                "drupal",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["drupal/core"]),
+                    web_dir: true,
+                    ..Default::default()
+                },
+                Some("web"),
+            ),
+            (
+                "magento",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["magento/product-community-edition"]),
+                    ..Default::default()
+                },
+                Some("pub"),
+            ),
+            (
+                "cakephp",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["cakephp/cakephp"]),
+                    ..Default::default()
+                },
+                Some("webroot"),
+            ),
+            (
+                "codeigniter",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["codeigniter4/framework"]),
+                    public_dir: true,
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            (
+                "slim",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["slim/slim"]),
+                    public_dir: true,
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            (
+                "yii",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["yiisoft/yii2"]),
+                    web_dir: true,
+                    ..Default::default()
+                },
+                Some("web"),
+            ),
+            (
+                "typo3",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["typo3/cms-core"]),
+                    public_dir: true,
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            (
+                "laminas",
+                Fingerprint {
+                    composer_json: true,
+                    composer_requires: s(&["laminas/laminas-mvc"]),
+                    public_dir: true,
+                    ..Default::default()
+                },
+                Some("public"),
+            ),
+            ("next", node_print("next"), None),
+            ("nuxt", node_print("nuxt"), None),
+            ("remix", node_print("@remix-run/dev"), None),
+            ("sveltekit", node_print("@sveltejs/kit"), None),
+            ("astro", node_print("astro"), None),
+            ("nestjs", node_print("@nestjs/core"), None),
+            ("vite", node_print("vite"), None),
+        ];
+
+        for (name, print, root) in &shapes {
+            let out = infer(print);
+            assert_eq!(
+                out.framework,
+                Some(*name),
+                "nothing reaches `{name}` — a rule above it answers first"
+            );
+            assert_eq!(
+                out.document_root.as_deref(),
+                *root,
+                "{name} serves from the wrong directory"
+            );
+        }
+
+        // Both directions, so neither list can grow past the other in silence.
+        let covered: Vec<&str> = shapes.iter().map(|(name, _, _)| *name).collect();
+        for name in FRAMEWORKS {
+            assert!(
+                covered.contains(&name),
+                "`{name}` is in FRAMEWORKS with no shape here to reach it"
+            );
+        }
+        for name in &covered {
+            assert!(
+                FRAMEWORKS.contains(name),
+                "`{name}` is detectable but not in FRAMEWORKS, so nothing binds \
+                 the scaffold catalogue to it"
+            );
+        }
+    }
+
+    /// A Statamic site is a Laravel site, and the more specific answer is the
+    /// one worth having: the two agree about the runtime and the document root,
+    /// so this is not caught by anything the generator does — only by asking.
+    #[test]
+    fn a_statamic_site_is_not_reported_as_the_laravel_underneath_it() {
+        let print = Fingerprint {
+            artisan: true,
+            composer_json: true,
+            package_json: true,
+            composer_requires: s(&["statamic/cms", "laravel/framework", "php"]),
+            php_constraint: Some("^8.3".into()),
+            ..Default::default()
+        };
+
+        let out = infer(&print);
+        assert_eq!(out.framework, Some("statamic"));
+        assert_eq!(out.php_version.as_deref(), Some("8.3"));
+    }
+
+    /// PrestaShop ships `bin/console` and requires `symfony/*` — it is a
+    /// Symfony application. Answering "symfony" would put the document root at
+    /// `public/`, which PrestaShop does not have.
+    #[test]
+    fn prestashop_is_not_reported_as_the_symfony_underneath_it() {
+        let print = Fingerprint {
+            composer_json: true,
+            composer_name: Some("prestashop/prestashop".into()),
+            bin_console: true,
+            index_php_root: true,
+            public_dir: true,
+            composer_requires: s(&["symfony/console", "symfony/framework-bundle"]),
+            ..Default::default()
+        };
+
+        let out = infer(&print);
+        assert_eq!(out.framework, Some("prestashop"));
+        // Even with a `public/` in the tree, which PrestaShop ships as a
+        // module asset directory rather than as a document root.
+        assert_eq!(out.document_root.as_deref(), Some("."));
+    }
+
+    /// A fork keeps the name it was forked from, and that is the right answer:
+    /// somebody's `shop/prestashop-custom` checkout is still PrestaShop.
+    #[test]
+    fn a_composer_name_from_somebody_else_is_not_a_distribution() {
+        let print = Fingerprint {
+            composer_json: true,
+            composer_name: Some("acme/shop".into()),
+            index_php_root: true,
+            ..Default::default()
+        };
+        assert_eq!(infer(&print).framework, None);
     }
 }

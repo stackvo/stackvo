@@ -16,6 +16,23 @@ Tarif `stackvo.json` içinde yazılı, yani depoyla birlikte geziyor ve klonlaya
 }
 ```
 
+## Başlangıç noktaları
+
+Hiç tarif yazmamış bir projeye, bu sürümün getirdiği üç tarif kartın üzerinde sunuluyor:
+
+| Tarif | Neye ulaşıyor | İki yön de var mı? |
+| --- | --- | --- |
+| `mysql-remote` | Bu makinenin doğrudan erişebildiği bir MySQL veya MariaDB sunucusu | Evet |
+| `postgres-remote` | Bu makinenin doğrudan erişebildiği bir PostgreSQL sunucusu | Evet |
+| `upsun` | Bir Upsun (Platform.sh) ortamı, kendi CLI'ı üzerinden | Yalnız çekme — CLI'ın `db:sql`'i dosya değil sorgu alıyor |
+
+**Eklemek hiçbir şeyi onaylamaz.** Tarif sizin `stackvo.json` dosyanıza yazılıyor ve sonra elle yazdığınız bir tarifle aynı onaydan geçiyor. Her birinde bir yer tutucu sunucu, veritabanı veya proje kimliği var; yani onayladığınız sürüm tanımı gereği eklenen sürüm değil — ve kart hangi kelimeleri değiştirmeniz gerektiğini sayıyor.
+
+İnsanların sorduğu iki tarif burada yok, ve nedenleri aramaya çıkmadan önce bilmeye değer:
+
+- **SSH artı `mysqldump`** — bir tarifin konteyneri sizin makinenizden hiçbir yol almıyor, yani ajan soketi de anahtar dosyası da yok; `ssh` ise ne bir ortam değişkeniyle ne de bir komut kelimesiyle kimlik doğruluyor. Engel eksik kabuk değil: `mysqldump --result-file` boruya ihtiyaç duymuyor.
+- **Pantheon** — çalıştırılacak bir Terminus imajı yok, ve `terminus backup:get` indirilmesi gereken bir URL döndürüyor; bu ikinci bir komut, dolayısıyla bir kabuk demek.
+
 ## Kurallar, ve her birinin sebebi
 
 **Komut bir kelime listesidir, komut satırı değil.** Kabuk yok; boru da yok, yönlendirme de, `$DEĞİŞKEN` de. `["pg_dump", "-Fc"]` yazın, `"pg_dump -Fc | gzip"` değil.

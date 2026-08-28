@@ -830,6 +830,22 @@ export const api = {
   /** The verb. A pull lands in `db_restore`, which takes its own copy first. */
   providerRun: (name, provider, direction, service, snapshotFirst = true) =>
     call('provider_run', { name, provider, direction, service, snapshotFirst }),
+  /**
+   * The starter recipes this build ships.
+   *
+   * The mechanism was finished before the catalogue existed, so using it meant
+   * learning a file format from source. These are starting points, not
+   * integrations — every host and project id in them is a placeholder.
+   */
+  providerRecipes: () => call('provider_recipes'),
+  /**
+   * Write one into this project's `stackvo.json`.
+   *
+   * Adding approves nothing: it goes through the same consent digest as a
+   * recipe somebody typed, and the placeholder has to be edited first, so the
+   * version approved is never the version added.
+   */
+  providerRecipeAdd: (name, recipe) => call('provider_recipe_add', { name, recipe }),
   projectManifestRead: (name) => call('project_manifest_read', { name }),
   // The file's own bytes. The editor edits those and not the reader's view of
   // them, which is spelled for this boundary (`documentRoot`) rather than for
@@ -886,6 +902,9 @@ export const api = {
    * Keys only, never values — `envGet` is the redacting reader and this must
    * not become a way past it.
    */
+  auditTrail: (limit) => call('audit_trail', { limit }),
+  focusPlan: (project) => call('focus_plan', { project }),
+  focusApply: (project) => call('focus_apply', { project }),
   policyStatus: () => call('policy_status'),
   /** Where each credential lives, and whether this machine has a keystore. */
   secretsStatus: () => call('secrets_status'),

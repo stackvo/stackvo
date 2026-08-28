@@ -1,13 +1,19 @@
 //! Reading a rival's installation, so its sites can be brought over.
 //!
-//! Two of them, and the reason is a window rather than a feature list. **XAMPP
-//! has been frozen on PHP 8.2 since late 2023 and lost its add-on ecosystem in
-//! September 2025**; **Laragon went commercial in 2025 with a nag screen on the
-//! free tier and was forked**. Those are the two largest installed bases in this
-//! category and both are looking around. Every serious competitor is courting
-//! them explicitly — EnvKit imports Laragon in bulk, ForgeKit lists six sources,
-//! Herd publishes guides — and StackVo could read neither (competitive review
-//! §L).
+//! **Seven of them** — see `ALL` below, which is the count that governs; this
+//! sentence has said "two" since the day the second one shipped and was wrong
+//! for the five that followed.
+//!
+//! The reason the first two were XAMPP and Laragon is a window rather than a
+//! feature list. **XAMPP has been frozen on PHP 8.2 since late 2023 and lost its
+//! add-on ecosystem in September 2025**; **Laragon went commercial in 2025 with
+//! a nag screen on the free tier and was forked**. Those are the two largest
+//! installed bases in this category and both are looking around, and every
+//! serious competitor is courting them explicitly.
+//!
+//! **Measured August 2026, against seventeen products:** seven sources is the
+//! widest list in the category. The nearest is ForgeKit at three, then EnvKit at
+//! one. Herd publishes migration guides and imports nothing.
 //!
 //! ## What an import is here, and why it has to copy
 //!

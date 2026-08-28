@@ -29,6 +29,19 @@ const manifest = computed(() => props.project?.manifest);
 // when a certificate is missing: `http://` works and `https://` does not.
 const httpUrl = computed(() => (props.project?.domain ? `http://${props.project.domain}` : null));
 const httpsUrl = computed(() => (props.project?.domain ? `https://${props.project.domain}` : null));
+
+// Where the generator actually put `WORKDIR`. PHP images work out of the web
+// root; node and every language runtime get `/app`. This line was `/var/www/html`
+// for everything, with no `v-if` under two rows that had one, so a Go project's
+// page offered a copy button for a path that does not exist in its container.
+//
+// Written as PHP-or-else rather than as a list of the runtimes that use `/app`,
+// because that is the shape of the dispatch it mirrors: `render_dockerfile`
+// sends node and the language runtimes elsewhere and falls through to PHP. A
+// ninth runtime added tomorrow gets `/app` in both places without an edit here.
+const containerPath = computed(() =>
+  (props.project?.runtime ?? 'php') === 'php' ? '/var/www/html' : '/app'
+);
 </script>
 
 <template>
@@ -83,13 +96,13 @@ const httpsUrl = computed(() => (props.project?.domain ? `https://${props.projec
         </div>
         <div class="field">
           <span class="field-key">{{ t('projectDetail.containerPath') }}</span>
-          <code class="field-mono">/var/www/html</code>
+          <code class="field-mono">{{ containerPath }}</code>
           <v-btn
             icon
             :aria-label="t('a11y.copy')"
             size="x-small"
             variant="text"
-            @click="copy('/var/www/html', 'cpath')"
+            @click="copy(containerPath, 'cpath')"
           >
             <v-icon>{{ copied === 'cpath' ? 'mdi-check' : 'mdi-content-copy' }}</v-icon>
             <v-tooltip activator="parent">{{ t('a11y.copy') }}</v-tooltip>

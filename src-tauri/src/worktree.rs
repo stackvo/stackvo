@@ -6,8 +6,15 @@
 //! environment variables — so `feature-x.shop.loc` and `shop.loc` are two
 //! running copies of the same application on two branches, at the same time.
 //!
-//! It is the one thing in the competitive review that nothing else in this
-//! space does, and the reason it is natural *here* is that everything it needs
+//! **Measured August 2026, against seventeen products.** Nothing else gives a
+//! branch its own *database and environment*; the nearest is dde, which gives
+//! each worktree a hostname and a TLS certificate and stops there. An earlier
+//! version of this line said "the one thing nothing else in this space does",
+//! which stopped being true without anybody noticing — an undated claim about
+//! the outside world does not become old, it becomes wrong. The lead this
+//! measurement records is the two halves dde has not built, not the whole idea.
+//!
+//! The reason it is natural *here* is that everything it needs
 //! already exists: a project is a directory with a manifest, a hostname is a
 //! Traefik rule, and a database is a `CREATE DATABASE` on an instance that is
 //! already running. There is no new machinery, only a new arrangement of it.

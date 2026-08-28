@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 157 named types, 302 wrappers, 5 field(s) the
+ * Measured at generation: 158 named types, 307 wrappers, 5 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -1716,6 +1716,23 @@ export interface QuickCommand {
     because: string;
 }
 
+export interface RecipeCard {
+    /** string */
+    name: string;
+    /** string */
+    about: string;
+    /** string[] */
+    edit: string[];
+    /** string */
+    image: string;
+    /** string[] */
+    pull: string[];
+    /** string[] */
+    push: string[];
+    /** string[] */
+    secrets: string[];
+}
+
 export interface RelayConfig {
     /** bool */
     enabled: boolean;
@@ -2958,7 +2975,7 @@ export interface StackvoApi {
   /**
    * The create half of P0-1 (detection/adoption shipped first). Runs the framework's own installer in a throwaway container — composer create-project, wp-cli, create-next-app — so nothing is installed on the host and only the bind-mounted project directory survives.
    */
-  projectScaffold(name: string, template: 'laravel' | 'symfony' | 'cakephp' | 'yii' | 'codeigniter' | 'laminas' | 'slim' | 'wordpress' | 'drupal' | 'prestashop' | 'typo3' | 'tina' | 'nextjs' | 'nuxt' | 'vue' | 'react' | 'svelte' | 'astro' | 'nest' | 'angular' | 'django' | 'rails' | 'gin' | 'echo' | 'flask' | 'fastapi' | 'sinatra' | 'rocket'): Promise<OperationId>;
+  projectScaffold(name: string, template: 'laravel' | 'symfony' | 'cakephp' | 'yii' | 'codeigniter' | 'laminas' | 'slim' | 'wordpress' | 'drupal' | 'prestashop' | 'statamic' | 'typo3' | 'tina' | 'nextjs' | 'nuxt' | 'vue' | 'react' | 'svelte' | 'astro' | 'nest' | 'angular' | 'django' | 'rails' | 'gin' | 'echo' | 'flask' | 'fastapi' | 'sinatra' | 'rocket'): Promise<OperationId>;
   /**
    * The clone option is hidden without it. A webview cannot answer "is a program installed", and the answer has to survive an app launched from the Dock, which inherits launchd's PATH rather than a login shell's — the same class of fact that made $LANG useless for locale detection.
    */
@@ -3155,6 +3172,14 @@ export interface StackvoApi {
   providerSecretSet(name: string, provider: string, key: string, value: string): Promise<void>;
   /** The verb. Everything else in this group decides whether it may happen. */
   providerRun(name: string, provider: string, direction: 'pull' | 'push', service: string, snapshotFirst: boolean): Promise<OperationId>;
+  /**
+   * The provider mechanism was finished and the catalogue was empty, so using the feature meant learning a file format from source — DDEV ships three recipes in every project and this shipped none. These are starting points written into the project's own stackvo.json, not integrations: every host name, database and project id in them is a placeholder.
+   */
+  providerRecipes(): Promise<RecipeCard[]>;
+  /**
+   * Closes the empty-field problem the recipe catalogue exists for: the user picks a starting point and it lands in their own stackvo.json, rather than being copied out of documentation.
+   */
+  providerRecipeAdd(name: string, recipe: string): Promise<Manifest>;
   projectManifestRead(name: string): Promise<ProjectManifest>;
   /**
    * The manifest editor edits the FILE, not the reader's view of it. Manifest is spelled for this boundary — `documentRoot`, `lanShare` — and the file spells them `document_root` and `lan_share`, so a payload handed to a text editor and posted back through project_manifest_write silently dropped both: the document root became `public` and LAN sharing switched itself off. The file's own bytes have no such gap. Refused with the reader's error when the file does not parse, rather than offering to save over something this app never understood.
@@ -3221,6 +3246,18 @@ export interface StackvoApi {
    * MIT, BSD, ISC and Apache-2.0 all require the copyright notice and the licence text to travel with the software. A NOTICE.md in a source repository does not reach the person who received a .dmg, and pointing them at the repository is the same answer as not shipping it.
    */
   licencesNotice(): Promise<string>;
+  /**
+   * The audit trail was written from eighteen places and read from none — of the commands in this contract, not one named it. audit.rs states its audience as "whoever has to account for the machine", and that person could only produce the record by knowing it is JSON Lines and knowing which directory the logs go in. Writing a record nobody can be shown is most of the cost of a record and none of the benefit.
+   */
+  auditTrail(limit?: number): Promise<Record<string, unknown>>;
+  /**
+   * "Run only what this project needs and stop the rest" is the most-wanted verb on a laptop, and this app is the only one in its category that can pose the question: stackvo.json DECLARES what a project needs around it, and the instance table says what is installed. Competitors switch services on and off one at a time because they have no manifest to declare a need in.
+   */
+  focusPlan(project: string): Promise<Record<string, unknown>>;
+  /**
+   * The verb behind focus_plan. Split from it for the reason preset, worktree and release all split: stopping five containers is reversible and still not something to do to somebody without showing them the list first.
+   */
+  focusApply(project: string): Promise<Record<string, unknown>>;
   /**
    * A fleet of machines has settings somebody other than the person at the keyboard cares about — the domain suffix, the web server, and on a network without Docker Hub the registry every image is pulled from. Without this the Settings panes can only grey a field out, and a greyed-out field with no reason reads as a broken app rather than a managed one.
    */

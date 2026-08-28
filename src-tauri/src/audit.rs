@@ -68,7 +68,7 @@
 use std::path::{Path, PathBuf};
 
 /// How an act ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Outcome {
     /// It happened.
@@ -143,6 +143,107 @@ pub fn append_to(path: &Path, entry: &Entry) {
     }
 }
 
+/// The most recent entries, newest first.
+///
+/// ## Why this did not exist
+///
+/// The trail was written from eighteen places and read from none: of 309 IPC
+/// commands, not one named `audit`. So the record that exists "for whoever has
+/// to account for the machine" could only be produced by that person knowing it
+/// was JSON Lines, knowing which directory the logs go in, and opening it in a
+/// text editor. Writing a record nobody can be shown is most of the cost of a
+/// record and none of the benefit.
+///
+/// ## Reading it backwards, and tolerating a bad line
+///
+/// The file is append-only and never rotated, so it is the one file in this app
+/// that only grows — which makes "read it all and take the last N" the wrong
+/// shape on the machine where this matters most. It is read as a tail: the last
+/// `limit` lines, then reversed.
+///
+/// A line that does not parse is **skipped rather than fatal**, and that is the
+/// same judgement `append_to` makes one function up. A trail is evidence about
+/// the app rather than a participant in it: a half-written final line from a
+/// process killed mid-append must not make the other nine thousand unreadable.
+/// The count of skipped lines is returned rather than swallowed, because "this
+/// file has damage in it" is itself something the person reading a trail needs
+/// to be told.
+pub fn tail_of(path: &Path, limit: usize) -> Trail {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        // No file is the normal state: nothing irreversible has been done yet.
+        return Trail::default();
+    };
+
+    let mut entries = Vec::new();
+    let mut unreadable = 0;
+    let mut total = 0;
+
+    // Counted in one pass and parsed in another over the same borrow: the file
+    // is read once and only the tail is turned into structs, which is the whole
+    // reason for the shape.
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    total += lines.len();
+
+    for line in lines.iter().rev().take(limit) {
+        match serde_json::from_str::<Record>(line) {
+            Ok(entry) => entries.push(entry),
+            Err(_) => unreadable += 1,
+        }
+    }
+
+    Trail {
+        entries,
+        total,
+        unreadable,
+    }
+}
+
+/// One line, read back.
+///
+/// A separate shape from [`Entry`] rather than the same one deriving both
+/// halves, because `Entry::action` is a `&'static str` **on purpose** — the
+/// doc comment on it says the verb has to be the same string for the same act
+/// for ever, and a `&'static str` is how the compiler holds that promise: the
+/// only values that can reach it are literals in this crate.
+///
+/// Deserialising into it would require the borrow to be `'static`, which it
+/// cannot be for text read off disk at runtime. Widening the field to `String`
+/// to make one struct do both jobs would trade an invariant the write side
+/// depends on for a struct definition the read side did not need.
+///
+/// So: the writer keeps its guarantee, and the reader carries an owned copy of
+/// whatever was written — including a verb this build no longer emits, which is
+/// exactly what reading an unrotated historical record means.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Record {
+    pub at: String,
+    pub action: String,
+    pub subject: String,
+    pub outcome: Outcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// What the trail holds, and what could not be read.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Trail {
+    /// Newest first — the order somebody scanning for "what just happened"
+    /// reads in, and the opposite of the order the file is written in.
+    pub entries: Vec<Record>,
+    /// Every line in the file, not just the ones returned. A screen showing
+    /// fifty of nine thousand has to say so, or it reads as the whole history.
+    pub total: usize,
+    /// Lines that did not parse. Nearly always zero, and when it is not, the
+    /// person reading the trail is the one who needs to know.
+    pub unreadable: usize,
+}
+
+/// The trail, wherever it happens to live.
+pub fn tail(limit: usize) -> Trail {
+    path().map(|p| tail_of(&p, limit)).unwrap_or_default()
+}
+
 /// Record an act, wherever the trail happens to live.
 pub fn record(action: &'static str, subject: impl Into<String>, outcome: Outcome) {
     record_with(action, subject, outcome, None);
@@ -206,7 +307,7 @@ mod tests {
         dir.join("audit.jsonl")
     }
 
-    fn entry(action: &'static str, subject: &str, outcome: Outcome) -> Entry {
+    pub(super) fn entry(action: &'static str, subject: &str, outcome: Outcome) -> Entry {
         Entry {
             at: "2026-08-10T09:00:00Z".into(),
             action,
@@ -295,5 +396,107 @@ mod tests {
             &blocker.join("audit.jsonl"),
             &entry("hosts_apply", "shop.loc", Outcome::Ok),
         );
+    }
+}
+
+/// The read side. The trail was write-only until this existed, so these are the
+/// first tests that treat it as a file somebody gets shown.
+#[cfg(test)]
+mod read_tests {
+    use super::tests::entry;
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("stackvo-audit-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        dir.join("audit.jsonl")
+    }
+
+    /// Newest first, which is the opposite of the order the file is written in.
+    /// A record read in write order puts the thing that just happened at the
+    /// bottom of a list that only grows.
+    #[test]
+    fn the_trail_comes_back_with_the_most_recent_act_first() {
+        let path = scratch("order");
+        for subject in ["first.loc", "second.loc", "third.loc"] {
+            append_to(&path, &entry("hosts_apply", subject, Outcome::Ok));
+        }
+
+        let trail = tail_of(&path, 10);
+        let subjects: Vec<&str> = trail.entries.iter().map(|e| e.subject.as_str()).collect();
+        assert_eq!(subjects, ["third.loc", "second.loc", "first.loc"]);
+        assert_eq!(trail.total, 3);
+        assert_eq!(trail.unreadable, 0);
+    }
+
+    /// The cap is a tail, and `total` is the file. A screen that showed the cap
+    /// as the history would understate what the machine has been through, which
+    /// is the one direction a record must not be wrong in.
+    #[test]
+    fn the_limit_trims_the_list_and_the_total_still_counts_the_file() {
+        let path = scratch("limit");
+        for i in 0..50 {
+            append_to(&path, &entry("env_write", &format!("key{i}"), Outcome::Ok));
+        }
+
+        let trail = tail_of(&path, 5);
+        assert_eq!(trail.entries.len(), 5);
+        assert_eq!(trail.total, 50);
+        assert_eq!(trail.entries[0].subject, "key49", "not the newest five");
+    }
+
+    /// A half-written final line is what a process killed mid-append leaves,
+    /// and it must not take the other entries with it. `append_to` makes the
+    /// same judgement in the other direction — it drops the error rather than
+    /// failing the act being recorded.
+    #[test]
+    fn a_damaged_line_is_skipped_and_counted_rather_than_losing_the_file() {
+        let path = scratch("damage");
+        append_to(&path, &entry("cert_apply", "shop.loc", Outcome::Ok));
+        {
+            use std::io::Write;
+            let mut f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .expect("the file exists");
+            f.write_all(b"{\"at\":\"2026-08-2")
+                .expect("a truncated line");
+            f.write_all(b"\n").expect("a newline");
+        }
+        append_to(&path, &entry("project_delete", "old", Outcome::Ok));
+
+        let trail = tail_of(&path, 10);
+        assert_eq!(trail.entries.len(), 2, "a bad line took good ones with it");
+        assert_eq!(trail.unreadable, 1, "the damage was not reported");
+        assert_eq!(trail.total, 3);
+    }
+
+    /// Nothing irreversible having been done yet is the normal state of a new
+    /// workspace, so an absent file is an empty trail rather than an error.
+    #[test]
+    fn no_file_is_an_empty_trail_and_not_a_failure() {
+        let trail = tail_of(Path::new("/nonexistent/stackvo/audit.jsonl"), 10);
+        assert!(trail.entries.is_empty());
+        assert_eq!(trail.total, 0);
+        assert_eq!(trail.unreadable, 0);
+    }
+
+    /// A verb this build no longer writes still reads back. The reader carries
+    /// an owned `String` precisely so an unrotated historical record stays
+    /// readable across a rename that `Entry`'s `&'static str` would refuse.
+    #[test]
+    fn a_verb_this_build_no_longer_emits_still_reads_back() {
+        let path = scratch("retired");
+        std::fs::write(
+            &path,
+            "{\"at\":\"2024-01-01T00:00:00Z\",\"action\":\"a_verb_since_renamed\",\
+             \"subject\":\"shop\",\"outcome\":\"ok\"}\n",
+        )
+        .expect("a historical line");
+
+        let trail = tail_of(&path, 10);
+        assert_eq!(trail.entries.len(), 1);
+        assert_eq!(trail.entries[0].action, "a_verb_since_renamed");
     }
 }
