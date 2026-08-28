@@ -1,0 +1,44 @@
+# The editor half of a rule the repository already enforces.
+#
+# `.gitattributes` pins LF in the working tree and explains at length why that
+# is correctness rather than taste: several tests read this repository's own
+# source and reason about its shape, and every one of them is written against
+# `\n`. What it could not do is stop an editor writing CRLF in the first place —
+# Git normalises on commit, so the mismatch shows up as a diff nobody made or as
+# a working tree that disagrees with itself.
+#
+# Prettier and rustfmt already own indentation for the files they format. This
+# is for the ones neither of them touches: YAML workflows, Markdown, TOML, the
+# shell scripts under tools/.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Matches rustfmt's defaults, which is what `cargo fmt --check` gates on.
+[*.rs]
+indent_size = 4
+max_line_length = 100
+
+# Matches .prettierrc.
+[*.{js,mjs,ts,vue,json,css}]
+indent_size = 2
+max_line_length = 100
+
+# Two trailing spaces are a line break in Markdown, so stripping them silently
+# reflows somebody's paragraph.
+[*.md]
+trim_trailing_whitespace = false
+
+# Tabs are the convention and `go fmt` will put them back anyway.
+[*.go]
+indent_style = tab
+
+[Makefile]
+indent_style = tab

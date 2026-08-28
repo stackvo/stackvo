@@ -218,21 +218,26 @@ mod tests {
     }
 
     #[test]
-    fn the_service_catalog_has_thirty_one_entries() {
+    fn the_service_catalog_has_thirty_three_entries() {
         // Was 25, and the number is a record rather than a rule: it counted the
         // template directories that shipped inside the binary. (The original
         // README claims of "40+" and "14" were both wrong, C-17.) It became 27
         // with Solr and ClickHouse — the first two that were never templates at
         // all, which is what carrying no service definitions was aiming at.
         //
-        // 31 now, and the four that closed the gap are the reason this number
-        // is worth keeping: dragonfly, soketi, prometheus and graylog were
-        // published as packages and never added here, so for four services the
-        // Market offered an install and the project page called the resulting
-        // manifest unknown. Exactly the failure the note in env.schema.json
-        // predicts when the vocabulary stops growing with the catalogue — and
-        // the second time it has happened, Solr and ClickHouse being the first.
-        assert_eq!(env_schema().service_catalog().len(), 31);
+        // It became 31 when the four that closed a gap were added: dragonfly,
+        // soketi, prometheus and graylog were published as packages and never
+        // added here, so for four services the Market offered an install and
+        // the project page called the resulting manifest unknown. Exactly the
+        // failure the note in env.schema.json predicts when the vocabulary
+        // stops growing with the catalogue — and the second time it had
+        // happened, Solr and ClickHouse being the first.
+        //
+        // 33 with SQL Server and Beanstalkd, and this pair went the other way
+        // round for once: the vocabulary and the package were written together,
+        // which is the state the note is asking for rather than the state it
+        // keeps describing.
+        assert_eq!(env_schema().service_catalog().len(), 33);
     }
 
     /// The catalog is a vocabulary, and the one thing left to check is that it
@@ -264,11 +269,55 @@ mod tests {
             );
         }
 
-        // The two that arrived as packages with no template ever existing.
-        for id in ["solr", "clickhouse"] {
+        // The ones that arrived as packages with no template ever existing.
+        for id in ["solr", "clickhouse", "mssql", "beanstalkd"] {
             assert!(
                 seen.contains(id),
                 "{id} is installable and unlisted, so declaring it warns wrongly"
+            );
+        }
+    }
+
+    /// A driver offered in the PHP image must have something in the catalogue
+    /// to connect to.
+    ///
+    /// This is the contradiction the competitor review named, held as a rule
+    /// rather than fixed once: `SUPPORTED_LANGUAGES_PHP_EXTENSIONS` has offered
+    /// `sqlsrv` and `pdo_sqlsrv` since the first version of that list, and
+    /// until SQL Server was packaged there was nothing in the catalogue they
+    /// could reach. Somebody could switch the extension on, rebuild, and be
+    /// left with a driver and no server — a dead end with no error attached to
+    /// it, because nothing was wrong except that the two lists had never been
+    /// read together.
+    ///
+    /// Only the pairs where the extension names a **server** this catalogue
+    /// could plausibly carry. `pdo_sqlite` needs no service and `ldap` is not
+    /// this application's business; a rule that demanded a package per
+    /// extension would be a rule nobody could keep.
+    #[test]
+    fn every_php_driver_that_needs_a_server_has_one_in_the_catalogue() {
+        let extensions: Vec<&str> = crate::config::SETTINGS
+            .iter()
+            .find(|(k, _)| *k == "SUPPORTED_LANGUAGES_PHP_EXTENSIONS")
+            .map(|(_, v)| v.split(',').collect())
+            .expect("the extension list is a setting");
+
+        let catalogue = env_schema();
+        for (extension, service) in [
+            ("sqlsrv", "mssql"),
+            ("pdo_sqlsrv", "mssql"),
+            ("pdo_mysql", "mysql"),
+            ("pdo_pgsql", "postgres"),
+            ("mongodb", "mongo"),
+            ("redis", "redis"),
+            ("memcached", "memcached"),
+        ] {
+            if !extensions.contains(&extension) {
+                continue;
+            }
+            assert!(
+                catalogue.knows_service(service),
+                "the PHP image offers `{extension}` and the catalogue has no                  `{service}` to point it at"
             );
         }
     }

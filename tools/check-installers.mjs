@@ -48,6 +48,7 @@
  * produced each thing it owes.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
@@ -214,6 +215,23 @@ export function inspect(files, { triple, signed = true, only = null }) {
   return problems;
 }
 
+/**
+ * The triple this machine builds for, for the usage message only.
+ *
+ * Reported so somebody can copy it, and never used as a default — see `main`.
+ * `rustc -vV` is the authority rather than `process.arch`, because the
+ * vocabularies differ (`arm64` against `aarch64`) and the one the bundler
+ * writes into a file name is Rust's.
+ */
+function hostTriple() {
+  try {
+    const out = execFileSync('rustc', ['-vV'], { encoding: 'utf8' });
+    return out.match(/^host: (.+)$/m)?.[1] ?? '(rustc gave no host line)';
+  } catch {
+    return '(rustc is not on PATH)';
+  }
+}
+
 /** `--target <value>`, or nothing. */
 function valueOf(flag) {
   const at = process.argv.indexOf(flag);
@@ -223,8 +241,24 @@ function valueOf(flag) {
 function main() {
   const triple = valueOf('--target');
   if (!triple) {
+    // Named, rather than guessed from the host. Guessing is precisely the
+    // failure this tool exists to catch: a cross-compile that fell back to the
+    // host produces a green job and an x86 installer with an ARM release's
+    // name on it, and a default triple would make this agree with it.
+    //
+    // The message says where a triple comes from, because "usage: --target
+    // <triple>" is a dead end to somebody who does not already know one. It
+    // also says the `--`, which npm needs and swallows arguments without.
     console.error(
-      'usage: node tools/check-installers.mjs --target <triple> [--unsigned] [--dir <path>]'
+      [
+        'usage: node tools/check-installers.mjs --target <triple> [--unsigned] [--dir <path>]',
+        '',
+        '  --target is required and is never guessed. A default would make this tool',
+        '  agree with the cross-compile it exists to catch.',
+        '',
+        '  This machine builds for:  ' + hostTriple(),
+        '  Through npm:              npm run installers:check -- --target <triple>',
+      ].join('\n')
     );
     process.exit(1);
   }

@@ -83,6 +83,7 @@ export const HELP_TOPICS = [
   'project-worktree',
   'project-xdebug',
   'settings-agents',
+  'settings-audit',
   'settings-appearance-presets',
   'settings-appearance-status-colors',
   'settings-appearance-theme-colors',

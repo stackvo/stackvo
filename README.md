@@ -2,13 +2,85 @@
 
 A Docker-based local development environment manager, as a native desktop app.
 
-**Self-contained.** It used to require a clone of
-[StackVo](https://github.com/stackvo/stackvo) to read its generator and
-templates from. The generator was ported to Rust (the shell was deleted), and
-the service templates now ship inside the binary — so a workspace is a folder
-this app creates, not one you have to fetch. Point it at an empty directory and
-it writes the `.env`, the templates and the project tree itself. An existing
-checkout still works and is left exactly as it is.
+**Self-contained.** It used to need a checkout of the Bash StackVo project
+beside it, to read that project's generator and templates from. The generator
+was ported to Rust (the shell was deleted), the service templates now ship
+inside the binary, and this repository took over the `stackvo/stackvo` name the
+Bash tree used to hold — so there is nothing to clone beside it any more. That
+sentence used to carry a link to `stackvo/stackvo`, which now points here: a
+reader following it to find the other project landed back on this one.
+
+A workspace is a folder this app creates, not one you have to fetch. Point it at
+an empty directory and it writes the `.env`, the templates and the project tree
+itself. An existing checkout still works and is left exactly as it is.
+
+## Installing it
+
+Six installer formats are built for every tagged release, two per platform:
+
+| Platform | Formats                       | Needs                                        |
+| -------- | ----------------------------- | -------------------------------------------- |
+| macOS    | `.dmg`                        | macOS 10.15 or later, Apple Silicon or Intel |
+| Windows  | `.msi`, `.exe` (NSIS)         | Windows 10 or later, x64 or ARM64            |
+| Linux    | `.deb`, `.rpm`, `.AppImage`   | x86_64 or aarch64                            |
+
+**No release is published yet**, so today the only route is building from source
+— `npm install && npm run tauri:dev`, with the toolchain under
+[How it is built](#how-it-is-built). This paragraph is the one that changes when
+the first tag ships; until then it is the honest answer.
+
+Whichever way you get it, it needs **Docker** — Docker Desktop on macOS and
+Windows, Docker Engine on Linux, or an API-compatible runtime. Colima and
+OrbStack are recognised by name. The app will open, report and offer to start
+Docker when it is not running, which is the one thing the container-based web UI
+could never do.
+
+### What Docker costs you
+
+This is the decision that separates StackVo from the local-binary tools in the
+same category, and it is worth reading before you install rather than after:
+
+| | StackVo | A tool that installs PHP on the host |
+| --- | --- | --- |
+| First install | the app (~27 MB) **plus** Docker and its images (GB) | one installer, ~100 MB |
+| A project's first `up` | an image build — minutes | seconds |
+| **Changing PHP version** | rewrite the manifest, rebuild the image | immediate |
+| Idle memory | the Docker VM, Traefik and whatever services are on | the language runtime alone |
+
+What you get for it is the thing none of them can offer: every project's
+environment is a container, so two projects can hold two PHP versions, two
+databases and two sets of environment variables without arguing, and what runs
+on your machine is what a Dockerfile says rather than what your `brew` history
+says.
+
+If that trade is wrong for you, it is wrong for you. It is not a gap anyone is
+going to close — it is the architecture.
+
+## Coming from something else
+
+StackVo imports from **seven** other local environments, which is the widest
+list in this category: **XAMPP, Laragon, MAMP, Laravel Valet, Laravel Sail,
+Laravel Herd and DDEV**. It finds them on this machine, shows what it found, and
+brings the projects over.
+
+It copies by default and moves only if you ask. **It never writes a byte into
+the installation it is importing from** — no PATH edits, no disabled services,
+nothing to undo if you decide to go back. Taking the other tool apart on your
+behalf is a decision about your machine that this one does not make for you.
+
+## What it does that gets missed
+
+Six things in this app are finished, tested, and have never been mentioned in a
+document a user reads. They are listed here rather than buried:
+
+| | What it is |
+| --- | --- |
+| **Production image build** | `release.rs` and seven IPC commands: plan, build, save, load, recipe, push-plan, push. A local dev environment that also builds the image you ship. |
+| **A full environment per git branch** | `worktree.rs` and six commands. Each worktree gets its own hostname, **its own database** and its own environment variables — the thing cloud "preview environments" sell, locally and free. |
+| **Why was this request slow** | `request_explain` and `request_timeline` put the profiler, the query log and your `dump()` calls on one axis around a single request. |
+| **Devcontainer export** | A project can hand out a `.devcontainer` for people who want to work inside the container rather than beside it. |
+| **An audit trail** | `audit.rs` records the acts that cannot be undone, for whoever has to account for the machine. |
+| **MCP for AI assistants** | 38 tools, with writes behind an explicit flag. See [Driving it from an AI assistant](#driving-it-from-an-ai-assistant). |
 
 ## Why a desktop app
 
@@ -75,20 +147,28 @@ Verification is differential, not by inspection — a generator that produces
 - `npm run diagnose` runs the same comparison **live** against your own
   projects, and reports which match.
 
-### Taking the generator over
+### The generator takeover, and how it ended
 
-The Rust generator runs _alongside_ the Bash one; it does not replace it.
-`generate_with` has three modes:
+The Rust generator no longer runs alongside the Bash one — it replaced it. The
+port reached byte-for-byte parity on all 28 fixtures against real data, and the
+Bash engine was retired in the same change. `generate_with` now has two
+behaviours rather than three:
 
-| Mode     | Behaviour                                                          |
-| -------- | ------------------------------------------------------------------ |
-| `bash`   | What StackVo does today. The default.                              |
-| `verify` | Bash writes; the Rust port renders the same files and is compared. |
-| `rust`   | Refuses to write unless the two agree byte-for-byte.               |
+| Mode     | Behaviour                                                                 |
+| -------- | ------------------------------------------------------------------------- |
+| `rust`   | Renders and writes. **The default**, and the only writer.                  |
+| `verify` | Renders without writing and reports drift against what is already on disk. |
+| `bash`   | Retired. Kept in the enum so an old caller gets a sentence, not a parse error. |
 
-Bash runs in every mode. The generator's output is the input to every container
-you run, so "probably identical" is not a standard worth shipping — `rust` mode
-cannot silently change an image, because a disagreement stops it.
+`verify` changed meaning when Bash left and is more useful for it: it used to
+ask whether two generators agreed, and now asks whether the files on disk still
+match what this one would write — which catches a hand-edited generated file,
+something byte parity only ever caught by accident.
+
+The generator's output is the input to every container you run, so "probably
+identical" was not a standard worth shipping. The fixtures that proved parity
+are still in the tree and still run: they are what keeps a change to the
+renderer from silently changing an image.
 
 ### Windows status
 
@@ -98,11 +178,17 @@ The pure logic — drive-letter to bind-mount conversion (`C:\Users\me` →
 platform. That is deliberate: Windows behaviour verified only on Windows is
 Windows behaviour nobody verifies.
 
-What is **not** verified: the handful of `#[cfg(target_os = "windows")]` blocks
-in `engine.rs`, `hosts.rs` and `pty.rs`. Cross-compiling from macOS fails in
-`tauri-build`, which needs `llvm-rc` to embed the app manifest — a toolchain
-gap, not a code error, but it means those blocks have never been compiled. They
-need a real Windows machine or a CI runner before anyone claims Windows works.
+The `#[cfg(target_os = "windows")]` blocks in `engine.rs`, `hosts.rs` and
+`pty.rs` **are compiled and unit-tested**: `windows-latest` is in the CI matrix
+and the four failures that first run surfaced were fixed. Cross-compiling from a
+Mac still fails in `tauri-build`, which wants `llvm-rc` to embed the app
+manifest, so a local `cargo build` on macOS proves nothing about them — CI does.
+
+What is still **not** verified is the part a compiler cannot answer: the hosts
+file write through UAC, the named pipe against a real Docker Desktop, and
+whether a project's domain resolves in a browser on that machine. Those need
+somebody at a Windows machine, and until this line says otherwise, nobody has
+been.
 
 ```bash
 npm install
@@ -313,7 +399,7 @@ notes:
 { "mcpServers": { "stackvo": { "command": "/path/to/stackvo-mcp" } } }
 ```
 
-The 34 tools cover the questions an assistant is actually asked. The reads go
+The 38 tools cover the questions an assistant is actually asked. The reads go
 wider than the stack's own state: `system` and `container_stats` for a machine
 that has run out of memory, `hosts` for a domain that does not resolve,
 `log_read` for the application's own exception rather than the container's
@@ -327,7 +413,16 @@ the one that costs several times the request, and `hotspots` for the answer that
 question actually wants — the functions one recorded run spent its time in,
 read from the trace rather than from SPX's own web UI.
 
-**Read-only by default.** 12 of the 34 tools change things and appear only with
+Four of them answer **"why was this request slow"** rather than "is it running",
+and they are the ones worth knowing about: `explain_request` joins the profile,
+the query log and the application's own `dump()` calls around a single recorded
+request; `timeline` puts the same events on one axis when there is no recording;
+`query_log` is what the database was actually asked, including the same question
+asked forty times; and `flame` keeps the call paths that a flat ranking loses.
+No other tool in this category correlates a dump with the query that caused it,
+so no other assistant can be asked this.
+
+**Read-only by default.** 12 of the 38 tools change things and appear only with
 `--allow-writes`: `xdebug_set`, `certificates_reissue`, `project_start`,
 `project_stop`, `project_restart`, `service_start`, `service_stop`,
 `service_restart`, `snapshot_take`, `stack_up`, `stack_down`, `generate`. Read
@@ -362,7 +457,7 @@ guarding nothing. Generating the list outright was the obvious move and is the
 wrong one: dispatch cannot be generated, so a generated list advertises tools
 that fail when called.
 
-**Not exposed:** the rest of the mutating surface. 67 of the 305 commands take
+**Not exposed:** the rest of the mutating surface. 68 of the 310 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it
@@ -565,8 +660,11 @@ of Phase 3, **22 declared commands had no implementation** — including
 `project_create`, so the app could not create a project at all. Suite F then
 found **21 wrappers no view called** and **4 events nothing emitted**.
 
-Current state: **no errors**, six warnings — five wrappers no view calls yet,
-and one for a checkout with no projects in it.
+Current state: **no errors, one warning** — and the warning is the expected one,
+for a checkout with no projects in it to read. It was six until the ten
+`SERVER_*` keys the app sets were finally described in the schema; the contract
+had been claiming to be the single source of truth for a set of keys it did not
+mention.
 
 That number is deliberately not a promise. It was written here as "4 errors, all
 of them pre-existing StackVo bugs" and stayed after the four were fixed, because
@@ -579,6 +677,16 @@ against the `status` labels in the contract. It exists because the first,
 hand-run version of that measurement was executed from the wrong directory and
 mislabelled twelve keys — a number that looked like evidence and was not
 checkable later.
+
+## Contributing, and getting help
+
+- [SUPPORT.md](SUPPORT.md) — where a question goes, what to attach to a bug
+  report, and what this project can and cannot promise. The last part is short
+  and worth reading before adopting it somewhere hard to leave.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build it and what the checks want.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — be decent to people; argue with the
+  work as hard as it deserves.
+- [SECURITY.md](SECURITY.md) — report privately, never as a public issue.
 
 ## License
 

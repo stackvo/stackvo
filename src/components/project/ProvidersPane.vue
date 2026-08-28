@@ -25,6 +25,16 @@ import PaneHeader from '@/components/PaneHeader.vue';
  * Agreeing to fetch is not agreeing to send. Push carries a second sentence,
  * a different colour and its own approval; nothing about approving a pull
  * makes a push cheaper.
+ *
+ * ## Why the card is no longer absent on a project that declares nothing
+ *
+ * It used to be, on the reading that a pane saying "no providers" answers a
+ * question nobody asked. That was right while there was nothing to offer and
+ * wrong the moment there was: with the mechanism finished and the catalogue
+ * empty, the only way to reach this feature was to already know the file
+ * format. So a project with no recipes gets the starting points instead of
+ * getting nothing — and a project that has some does not, because it is past
+ * that question.
  */
 const props = defineProps({
   name: { type: String, required: true },
@@ -47,6 +57,13 @@ const busy = ref('');
 const service = ref('');
 const snapshotFirst = ref(true);
 const secretDrafts = ref({});
+/**
+ * The starting points this build ships.
+ *
+ * Fetched beside the plans rather than lazily behind a disclosure: the whole
+ * problem being fixed is that somebody had to know this existed.
+ */
+const recipes = ref([]);
 
 const plans = computed(() => set.value?.plans ?? []);
 /** A direction a recipe does not offer is not a row — it is not a choice. */
@@ -56,6 +73,7 @@ async function load() {
   error.value = null;
   try {
     set.value = await api.projectProviders(props.name);
+    if (!recipes.value.length) recipes.value = asList(await api.providerRecipes());
     if (!services.value.length) {
       services.value = asList(await api.dbTargets()).map((target) => target.service ?? target);
     }
@@ -124,6 +142,30 @@ const missing = (plan) =>
 
 const needsConsent = (plan) => plan.blocked === 'needs-consent';
 
+/**
+ * Offered only to a project with nothing declared.
+ *
+ * A project that already has recipes has answered the question these exist to
+ * ask, and a permanent list of starting points under somebody's working
+ * configuration reads as an invitation to add another.
+ */
+const startingPoints = computed(() =>
+  set.value && !set.value.recipes?.length ? recipes.value : []
+);
+
+async function addRecipe(recipe) {
+  busy.value = `recipe:${recipe.name}`;
+  error.value = null;
+  try {
+    await api.providerRecipeAdd(props.name, recipe.name);
+    await load();
+  } catch (e) {
+    error.value = e;
+  } finally {
+    busy.value = '';
+  }
+}
+
 onMounted(load);
 watch(() => props.name, load);
 </script>
@@ -132,7 +174,11 @@ watch(() => props.name, load);
   <!-- Absent, not empty, when the project declares none. Every project until
        somebody writes a recipe — and a pane reading "no providers" answers a
        question nobody asked. -->
-  <v-card v-if="offered.length || set?.problems?.length" variant="flat" class="pane">
+  <v-card
+    v-if="offered.length || set?.problems?.length || startingPoints.length"
+    variant="flat"
+    class="pane"
+  >
     <PaneHeader
       help="project-providers"
       icon="mdi-cloud-download-outline"
@@ -156,6 +202,47 @@ watch(() => props.name, load);
         ><code>{{ problem.provider }}</code> — {{ problem.message }}</span
       >
     </v-alert>
+
+    <!-- The starting points, and only for a project that declares nothing.
+         Each shows the command it would add, because that is the thing being
+         added — and the list under it says which words are placeholders, since
+         the recipe cannot work until they are replaced. -->
+    <div v-if="startingPoints.length" data-test="provider-recipes">
+      <p class="text-caption text-medium-emphasis mb-3">{{ t('providers.recipesIntro') }}</p>
+
+      <div v-for="recipe in startingPoints" :key="recipe.name" class="plan">
+        <div class="d-flex align-center ga-2 mb-1">
+          <v-icon size="16">mdi-file-document-outline</v-icon>
+          <span class="text-body-2 font-weight-medium">{{ recipe.name }}</span>
+          <v-chip v-if="recipe.pull.length" size="x-small" variant="tonal">
+            {{ t('providers.pull') }}
+          </v-chip>
+          <v-chip v-if="recipe.push.length" size="x-small" variant="tonal" color="error">
+            {{ t('providers.push') }}
+          </v-chip>
+        </div>
+
+        <p class="text-caption text-medium-emphasis mb-1">{{ recipe.about }}</p>
+
+        <pre class="command"
+          >{{ recipe.image }}
+{{ (recipe.pull.length ? recipe.pull : recipe.push).join(' ') }}</pre>
+
+        <!-- Never empty: every shipped recipe carries a placeholder. -->
+        <ul class="text-caption text-medium-emphasis mb-2 ms-4">
+          <li v-for="(what, i) in recipe.edit" :key="i">{{ what }}</li>
+        </ul>
+
+        <v-btn
+          size="x-small"
+          variant="tonal"
+          :loading="busy === `recipe:${recipe.name}`"
+          @click="addRecipe(recipe)"
+        >
+          {{ t('providers.addRecipe') }}
+        </v-btn>
+      </div>
+    </div>
 
     <v-select
       v-if="offered.length && services.length"

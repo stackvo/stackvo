@@ -1276,6 +1276,9 @@ export default {
     saveSecret: 'Kaydet',
     snapshotFirst: 'Önce yerine geçeceği şeyin kopyasını al',
     revoke: 'Onayı geri çek',
+    recipesIntro:
+      'Bu proje henüz bir tarif yazmamış. Bunlar başlangıç noktaları, bağlantı değil — her biri bu projenin stackvo.json dosyasına yazılıyor ve aşağıdaki yer tutucular değiştirilmeden çalışmaz. Eklemek hiçbir şeyi onaylamaz.',
+    addRecipe: 'Bu projeye ekle',
   },
   release: {
     pushExplain:
@@ -2109,6 +2112,17 @@ export default {
     helpFor: 'Bu kart ne işe yarar: {subject}',
     primaryNav: 'Ana gezinme',
   },
+  focus: {
+    action: 'Bu projeye odaklan',
+    title: 'Yalnız bu projenin ihtiyacı olanı çalıştır',
+    willStop: 'Şu {count} servis örneği durdurulacak:',
+    willKeep: 'Şunlar açık kalacak:',
+    becauseDependency: 'biri buna ihtiyaç duyuyor',
+    nothingToStop: 'Başka bir şey çalışmıyor. Bu proje zaten odaklanmış durumda.',
+    declaresNothing:
+      'Bu proje hiçbir servis beyan etmiyor, dolayısıyla odaklanılacak bir şey yok. stackvo.json dosyasına bir `services` listesi ekleyin — odak, listede olmayan her şeyi durdurur, ve boş bir liste tüm yığını durdururdu.',
+    apply: 'Geri kalanını durdur',
+  },
   actions: {
     start: 'Konteyneri başlat',
     stop: 'Konteyneri durdur',
@@ -2627,6 +2641,15 @@ export default {
       '{host} üretilmiş dosyalara yazılı ve bu makine artık o ağda değil. Yeniden üretin — o zamana kadar bu ad, adresi devralan makineye çözülür.',
   },
 
+  audit: {
+    title: 'Denetim kaydı',
+    sectionDesc: 'Bu makinede yapılan ve geri alınamayacak olanlar.',
+    description:
+      'Yalnızca bu uygulamanın dışında bir şeyi değiştiren ve düğmeye ikinci kez basarak geri alınamayan işlemler — hosts dosyasına yükseltilmiş bir yazma, sertifika güveninde bir değişiklik, silinen bir proje, geri yüklenen bir veritabanı, anahtar deposuna taşınan bir kimlik bilgisi. Bir kapsayıcıyı başlatmak burada değil, hiçbir okuma da değil. Bu dosya hiç döndürülmez: üç hafta sonra "bu ne zaman yapıldı" sorusuna hâlâ cevap verebilen tek kayıt odur.',
+    empty: 'Henüz geri alınamayacak bir işlem yapılmadı.',
+    truncated: 'Toplam {total} girdinin en yeni {shown} tanesi gösteriliyor.',
+    unreadable: 'Kayıttaki {count} satır okunamadı ve atlandı. Geri kalanı sağlam.',
+  },
   doctor: {
     title: 'Doktor',
     sectionDesc: 'Neyin bozuk olduğu, adıyla — ve her bulgunun yanında onarımı.',
@@ -2749,6 +2772,7 @@ export default {
       laminas: 'Laminas (Zend)',
       drupal: 'Drupal',
       prestashop: 'PrestaShop',
+      statamic: 'Statamic',
       django: 'Django',
       rails: 'Ruby on Rails',
       slim: 'Slim',
@@ -3021,6 +3045,8 @@ export default {
     quickCommandsAreFixed:
       'Kimlikler ya gömülü katalogdan ya da bu projenin kendi stackvo.json dosyasından gelir; serbest değildir.',
     imageReferenceCharset: 'Yalnızca küçük harf, rakam ve . _ - / : karakterleri.',
+    focusNeedsServices:
+      'Önce bu projenin stackvo.json dosyasına bir `services` listesi ekleyin — odak, listede olmayan her şeyi durdurur, ve boş bir liste tüm yığını durdururdu.',
     composeFileNotFound:
       'compose.yaml, compose.yml, docker-compose.yaml ve docker-compose.yml dosyalarına bakıldı.',
     composeFileMustBeValid:

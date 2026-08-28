@@ -1,7 +1,11 @@
 //! An MCP server over the same core the app drives.
 //!
-//! Five of the eight competitors ship one — Herd, Lerd, EnvKit, FlyEnv and
-//! ServBay — and in 2026 it is the price of entry rather than a differentiator.
+//! **Measured August 2026, across seventeen products: at least seven ship one.**
+//! In 2026 an MCP server is the price of entry rather than a differentiator, and
+//! that is the point of dating the number — the earlier version of this line said
+//! "five of the eight competitors", which was a true count of a smaller survey
+//! and read as a lead long after it had stopped being one.
+//!
 //! What is different here is where the tool list comes from.
 //!
 //! ## The contract is the authority
@@ -289,6 +293,62 @@ fn hotspots_args() -> Value {
     })
 }
 
+/// A project, a recording key, and the database the request talked to.
+///
+/// `service` is optional everywhere it appears below and its absence is an
+/// answer rather than an error: the query half goes missing and the rest of the
+/// explanation stands. That is the rule `request_explain` already follows for a
+/// database it cannot reach, kept here so an assistant that does not know which
+/// service a project uses still gets the trace half.
+fn explain_args() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "project": { "type": "string" },
+            "key": {
+                "type": "string",
+                "description": "A report key, as `stackvo_profiler` lists them."
+            },
+            "service": {
+                "type": "string",
+                "description": "The database service whose query log to join in. Optional."
+            }
+        },
+        "required": ["project", "key"],
+        "additionalProperties": false
+    })
+}
+
+fn timeline_args() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "project": { "type": "string" },
+            "service": {
+                "type": "string",
+                "description": "The database service whose query log to join in. Optional."
+            }
+        },
+        "required": ["project"],
+        "additionalProperties": false
+    })
+}
+
+fn flame_args() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "name": { "type": "string" },
+            "id": {
+                "type": "string",
+                "description": "A recording id, as `stackvo_profiler` lists them."
+            }
+        },
+        "required": ["name", "id"],
+        "additionalProperties": false
+    })
+}
+
 pub const TOOLS: &[Tool] = &[
     Tool {
         name: "stackvo_overview",
@@ -367,6 +427,66 @@ pub const TOOLS: &[Tool] = &[
                       one. A very long trace is replayed up to a limit and says so.",
         writes: false,
         schema: hotspots_args,
+    },
+    // The four instruments that were built, tested and unreachable.
+    //
+    // `stackvo_profiler` and `stackvo_hotspots` were here from the start, so an
+    // assistant could ask *where the time went inside PHP* — and could not ask
+    // what the database was asked, what else happened around the request, or
+    // what the native stack looked like. The README advertises that MCP answers
+    // "why is shop.loc not loading?"; "why is it slow" had the harder half of
+    // its answer written and no way to call it.
+    //
+    // Each is one dispatch arm over a function that already exists. Nothing
+    // here is new capability; it is the same four commands the window has.
+    Tool {
+        name: "stackvo_explain_request",
+        command: "request_explain",
+        also: &["spx_status", "spx_report", "query_log"],
+        description: "Why one recorded request was slow, with the three instruments joined \
+                      around it: where the code spent its time, what the database was asked \
+                      in the same stretch of wall clock, and what the application dumped or \
+                      mailed while it ran. This is the deepest answer this server has to \
+                      \"why is this page slow\" — `stackvo_profiler` lists the recordings and \
+                      their keys, and this explains one. Names any other recording that \
+                      overlaps the same stretch, because that is when the numbers mislead.",
+        writes: false,
+        schema: explain_args,
+    },
+    Tool {
+        name: "stackvo_timeline",
+        command: "request_timeline",
+        also: &["query_log"],
+        description: "Everything the application reported, on one axis: `dump()` and `dd()` \
+                      calls, the queries the database ran, and the mail it sent, in the order \
+                      they happened. Use it when there is no profile to explain — it needs no \
+                      recording, only the debug bridge. Says whether the query log was actually \
+                      recording, so an empty database half is not read as a quiet page.",
+        writes: false,
+        schema: timeline_args,
+    },
+    Tool {
+        name: "stackvo_query_log",
+        command: "query_log",
+        also: &[],
+        description: "What one database service was actually asked: every statement, how long \
+                      it took, and which of them are the same question asked repeatedly — the \
+                      N+1 that a page's slowness usually turns out to be. Reports whether \
+                      recording is switched on, because 'no queries' and 'not listening' are \
+                      different answers.",
+        writes: false,
+        schema: service_arg,
+    },
+    Tool {
+        name: "stackvo_flame",
+        command: "profiler_flame",
+        also: &[],
+        description: "One recording as a flame graph: the real call stacks the sampler saw, \
+                      nested, with the time held at each level. Where `stackvo_hotspots` ranks \
+                      functions flat, this keeps the paths — which is what separates \"this \
+                      function is slow\" from \"this function is slow when called from there\".",
+        writes: false,
+        schema: flame_args,
     },
     Tool {
         name: "stackvo_ide_debug",
@@ -668,6 +788,45 @@ fn err(id: Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
+/// A failed tool call, in the shape the failure was already produced in.
+///
+/// `error.rs` builds four things and this used to forward two of them. The two
+/// it dropped are the two an assistant cannot reconstruct:
+///
+///   * **`details` — the named culprit.** `engine.rs` attaches the socket it
+///     tried, `env_writer.rs` the keys it refused, `project_validate` the
+///     manifest errors. An assistant told "Docker is not running" with no
+///     socket name can say that a daemon is down; one holding
+///     `{"socket": "/var/run/docker.sock"}` can say *which* daemon, on a
+///     machine that has Colima and Docker Desktop both installed. That is the
+///     difference between repeating the error and diagnosing it.
+///   * **`hintKey`** — the locale key for the suggestion. The hint text is
+///     English; the key is what a client with a Turkish user resolves against
+///     the same catalogue the window uses. `hints.rs` exists to keep those two
+///     in step and the MCP surface was throwing away the half that makes it
+///     work.
+///
+/// Both are omitted when absent rather than sent as `null`: an assistant
+/// reading a field that is always present and usually null learns to skip it.
+pub fn failure(e: &crate::error::Error) -> Value {
+    let mut body = serde_json::Map::new();
+    body.insert("error".into(), json!(e.message));
+    // `Code` derives `Serialize`, so the variant name comes from the same place
+    // the contract's closed set does. `format!("{:?}")` was a third spelling of
+    // a value two others already produce, and the one nothing checks.
+    body.insert("code".into(), json!(e.code));
+    if let Some(hint) = &e.hint {
+        body.insert("hint".into(), json!(hint));
+    }
+    if let Some(key) = e.hint_key {
+        body.insert("hintKey".into(), json!(key));
+    }
+    if let Some(details) = &e.details {
+        body.insert("details".into(), (**details).clone());
+    }
+    Value::Object(body)
+}
+
 /// Tool output. MCP carries text; JSON is what an assistant can actually use.
 fn text_result(id: Value, body: &Value, is_error: bool) -> Value {
     let text = serde_json::to_string_pretty(body).unwrap_or_else(|_| body.to_string());
@@ -732,11 +891,7 @@ pub async fn handle(request: &Value, allow_writes: bool) -> Option<Value> {
                 // Returned as tool output rather than a JSON-RPC error: an
                 // assistant can read and act on "Docker is not running", which
                 // a transport-level failure would hide from it.
-                Err(e) => text_result(
-                    id,
-                    &json!({ "error": e.message, "code": format!("{:?}", e.code), "hint": e.hint }),
-                    true,
-                ),
+                Err(e) => text_result(id, &failure(&e), true),
             }
         }
         _ => err(id, -32601, "method not found"),
@@ -842,6 +997,48 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
                 &key,
                 crate::spx::HOTSPOTS
             )?))
+        }
+
+        "stackvo_explain_request" => {
+            let project = string("project")
+                .ok_or_else(|| Error::new(Code::InvalidInput, "`project` is required"))?;
+            let key =
+                string("key").ok_or_else(|| Error::new(Code::InvalidInput, "`key` is required"))?;
+            known_project(&root, &project).await?;
+            Ok(json!(
+                crate::commands::explain_request(
+                    &root,
+                    &project,
+                    &key,
+                    string("service").as_deref()
+                )
+                .await?
+            ))
+        }
+
+        "stackvo_timeline" => {
+            let project = string("project")
+                .ok_or_else(|| Error::new(Code::InvalidInput, "`project` is required"))?;
+            known_project(&root, &project).await?;
+            Ok(json!(
+                crate::commands::build_timeline(&root, &project, string("service").as_deref())
+                    .await?
+            ))
+        }
+
+        "stackvo_query_log" => {
+            let service = string("service")
+                .ok_or_else(|| Error::new(Code::InvalidInput, "`service` is required"))?;
+            Ok(json!(crate::querylog::read(&root, &service).await?))
+        }
+
+        "stackvo_flame" => {
+            let name = string("name")
+                .ok_or_else(|| Error::new(Code::InvalidInput, "`name` is required"))?;
+            let id =
+                string("id").ok_or_else(|| Error::new(Code::InvalidInput, "`id` is required"))?;
+            known_project(&root, &name).await?;
+            Ok(json!(crate::trace::read(&root, &name, &id)?))
         }
 
         "stackvo_ide_debug" => {
@@ -1508,6 +1705,45 @@ mod tests {
         let text = response["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("read-only"), "got: {text}");
         assert!(text.contains("--allow-writes"), "the fix has to be named");
+    }
+
+    /// The named culprit has to survive the trip to the assistant.
+    ///
+    /// This is the difference between an assistant that repeats an error and
+    /// one that diagnoses it. `engine.rs` attaches the socket it tried, and on
+    /// a machine with Colima and Docker Desktop both installed "Docker is not
+    /// running" is not an answer — *which* one, and where, is. The MCP surface
+    /// built its own error object out of three fields and dropped `details`
+    /// and `hint_key`, so the two halves that cannot be reconstructed from the
+    /// prose were the two that never left the process.
+    #[test]
+    fn a_failure_carries_the_culprit_and_the_locale_key_not_just_the_sentence() {
+        use crate::error::{Code, Error};
+
+        let e = Error::new(Code::EngineUnreachable, "Docker is not running")
+            .with_hint(crate::hints::START_DOCKER)
+            .with_details(json!({ "socket": "/var/run/docker.sock" }));
+
+        let body = failure(&e);
+        assert_eq!(body["error"], "Docker is not running");
+        assert_eq!(body["code"], json!(Code::EngineUnreachable));
+        assert_eq!(body["details"]["socket"], "/var/run/docker.sock");
+        assert!(
+            body["hint"].is_string() && body["hintKey"].is_string(),
+            "the suggestion lost either its text or the key that translates it: {body}"
+        );
+    }
+
+    /// A field that is always present and usually null is one a reader learns
+    /// to skip, so the optional halves are omitted rather than sent empty.
+    #[test]
+    fn a_failure_with_nothing_extra_carries_nothing_extra() {
+        use crate::error::{Code, Error};
+
+        let body = failure(&Error::new(Code::NotFound, "no such project"));
+        assert_eq!(body.as_object().map(|o| o.len()), Some(2), "{body}");
+        assert!(body.get("hint").is_none());
+        assert!(body.get("details").is_none());
     }
 
     /// The handshake the constant used to break. A client that asks for the
