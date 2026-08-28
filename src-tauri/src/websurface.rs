@@ -996,14 +996,15 @@ async fn serve_with_handle(
                             // in one place only.
                             match crate::mcp::call(&asked.tool, &asked.arguments, false).await {
                                 Ok(value) => render_response(200, &value.to_string()),
-                                Err(e) => render_response(
-                                    400,
-                                    &serde_json::json!({
-                                        "error": e.message,
-                                        "code": e.code,
-                                    })
-                                    .to_string(),
-                                ),
+                                // The same body the stdio surface returns, from
+                                // the same function. These were two hand-written
+                                // objects for one failure and this one dropped
+                                // the hint as well as the culprit — so the two
+                                // ways of reaching one tool disagreed about how
+                                // much of the diagnosis the caller got.
+                                Err(e) => {
+                                    render_response(400, &crate::mcp::failure(&e).to_string())
+                                }
                             }
                         }
                     },

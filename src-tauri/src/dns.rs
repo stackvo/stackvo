@@ -880,12 +880,17 @@ fn write_plan(plan: &Plan, foreign: bool, stale: &[PathBuf]) -> Result<()> {
         ));
     };
 
-    let staged = std::env::temp_dir().join("stackvo-dns-staged");
+    // A private directory rather than a fixed name in a shared `/tmp` — root
+    // copies this file into `/etc/resolver/`, so a name another local account
+    // can create first is a name that chooses what this machine resolves. See
+    // `elevate::staging_dir`.
+    let stage = crate::elevate::staging_dir("dns")?;
+    let staged = stage.join("resolver");
     std::fs::write(&staged, &plan.text).map_err(|e| Error::io("staging the resolver file", e))?;
 
     let command = write_command(plan, path, &staged, foreign, stale);
     let ok = crate::elevate::run(&["/bin/sh", "-c", &command])?;
-    let _ = std::fs::remove_file(&staged);
+    let _ = std::fs::remove_dir_all(&stage);
 
     if !ok {
         return Err(Error::new(

@@ -959,6 +959,26 @@
       "why": "The container, without touching what the instance table says. Distinct from enable/disable, which change whether the instance is part of the stack at all.",
       "notes": "Goes through the same lifecycle helper as project_* and service_*; the id is validated against the instance table first, because it is not in the service catalog and never will be."
     },
+    "focus_plan": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "project": "string"
+      },
+      "returns": "{ keep: FocusVerdict[], stop: FocusVerdict[], declaresNothing: boolean }",
+      "why": "\"Run only what this project needs and stop the rest\" is the most-wanted verb on a laptop, and this app is the only one in its category that can pose the question: stackvo.json DECLARES what a project needs around it, and the instance table says what is installed. Competitors switch services on and off one at a time because they have no manifest to declare a need in.",
+      "notes": "A query — nothing is stopped by asking. Only service instances are considered and only running ones can appear in `stop`; projects are never touched, and Traefik is not an instance so it cannot be reached from here, which is right rather than a special case — stopping the router would take the focused project down with everything else. Required dependencies are followed transitively and kept with reason `dependency`, because stopping what a declared service needs breaks the thing that was asked for; OPTIONAL dependencies are not followed, since an optional service that happens to be running is exactly what focus is for. Every instance of a declared service is kept: a workspace running MySQL 8.0 and 8.4 has two instances for one id and the manifest cannot say which, so keeping both is the answer that cannot cost somebody their afternoon. `declaresNothing` reports an empty `services` list, which the manifest documents as \"nothing declared, not nothing needed\" — the plan is still computed so a screen can show what WOULD happen, and focus_apply refuses it. A dead engine degrades to \"nothing is running\" rather than failing. See src-tauri/src/focus.rs."
+    },
+    "focus_apply": {
+      "new": true,
+      "kind": "operation",
+      "args": {
+        "project": "string"
+      },
+      "returns": "{ keep: FocusVerdict[], stop: FocusVerdict[], declaresNothing: boolean }",
+      "why": "The verb behind focus_plan. Split from it for the reason preset, worktree and release all split: stopping five containers is reversible and still not something to do to somebody without showing them the list first.",
+      "notes": "The plan is MADE AGAIN here rather than taken from the caller — the same rule provider states, for the same reason: the screen that offered the button may be minutes old, and a service started in between must not be stopped by an approval given before it existed. INVALID_INPUT when the project declares no services, because acting on an unfilled field would stop the whole workspace and the person who pressed the button would have no way to know that is what they asked for. Takes the `stack` in-flight guard, so it cannot run beside an up/down. One instance failing to stop does not abandon the rest: stopping four of five and reporting the fifth beats stopping none, and the returned plan says what was attempted. Nothing is deleted — instance_stop only, so data directories and settings survive. NOT audited: every act here is undone by starting the instance again, which is the line audit.rs draws. See src-tauri/src/focus.rs."
+    },
     "instance_stop": {
       "new": true,
       "kind": "operation",
@@ -1489,6 +1509,16 @@
       "implementedAs": "@tauri-apps/plugin-dialog → open({directory:true})",
       "notes": "Used directly by the front end. `workspace_pick` is the Rust command that matters, because it pairs the picker with validation and persistence."
     },
+    "audit_trail": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "limit": "number?"
+      },
+      "returns": "{ entries: AuditRecord[], total: number, unreadable: number }",
+      "why": "The audit trail was written from eighteen places and read from none — of the commands in this contract, not one named it. audit.rs states its audience as \"whoever has to account for the machine\", and that person could only produce the record by knowing it is JSON Lines and knowing which directory the logs go in. Writing a record nobody can be shown is most of the cost of a record and none of the benefit.",
+      "notes": "Newest first, which is the opposite of the order the file is written in and the order somebody scanning for \"what just happened\" reads in. Capped — default 200, ceiling 2000 — because this is the one file in the app that is never rotated, so an uncapped read is worst on exactly the machine where the trail matters most; `total` is every line in the file, so a screen showing fifty of nine thousand can say so rather than implying it is the history. A line that does not parse is SKIPPED and counted in `unreadable` rather than failing the call: the same judgement append_to makes, for the same reason — a half-written final line from a process killed mid-append must not make the rest unreadable, and damage in the file is itself something the reader needs to be told. Read-only and never audited itself: reading a record is not an act the record is for. No workspace is required — the trail lives beside the logs, not in the workspace, so it answers on a machine whose checkout has been moved. An absent file is an empty trail rather than an error, because nothing irreversible having been done yet is the normal state. `action` comes back as a string rather than the writer's &'static str, so a verb this build no longer emits still reads back — which is what an unrotated historical record means. See src-tauri/src/audit.rs."
+    },
     "policy_status": {
       "new": true,
       "kind": "query",
@@ -1933,7 +1963,7 @@
       "kind": "operation",
       "args": {
         "name": "string",
-        "template": "'laravel'|'symfony'|'cakephp'|'yii'|'codeigniter'|'laminas'|'slim'|'wordpress'|'drupal'|'prestashop'|'typo3'|'tina'|'nextjs'|'nuxt'|'vue'|'react'|'svelte'|'astro'|'nest'|'angular'|'django'|'rails'|'gin'|'echo'|'flask'|'fastapi'|'sinatra'|'rocket'"
+        "template": "'laravel'|'symfony'|'cakephp'|'yii'|'codeigniter'|'laminas'|'slim'|'wordpress'|'drupal'|'prestashop'|'statamic'|'typo3'|'tina'|'nextjs'|'nuxt'|'vue'|'react'|'svelte'|'astro'|'nest'|'angular'|'django'|'rails'|'gin'|'echo'|'flask'|'fastapi'|'sinatra'|'rocket'"
       },
       "returns": "OperationId",
       "emits": [
@@ -1941,7 +1971,7 @@
         "scaffold:done"
       ],
       "why": "The create half of P0-1 (detection/adoption shipped first). Runs the framework's own installer in a throwaway container — composer create-project, wp-cli, create-next-app — so nothing is installed on the host and only the bind-mounted project directory survives.",
-      "notes": "Ends where adoption begins: the UI follows with project_adopt, which detects runtime/server/document root from what the installer actually wrote — the same machinery as a git clone. Nine installers, every command pinned non-interactive — each flag measured against a real container rather than read off a README (nuxi needs both --template and --force; sv needs --no-add-ons; astro needs --yes). The JavaScript ones pass --no-install: the node Dockerfile installs for the container's platform, and a host node_modules in the image is the arm64-in-amd64 mistake NODE_DOCKERIGNORE exists to prevent (a prompt inside an operation console is a hang, not a question). On unix runs --user uid:gid so files land owned by the user, not root. Refuses a non-empty directory; a failed install that wrote nothing removes the husk so the retry is not blocked. Seventeen installers now, across PHP, JavaScript, Python and Ruby. Composer projects carry --ignore-platform-reqs because the installer container is not the machine the code runs on (CakePHP wants ext-intl, the composer image has none, and StackVo's PHP image does); Rails needs the full ruby image rather than slim, which cannot compile websocket-driver. Twenty-eight templates in two kinds: an installer container where the ecosystem has a scaffolder, and **written files** where it does not — Gin, Echo, Flask, FastAPI, Sinatra and Rocket are each 'write two files and let the language build them', so pulling an image to write thirty lines would be a download for nothing. Their dependencies are not skipped, they move: the project's own Dockerfile already runs pip/go build/bundle/cargo for the container's platform. Every written template binds 0.0.0.0 on the port lang_defaults gives its runtime — a test asserts it over code lines only, because the comments explaining the loopback trap were tripping the check."
+      "notes": "Ends where adoption begins: the UI follows with project_adopt, which detects runtime/server/document root from what the installer actually wrote — the same machinery as a git clone. Nine installers, every command pinned non-interactive — each flag measured against a real container rather than read off a README (nuxi needs both --template and --force; sv needs --no-add-ons; astro needs --yes). The JavaScript ones pass --no-install: the node Dockerfile installs for the container's platform, and a host node_modules in the image is the arm64-in-amd64 mistake NODE_DOCKERIGNORE exists to prevent (a prompt inside an operation console is a hang, not a question). On unix runs --user uid:gid so files land owned by the user, not root. Refuses a non-empty directory; a failed install that wrote nothing removes the husk so the retry is not blocked. Seventeen installers now, across PHP, JavaScript, Python and Ruby. Composer projects carry --ignore-platform-reqs because the installer container is not the machine the code runs on (CakePHP wants ext-intl, the composer image has none, and StackVo's PHP image does); Rails needs the full ruby image rather than slim, which cannot compile websocket-driver. Twenty-nine templates in two kinds: an installer container where the ecosystem has a scaffolder, and **written files** where it does not — Gin, Echo, Flask, FastAPI, Sinatra and Rocket are each 'write two files and let the language build them', so pulling an image to write thirty lines would be a download for nothing. Their dependencies are not skipped, they move: the project's own Dockerfile already runs pip/go build/bundle/cargo for the container's platform. Every written template binds 0.0.0.0 on the port lang_defaults gives its runtime — a test asserts it over code lines only, because the comments explaining the loopback trap were tripping the check."
     },
     "project_sidecars": {
       "new": true,
@@ -2051,6 +2081,25 @@
       "returns": "void",
       "why": "A recipe names what it needs and never carries it. The manifest is committed.",
       "notes": "Into the OS keystore, scoped per project AND per provider: two projects both wanting `SSH_KEY` are two different credentials, and a shared entry would hand one team's key to another project's recipe. Audited by NAME — there is nowhere in the record to put a value. DDEV mounts the developer's ssh agent into the container that runs the pull; that is coherent for a tool with curated recipes and wrong here, because a repository-declared container gets no host path and an ssh agent is a host path that signs things."
+    },
+    "provider_recipes": {
+      "new": true,
+      "kind": "query",
+      "args": {},
+      "returns": "RecipeCard[]",
+      "why": "The provider mechanism was finished and the catalogue was empty, so using the feature meant learning a file format from source — DDEV ships three recipes in every project and this shipped none. These are starting points written into the project's own stackvo.json, not integrations: every host name, database and project id in them is a placeholder.",
+      "notes": "Takes no workspace and answers the same for every project, because the catalogue is in the binary. Each card carries the image and every word of both directions, so the list and the approval screen describe the same thing — a list naming recipes without showing what they run would put the consequence one click further away than the click that commits to it. `edit` is never empty. Three shipped: mysql-remote and postgres-remote (both directions, password from the keystore through MYSQL_PWD/PGPASSWORD so it is never an argument) and upsun (pull only — its CLI's db:sql takes a query, not a file). SSH+mysqldump is NOT shippable and the reason is measured: a repository-declared container gets no host path, so no agent socket and no key file, and ssh authenticates with neither an environment variable nor an argv. Pantheon likewise: no Terminus image on any registry checked, and `terminus backup:get` answers with a URL that then has to be downloaded — a second command, therefore a shell."
+    },
+    "provider_recipe_add": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "recipe": "string"
+      },
+      "returns": "Manifest",
+      "why": "Closes the empty-field problem the recipe catalogue exists for: the user picks a starting point and it lands in their own stackvo.json, rather than being copied out of documentation.",
+      "notes": "Nothing is approved by being added. The recipe goes through the same consent digest as one somebody typed, and since every shipped recipe carries a placeholder host the version that gets approved is by definition not the version that was added — the digest covering that edit is what makes them two acts. Written through manifest::write, the same serialiser the form save uses, rather than by splicing an object into the file: a second writer for one file diverges, and the first divergence shows up as a project that opens with a Problem nobody wrote. Refuses a name the project already declares rather than replacing it — the copy on disk has been edited by definition, and overwriting it would discard a host name somebody looked up, in response to a button labelled add."
     },
     "pty_close": {
       "replaces": "socket 'disconnect'",
@@ -4692,6 +4741,15 @@
       "interactive": "bool",
       "because": "string (the marker file)",
       "note": "`display` is the command as typed, so what runs and what is shown cannot drift. `interactive` decides where it goes — the user's terminal, or the operation console. `id` is the only thing quick_command_run accepts."
+    },
+    "RecipeCard": {
+      "name": "string",
+      "about": "string",
+      "edit": "string[]",
+      "image": "string",
+      "pull": "string[]",
+      "push": "string[]",
+      "secrets": "string[]"
     },
     "RelayConfig": {
       "enabled": "bool",

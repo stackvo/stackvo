@@ -755,9 +755,368 @@ pub fn all_secrets(providers: &[Provider]) -> Vec<String> {
     seen.into_iter().collect()
 }
 
+// ------------------------------------------------------------------ recipes
+
+/// A starter recipe, shipped in the binary.
+///
+/// ## Why the catalogue was empty, and why that was the whole feature missing
+///
+/// The mechanism above is stricter than DDEV's and was finished before this
+/// existed: argv only, container only, consent per direction, secrets from the
+/// keystore. What it did not have was a single example. DDEV ships
+/// `.ddev/providers` with Upsun, Acquia and Lagoon already in every project;
+/// here, using the feature meant first learning a file format from source. A
+/// mechanism nobody can start using is not a shipped mechanism.
+///
+/// These are **starting points, not integrations**. Adding one writes it into
+/// the project's own `stackvo.json`, where it is a file the user owns and edits
+/// — every host name, database name and project id below is a placeholder, and
+/// the recipe will not work until somebody replaces them. That is deliberate:
+/// a recipe that guessed would be a recipe that reached the wrong server with
+/// real credentials.
+///
+/// Nothing about consent is shortened by a recipe being shipped. It is written
+/// into the manifest and then approved through the same digest as one somebody
+/// typed, because the two are the same thing the moment the file is saved —
+/// and because a recipe the user edited after adding it must ask again.
+///
+/// ## What could not be shipped, measured rather than assumed
+///
+/// **SSH plus `mysqldump`, the one that depends on no provider at all, cannot
+/// be expressed today.** Not because of the missing shell — `mysqldump` has
+/// `--result-file` and needs no pipe — but because of the rule this module
+/// states in its own header: a repository-declared container gets no host path,
+/// so no agent socket and no key file. `ssh` authenticates with a *file* or an
+/// *agent*, and a secret here arrives as an environment variable. There is no
+/// argv that turns one into the other. Closing that would mean letting a recipe
+/// ask for a secret to be materialised as a file in the scratch directory,
+/// which is a decision about this module's threat model rather than a recipe,
+/// and it is not made here.
+///
+/// **Pantheon cannot be expressed either, for two independent reasons.** There
+/// is no Terminus image on any registry this checked — DDEV installs the CLI
+/// into its own web container rather than running one — and `terminus
+/// backup:get` answers with a URL that then has to be downloaded, which is a
+/// second command and therefore a shell.
+///
+/// The Upsun CLI has an image and was run to check it: `ghcr.io/upsun/cli`
+/// takes `db:dump --directory --file`, reads `UPSUN_CLI_TOKEN` from the
+/// environment, and its entrypoint is the CLI itself so the argv is just the
+/// subcommand. It offers no `push`, and that is the CLI's shape rather than a
+/// choice here — `db:sql` takes a query, not a file.
+///
+/// ## The tag is `latest`, and the digest does not cover the bytes
+///
+/// `ghcr.io/upsun/cli` publishes no version tags. A consent digest covers the
+/// image *reference*, so an image that moves under a fixed tag is approved once
+/// and can change afterwards. That is true of any recipe naming a moving tag,
+/// including one somebody writes; it is said here because this is the one
+/// shipped recipe where there was no pinnable alternative to choose.
+pub struct Recipe {
+    /// The key it is written under, and the name consent is keyed on.
+    pub name: &'static str,
+    /// One line, for a list.
+    pub about: &'static str,
+    /// What has to be changed before it will work, in the reader's terms.
+    ///
+    /// Required rather than optional: every recipe here carries a placeholder,
+    /// and a starting point that does not say which words are placeholders is
+    /// a command somebody will approve as it stands.
+    pub edit: &'static [&'static str],
+    /// The body, exactly as it sits under `providers.<name>` in the manifest.
+    ///
+    /// Held as the JSON text rather than as a [`Provider`] so the shipped
+    /// recipes go through [`parse`] — the same reader the manifest uses — and a
+    /// recipe this repository ships cannot be one the parser refuses.
+    pub body: &'static str,
+}
+
+pub const RECIPES: [Recipe; 3] = [
+    Recipe {
+        name: "mysql-remote",
+        about: "A MySQL or MariaDB server this machine can reach directly",
+        edit: &[
+            "the host, port, user and database name in both commands",
+            "MYSQL_PWD, which the client reads from the environment so the \
+             password is never an argument",
+        ],
+        // `--result-file` rather than a redirect, and `--execute=source …`
+        // rather than `< dump.sql`: both are the client's own answer to the
+        // absence of a shell, which is why this pair is expressible and the ssh
+        // one is not.
+        body: r#"{
+          "image": "mysql:8.4",
+          "about": "The database this project really runs against",
+          "pull": [
+            "mysqldump",
+            "--host=db.example.com",
+            "--port=3306",
+            "--user=stackvo",
+            "--single-transaction",
+            "--quick",
+            "--no-tablespaces",
+            "--result-file=/stackvo/dump.sql",
+            "the_database"
+          ],
+          "push": [
+            "mysql",
+            "--host=db.example.com",
+            "--port=3306",
+            "--user=stackvo",
+            "--execute=source /stackvo/dump.sql",
+            "the_database"
+          ],
+          "secrets": ["MYSQL_PWD"]
+        }"#,
+    },
+    Recipe {
+        name: "postgres-remote",
+        about: "A PostgreSQL server this machine can reach directly",
+        edit: &[
+            "the host, port, user and database name in both commands",
+            "PGPASSWORD, which libpq reads from the environment",
+        ],
+        // `--no-owner --no-privileges` because the roles on the far side are
+        // not the roles here, and a restore that fails on a missing role is a
+        // pull that appears to have worked. `ON_ERROR_STOP` for the reverse
+        // reason: a push must not half-apply.
+        body: r#"{
+          "image": "postgres:17",
+          "about": "The database this project really runs against",
+          "pull": [
+            "pg_dump",
+            "--host=db.example.com",
+            "--port=5432",
+            "--username=stackvo",
+            "--no-owner",
+            "--no-privileges",
+            "--file=/stackvo/dump.sql",
+            "the_database"
+          ],
+          "push": [
+            "psql",
+            "--host=db.example.com",
+            "--port=5432",
+            "--username=stackvo",
+            "--dbname=the_database",
+            "--set=ON_ERROR_STOP=1",
+            "--file=/stackvo/dump.sql"
+          ],
+          "secrets": ["PGPASSWORD"]
+        }"#,
+    },
+    Recipe {
+        name: "upsun",
+        about: "An Upsun (Platform.sh) environment, through its own CLI",
+        edit: &[
+            "the project id and the environment name",
+            "UPSUN_CLI_TOKEN, an API token from the Upsun console",
+        ],
+        // No `push`. `upsun db:sql` takes a query rather than a file, so there
+        // is no argv that sends this database to that one — and an empty `push`
+        // is how a recipe says a direction is not offered.
+        body: r#"{
+          "image": "ghcr.io/upsun/cli:latest",
+          "about": "The Upsun environment this project deploys to",
+          "pull": [
+            "db:dump",
+            "--project=YOUR-PROJECT-ID",
+            "--environment=main",
+            "--directory=/stackvo",
+            "--file=dump.sql",
+            "--yes"
+          ],
+          "secrets": ["UPSUN_CLI_TOKEN"]
+        }"#,
+    },
+];
+
+pub fn recipe(name: &str) -> Option<&'static Recipe> {
+    RECIPES.iter().find(|r| r.name == name)
+}
+
+/// A shipped recipe, read through the same parser the manifest uses.
+///
+/// Returns `None` only if the shipped text is malformed, which
+/// [`tests::every_shipped_recipe_survives_the_parser_that_reads_the_manifest`]
+/// makes a build failure rather than a runtime one.
+pub fn as_provider(recipe: &Recipe) -> Option<Provider> {
+    let body: serde_json::Value = serde_json::from_str(recipe.body).ok()?;
+    let wrapped = serde_json::json!({ "providers": { recipe.name: body } });
+    let (mut providers, problems) = parse(&wrapped);
+    problems.is_empty().then(|| providers.pop()).flatten()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ------------------------------------------------------------- recipes
+
+    /// A recipe this repository ships must survive the reader the manifest
+    /// uses. Anything else means shipping a file that opens as a `Problem` in
+    /// the pane, next to the sentence explaining why the user's own file was
+    /// wrong.
+    #[test]
+    fn every_shipped_recipe_survives_the_parser_that_reads_the_manifest() {
+        for shipped in &RECIPES {
+            let body: serde_json::Value = serde_json::from_str(shipped.body)
+                .unwrap_or_else(|e| panic!("{}: not JSON: {e}", shipped.name));
+            let wrapped = serde_json::json!({ "providers": { shipped.name: body } });
+
+            let (providers, problems) = parse(&wrapped);
+            assert!(
+                problems.is_empty(),
+                "{} is refused by the parser: {problems:?}",
+                shipped.name
+            );
+            assert_eq!(providers.len(), 1, "{}", shipped.name);
+            assert_eq!(providers[0].name, shipped.name);
+
+            // And the convenience path agrees with the long one, since that is
+            // what the command actually calls.
+            assert_eq!(
+                as_provider(shipped).map(|p| p.name),
+                Some(shipped.name.to_string())
+            );
+        }
+    }
+
+    /// Names are keys, and a duplicate would make one of them unreachable
+    /// through `recipe()` while both still showed in the list.
+    #[test]
+    fn every_shipped_recipe_has_its_own_name_and_says_what_to_edit() {
+        let mut seen = BTreeSet::new();
+        for shipped in &RECIPES {
+            assert!(
+                seen.insert(shipped.name),
+                "two recipes are called {}",
+                shipped.name
+            );
+            assert!(
+                is_name(shipped.name),
+                "{} is not a usable key",
+                shipped.name
+            );
+            assert_eq!(
+                super::recipe(shipped.name).map(|r| r.name),
+                Some(shipped.name)
+            );
+
+            // Every one of these carries a placeholder host, database or
+            // project id. A starting point that does not say which words are
+            // placeholders is a command somebody approves as it stands.
+            assert!(
+                !shipped.edit.is_empty(),
+                "{} says nothing about what has to be changed",
+                shipped.name
+            );
+            assert!(!shipped.about.is_empty());
+        }
+        assert_eq!(super::recipe("no-such-recipe").map(|r| r.name), None);
+    }
+
+    /// The rule the module header states, held against the recipes it ships.
+    ///
+    /// A shipped `sh -c` would be the loudest possible contradiction: the
+    /// consent screen shows every word of the command, and a shell string is
+    /// one word that means anything.
+    #[test]
+    fn no_shipped_recipe_reaches_for_a_shell() {
+        for shipped in &RECIPES {
+            let provider = as_provider(shipped).expect("parses");
+            for direction in [Direction::Pull, Direction::Push] {
+                let argv = provider.command(direction);
+                let Some(program) = argv.first() else {
+                    continue;
+                };
+                assert!(
+                    !matches!(program.as_str(), "sh" | "bash" | "zsh" | "dash" | "env"),
+                    "{} runs `{program}` — there is no shell here",
+                    shipped.name
+                );
+                // A pipeline or a redirect could only work through one, so
+                // their presence means somebody wrote a command line and
+                // expected it to be read as one.
+                for word in argv {
+                    assert!(
+                        !word.starts_with('|') && !word.starts_with('>') && !word.starts_with('<'),
+                        "{} has `{word}` in its argv, which needs a shell",
+                        shipped.name
+                    );
+                }
+            }
+        }
+    }
+
+    /// Every shipped recipe reads or writes the one file the contract names,
+    /// and gets its credential from the keystore rather than from the file.
+    ///
+    /// The first half is what makes a pull land anywhere: `produced` looks for
+    /// `/stackvo/dump.sql` and nothing else, so a recipe writing next to it
+    /// fails with "the provider wrote no dump" after a successful-looking run.
+    /// The second is the rule the whole module exists for — a password in
+    /// `env` would be a credential in a committed file.
+    #[test]
+    fn every_shipped_recipe_uses_the_agreed_path_and_keeps_its_password_out_of_the_file() {
+        let dump = format!("{MOUNT}/{DUMP}");
+
+        for shipped in &RECIPES {
+            let provider = as_provider(shipped).expect("parses");
+            assert!(
+                !provider.secrets.is_empty(),
+                "{} names no secret, so where does it authenticate from",
+                shipped.name
+            );
+            assert!(
+                provider.env.is_empty(),
+                "{} puts values in `env`, which is the committed half",
+                shipped.name
+            );
+
+            for direction in [Direction::Pull, Direction::Push] {
+                let argv = provider.command(direction);
+                if argv.is_empty() {
+                    continue;
+                }
+                assert!(
+                    argv.iter().any(|word| word.contains(&dump))
+                        // The Upsun CLI splits it: `--directory=/stackvo`
+                        // plus `--file=dump.sql`.
+                        || (argv.iter().any(|w| w.contains(MOUNT))
+                            && argv.iter().any(|w| w.contains(DUMP))),
+                    "{} ({}) never names {dump}, so a pull would produce nothing \
+                     and a push would send nothing",
+                    shipped.name,
+                    direction.as_str()
+                );
+            }
+        }
+    }
+
+    /// `run_args` over a shipped recipe, end to end — the array is where every
+    /// dangerous property of this feature lives, so at least one shipped recipe
+    /// is checked through it rather than only through the parser.
+    #[test]
+    fn a_shipped_recipe_builds_the_argv_the_run_rules_require() {
+        let provider =
+            as_provider(super::recipe("mysql-remote").expect("shipped")).expect("parses");
+        let args = run_args(&provider, Direction::Pull, Path::new("/tmp/scratch"));
+        let line = args.join(" ");
+
+        assert!(line.starts_with("run --rm"));
+        assert!(line.contains("-i=false"), "{line}");
+        assert!(line.contains(&format!("/tmp/scratch:{MOUNT}")), "{line}");
+        // Name only: `docker run -e NAME` copies the value from this process,
+        // so it is not in `ps` and not in a crash report.
+        assert!(line.contains("-e MYSQL_PWD "), "{line}");
+        assert!(
+            !line.contains("MYSQL_PWD="),
+            "a value reached the argv: {line}"
+        );
+        // Exactly one mount, and it is this application's scratch directory.
+        assert_eq!(args.iter().filter(|a| *a == "-v").count(), 1);
+    }
 
     fn recipe(body: serde_json::Value) -> (Vec<Provider>, Vec<Problem>) {
         parse(&serde_json::json!({ "providers": { "staging": body } }))

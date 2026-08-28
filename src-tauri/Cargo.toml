@@ -2,8 +2,14 @@
 name = "stackvo-desktop"
 version = "0.1.0"
 description = "Native desktop app for StackVo"
-authors = ["StackVo"]
+# The name on LICENSE. `authors = ["StackVo"]` named the product rather than the
+# copyright holder, so the two files disagreed about who wrote this.
+authors = ["Fahrettin Aksoy"]
 license = "MIT"
+repository = "https://github.com/stackvo/stackvo"
+homepage = "https://github.com/stackvo/stackvo"
+keywords = ["docker", "development", "php", "tauri", "localhost"]
+categories = ["development-tools", "web-programming"]
 edition = "2021"
 rust-version = "1.82"
 

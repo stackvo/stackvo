@@ -1,0 +1,71 @@
+# Three ecosystems ship in this repository and none of them was watched.
+#
+# `npm audit` is clean and `cargo deny` runs in CI, so this is not about
+# vulnerabilities — it is about distance. Seven npm packages are a major version
+# behind and the gap widens every month a nobody looks, which makes the eventual
+# migration more expensive rather than more urgent. A pull request per bump is
+# the cheapest way to keep that visible.
+#
+# Grouped, and weekly rather than daily. An ungrouped daily Dependabot on three
+# ecosystems is a repository nobody reads the notifications for, which is the
+# same outcome as not having it with extra noise attached.
+version: 2
+
+updates:
+  # The front end. Vuetify, Pinia, Vue Router and vue-i18n move together often
+  # enough that separate pull requests for them are separate merge conflicts.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      vue:
+        patterns:
+          - vue
+          - vue-*
+          - vuetify
+          - pinia
+          - '@vitejs/*'
+      tooling:
+        patterns:
+          - vite
+          - vitest
+          - '@vitest/*'
+          - eslint
+          - '@eslint/*'
+          - prettier
+          - jsdom
+    # Majors are deliberately left out of the groups above and raised on their
+    # own: Vuetify 4 and Pinia 4 are migrations rather than bumps, and a grouped
+    # pull request that mixes one with six patch updates is one nobody can
+    # review or revert cleanly.
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      tauri:
+        patterns:
+          - tauri
+          - tauri-*
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
+  # The workflows themselves. An action pinned to a tag that stops being
+  # maintained is the supply-chain hole nobody looks for, because it is not in
+  # any lockfile.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3

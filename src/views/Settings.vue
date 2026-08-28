@@ -23,6 +23,7 @@ import CataloguePane from '@/components/settings/CataloguePane.vue';
 import PreferencesPane from '@/components/settings/PreferencesPane.vue';
 import { usePreferences } from '@/composables/usePreferences';
 import DiagnosticsPane from '@/components/settings/DiagnosticsPane.vue';
+import AuditPane from '@/components/settings/AuditPane.vue';
 import PolicyNotice from '@/components/settings/PolicyNotice.vue';
 import SecretsPane from '@/components/settings/SecretsPane.vue';
 import AgentsPane from '@/components/settings/AgentsPane.vue';
@@ -238,6 +239,16 @@ const SECTIONS = [
     icon: 'mdi-stethoscope',
     label: 'doctor.title',
     desc: 'doctor.sectionDesc',
+  },
+  {
+    // Beside the doctor rather than in the stack group: both answer a question
+    // about this machine rather than configuring it, and the doctor says what
+    // is wrong now while this says what was done before.
+    key: 'audit',
+    group: 'help',
+    icon: 'mdi-clipboard-text-clock-outline',
+    label: 'audit.title',
+    desc: 'audit.sectionDesc',
   },
   {
     key: 'about',
@@ -539,6 +550,10 @@ onMounted(async () => {
 
           <template v-if="tab === 'doctor'">
             <DiagnosticsPane />
+          </template>
+
+          <template v-if="tab === 'audit'">
+            <AuditPane />
           </template>
 
           <template v-if="tab === 'secrets'">

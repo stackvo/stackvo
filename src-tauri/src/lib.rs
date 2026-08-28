@@ -34,6 +34,7 @@ pub mod env_writer;
 pub mod error;
 pub mod events;
 pub mod explain;
+pub mod focus;
 pub mod generator;
 pub mod git;
 pub mod handover;
@@ -481,6 +482,8 @@ pub fn run() {
             commands::project_providers,
             commands::provider_consent,
             commands::provider_secret_set,
+            commands::provider_recipes,
+            commands::provider_recipe_add,
             commands::provider_run,
             commands::project_devcontainer_plan,
             commands::project_devcontainer_write,
@@ -685,6 +688,9 @@ pub fn run() {
             commands::websurface_status,
             commands::websurface_stop,
             commands::licences_notice,
+            commands::audit_trail,
+            commands::focus_plan,
+            commands::focus_apply,
             commands::policy_status,
             commands::secrets_status,
             commands::secret_move,

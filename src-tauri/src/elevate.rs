@@ -33,6 +33,66 @@
 
 use crate::error::{Code, Error, Result};
 
+/// A private directory to stage a file the elevated step will copy.
+///
+/// The two callers here write a file as this user and then have root copy it
+/// over `/etc/hosts` or a resolver file. Both used a fixed name in
+/// `std::env::temp_dir()` — `stackvo-hosts-staged`, `stackvo-dns-staged` —
+/// while every other temporary path in this repository is already made unique
+/// with the process id. Those two were the ones where it mattered most.
+///
+/// On Linux `temp_dir()` is the shared `/tmp`. A fixed name there is a name any
+/// other local account can create first, or replace between our `write` and
+/// root's `cp`, and the result is **content of somebody else's choosing written
+/// into `/etc/hosts` with root's authority**. macOS gives each user a private
+/// `TMPDIR`, so exposure there is narrow — but Linux is a supported platform,
+/// not a footnote.
+///
+/// So: a fresh `0700` directory per call, named with the process id and a
+/// counter. `create_dir` fails rather than reuses if the name is somehow taken,
+/// which is the property a fixed name gave away. The mode is set before
+/// anything is written into it — a directory created world-traversable and
+/// tightened afterwards has the same window in miniature.
+///
+/// Returns the directory; the caller joins its own filename onto it and is
+/// responsible for removing it. A leaked directory is empty and harmless; a
+/// leaked *shared* name was the bug.
+pub fn staging_dir(purpose: &str) -> Result<std::path::PathBuf> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let dir = std::env::temp_dir().join(format!(
+        "stackvo-{purpose}-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+
+    make_private(&dir)?;
+    Ok(dir)
+}
+
+/// Create one directory, private, refusing a name that is already taken.
+///
+/// Split out from [`staging_dir`] because the refusal is the property worth a
+/// test and the name above is deliberately unpredictable — it carries a process
+/// id and a counter shared across every caller, so a test cannot arrange a
+/// collision on it. Here it can pass a path it occupied itself.
+fn make_private(dir: &std::path::Path) -> Result<()> {
+    // Not `create_dir_all`: the caller's path is unique per call, so an
+    // existing one is a collision worth failing on rather than a directory to
+    // adopt — adopting one is adopting whatever made it.
+    std::fs::create_dir(dir).map_err(|e| Error::io("creating a staging directory", e))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| Error::io("restricting a staging directory", e))?;
+    }
+
+    Ok(())
+}
+
 /// Turn `argv` into one shell command, quoting every item.
 ///
 /// A named handler rather than inline code because the test below runs this
@@ -665,5 +725,73 @@ mod tests {
     fn an_empty_command_is_refused_before_a_panel_appears() {
         let error = run(&[]).expect_err("an empty argv must not reach osascript");
         assert_eq!(error.code, Code::InvalidInput);
+    }
+}
+
+/// The staging directory is the one part of the elevated path that runs on
+/// every platform and in a test, so it is held here rather than described.
+#[cfg(test)]
+mod staging_tests {
+    use super::*;
+
+    /// Two calls must not be able to collide, because a shared name is exactly
+    /// what this replaced: the previous code wrote to a fixed
+    /// `stackvo-hosts-staged` in `/tmp` and root copied whatever was there.
+    #[test]
+    fn every_call_gets_a_directory_of_its_own() {
+        let a = staging_dir("test-unique").expect("a staging directory");
+        let b = staging_dir("test-unique").expect("a second staging directory");
+        assert_ne!(a, b, "two calls returned the same path");
+        assert!(a.is_dir() && b.is_dir());
+
+        // And the name carries this process, so two copies of the app running
+        // side by side cannot meet in the middle either.
+        let pid = std::process::id().to_string();
+        for dir in [&a, &b] {
+            assert!(
+                dir.file_name().unwrap().to_string_lossy().contains(&pid),
+                "{dir:?} does not name this process"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&a);
+        let _ = std::fs::remove_dir_all(&b);
+    }
+
+    /// The mode is the whole point on Linux, where `temp_dir()` is shared.
+    #[cfg(unix)]
+    #[test]
+    fn the_directory_is_private_before_anything_is_written_into_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = staging_dir("test-mode").expect("a staging directory");
+        let mode = std::fs::metadata(&dir)
+            .expect("the directory exists")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(
+            mode, 0o700,
+            "staging directory is {mode:o}; group or other can reach the file root is about to copy"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `create_dir` rather than `create_dir_all`: adopting a directory that is
+    /// already there is adopting whatever made it — which is the whole attack
+    /// this replaced, since the attacker's move was to get there first.
+    #[test]
+    fn an_existing_name_is_refused_rather_than_reused() {
+        let taken = std::env::temp_dir().join(format!("stackvo-test-taken-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&taken);
+        std::fs::create_dir(&taken).expect("a directory in the way");
+
+        assert!(
+            make_private(&taken).is_err(),
+            "an occupied name was adopted instead of refused"
+        );
+
+        let _ = std::fs::remove_dir_all(&taken);
     }
 }

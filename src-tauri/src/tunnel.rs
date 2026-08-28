@@ -838,7 +838,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
 
     match provider.id {
         "cloudflare" => {
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.extend(
                 ["tunnel", "--no-autoupdate", "--url"]
                     .into_iter()
@@ -856,7 +856,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
         // The same client, told to run a tunnel that already exists rather
         // than to invent one.
         "cloudflare_named" => {
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.extend(
                 ["tunnel", "--no-autoupdate", "run", "--url"]
                     .into_iter()
@@ -885,7 +885,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
         "localhost_run" => {
             args.push("--entrypoint".into());
             args.push("ssh".into());
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.extend(SSH_OPTS.iter().map(|s| String::from(*s)));
             args.push("-R".into());
             args.push(format!("80:{host}:{port}"));
@@ -896,7 +896,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
         "pinggy" => {
             args.push("--entrypoint".into());
             args.push("ssh".into());
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.extend(SSH_OPTS.iter().map(|s| String::from(*s)));
             // 443 rather than 22: the free endpoint listens there, and it is
             // also the port a restrictive network lets out.
@@ -912,7 +912,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
             // a question in a detached container is a hang.
             args.push("--entrypoint".into());
             args.push("npx".into());
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.extend(
                 ["-y", "localtunnel", "--port"]
                     .into_iter()
@@ -940,7 +940,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
         }
 
         "ngrok" => {
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.push("http".into());
             // `host:port` is the agent's own documented form for forwarding to
             // another machine on the network — `ngrok http servername.local:9000`
@@ -984,7 +984,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
             // has one network mode, and this one is the project's.
             args.push("--entrypoint".into());
             args.push("sh".into());
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.push("-c".into());
             // The funnel is published at `<hostname>.<tailnet>.ts.net`, so the
             // hostname *is* the reserved name here — there is no second flag.
@@ -1018,7 +1018,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
             // stops it drawing a terminal UI at a log.
             args.push("--entrypoint".into());
             args.push("sh".into());
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.push("-c".into());
             args.push(match reserved {
                 // The vendor's own two-step for a kept address: reserve the
@@ -1041,7 +1041,7 @@ pub fn run_args(provider: &Provider, plan: &Plan) -> Vec<String> {
         }
 
         "localxpose" => {
-            args.push(provider.image.into());
+            args.push(crate::policy::run_image(provider.image));
             args.extend(["tunnel", "http", "--to"].into_iter().map(String::from));
             // `--to app.corp:8080` is the client's own example of forwarding to
             // another machine, so the project container is a target it names.

@@ -104,7 +104,7 @@ pub fn run_args(host_dir: &str, domain: &str, network: &str) -> Vec<String> {
         &format!("traefik.http.routers.{router}.tls=true"),
         "--label",
         &format!("traefik.http.services.{router}.loadbalancer.server.port=80"),
-        IMAGE,
+        &crate::policy::run_image(IMAGE),
     ]
     .into_iter()
     .map(String::from)

@@ -114,6 +114,8 @@ fn container_port(id: &str) -> Option<u16> {
         "cassandra" => 9042,
         "clickhouse" => 8123,
         "solr" => 8983,
+        "mssql" => 1433,
+        "beanstalkd" => 11300,
         _ => return None,
     })
 }
