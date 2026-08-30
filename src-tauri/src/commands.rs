@@ -65,6 +65,18 @@ pub struct AppState {
     /// container name -> (timestamp, cpu %, memory %). Sampled in the
     /// background so the dashboard has history to draw on its first render.
     pub stats_history: Mutex<StatsHistory>,
+    /// What each container has cost, accumulated from the same samples.
+    ///
+    /// Beside the history rather than derived from it, because the two want
+    /// opposite things from time: the history is a two-hour window drawn as a
+    /// chart, and this is a running total nobody may lose. See
+    /// [`crate::usage`].
+    pub usage: Mutex<crate::usage::Ledger>,
+    /// Which projects have already been reported over budget today, so the
+    /// notice arrives once rather than every sixty seconds for the rest of the
+    /// afternoon. Keyed `<date>/<project>`; a new day is a new key, which is
+    /// what makes tomorrow's first breach an event again.
+    pub budget_notified: Mutex<std::collections::BTreeSet<String>>,
     /// One operation per subject. The front end's busy flag is per view; this
     /// is the boundary that the tray, a second view and a shortcut all share.
     pub inflight: crate::inflight::Registry,
@@ -133,6 +145,12 @@ impl AppState {
                     .map(|p| crate::stats_store::load_from(&p, crate::stats_store::now()))
                     .unwrap_or_default(),
             ),
+            usage: Mutex::new(
+                crate::usage::path()
+                    .map(|p| crate::usage::load_from(&p))
+                    .unwrap_or_default(),
+            ),
+            budget_notified: Mutex::new(std::collections::BTreeSet::new()),
             inflight: crate::inflight::Registry::new(),
             supervisor_watch: Mutex::new(crate::supervisor::Watch::default()),
             supervisor_alarms: Mutex::new(crate::supervisor::Alarms::default()),
@@ -643,7 +661,7 @@ fn instance_services(
     }
     let table = crate::instances::Table::load(root).ok()?;
     let tree = crate::market::catalogue(root).ok()?;
-    let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
+    let tld = env.tld_suffix();
 
     let mut out: Vec<Service> = table
         .instances
@@ -750,7 +768,7 @@ fn instance_services(
                 url: manifest
                     .as_ref()
                     .and_then(|m| m.url.as_ref())
-                    .map(|u| instance.domain(&u.subdomain, tld)),
+                    .map(|u| instance.domain(&u.subdomain, &tld)),
                 // The published number, which is the one somebody pastes into a
                 // client. The manifest's `primary` port names which that is.
                 host_port: manifest
@@ -854,7 +872,7 @@ pub async fn list_services(root: &std::path::Path) -> Result<Vec<Service>> {
     }
 
     let schema = env_schema();
-    let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
+    let tld = env.tld_suffix();
 
     let is_running = |id: &str| {
         containers
@@ -1066,13 +1084,10 @@ pub fn build_catalog(root: &std::path::Path) -> Result<Catalog> {
     Ok(Catalog {
         runtimes,
         servers: env.get("SUPPORTED_SERVERS").map_or_else(
-            || vec!["nginx".to_string()],
+            || vec![crate::config::DEFAULT_SERVER.to_string()],
             |v| v.split(',').map(|s| s.trim().to_string()).collect(),
         ),
-        default_server: env
-            .get("SUPPORTED_SERVERS_DEFAULT")
-            .unwrap_or("nginx")
-            .to_string(),
+        default_server: env.default_server(),
         max_extensions: php_ext.len(),
         php_extensions: php_ext,
     })
@@ -1705,7 +1720,7 @@ fn generate_reported(
     operation_id: &str,
     scope: &str,
 ) -> Result<()> {
-    let report = write_generated(root, scope, |label| {
+    let report = crate::generator::write_generated(root, scope, |label| {
         crate::progress::emit(
             sink,
             "generate:progress",
@@ -2275,10 +2290,7 @@ pub async fn db_move_apply(
 pub fn routes_list(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>> {
     let root = state.root()?;
     let env = crate::config::Env::load(&root)?;
-    let suffix = env
-        .get("DEFAULT_TLD_SUFFIX")
-        .unwrap_or("stackvo.loc")
-        .to_string();
+    let suffix = env.tld_suffix();
 
     Ok(crate::routes::read(&root)
         .into_iter()
@@ -2312,10 +2324,7 @@ pub async fn routes_save(
 ) -> Result<Vec<serde_json::Value>> {
     let root = state.root()?;
     let env = crate::config::Env::load(&root)?;
-    let suffix = env
-        .get("DEFAULT_TLD_SUFFIX")
-        .unwrap_or("stackvo.loc")
-        .to_string();
+    let suffix = env.tld_suffix();
 
     for route in &routes {
         route.normalise(&suffix)?;
@@ -2350,7 +2359,7 @@ fn dns_suffix(state: &AppState) -> String {
         .root()
         .ok()
         .map(|root| crate::certs::suffix(&root))
-        .unwrap_or_else(|| "stackvo.loc".to_string())
+        .unwrap_or_else(|| crate::config::DEFAULT_TLD_SUFFIX.to_string())
 }
 
 fn dns_state(state: &AppState, suffix: &str) -> crate::dns::Status {
@@ -2708,7 +2717,7 @@ fn host_sync_action(
 /// and the Domain pane lists what is still missing.
 async fn sync_service_host(root: &std::path::Path, service: &str, enabled: bool) -> Result<()> {
     let env = Env::load(root)?;
-    let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
+    let tld = env.tld_suffix();
     let Some(url) = env.service_url(service) else {
         return Ok(());
     };
@@ -2884,7 +2893,7 @@ fn instance_domains(
     }
     let table = crate::instances::Table::load(root).ok()?;
     let tree = crate::market::catalogue(root).ok()?;
-    let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
+    let tld = env.tld_suffix();
 
     Some(
         table
@@ -2894,7 +2903,7 @@ fn instance_domains(
             .filter_map(|instance| {
                 let manifest = tree.load(&instance.service, &instance.version).ok()?;
                 let url = manifest.url.as_ref()?;
-                Some((instance.id.clone(), instance.domain(&url.subdomain, tld)))
+                Some((instance.id.clone(), instance.domain(&url.subdomain, &tld)))
             })
             // The same two reasons a name is wanted as on the `.env` path: the
             // container is up, or the hosts file already carries the line and
@@ -2927,7 +2936,7 @@ fn service_domains_from(
     running: &std::collections::HashSet<String>,
     managed: &std::collections::HashSet<String>,
 ) -> Vec<String> {
-    let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
+    let tld = env.tld_suffix();
 
     env_schema()
         .service_catalog()
@@ -2976,7 +2985,7 @@ fn core_domains(root: &std::path::Path) -> Vec<String> {
     let Ok(env) = Env::load(root) else {
         return Vec::new();
     };
-    let tld = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
+    let tld = env.tld_suffix();
 
     let mut out = vec![tld.to_string(), format!("traefik.{tld}")];
     out.retain(|d| crate::hosts::is_valid_domain(d));
@@ -3309,19 +3318,10 @@ pub async fn service_open_in_client(
     // handed to TablePlus is a line, which is a worse record than either choice.
     // If reveals ever become auditable, this belongs with them and not before.
 
-    if let Some(launch) = crate::apps::resolve_db_client(&client) {
-        let spawned = match launch {
-            crate::apps::Launch::Command(cmd) => std::process::Command::new(cmd)
-                .arg(&endpoint.uri)
-                .spawn()
-                .is_ok(),
-            crate::apps::Launch::Bundle(bundle) => std::process::Command::new("open")
-                .args(["-a", bundle])
-                .arg(&endpoint.uri)
-                .spawn()
-                .is_ok(),
-        };
-        if spawned {
+    if let Some(launch) =
+        crate::apps::resolve_db_client(&client, pref_str("dbClientCustom").as_deref())
+    {
+        if launch.spawn_with(endpoint.uri.as_ref()) {
             return Ok(());
         }
         // Fall through to the system handler rather than leaving the click with
@@ -4130,6 +4130,25 @@ pub async fn spx_record_request(
 ) -> Result<crate::spx::Report> {
     let root = state.root()?;
     workspace::project_dir(&root, &name)?;
+    record_request(&state, &root, &name, path.as_deref().unwrap_or("/")).await
+}
+
+/// Send one request with the profiler on, and hand back the recording it made.
+///
+/// Extracted from the command above so [`request_replay`] runs *the same*
+/// request rather than a second implementation of one — the two would drift on
+/// exactly the details that make a replay comparable to the original: the
+/// profiler cookie, the redirect policy, and the observation window that
+/// `request_explain` later joins statements against.
+async fn record_request(
+    state: &State<'_, AppState>,
+    root: &std::path::Path,
+    name: &str,
+    path: &str,
+) -> Result<crate::spx::Report> {
+    let name = name.to_string();
+    let root = root.to_path_buf();
+    let path = Some(path.to_string());
 
     // One recording of a project at a time. The new report is found by diffing
     // the directory, and two recordings racing would each be able to claim the
@@ -4205,6 +4224,65 @@ pub async fn spx_record_request(
         format!("{name} answered {code}, and the profiler recorded nothing"),
     )
     .with_hint(crate::hints::SPX_RECORDED_NOTHING))
+}
+
+/// Send a recorded request again, and hand back both recordings.
+///
+/// ## The verb the instruments were waiting for
+///
+/// `explain.rs` opens by saying that no new measurement is needed, and it was
+/// right about its own view. It is right about this one too: everything a
+/// replay needs already exists — the recording that names a request, the sender
+/// that can issue one with the profiler on, the observation window that lets
+/// the query log be joined to it. What was missing was the act.
+///
+/// The loop this closes is the commonest one in performance work and it takes
+/// four steps today: change the code, open the site, find the page, come back
+/// and hunt for the new recording in a list of twenty. This is that loop as one
+/// call, and it answers with **both** reports so the two can be read side by
+/// side rather than by remembering a number.
+///
+/// ## What it will not do, and why that is written down rather than attempted
+///
+/// A recording names the request *line* and nothing else — see
+/// [`crate::explain::replayable`]. A POST re-sent without its body and its
+/// session is a different request, and one that usually answers 419. So it is
+/// refused with the reason instead of run, because a result that looks like an
+/// answer and is not is worse than a refusal.
+#[tauri::command]
+pub async fn request_replay(
+    state: State<'_, AppState>,
+    name: String,
+    key: String,
+) -> Result<crate::explain::Replay> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let before = crate::spx::list(&root, &name)
+        .into_iter()
+        .find(|report| report.key == key)
+        .ok_or_else(|| Error::not_found(format!("recording {key}")))?;
+
+    // `Unsupported` rather than `InvalidInput`: the caller did nothing wrong
+    // and there is no argument to correct. The recording is what it is.
+    let path =
+        crate::explain::replayable(&before).map_err(|why| Error::new(Code::Unsupported, why))?;
+
+    let after = record_request(&state, &root, &name, &path).await?;
+
+    // Deliberately not audited, and not because it is harmless: it sends a real
+    // request to the person's own site, which runs their code. It is the same
+    // act `spx_record_request` performs, that one is not audited either, and
+    // `audit.rs` states the bar this falls under — a trail that records routine
+    // traffic is one nobody reads, and a trail nobody reads is not evidence.
+    // Auditing one half of an identical pair would be worse than auditing
+    // neither.
+    Ok(crate::explain::Replay {
+        wall_time_us: after.wall_time_us as i64 - before.wall_time_us as i64,
+        peak_memory: after.peak_memory as i64 - before.peak_memory as i64,
+        before,
+        after,
+    })
 }
 
 /// The host clock, in the unit and epoch every other source on the axis uses.
@@ -4449,8 +4527,24 @@ pub async fn xdebug_set(
 /// reads it. That is the whole operation — no compose command, no recreate, no
 /// waiting for a worker to cycle. It is the difference this feature exists for.
 #[tauri::command]
-pub fn debug_bridge_set(state: State<'_, AppState>, name: String, enabled: bool) -> Result<()> {
-    crate::debugbridge::set_enabled(&state.root()?, &name, enabled)
+pub async fn debug_bridge_set(
+    state: State<'_, AppState>,
+    name: String,
+    enabled: bool,
+) -> Result<()> {
+    let root = state.root()?;
+    crate::debugbridge::set_enabled(&root, &name, enabled)?;
+
+    // Seeded here rather than on the first poll, and the difference is one
+    // second of somebody's attention: switching capture on and dispatching a
+    // job straight away is the normal way to use this, and a seed that happens
+    // a poll later takes that job's own line as the history to start after.
+    // `set_enabled` dropped the cursor, so this writes where the worker is
+    // *now* and ingests nothing.
+    if enabled {
+        crate::queuelog::ingest(&root, &name).await;
+    }
+    Ok(())
 }
 
 /// Events recorded after the `since`th one.
@@ -4460,12 +4554,22 @@ pub fn debug_bridge_set(state: State<'_, AppState>, name: String, enabled: bool)
 /// saw is enough: events are only ever appended, so everything past that index
 /// is new, and a caller that missed a poll catches up rather than losing them.
 #[tauri::command]
-pub fn debug_bridge_events(
+pub async fn debug_bridge_events(
     state: State<'_, AppState>,
     name: String,
     since: Option<usize>,
 ) -> Result<serde_json::Value> {
     let root = state.root()?;
+
+    // The queue's half, folded into the same file before it is read. Only
+    // while capture is on: the worker's log is there either way, and reading a
+    // container's output once a second for a project nobody is watching is a
+    // cost with no reader. See `queuelog` for why jobs arrive from the host at
+    // all.
+    if crate::debugbridge::sentinel_path(&root, &name).is_file() {
+        crate::queuelog::ingest(&root, &name).await;
+    }
+
     crate::debugbridge::rotate_if_large(&root, &name);
 
     let all = crate::debugbridge::read_events(&root, &name);
@@ -5097,7 +5201,12 @@ pub fn site_settings(state: State<'_, AppState>, name: String) -> Result<serde_j
     )
     .ok()
     .and_then(|m| m.server.clone())
-    .unwrap_or_else(|| "nginx".to_string());
+    .unwrap_or_else(|| {
+        crate::config::Env::load(&root).map_or_else(
+            |_| crate::config::DEFAULT_SERVER.to_string(),
+            |env| env.default_server(),
+        )
+    });
 
     Ok(serde_json::json!({
         "env": config.env,
@@ -5164,6 +5273,82 @@ pub fn quick_commands(
     crate::quickcmd::for_project(&state.root()?, &name)
 }
 
+// ---------------------------------------------------------- crash reports
+
+/// Crash reports this install has not been told about yet.
+///
+/// `PRIVACY.md` promises no telemetry and no crash reporting service, and this
+/// keeps that promise exactly: nothing leaves the machine. What it fixes is
+/// that the application could crash, write a perfectly good report, and never
+/// mention it — so somebody who would happily have attached one to a bug report
+/// never learned there was anything to attach.
+///
+/// Read-only, and cheap: a directory listing of at most ten files.
+#[tauri::command]
+pub fn crash_reports() -> Result<Vec<crate::crash::Report>> {
+    Ok(crate::crash::unseen())
+}
+
+/// Record that the notice has been shown, so it does not repeat every launch.
+///
+/// Separate from reading them, because the two are different moments: the
+/// window asks on open and marks when the person has actually seen the line.
+/// Marking on read would dismiss a notice nobody looked at — which is the same
+/// as not having one.
+#[tauri::command]
+pub fn crash_reports_seen() -> Result<()> {
+    crate::crash::mark_seen();
+    Ok(())
+}
+
+/// The machine-wide commands, and what the file got wrong.
+///
+/// Its own command rather than a field on `quick_commands`, because the two
+/// answer different questions: that one is "what can I run in *this* project",
+/// this one is "what does my `commands.json` say" — a question about a file,
+/// asked from Settings, with no project open.
+///
+/// `shadowed` is per project and is therefore *not* here. A machine-wide row is
+/// only shadowed relative to a project that declares the same id, and this
+/// command has no project; `quick_commands` marks each row with the file it
+/// came from, which is where that distinction is visible.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineCommands {
+    /// Where the file is, or would be. Shown so somebody can go and write one.
+    pub path: String,
+    /// Whether it is there at all — an absent file is the ordinary case, not an
+    /// error, and the pane says something different for each.
+    pub exists: bool,
+    pub commands: crate::quickcmd::Declared,
+    /// Rows the file got wrong, as `Finding`s under the `COMMAND` code — the
+    /// same shape and the same code a manifest's bad `commands` block produces,
+    /// because it is the same parser reporting the same rule.
+    pub problems: Vec<crate::manifest::Finding>,
+}
+
+#[tauri::command]
+pub fn machine_commands(state: State<'_, AppState>) -> Result<MachineCommands> {
+    let root = state.root()?;
+    let path = root.join(crate::quickcmd::MACHINE_FILE);
+    let (commands, problems) = crate::quickcmd::machine_wide(&root);
+    let problems = problems
+        .into_iter()
+        .map(|p| crate::manifest::Finding {
+            code: "COMMAND".into(),
+            path: p.path,
+            message: p.message,
+        })
+        .collect();
+
+    Ok(MachineCommands {
+        exists: path.is_file(),
+        path: path.display().to_string(),
+        commands,
+        problems,
+    })
+}
+
 /// Run one of them, by id.
 ///
 /// The id is looked up in the catalog and the argv is built here; the frontend
@@ -5199,12 +5384,14 @@ pub async fn quick_command_run(
     }
 
     if spec.interactive {
-        let preferred = prefs_get().ok().and_then(|p| {
-            p.get("terminalApp")
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        });
-        crate::pty::open_external_command(&container, &spec, preferred.as_deref())?;
+        let preferred = pref_str("terminalApp");
+        let custom = pref_str("terminalCustom");
+        crate::pty::open_external_command(
+            &container,
+            &spec,
+            preferred.as_deref(),
+            custom.as_deref(),
+        )?;
         return Ok(None);
     }
 
@@ -5755,11 +5942,8 @@ pub fn pty_close(registry: State<'_, pty::Registry>, session_id: String) -> Resu
 /// that signed this stack's certificate.
 #[tauri::command]
 pub fn cert_trust_in_terminal() -> Result<()> {
-    let preferred = prefs_get().ok().and_then(|p| {
-        p.get("terminalApp")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-    });
+    let preferred = pref_str("terminalApp");
+    let custom = pref_str("terminalCustom");
 
     // The command mkcert itself runs, without mkcert's own pre-check.
     //
@@ -5783,17 +5967,14 @@ pub fn cert_trust_in_terminal() -> Result<()> {
         "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '{}'",
         crate::certs::ca_file().display()
     );
-    crate::pty::open_external_shell(&command, preferred.as_deref())
+    crate::pty::open_external_shell(&command, preferred.as_deref(), custom.as_deref())
 }
 
 #[tauri::command]
 pub fn terminal_open_external(target: PtyTarget) -> Result<()> {
-    let preferred = prefs_get().ok().and_then(|p| {
-        p.get("terminalApp")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-    });
-    pty::open_external(&target, preferred.as_deref())
+    let preferred = pref_str("terminalApp");
+    let custom = pref_str("terminalCustom");
+    pty::open_external(&target, preferred.as_deref(), custom.as_deref())
 }
 
 // ================================================================ Gap fill
@@ -6046,6 +6227,32 @@ pub struct Requirements {
     /// The reviewed diff, from the same planner a preset import uses. Empty
     /// changes means the stack already satisfies the declaration.
     pub plan: crate::preset::Plan,
+    /// The preset this project ships, if it ships one.
+    ///
+    /// The half `services` cannot carry: a manifest declares *which* services,
+    /// and a preset declares which **versions** and the shareable settings
+    /// beside them. Reported rather than applied — see `PresetOffer`.
+    pub preset: Option<PresetOffer>,
+}
+
+/// A preset sitting at the conventional path, and what applying it would do.
+///
+/// Reported, never applied. `preset.rs` states the rule and it is the same one
+/// `hosts_plan`/`hosts_apply` follows: a file that arrived with somebody else's
+/// clone must not rewrite your stack because you opened a page. What was
+/// missing was not the review — it was that the file had nowhere to *be*, so
+/// the flow began with a colleague saying where they had put it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetOffer {
+    /// Absolute, because `preset_apply` takes a path and this is the one to
+    /// hand it — the front end never has to build it and cannot build it wrong.
+    pub path: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    /// What applying it would change. Empty means the stack already matches,
+    /// which is the state a project sits in after somebody applied it once.
+    pub plan: crate::preset::Plan,
 }
 
 /// Read the declaration and compare it with the stack. Changes nothing.
@@ -6085,10 +6292,26 @@ pub fn project_requirements(state: State<'_, AppState>, name: String) -> Result<
         .filter(|hint| !manifest.services.contains(&hint.service))
         .collect();
 
+    // A preset that will not parse is *not* an error here: the requirements
+    // card is about the manifest's declaration, and a broken optional file must
+    // not take that answer off the screen. It reads as "no preset", which is
+    // the same thing the importer will say when somebody points at it.
+    let preset = crate::preset::at_project(&dir).and_then(|path| {
+        let preset = crate::preset::load(&path).ok()?;
+        let plan = crate::preset::plan_file(&root, &path).ok()?;
+        Some(PresetOffer {
+            path: path.display().to_string(),
+            name: preset.name.clone(),
+            description: preset.description.clone(),
+            plan,
+        })
+    });
+
     Ok(Requirements {
         declared,
         suggested,
         plan: crate::preset::plan_declared(&root, &manifest.services)?,
+        preset,
     })
 }
 
@@ -6620,7 +6843,11 @@ pub struct RecipeCard {
     pub about: &'static str,
     /// What has to be edited before it will work. Never empty — every shipped
     /// recipe carries a placeholder host or project id.
-    pub edit: &'static [&'static str],
+    ///
+    /// `{ key, english }` per entry rather than a sentence: the window is
+    /// bilingual and this is the instruction, so the key is what it looks up
+    /// and the English is the fallback the CLI and the log keep getting.
+    pub edit: &'static [crate::provider::Edit],
     pub image: String,
     pub pull: Vec<String>,
     pub push: Vec<String>,
@@ -7515,7 +7742,7 @@ pub fn project_devcontainer_plan(
     let dir = workspace::project_dir(&root, &name)?;
     let m = manifest::read(&dir.join("stackvo.json"), &name)?;
 
-    let table = service_source(&root)?;
+    let table = crate::generator::service_source(&root)?;
     let tree = crate::market::catalogue(&root)?;
     let env = Env::load(&root)?;
     let opts = crate::generator::ToolchainOptions {
@@ -7531,7 +7758,7 @@ pub fn project_devcontainer_plan(
             .to_string(),
     };
 
-    crate::devcontainer::plan(&m, &table, &tree, &opts)
+    crate::devcontainer::plan(&m, &table, &tree, &opts, &env.default_server())
 }
 
 /// Write it.
@@ -7633,9 +7860,16 @@ fn detected_spec(
         block.insert("port".into(), serde_json::json!(defaults.port));
         spec[detected.runtime] = serde_json::Value::Object(block);
     } else {
-        spec["server"] = serde_json::json!(env
-            .get("SUPPORTED_SERVERS_DEFAULT")
-            .unwrap_or(detected.server));
+        // Detection first, the setting second — the same order as the version
+        // fields below, and the opposite of what this used to do. `detected.server`
+        // is `None` unless something actually said so (DDEV's `webserver_type`
+        // is the one that does), and reading the setting first meant importing
+        // a DDEV project configured for Apache as whatever the setting named,
+        // with the evidence recorded and ignored.
+        spec["server"] = serde_json::json!(detected
+            .server
+            .map(str::to_string)
+            .unwrap_or_else(|| env.default_server()));
         spec["document_root"] = serde_json::json!(detected
             .document_root
             .clone()
@@ -7782,6 +8016,21 @@ pub async fn project_delete(
                 "a worktree was deleted through the project path; its branch and \
                  any database it was given were left in place"
             );
+
+            // The account this app made for it goes, on the same terms as the
+            // generated output below: the database is the user's data and is
+            // left alone, and the login is app-owned state that now reaches a
+            // project that does not exist. Leaving it would also leave its
+            // password in a file for nothing.
+            if let Some(login) = crate::worktree::forget_login(&root, &name) {
+                if let Err(e) = crate::db::drop_scoped_user(&root, &login.instance, &login.user).await
+                {
+                    tracing::warn!(
+                        user = %login.user, error = %e.message,
+                        "the worktree's own account could not be dropped and is still there"
+                    );
+                }
+            }
         }
 
         // App-owned output, removed either way. `remove_files` is about the
@@ -8166,27 +8415,11 @@ pub fn open_in_browser(url: String) -> Result<()> {
         ));
     }
 
-    let configured = prefs_get()
-        .ok()
-        .and_then(|p| {
-            p.get("browserCommand")
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        })
-        .filter(|s| !s.is_empty());
+    let configured = pref_str("browserCommand");
+    let custom = pref_str("browserCustom");
 
-    if let Some(launch) = crate::apps::resolve_browser(configured.as_deref()) {
-        let spawned = match launch {
-            crate::apps::Launch::Command(cmd) => {
-                std::process::Command::new(cmd).arg(&url).spawn().is_ok()
-            }
-            crate::apps::Launch::Bundle(bundle) => std::process::Command::new("open")
-                .args(["-a", bundle])
-                .arg(&url)
-                .spawn()
-                .is_ok(),
-        };
-        if spawned {
+    if let Some(launch) = crate::apps::resolve_browser(configured.as_deref(), custom.as_deref()) {
+        if launch.spawn_with(url.as_ref()) {
             return Ok(());
         }
         // Chosen browser could not start — fall through to the system default
@@ -8648,45 +8881,6 @@ pub async fn project_clone(
 // `crate::db`, and what is left here is argument checking, the order the steps
 // run in, and the rollback when one of them fails.
 
-/// What a worktree would be given.
-///
-/// A plan-then-apply pair, the same shape as `hosts_plan`/`hosts_apply` and
-/// `db_move_plan`/`db_move_apply`, and for the sharper version of their reason:
-/// this creates a directory, a hostname, a container and a database, and the
-/// only moment those can be argued with is before they exist. Every refusal is
-/// a sentence rather than a boolean, because "cannot" with no reason is the
-/// message people file bugs about.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorktreePlan {
-    pub parent: String,
-    pub branch: String,
-    /// Whether the branch would be created rather than checked out.
-    pub new_branch: bool,
-    pub name: String,
-    pub path: String,
-    pub domain: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub database: Option<PlannedDatabase>,
-    pub warnings: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refused: Option<String>,
-    pub possible: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlannedDatabase {
-    pub instance: String,
-    pub service: String,
-    pub name: String,
-    /// Whether it would be copied from [`Self::source`] rather than created
-    /// empty.
-    pub seed: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
-}
-
 /// What a project can say about worktrees before anybody opens a dialog.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -8699,6 +8893,23 @@ pub struct WorktreeSupport {
     /// This app's own record, when the project is a worktree it created.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub record: Option<crate::worktree::Record>,
+    /// Whether this worktree reaches its database with a login of its own.
+    ///
+    /// The one fact that decides whether "this branch has its own database"
+    /// also means "this branch cannot reach the parent's". `false` is a real
+    /// answer and not a missing one — on PostgreSQL and MongoDB it is the only
+    /// answer there is — so it is reported rather than implied. `false` for a
+    /// project that is not a worktree at all.
+    pub isolated: bool,
+    /// The flags that would give an assistant this worktree and nothing else.
+    ///
+    /// Rendered from a [`crate::grant::Grant`] rather than assembled on screen,
+    /// so what a person copies is the sentence the server enforces — the same
+    /// rule `agents_install` follows. Empty for a project that is not a
+    /// worktree. Carries `--for` only while there is time left on the sandbox:
+    /// a registration handed out after the expiry would be one that grants
+    /// nothing and says nothing about why.
+    pub grant_args: Vec<String>,
     /// What this worktree's container is actually given, when it is one.
     ///
     /// Beside the record rather than derived in the pane, because half of it is
@@ -8747,61 +8958,44 @@ pub struct WorktreeRow {
     /// The project is registered here but git no longer has a worktree at that
     /// path — usually because somebody deleted the folder by hand.
     pub orphaned: bool,
-}
-
-/// The project directory of a name, and its effective manifest.
-fn project_with_manifest(
-    root: &std::path::Path,
-    name: &str,
-) -> Result<(std::path::PathBuf, Manifest)> {
-    let dir = workspace::project_dir(root, name)?;
-    if !dir.is_dir() {
-        return Err(Error::not_found(format!("project {name}")));
-    }
-    let manifest = manifest::read(&dir.join(manifest::FILE), name)?;
-    Ok((dir, manifest))
-}
-
-/// Every hostname the workspace already answers on.
-///
-/// Read off the manifests rather than off the running containers: a project
-/// that is stopped still owns its name, and a worktree given a hostname a
-/// stopped project holds would take it over the moment both were started —
-/// which Traefik reports as nothing at all.
-fn claimed_domains(root: &std::path::Path) -> std::collections::BTreeSet<String> {
-    let mut out = std::collections::BTreeSet::new();
-    let Some(projects) = workspace::projects_root(root) else {
-        return out;
-    };
-    let Ok(entries) = std::fs::read_dir(&projects) else {
-        return out;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !path.join(manifest::FILE).is_file() {
-            continue;
-        }
-        let Ok(m) = manifest::read(&path.join(manifest::FILE), name) else {
-            continue;
-        };
-        out.extend(m.domain.iter().map(|d| d.to_ascii_lowercase()));
-        out.extend(m.aliases.iter().map(|a| a.to_ascii_lowercase()));
-    }
-    out
+    /// Whether this branch reaches its database with a login of its own.
+    ///
+    /// Derived from whether a login is held for it rather than stored on the
+    /// record, so there is one source of truth: the file that holds the
+    /// password is the file that decides the answer. `false` means the branch
+    /// uses the instance's shared account and can therefore reach the parent's
+    /// data — which is a true thing the screen has to be able to say, because
+    /// on PostgreSQL and MongoDB it is the only answer there is.
+    pub isolated: bool,
+    /// Whether its time has passed. `false` for a worktree with no expiry,
+    /// which is every worktree somebody made for themselves.
+    pub expired: bool,
+    /// Whole minutes left, for one with an expiry. `Some(0)` is "over", `None`
+    /// is "no expiry" — two answers, not one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_minutes: Option<u32>,
 }
 
 /// The rows for a set of records, with what git says about each.
-fn worktree_rows(records: &[crate::worktree::Record]) -> Vec<WorktreeRow> {
+fn worktree_rows(root: &std::path::Path, records: &[crate::worktree::Record]) -> Vec<WorktreeRow> {
+    // Read once for the whole list rather than once a row: it is one small
+    // file, and a per-row read would open it as many times as there are
+    // branches to answer the same question. The clock is read once for the same
+    // reason, and for a second one that matters more: a list whose rows were
+    // each judged against their own `now` could report two of them on either
+    // side of the same second.
+    let logins = crate::worktree::logins(root);
+    let now = crate::audit::now_rfc3339();
+
     records
         .iter()
         .map(|record| {
             let dir = std::path::PathBuf::from(&record.path);
             let exists = dir.is_dir();
             WorktreeRow {
+                isolated: logins.contains_key(&record.name),
+                expired: crate::worktree::expired_at(record, &now),
+                remaining_minutes: crate::worktree::remaining_minutes_at(record, &now),
                 record: record.clone(),
                 exists,
                 dirty: exists.then(|| crate::worktree::is_dirty(&dir)).flatten(),
@@ -8820,7 +9014,7 @@ fn worktree_rows(records: &[crate::worktree::Record]) -> Vec<WorktreeRow> {
 #[tauri::command]
 pub async fn worktree_support(state: State<'_, AppState>, name: String) -> Result<WorktreeSupport> {
     let root = state.root()?;
-    let (dir, manifest) = project_with_manifest(&root, &name)?;
+    let (dir, manifest) = crate::workspace::project_with_manifest(&root, &name)?;
 
     let table = crate::worktree::Table::load(&root)?;
     let record = table.get(&name).cloned();
@@ -8889,6 +9083,17 @@ pub async fn worktree_support(state: State<'_, AppState>, name: String) -> Resul
         git_available,
         repository,
         linked,
+        isolated: record
+            .as_ref()
+            .is_some_and(|r| crate::worktree::login_of(&root, &r.name).is_some()),
+        // Nothing for a sandbox whose time has passed. `remaining_minutes` is
+        // `Some(0)` there, which would render *no* `--for` at all and so hand
+        // out an unlimited grant — the exact opposite of what the expiry says.
+        grant_args: record
+            .as_ref()
+            .filter(|r| !crate::worktree::expired(r))
+            .map(|r| crate::worktree::grant_for(r, crate::worktree::remaining_minutes(r)).to_args())
+            .unwrap_or_default(),
         record,
         effective_env,
         domain: manifest.domain.clone(),
@@ -8896,7 +9101,7 @@ pub async fn worktree_support(state: State<'_, AppState>, name: String) -> Resul
         branches,
         instances,
         reason,
-        worktrees: worktree_rows(&children),
+        worktrees: worktree_rows(&root, &children),
     })
 }
 
@@ -8910,310 +9115,9 @@ pub async fn worktree_support(state: State<'_, AppState>, name: String) -> Resul
 pub fn worktree_list(state: State<'_, AppState>) -> Result<Vec<WorktreeRow>> {
     let root = state.root()?;
     Ok(worktree_rows(
+        &root,
         &crate::worktree::Table::load(&root)?.worktrees,
     ))
-}
-
-/// How a worktree was asked for, once the arguments have been read.
-struct WorktreeRequest {
-    branch: String,
-    new_branch: bool,
-    name: Option<String>,
-    /// `none`, `create` or `copy`.
-    database: String,
-    instance: Option<String>,
-}
-
-impl WorktreeRequest {
-    /// Read the options object, defaulting every field.
-    ///
-    /// One loose `serde_json::Value` rather than six named arguments: the
-    /// contract calls it `options` and the shape is a form's, so a field added
-    /// next year is a default here rather than a signature change that every
-    /// caller has to be edited for.
-    fn read(branch: String, options: Option<serde_json::Value>) -> Self {
-        let options = options.unwrap_or(serde_json::Value::Null);
-        let string = |key: &str| {
-            options
-                .get(key)
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-                .map(str::to_string)
-        };
-
-        Self {
-            branch: branch.trim().to_string(),
-            new_branch: options
-                .get("newBranch")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            name: string("name"),
-            database: string("database").unwrap_or_else(|| "none".to_string()),
-            instance: string("instance"),
-        }
-    }
-}
-
-/// Work out what creating this worktree would do, and refuse it here if it
-/// cannot be done.
-async fn plan_worktree(
-    root: &std::path::Path,
-    parent: &str,
-    request: &WorktreeRequest,
-) -> Result<WorktreePlan> {
-    let (dir, manifest) = project_with_manifest(root, parent)?;
-
-    let mut warnings: Vec<String> = Vec::new();
-    let refuse = |plan: WorktreePlan, why: String| WorktreePlan {
-        refused: Some(why),
-        possible: false,
-        ..plan
-    };
-
-    // Everything derivable before any refusal, so a refused plan still shows
-    // what it *would* have been — a dialog that blanks out when it says no
-    // makes the reason harder to act on, not easier.
-    let slug = crate::worktree::slug(&request.branch);
-    let name = match (&request.name, &slug) {
-        (Some(given), _) => workspace::canonical_name(given),
-        (None, Some(slug)) => crate::worktree::project_name(parent, slug),
-        (None, None) => String::new(),
-    };
-    let label = crate::worktree::domain_label(parent, &name);
-    let parent_domain = manifest.domain.clone().unwrap_or_default();
-    let domain = crate::worktree::domain(&parent_domain, &label);
-
-    let mut plan = WorktreePlan {
-        parent: parent.to_string(),
-        branch: request.branch.clone(),
-        new_branch: request.new_branch,
-        name: name.clone(),
-        path: workspace::projects_root(root)
-            .map(|p| p.join(&name).display().to_string())
-            .unwrap_or_default(),
-        domain: domain.clone(),
-        database: None,
-        warnings: Vec::new(),
-        refused: None,
-        possible: false,
-    };
-
-    // ---- the ground it stands on -----------------------------------------
-    if !crate::git::available() {
-        return Ok(refuse(plan, "git is not installed on this machine.".into()));
-    }
-    if !crate::worktree::is_repository(&dir) {
-        return Ok(refuse(plan, format!("{parent} is not a git repository.")));
-    }
-    if crate::worktree::is_linked_worktree(&dir) {
-        return Ok(refuse(
-            plan,
-            format!(
-                "{parent} is itself a worktree; create the next one from the project it came from."
-            ),
-        ));
-    }
-    if manifest.domain.is_none() {
-        return Ok(refuse(
-            plan,
-            format!("{parent} has no `domain` in its manifest to build a hostname under."),
-        ));
-    }
-
-    // ---- the branch -------------------------------------------------------
-    if request.branch.is_empty() {
-        return Ok(refuse(plan, "No branch was named.".into()));
-    }
-    if !crate::worktree::is_valid_branch_name(&dir, &request.branch) {
-        return Ok(refuse(
-            plan,
-            format!(
-                "git will not accept \"{}\" as a branch name.",
-                request.branch
-            ),
-        ));
-    }
-
-    let checkouts = crate::worktree::checkouts(&dir);
-    let branch_exists = crate::worktree::branches(&dir).contains(&request.branch);
-    if request.new_branch && branch_exists {
-        return Ok(refuse(
-            plan,
-            format!("a branch called \"{}\" already exists.", request.branch),
-        ));
-    }
-    if !request.new_branch && !branch_exists {
-        return Ok(refuse(
-            plan,
-            format!(
-                "there is no branch called \"{}\"; tick \"create the branch\" to make one.",
-                request.branch
-            ),
-        ));
-    }
-    if checkouts
-        .iter()
-        .any(|c| c.branch.as_deref() == Some(request.branch.as_str()))
-    {
-        return Ok(refuse(
-            plan,
-            format!(
-                "\"{}\" is already checked out in another worktree; git allows a branch in one working tree at a time.",
-                request.branch
-            ),
-        ));
-    }
-
-    // ---- the name and the hostname ---------------------------------------
-    if name.is_empty() {
-        return Ok(refuse(
-            plan,
-            format!(
-                "\"{}\" has no letters or digits to build a name from; give the worktree a name of its own.",
-                request.branch
-            ),
-        ));
-    }
-    if !workspace::is_safe_name(&name) {
-        return Ok(refuse(
-            plan,
-            format!("\"{name}\" is not a name a project directory can have."),
-        ));
-    }
-    // Through the same gate every other creation path uses, so a name that
-    // escapes the project tree is refused here rather than at `create_dir_all`.
-    let path = workspace::project_dir(root, &name)?;
-    plan.path = path.display().to_string();
-    if path.exists() {
-        return Ok(refuse(plan, format!("projects/{name} already exists.")));
-    }
-    if !crate::hosts::is_valid_domain(&domain) {
-        return Ok(refuse(
-            plan,
-            format!("\"{domain}\" is not a hostname; the branch produces a label a resolver would refuse."),
-        ));
-    }
-    if claimed_domains(root).contains(&domain.to_ascii_lowercase()) {
-        return Ok(refuse(
-            plan,
-            format!("another project already answers on {domain}."),
-        ));
-    }
-
-    // Matched by the parent's own wildcard, which is not a conflict Traefik
-    // reports: it has two routers for one name and answers with whichever it
-    // ranks higher. Said out loud rather than refused — a wildcard alias is a
-    // deliberate arrangement and this hostname is still the more specific rule.
-    if manifest
-        .aliases
-        .iter()
-        .any(|alias| alias.strip_prefix("*.") == Some(parent_domain.as_str()))
-    {
-        warnings.push(format!(
-            "{parent} also answers on *.{parent_domain}, so {domain} matches two routes; the exact one wins, but the wildcard will not stop answering."
-        ));
-    }
-
-    // ---- the database -----------------------------------------------------
-    match request.database.as_str() {
-        "none" => {}
-        mode @ ("create" | "copy") => {
-            let instances = crate::db::instances(root).await.unwrap_or_default();
-            let chosen = match &request.instance {
-                Some(id) => instances.iter().find(|i| &i.id == id),
-                // The first database instance in the table, which is the order
-                // `instances.json` keeps and therefore the order the Market
-                // installed them in.
-                None => instances.first(),
-            };
-
-            let Some(instance) = chosen else {
-                return Ok(refuse(
-                    plan,
-                    match &request.instance {
-                        Some(id) => format!("there is no database instance called \"{id}\"."),
-                        None => "no database instance is installed to create one on.".into(),
-                    },
-                ));
-            };
-            if !instance.running {
-                return Ok(refuse(
-                    plan,
-                    format!(
-                        "{} is not running; a database cannot be created on a stopped engine.",
-                        instance.id
-                    ),
-                ));
-            }
-
-            let connection = crate::db::connection(root, &instance.id)?;
-            let stem = connection.database.clone().unwrap_or_else(|| parent.into());
-            let database = crate::worktree::database_name(&stem, &label);
-
-            if !crate::db::is_valid_database_name(&database) {
-                return Ok(refuse(
-                    plan,
-                    format!("\"{database}\" is not a database name this app will create."),
-                ));
-            }
-
-            let seed = mode == "copy";
-            if seed {
-                if instance.kind == crate::db::Kind::Mongo {
-                    return Ok(refuse(
-                        plan,
-                        "MongoDB publishes no database name for this workspace, so there is nothing to copy from.".into(),
-                    ));
-                }
-                if connection.database.is_none() {
-                    return Ok(refuse(
-                        plan,
-                        format!("{} has no database configured to copy from.", instance.id),
-                    ));
-                }
-            }
-            if instance.kind == crate::db::Kind::Mongo {
-                warnings.push(format!(
-                    "MongoDB has no CREATE DATABASE; {database} begins existing the first time the branch writes to it."
-                ));
-            }
-
-            // Asked of the engine rather than assumed: a name left behind by a
-            // worktree somebody removed by hand is the case this catches, and
-            // creating "on top of" it would hand the branch somebody else's
-            // data without saying so.
-            if crate::db::databases(root, &instance.id)
-                .await
-                .unwrap_or_default()
-                .iter()
-                .any(|existing| existing == &database)
-            {
-                warnings.push(format!(
-                    "{database} already exists on {}; it will be used as it is rather than created.",
-                    instance.id
-                ));
-            }
-
-            plan.database = Some(PlannedDatabase {
-                instance: instance.id.clone(),
-                service: instance.service.clone(),
-                name: database,
-                seed,
-                source: seed.then(|| connection.database.clone()).flatten(),
-            });
-        }
-        other => {
-            return Ok(refuse(
-                plan,
-                format!("\"{other}\" is not a way to give a worktree a database."),
-            ));
-        }
-    }
-
-    plan.warnings = warnings;
-    plan.possible = true;
-    Ok(plan)
 }
 
 /// What creating this worktree would do. No side effects.
@@ -9223,9 +9127,14 @@ pub async fn worktree_plan(
     name: String,
     branch: String,
     options: Option<serde_json::Value>,
-) -> Result<WorktreePlan> {
+) -> Result<crate::worktree::WorktreePlan> {
     let root = state.root()?;
-    plan_worktree(&root, &name, &WorktreeRequest::read(branch, options)).await
+    crate::worktree::plan_worktree(
+        &root,
+        &name,
+        &crate::worktree::WorktreeRequest::read(branch, options),
+    )
+    .await
 }
 
 /// Give a branch an environment of its own.
@@ -9250,8 +9159,8 @@ pub async fn worktree_create(
     options: Option<serde_json::Value>,
 ) -> Result<String> {
     let root = state.root()?;
-    let request = WorktreeRequest::read(branch, options);
-    let plan = plan_worktree(&root, &name, &request).await?;
+    let request = crate::worktree::WorktreeRequest::read(branch, options);
+    let plan = crate::worktree::plan_worktree(&root, &name, &request).await?;
 
     // The plan's own sentence, with no hint attached. Each of these already
     // names the branch, the hostname or the directory that caused it and says
@@ -9291,6 +9200,7 @@ pub async fn worktree_create(
     };
 
     let mut created_database: Option<(String, String)> = None;
+    let mut created_login: Option<(String, String)> = None;
 
     let outcome = async {
         // ---- 1. the checkout ---------------------------------------------
@@ -9377,6 +9287,54 @@ pub async fn worktree_create(
                 )
                 .await?;
             }
+
+            // ---- 3b. a login that reaches only it -------------------------
+            //
+            // After the copy, not before: on MySQL the grant covers tables that
+            // do not exist yet, so the order is not load-bearing there — but it
+            // is the order the next engine will need, and doing it here means
+            // the account is made against a database that is already whole.
+            //
+            // A failure is reported and not fatal, which is the one judgement
+            // call in this step. Refusing to create the worktree because the
+            // server would not make an account would take a feature that works
+            // today away from anybody whose database user cannot GRANT. What
+            // must not happen is the app implying an isolation it did not get,
+            // and that is handled by saying which login the branch has rather
+            // than by assuming.
+            match crate::db::create_scoped_user(&root, &database.instance, &database.name).await {
+                Ok(Some(scoped)) => {
+                    created_login = Some((database.instance.clone(), scoped.user.clone()));
+                    crate::worktree::remember_login(
+                        &root,
+                        &plan.name,
+                        crate::worktree::Login {
+                            instance: database.instance.clone(),
+                            user: scoped.user.clone(),
+                            password: scoped.password,
+                        },
+                    )?;
+                    progress(format!(
+                        "{} reaches {} with its own login and cannot read another database on {}",
+                        plan.name, database.name, database.instance
+                    ));
+                }
+                Ok(None) => progress(format!(
+                    "{} shares {}'s login, so it can reach every database on it — \
+                     a login of its own is arranged on MySQL and MariaDB only",
+                    plan.name, database.instance
+                )),
+                Err(e) => {
+                    tracing::warn!(
+                        worktree = %plan.name, error = %e.message,
+                        "no login of its own could be created; the shared one is used"
+                    );
+                    progress(format!(
+                        "{} could not be given a login of its own ({}), so it shares {}'s",
+                        plan.name, e.message, database.instance
+                    ));
+                }
+            }
         }
 
         // ---- 4. the record ------------------------------------------------
@@ -9394,6 +9352,11 @@ pub async fn worktree_create(
             }),
             env: std::collections::BTreeMap::new(),
             created_at: crate::snapshot::now_rfc3339(),
+            // Recomputed here rather than taken from the plan: the plan may
+            // have been made minutes ago on a screen somebody was reading, and
+            // an environment wanted for two hours should get two hours from
+            // when it was built.
+            expires_at: request.minutes().map(crate::worktree::expiry_in),
         })?;
         table.save(&root)?;
 
@@ -9426,7 +9389,15 @@ pub async fn worktree_create(
             events::emit(&app, "project:created", SubjectEvent::project(&plan.name));
         }
         Err(e) => {
-            rollback_worktree(&root, &parent_dir, &worktree, &plan.name, &created_database).await;
+            rollback_worktree(
+                &root,
+                &parent_dir,
+                &worktree,
+                &plan.name,
+                &created_database,
+                &created_login,
+            )
+            .await;
             events::emit(
                 &app,
                 "project:error",
@@ -9459,12 +9430,27 @@ async fn rollback_worktree(
     worktree: &std::path::Path,
     name: &str,
     database: &Option<(String, String)>,
+    login: &Option<(String, String)>,
 ) {
     // The record first: a record pointing at a directory being removed is the
     // one piece of state another command could read mid-rollback.
     let mut table = crate::worktree::Table::load(root).unwrap_or_default();
     if table.remove(name).is_some() {
         let _ = table.save(root);
+    }
+
+    // Only an account this creation made, for the same reason only a database
+    // this creation made is dropped. The stored password goes with it — a
+    // credential kept for an account that no longer exists is a secret in a
+    // file for nothing.
+    crate::worktree::forget_login(root, name);
+    if let Some((instance, user)) = login {
+        if let Err(e) = crate::db::drop_scoped_user(root, instance, user).await {
+            tracing::warn!(
+                %user, error = %e.message,
+                "the worktree's own database account could not be dropped and is still there"
+            );
+        }
     }
 
     // Only a database this creation made. One that was already there belongs to
@@ -9559,6 +9545,25 @@ pub async fn worktree_remove(
                     Ok(false) => tracing::info!(database = %database.name, "there was no such database"),
                     Err(e) => return Err(e),
                 }
+            }
+        }
+
+        // ---- 2b. the login --------------------------------------------------
+        //
+        // Whatever was decided about the data. The account is this app's, not
+        // the user's: keeping `drop_database` off means "leave my data alone",
+        // not "leave an account behind that can reach it". And unlike the
+        // database this cannot refuse in a way worth stopping for — an account
+        // with nothing left to reach grants nothing — so a failure is logged
+        // and the removal continues.
+        if let Some(login) = crate::worktree::forget_login(&root, &record.name) {
+            match crate::db::drop_scoped_user(&root, &login.instance, &login.user).await {
+                Ok(true) => tracing::info!(user = %login.user, "the worktree's own account was dropped"),
+                Ok(false) => {}
+                Err(e) => tracing::warn!(
+                    user = %login.user, error = %e.message,
+                    "the worktree's own account could not be dropped and is still there"
+                ),
             }
         }
 
@@ -9829,6 +9834,12 @@ pub async fn worker_start(state: State<'_, AppState>, name: String, kind: String
         ));
     }
 
+    // Written before the container is created, and passed rather than looked
+    // up inside `run_args`: a directory Docker is asked to bind and does not
+    // find is a directory Docker creates, owned by root, which the bridge then
+    // cannot write into and nothing says why.
+    let debug = crate::debugbridge::prepare(&root, &name);
+
     let args = crate::worker::run_args(
         &name,
         kind,
@@ -9836,6 +9847,7 @@ pub async fn worker_start(state: State<'_, AppState>, name: String, kind: String
         &root.display().to_string(),
         &network,
         &domain,
+        debug.as_ref(),
     );
 
     let output = tokio::process::Command::new("docker")
@@ -10574,10 +10586,7 @@ async fn landing_entries(
 
     let mut services = Vec::new();
     if let Ok(env) = Env::load(root) {
-        let tld = env
-            .get("DEFAULT_TLD_SUFFIX")
-            .unwrap_or("stackvo.loc")
-            .to_string();
+        let tld = env.tld_suffix().to_string();
         let running: std::collections::HashSet<String> = engine::stackvo_containers()
             .await
             .unwrap_or_default()
@@ -10604,8 +10613,8 @@ async fn landing_entries(
 fn landing_url(root: &std::path::Path) -> String {
     let suffix = Env::load(root)
         .ok()
-        .and_then(|env| env.get("DEFAULT_TLD_SUFFIX").map(str::to_string))
-        .unwrap_or_else(|| "stackvo.loc".to_string());
+        .map(|env| env.tld_suffix())
+        .unwrap_or_else(|| crate::config::DEFAULT_TLD_SUFFIX.to_string());
     format!("https://{suffix}")
 }
 
@@ -11237,6 +11246,260 @@ pub async fn diagnostics_bundle(
     crate::diagnostics::write(root.as_deref(), std::path::Path::new(&path)).await
 }
 
+/// Hold somebody else's machine against this one.
+///
+/// ## The oldest complaint in the category, and the answer nobody has
+///
+/// "It works on my machine" is what every product here says the container
+/// solves, and the container does not: the same compose file on two Docker
+/// versions is two different things. This app was already the only one that
+/// packages the state of a machine; what it could not do was put two of them
+/// side by side.
+///
+/// So the bundle now carries a flat, path-free, credential-free fingerprint —
+/// see [`crate::diagnostics::facts`] — and this compares theirs with the one
+/// this machine has *right now*, rather than with a stored copy. Comparing
+/// against a snapshot of ourselves would answer a question nobody asked; the
+/// question is always "what is different **now**".
+///
+/// `path` is a file the user picked. A whole bundle or the one file out of it,
+/// because both are what people actually send.
+#[tauri::command]
+pub async fn diagnostics_compare(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<crate::diagnostics::Comparison> {
+    // Their side first: a file that cannot be read is the answer, and there is
+    // no reason to walk this machine to find that out.
+    let theirs = crate::diagnostics::facts_from_file(std::path::Path::new(&path))?;
+    let root = state.root().ok();
+    let mine = crate::diagnostics::facts(root.as_deref()).await;
+    Ok(crate::diagnostics::compare(&mine, &theirs))
+}
+
+/// What each container has cost today, and which projects are over budget.
+///
+/// ## Why this is a total rather than a chart
+///
+/// The dashboard already draws CPU and memory as they are *now*, and "now" is
+/// the wrong tense for the question people actually ask about Docker, which is
+/// what it cost them over an afternoon. Every product in this category has the
+/// same cost and none of them measures it — see [`crate::usage`] for why being
+/// the one that does is a better position than denying it.
+///
+/// `date` is `YYYY-MM-DD` UTC and defaults to today. Days older than the
+/// retention window are simply absent rather than an error: a record that only
+/// keeps a month says so by having nothing there.
+#[tauri::command]
+pub async fn usage_report(
+    state: State<'_, AppState>,
+    date: Option<String>,
+) -> Result<crate::usage::Report> {
+    usage_report_for(&state, date.as_deref()).await
+}
+
+/// The report, without the command wrapper, so the background sampler can ask
+/// the same question the screen does.
+async fn usage_report_for(
+    state: &State<'_, AppState>,
+    date: Option<&str>,
+) -> Result<crate::usage::Report> {
+    let date = date.map(str::to_string).unwrap_or_else(|| {
+        crate::usage::day_of(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0),
+        )
+    });
+
+    let day = recover(&state.usage).day(&date);
+
+    // The two sets that turn a container name into a kind. Read from the same
+    // places the rest of the app reads them, so a name is classified the way it
+    // is everywhere else rather than by a rule invented here. Both degrade to
+    // empty without a workspace, which makes every row `stack` — true, and the
+    // honest answer for a machine with no workspace open.
+    let (mut projects, mut services) = (
+        std::collections::BTreeSet::new(),
+        std::collections::BTreeSet::new(),
+    );
+    if let Ok(root) = state.root() {
+        if let Ok(list) = list_projects(&root).await {
+            projects.extend(list.into_iter().map(|p| p.name));
+        }
+        if let Ok(table) = crate::instances::Table::load(&root) {
+            services.extend(table.instances.iter().map(|i| i.id.clone()));
+        }
+    }
+
+    Ok(crate::usage::report(
+        &date,
+        &day,
+        &projects,
+        &services,
+        &usage_budgets(),
+    ))
+}
+
+/// The budgets, out of the preferences file.
+///
+/// Read on every report rather than cached, because the alternative is a
+/// budget somebody just typed that does not apply until a restart — and this is
+/// a file read of a few hundred bytes, once a minute at worst.
+fn usage_budgets() -> std::collections::BTreeMap<String, crate::usage::Budget> {
+    let Ok(prefs) = prefs_get() else {
+        return Default::default();
+    };
+    let Some(budgets) = prefs.get("usageBudgets").and_then(|v| v.as_object()) else {
+        return Default::default();
+    };
+
+    budgets
+        .iter()
+        .map(|(name, value)| {
+            let number = |key: &str| value.get(key).and_then(serde_json::Value::as_f64);
+            (
+                name.clone(),
+                crate::usage::Budget {
+                    cpu_minutes: number("cpuMinutes"),
+                    gb_hours: number("gbHours"),
+                },
+            )
+        })
+        .collect()
+}
+
+/// Does this machine match what the repository says this project needs?
+///
+/// ## The half of onboarding nobody built
+///
+/// Every tool in this category does the setting-up half — DDEV has its config
+/// and hooks, this app has presets. None of them does the **checking** half,
+/// which is the question somebody actually has an hour after cloning: not "how
+/// do I set this up" but *"I did set it up; why does it still not work?"*
+///
+/// Nothing new is measured. Every fact compared here is one `projects_list`
+/// and the instance table already produce — see [`crate::verify`], which is a
+/// pure function over them for exactly that reason.
+#[tauri::command]
+pub async fn project_verify(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::verify::Report> {
+    let root = state.root()?;
+
+    // Through the list rather than reading the manifest here, because four of
+    // the five facts this compares are computed there — built, stale, the
+    // domain, and whether the manifest validated at all — and a second
+    // derivation of any of them would be a second answer to the same question.
+    let project = list_projects(&root)
+        .await?
+        .into_iter()
+        .find(|p| p.name == name)
+        .ok_or_else(|| Error::not_found(format!("project {name}")))?;
+
+    let catalogue: Vec<String> = crate::contracts::env_schema()
+        .service_catalog()
+        .into_iter()
+        .map(|(id, _category)| id)
+        .collect();
+
+    Ok(crate::verify::verify(
+        &crate::verify::Declared {
+            name: &project.name,
+            manifest: &project.manifest,
+            manifest_valid: project.manifest_valid,
+            built: project.built,
+            generated_stale: project.generated_stale,
+            domain_configured: project.domain_configured,
+        },
+        &crate::instances::Table::load(&root).unwrap_or_default(),
+        &catalogue,
+    ))
+}
+
+/// Credentials sitting where they should not be.
+///
+/// ## The direction nothing went
+///
+/// `secrets.rs` moves a password out of `.env` and into the OS keystore, which
+/// is the direction somebody takes **after** they know there is a problem. The
+/// other one — *"there is an AWS key in your `.env` that is not in the
+/// keystore"*, and harder, *"that key is in a file git is tracking"* — did not
+/// exist, so nobody found out until the repository was already public.
+///
+/// `name` scopes the tracked-file half to one project's repository. Without it
+/// only `.env` is read, which is the answer for a machine with no project
+/// open.
+#[tauri::command]
+pub async fn leaks_scan(
+    state: State<'_, AppState>,
+    name: Option<String>,
+) -> Result<crate::leaks::Report> {
+    let root = state.root()?;
+    let dir = match &name {
+        Some(name) => Some(workspace::project_dir(&root, name)?),
+        None => None,
+    };
+    Ok(crate::leaks::scan(&root, dir.as_deref()).await)
+}
+
+/// Take `.env` out of git, the standard way, and say what is left to do.
+///
+/// ## Why the app does this rather than telling somebody to
+///
+/// A finding people cannot act on is a finding they turn off, and this
+/// particular repair is easy to get half right: the common half-fix is deleting
+/// the file in a later commit, which takes it out of the working tree and
+/// leaves every value in the history.
+///
+/// The three mechanical steps are done — untrack, ignore, write the example —
+/// and the fourth is reported rather than attempted, because it is not this
+/// app's to take: **rotate what was in it.** See [`crate::leaks::untrack_env`]
+/// for what each step is and why it is that step.
+///
+/// Audited, because it writes to files in somebody's repository — the same
+/// reason writing an IDE's debug configuration is.
+#[tauri::command]
+pub async fn env_untrack(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::leaks::Untracked> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+
+    if !crate::worktree::is_repository(&dir) {
+        return Err(Error::new(
+            Code::Unsupported,
+            format!("{name} is not a git repository, so there is nothing tracking its .env"),
+        ));
+    }
+
+    let outcome = crate::leaks::untrack_env(&dir).await;
+
+    crate::audit::record_with(
+        "env_untrack",
+        &name,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        outcome.as_ref().ok().map(|done| {
+            // The detail worth having later is not that a button was pressed;
+            // it is whether the values were ever pushed, which is the question
+            // somebody asks when they find out.
+            format!(
+                "untracked {}, ignored {}, example {}, still in history {}",
+                done.untracked, done.ignored, done.example_keys, done.still_in_history
+            )
+        }),
+    );
+
+    outcome
+}
+
 /// Where the log is, how big it is, and whether there is one at all.
 ///
 /// A support instruction of "send me your log" is only actionable if the app
@@ -11471,11 +11734,13 @@ pub fn agents_status(state: State<'_, AppState>) -> Result<crate::agents::Status
 
 /// Write the server into one client's configuration file.
 ///
-/// `allow_writes` is the whole security decision and it is passed from the UI
-/// rather than defaulted here: it puts `--allow-writes` in the argument list,
-/// which grants that assistant `stack_down` and `project_stop` along with the
-/// tools people actually want. The default in the pane is off, matching the
-/// server's own default.
+/// The three arguments after `client` are the whole security decision and all
+/// three are passed from the UI rather than defaulted here — see
+/// [`crate::grant`] for what each one bounds. `allow_writes` alone is still
+/// the twelve tools it always was, including `stack_down`; `projects` cuts
+/// that to the four a project bounds and hides every other project from the
+/// reads as well; `minutes` ends it. The defaults in the pane are off, every
+/// project and no limit, matching the server's own.
 ///
 /// Audited, because this writes to a file outside the workspace and outside
 /// this app's own directories — the same reason `/etc/hosts` is audited.
@@ -11484,9 +11749,25 @@ pub fn agents_install(
     state: State<'_, AppState>,
     client: String,
     allow_writes: bool,
+    projects: Option<Vec<String>>,
+    minutes: Option<u32>,
 ) -> Result<String> {
     let root = state.root().ok().map(|r| r.display().to_string());
-    let outcome = crate::agents::install(&client, allow_writes, root.as_deref());
+
+    let mut grant = if allow_writes {
+        crate::grant::Grant::everything()
+    } else {
+        crate::grant::Grant::read_only()
+    };
+    grant = grant.scoped_to(projects.unwrap_or_default());
+    // A zero is "no limit" rather than "expired on arrival": a number input
+    // that has been cleared reads as 0 on its way here, and a grant that is
+    // over before the server starts is a registration nobody could debug.
+    if let Some(minutes) = minutes.filter(|m| *m > 0) {
+        grant = grant.lasting(std::time::Duration::from_secs(u64::from(minutes) * 60));
+    }
+
+    let outcome = crate::agents::install(&client, &grant, root.as_deref());
 
     crate::audit::record_with(
         "agent_install",
@@ -11496,16 +11777,10 @@ pub fn agents_install(
         } else {
             crate::audit::Outcome::Failed
         },
-        // The flag is the detail worth having later: "an assistant could stop
-        // the stack from this date" is answerable only if it was written down.
-        Some(
-            if allow_writes {
-                "reads and writes"
-            } else {
-                "read-only"
-            }
-            .to_string(),
-        ),
+        // The grant is the detail worth having later: "an assistant could stop
+        // the stack from this date" is answerable only if it was written down,
+        // and now so is "which project, and until when".
+        Some(grant.describe()),
     );
     outcome
 }
@@ -11909,6 +12184,119 @@ pub fn audit_trail(limit: Option<usize>) -> crate::audit::Trail {
     crate::audit::tail(limit.unwrap_or(200).min(2000))
 }
 
+/// Put one recorded act back.
+///
+/// ## Why the plan is read rather than worked out
+///
+/// The compensation was built **before** the tool ran, out of the state the
+/// call was about to change, and stored on the line — see [`crate::undo`]. A
+/// plan computed here would be computed against a machine that has since
+/// changed: what `stackvo_stack_down` stopped exists only before it ran.
+///
+/// So this executes what was written down, and refuses everything else. The
+/// three refusals are the interesting part:
+///
+///   * **an act with no compensation** — a restart, a generate, a reissue. The
+///     line says why in its own words and this repeats it rather than inventing
+///     a second explanation.
+///   * **an act that did not happen** — a refused or failed call carries no
+///     plan, because reversing something that never ran is a change nobody
+///     asked for.
+///   * **an act already put back** — the trail is append-only, so the original
+///     line still reads as it did; `undone` is the join with the undo that
+///     names it, and pressing the button twice must not run the steps twice.
+///
+/// The steps go through `mcp::call` rather than through this module's own
+/// commands, because the plan is written in tool names and executing it any
+/// other way would let the record and the act drift apart. It is a sequence and
+/// not a transaction: if the fourth of six fails, the first three stay done and
+/// what comes back names the one that stopped it.
+#[tauri::command]
+pub async fn audit_undo(at: String) -> Result<crate::audit::Undone> {
+    use crate::error::{Code, Error};
+
+    let trail = crate::audit::tail(2000);
+    let entry = trail
+        .entries
+        .iter()
+        .find(|e| e.at == at)
+        .ok_or_else(|| Error::not_found(format!("an audit entry at {at}")))?;
+
+    if entry.undone {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("{} on {} was already put back", entry.action, entry.subject),
+        ));
+    }
+
+    let steps = match &entry.undo {
+        Some(crate::undo::Undo::Steps { steps }) => steps.clone(),
+        Some(crate::undo::Undo::None { because }) => {
+            return Err(Error::new(
+                Code::Unsupported,
+                format!("{} cannot be put back: {because}", entry.action),
+            ))
+        }
+        None => {
+            return Err(Error::new(
+                Code::Unsupported,
+                format!(
+                    "{} was not recorded with a compensation — it did not change anything",
+                    entry.action
+                ),
+            ))
+        }
+    };
+
+    let action = entry.action.clone();
+    let subject = entry.subject.clone();
+    // The grant is `everything()` and that is not a hole: this is the app, the
+    // person is at the keyboard, and what runs is a plan the app wrote itself.
+    // A grant here would be the assistant's limit applied to the human undoing
+    // the assistant, which is the wrong way round.
+    let grant = crate::grant::Grant::everything();
+
+    let mut done = 0;
+    let mut failure = None;
+    for step in &steps {
+        match crate::mcp::call(&step.tool, &step.arguments, &grant).await {
+            Ok(_) => done += 1,
+            Err(e) => {
+                failure = Some((step.tool.clone(), e));
+                break;
+            }
+        }
+    }
+
+    let outcome = if failure.is_some() {
+        crate::audit::Outcome::Failed
+    } else {
+        crate::audit::Outcome::Ok
+    };
+
+    let detail = match &failure {
+        None => format!("{action} on {subject}, {done} step(s)"),
+        Some((tool, e)) => format!(
+            "{action} on {subject}, {done} of {} step(s) — {tool} failed: {}",
+            steps.len(),
+            e.message
+        ),
+    };
+
+    // Recorded whichever way it went. A half-completed undo is the line
+    // somebody most needs to find later, and it is the one an unrecorded
+    // failure would hide.
+    crate::audit::record_undone(subject, outcome, Some(detail), &at);
+
+    match failure {
+        None => Ok(crate::audit::Undone {
+            steps: steps.len(),
+            done,
+        }),
+        Some((_, e)) => Err(e),
+    }
+}
+
 /// What an administrator has decided on this machine, if anything.
 ///
 /// Every field here exists so a Settings pane can explain itself rather than
@@ -11957,8 +12345,184 @@ pub fn policy_status() -> serde_json::Value {
             // arrive", which is the question an administrator has.
             "additionalKeys": policy.market().additional_keys.len(),
         },
+        // The ten images this application runs and did not build, resolved
+        // against the policy in force. Reported here rather than in a pane of
+        // their own because the two questions are one question: "what will this
+        // machine pull, and from where" — `registryPrefix` answers the second
+        // half and was already here, and until now nothing answered the first.
+        //
+        // Six of them ship on `latest`, which is the tag this repository
+        // forbids third-party packages from using. `moving` is computed after
+        // the pin, so a row an administrator has fixed stops being flagged —
+        // one that stayed flagged would be a screen that lies about a setting
+        // that worked.
+        "images": crate::images::listed(),
         "error": policy.error(),
     })
+}
+
+/// Every file under a directory, depth first, symlinks not followed.
+///
+/// Small and local because the one caller wants exactly this: the generated
+/// tree is a handful of directories deep and a missing or unreadable one is an
+/// empty answer rather than an error — a workspace that has generated nothing
+/// has nothing to be non-compliant about.
+fn walk_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(next) = stack.pop() {
+        for entry in std::fs::read_dir(&next).into_iter().flatten().flatten() {
+            let path = entry.path();
+            match entry.file_type() {
+                Ok(kind) if kind.is_dir() => stack.push(path),
+                Ok(kind) if kind.is_file() => out.push(path),
+                _ => {}
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Which clause of that policy is actually holding on this machine.
+///
+/// [`policy_status`] answers what the file says. This answers whether any of it
+/// is in force here, which is a different question and the one the person who
+/// deployed the file has. [`crate::compliance`] carries the reasoning; the work
+/// here is gathering the evidence it holds the policy against.
+///
+/// Every measurement below is of state that is **already on disk** — the `.env`
+/// as written, the generated tree, the package directory, the remembered
+/// source, the override files, the manifests. Nothing is spawned and the engine
+/// is never asked, because a compliance report that cannot be produced with
+/// Docker stopped is one nobody can run when they most need it.
+#[tauri::command]
+pub async fn policy_compliance(state: State<'_, AppState>) -> Result<crate::compliance::Report> {
+    let root = state.root()?;
+    let policy = crate::policy::current();
+
+    // ---- what the workspace's own file says ------------------------------
+    //
+    // `Env::parse` rather than `Env::load`: load applies the policy last, so
+    // asking the loaded environment whether the policy took effect is asking a
+    // question whose answer is `true` by construction. `stated` is the accessor
+    // that already tells the file's keys apart from the embedded defaults, so
+    // only what somebody actually wrote gets compared.
+    let text = std::fs::read_to_string(root.join(".env")).unwrap_or_default();
+    let written = crate::config::Env::parse(&text);
+    let env_file: std::collections::BTreeMap<String, String> = policy
+        .settings()
+        .keys()
+        .filter_map(|key| written.stated(key).map(|v| (key.clone(), v.to_string())))
+        .collect();
+
+    // ---- what the mirror did and did not reach ---------------------------
+    //
+    // The question is asked of each file by the mirror itself: if rewriting the
+    // bytes on disk would change them, the mirror has not been applied to them.
+    // A second scanner here would be a second opinion about build stages, about
+    // references that already name a registry and about the three this app
+    // leaves alone — and the wrong one would be this one's.
+    let generated = policy.registry_prefix().map(|prefix| {
+        let mut files = Vec::new();
+        let dir = root.join("generated");
+        for path in walk_files(&dir) {
+            let label = path
+                .strip_prefix(&dir)
+                .unwrap_or(&path)
+                .display()
+                .to_string();
+            if !crate::policy::rewrites(&label) {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            files.push(crate::compliance::Generated {
+                would_change: crate::policy::rewrite(&content, prefix) != content,
+                label,
+            });
+        }
+        files
+    });
+
+    // ---- what is installed -----------------------------------------------
+    //
+    // Straight off the package tree rather than through the cached index: a
+    // package installed from a source that is no longer listed is exactly the
+    // one a compliance report must not lose sight of, and the index would not
+    // name it.
+    let packages = crate::pkg::Tree::open(&root).ok().map(|tree| {
+        use crate::pkg::Catalogue;
+        let mut out = Vec::new();
+        for service in tree.services() {
+            for version in tree.versions(&service) {
+                let image = tree
+                    .manifest(&service, &version)
+                    .map(|m| m.image.reference());
+                out.push(crate::compliance::Package {
+                    service: service.clone(),
+                    version,
+                    image,
+                });
+            }
+        }
+        out
+    });
+
+    // ---- what the projects declare ---------------------------------------
+    //
+    // Read here rather than through `list_projects`, which asks the engine. The
+    // two facts wanted are in the manifest and nowhere else, and a report that
+    // needed Docker running to say whether hooks are disabled would be a report
+    // about the wrong thing.
+    let mut projects = Vec::new();
+    if let Some(dir) = crate::workspace::projects_root(&root) {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name.starts_with('.') || !path.is_dir() {
+                continue;
+            }
+            let Ok(manifest) = manifest::read(&path.join("stackvo.json"), name) else {
+                continue;
+            };
+            let steps: usize = crate::hooks::Event::ALL
+                .iter()
+                .map(|event| manifest.hooks.steps(*event).len())
+                .sum();
+            projects.push(crate::compliance::ProjectFacts {
+                name: name.to_string(),
+                host_steps: manifest.hooks.host_steps().len(),
+                steps,
+                providers: manifest.providers.len(),
+                push_providers: manifest
+                    .providers
+                    .iter()
+                    .filter(|p| p.offers(crate::provider::Direction::Push))
+                    .count(),
+            });
+        }
+    }
+
+    let images = crate::images::listed();
+    let source = crate::market::remembered(&root).ok().flatten();
+    let overrides = crate::overrides::all(&root);
+
+    Ok(crate::compliance::measure(
+        policy,
+        &crate::compliance::Observed {
+            env_file: &env_file,
+            generated: generated.as_deref(),
+            images: &images,
+            packages: packages.as_deref(),
+            source: source.as_ref(),
+            overrides: &overrides,
+            projects: &projects,
+        },
+    ))
 }
 
 /// The user's language: what they chose, else what the machine is set to.
@@ -12055,7 +12619,8 @@ mod migrate_tests {
         detect::Detected {
             framework: None,
             runtime,
-            server: "nginx",
+            // What detection actually produces: nothing said which server.
+            server: None,
             document_root: Some("public".into()),
             php_version: Some("8.2".into()),
             node_version: Some("20".into()),
@@ -12287,6 +12852,18 @@ mod prefs_tests {
     }
 }
 
+/// One preference, as a non-empty string.
+///
+/// Five call sites had grown the same six-line `and_then` chain and two of them
+/// had lost the `filter` on the way, so a preference cleared to `""` read as a
+/// choice rather than as no choice.
+fn pref_str(key: &str) -> Option<String> {
+    prefs_get()
+        .ok()
+        .and_then(|p| p.get(key).and_then(|v| v.as_str()).map(str::to_string))
+        .filter(|s| !s.is_empty())
+}
+
 fn prefs_path() -> Result<std::path::PathBuf> {
     crate::appdir::config()
         .map(|d| d.join("preferences.json"))
@@ -12299,8 +12876,12 @@ fn default_prefs() -> serde_json::Value {
         "locale": null,
         "theme": "system",
         "editorCommand": null,
+        "editorCustom": null,
         "terminalApp": null,
+        "terminalCustom": null,
         "browserCommand": null,
+        "browserCustom": null,
+        "dbClientCustom": null,
         "startMinimized": false,
         "closeBehaviour": "ask",
         "autostart": false,
@@ -12308,7 +12889,10 @@ fn default_prefs() -> serde_json::Value {
         // Off, because a feature that starts writing hundreds of megabytes
         // without being asked is one people find out about when a disk fills.
         "backupSchedule": "off",
-        "backupKeep": 7
+        "backupKeep": 7,
+        // Absent means "not yet", which is what a fresh install is. Written
+        // once, when the introduction is dismissed or followed.
+        "tourSeen": false
     })
 }
 
@@ -12349,40 +12933,27 @@ pub fn open_in_editor(state: State<'_, AppState>, path: String) -> Result<()> {
     // paths go through `resolve_editor`, so an editor installed only as a macOS
     // bundle is launchable either way — spawning the launcher blindly, as this
     // used to, reports "no editor found" on a machine that has one.
-    let configured = prefs_get()
-        .ok()
-        .and_then(|p| {
-            p.get("editorCommand")
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        })
-        .filter(|s| !s.is_empty());
+    let configured = pref_str("editorCommand");
+    let custom = pref_str("editorCustom");
 
     let ids: Vec<String> = match configured {
         Some(id) => vec![id],
+        // `Other…` is skipped here on purpose. The walk exists for the case
+        // where nobody has chosen anything, and a command line stored under a
+        // choice that was never made is not a detection result — starting it
+        // would be this app running something the user did not ask it to.
         None => crate::apps::editors()
             .into_iter()
-            .filter(|a| a.available)
+            .filter(|a| a.available && a.id != crate::apps::CUSTOM)
             .map(|a| a.id)
             .collect(),
     };
 
     for id in ids {
-        let Some(launch) = crate::apps::resolve_editor(&id) else {
+        let Some(launch) = crate::apps::resolve_editor(&id, custom.as_deref()) else {
             continue;
         };
-        let spawned = match launch {
-            crate::apps::Launch::Command(cmd) => {
-                std::process::Command::new(cmd).arg(&target).spawn().is_ok()
-            }
-            // `open -a` is what Finder does; it needs no CLI helper installed.
-            crate::apps::Launch::Bundle(bundle) => std::process::Command::new("open")
-                .args(["-a", bundle])
-                .arg(&target)
-                .spawn()
-                .is_ok(),
-        };
-        if spawned {
+        if launch.spawn_with(target.as_os_str()) {
             return Ok(());
         }
     }
@@ -12483,14 +13054,27 @@ pub async fn sample_container_stats(app: &AppHandle) {
             continue;
         };
 
-        let mut history = recover(&state.stats_history);
-        let series = history.entry(engine::container_name(&id)).or_default();
-        series.push((now, stats.cpu_percent, stats.memory_percent));
-        if series.len() > 120 {
-            let excess = series.len() - 120;
-            series.drain(0..excess);
+        let name = engine::container_name(&id);
+
+        {
+            let mut history = recover(&state.stats_history);
+            let series = history.entry(name.clone()).or_default();
+            series.push((now, stats.cpu_percent, stats.memory_percent));
+            if series.len() > 120 {
+                let excess = series.len() - 120;
+                series.drain(0..excess);
+            }
         }
+
+        // The same reading, kept rather than discarded after two hours. The
+        // percentage is what the chart wants; the total is what "what did this
+        // cost me today" wants, and neither can be derived from the other
+        // afterwards — `memory_percent` is a share of a limit that can change.
+        recover(&state.usage).record(&name, now, stats.cpu_percent, stats.memory_used);
     }
+
+    // Only after the whole round, and only what changed: the budget notice.
+    over_budget_notice(app, &state).await;
 
     // Written after the whole round rather than after each container: one
     // atomic replacement per minute, of a file bounded by the same 120-sample
@@ -12507,6 +13091,61 @@ pub async fn sample_container_stats(app: &AppHandle) {
     if let Some(path) = crate::stats_store::path() {
         let snapshot = recover(&state.stats_history).clone();
         let _ = crate::stats_store::save_to(&path, &snapshot);
+    }
+
+    if let Some(path) = crate::usage::path() {
+        let snapshot = {
+            let mut ledger = recover(&state.usage);
+            ledger.prune();
+            ledger.clone()
+        };
+        // Dropped on the same terms as the history above: a total that could
+        // not be written is a day that starts again, and stopping the sampler
+        // over it would trade that for no totals at all.
+        let _ = crate::usage::save_to(&path, &snapshot);
+    }
+}
+
+/// Say once, per project per day, that a budget has been passed.
+///
+/// ## Once, and why that needed state
+///
+/// The sampler runs every sixty seconds and a project that is over budget at
+/// two o'clock is still over at half past. A notice per round would be four
+/// hundred notices by the evening, which is a feature somebody switches off
+/// within the hour — and the one they switch off is the one that would have
+/// told them tomorrow.
+///
+/// So a project is announced once per **day**, keyed by date, which also means
+/// the first breach tomorrow is an event again without anything having to
+/// clear the set at midnight.
+///
+/// A budget is a **machine's** decision and lives in preferences rather than in
+/// the manifest: the same repository on a colleague's laptop has different room
+/// to spare, and a threshold committed to git would be one of them arguing with
+/// the other in a pull request.
+async fn over_budget_notice(app: &AppHandle, state: &tauri::State<'_, AppState>) {
+    let Ok(report) = usage_report_for(state, None).await else {
+        return;
+    };
+
+    for row in report.rows.iter().filter(|r| r.over_budget) {
+        let key = format!("{}/{}", report.date, row.name);
+        if !recover(&state.budget_notified).insert(key) {
+            continue;
+        }
+        events::emit(
+            app,
+            "usage:over-budget",
+            serde_json::json!({
+                "project": row.name,
+                "date": report.date,
+                "cpuMinutes": row.cpu_seconds / 60.0,
+                "gbHours": row.gb_hours,
+                "budgetCpuMinutes": row.budget_cpu_minutes,
+                "budgetGbHours": row.budget_gb_hours,
+            }),
+        );
     }
 }
 
@@ -12549,7 +13188,7 @@ pub fn project_dockerfile_preview(
     };
 
     let strict = strict.unwrap_or(true);
-    let rendered = crate::generator::render_from_manifest(&m, &opts, strict)
+    let rendered = crate::generator::render_from_manifest(&m, &opts, strict, &env.default_server())
         .map_err(|e| Error::new(Code::Unsupported, e))?;
 
     // What a non-strict render drops without telling anyone — which is what
@@ -12612,585 +13251,7 @@ pub fn project_dockerfile_preview(
 /// Reads only. It never writes a generated file.
 #[tauri::command]
 pub fn generator_verify(state: State<'_, AppState>) -> Result<serde_json::Value> {
-    verify_generator(&state.root()?)
-}
-
-/// One generated file, rendered in memory and not yet on disk.
-pub struct GenFile {
-    /// Human-facing label — `parser.ajans/Dockerfile`, `configs/mysql.cnf`.
-    pub label: String,
-    /// Absolute target path.
-    pub path: std::path::PathBuf,
-    /// `projects` or `services` — which generate scope owns it, mirroring the
-    /// Bash orchestrator's two subcommands.
-    pub scope: &'static str,
-    pub content: String,
-}
-
-/// Render everything the generator owns, in memory.
-///
-/// The single source both `verify_generator` (compare against disk) and
-/// `write_generated` (write to disk) consume — one enumeration, so the set
-/// that is verified and the set that is written cannot drift apart.
-///
-/// Project render failures come back as `(label, error)` pairs rather than
-/// failing the whole call: one broken manifest must neither hide the other
-/// projects nor abort a stack-wide regenerate, which is also what the Bash
-/// generator did.
-/// What a render produced: the files, and the manifests that were skipped
-/// paired with the reason. The second half is not an error channel — a broken
-/// manifest is reported alongside the projects that rendered fine.
-pub type Rendered = (Vec<GenFile>, Vec<(String, String)>);
-
-/// The services half, rendered from `.env` and the compiled-in templates.
-///
-/// Lifted out of `render_generated` unchanged when the instance table became a
-/// second source. Kept whole rather than merged with the new path: they share
-/// an output and nothing else, and a single function with a branch through the
-/// middle of it would be a function nobody could read either half of.
-/// Where the services half of a render comes from — and there is only one.
-///
-/// The package system is what closed the second one. This used to be a switch: no
-/// `instances.json` meant render from `.env` and the templates compiled into the
-/// binary, an `instances.json` meant render from the table and the package tree.
-/// Both branches existed so that every workspace in existence could keep working
-/// while the second one was built.
-///
-/// The first branch is gone. What made keeping it untenable was not
-/// the code — it was that the two branches knew about **different catalogues**:
-/// `.env` knew the twenty-five services that had a template inside the binary,
-/// the table knows whatever the package tree holds. Adding Solr and ClickHouse
-/// as packages made that concrete rather than theoretical — a project declaring
-/// `services: ["solr"]` got a correct declaration met with a wrong warning, and
-/// the warning could not be fixed without putting a templateless entry into the
-/// `.env` catalogue, where it would have offered a switch that renders nothing.
-///
-/// A workspace that owes a migration is met by `MigrationGate` before it ever
-/// reaches a render, and reaching here still owing one is a bug in the gate —
-/// so it says so with a name. What it does *not* do is read a missing table as
-/// that bug: a workspace that has installed nothing has no table either, and
-/// there the empty stack is the correct answer rather than a symptom.
-fn service_source(root: &std::path::Path) -> Result<crate::instances::Table> {
-    // The question is "has this workspace a migration owed", not "is there a
-    // file" — and it is asked through the predicate the gate is driven by, so
-    // the two cannot answer differently. They did: a first launch has no table
-    // and nothing in `.env` to migrate, so `MigrationGate` waved it through and
-    // this refused it, and the bootstrap's very first step failed with a
-    // sentence about a `.env` the workspace had never had.
-    if crate::handover::pending(root) {
-        // `Conflict` rather than a new code: the workspace's state and this
-        // version's renderer disagree, which is what that code already means,
-        // and a new variant is a contract change for a message.
-        return Err(Error::new(
-            Code::Conflict,
-            "this workspace still keeps its services in .env, and this version renders them \
-             from instances.json",
-        )
-        .with_hint(crate::hints::MIGRATE_THE_WORKSPACE));
-    }
-    // Absent is empty (`Table::load`), and empty is a stack of the proxy and
-    // the certificate authority with nothing behind them — which is what a
-    // workspace that has installed no service from the Market yet *is*.
-    crate::instances::Table::load(root)
-}
-
-pub fn render_generated(root: &std::path::Path) -> Result<Rendered> {
-    use crate::generator;
-
-    let env = Env::load(root)?;
-
-    // Before anything is rendered, because the failure is silent otherwise.
-    //
-    // A key whose keystore entry did not answer is *absent* from the map, so
-    // `{{ SERVICE_MYSQL_ROOT_PASSWORD | default('root') }}` renders `root` and
-    // a database comes up on a password the user last set years ago and does
-    // not know is in force. Every other consumer of `Env` can live with a
-    // missing key; this one writes it into a file that starts a container.
-    let unresolved = env.unresolved_secrets();
-    if !unresolved.is_empty() {
-        return Err(Error::new(
-            Code::PermissionDenied,
-            format!(
-                "the keystore did not produce a value for {}",
-                unresolved.join(", ")
-            ),
-        )
-        .with_hint(crate::hints::UNLOCK_THE_KEYSTORE)
-        .with_details(serde_json::json!({ "keys": unresolved })));
-    }
-
-    let limits = generator::ServerSettings::from_env(&env);
-    let extras = generator::ServerExtras::load(root, &env);
-    let opts = generator::ToolchainOptions {
-        tools: env.list("PHP_DEFAULT_TOOLS"),
-        apt_packages: env.list("PHP_DEFAULT_APT_PACKAGES"),
-        composer_version: env
-            .get("PHP_TOOL_COMPOSER_VERSION")
-            .unwrap_or("latest")
-            .to_string(),
-        nodejs_version: env
-            .get("PHP_TOOL_NODEJS_VERSION")
-            .unwrap_or("20")
-            .to_string(),
-    };
-
-    let mut files: Vec<GenFile> = Vec::new();
-    let mut errors: Vec<(String, String)> = Vec::new();
-
-    // Once, not per project: every project that shares on the LAN shares on the
-    // same address, and asking the routing table in a loop would be asking the
-    // same question once per manifest.
-    let lan_address = crate::lan::address();
-
-    // ---- per-project files ----
-    let mut manifests: Vec<(String, crate::manifest::Manifest)> = Vec::new();
-    if let Some(entries) =
-        crate::workspace::projects_root(root).and_then(|p| std::fs::read_dir(p).ok())
-    {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            if name.starts_with('.') || !path.join("stackvo.json").is_file() {
-                continue;
-            }
-            let Ok(mut m) = crate::manifest::read(&path.join("stackvo.json"), name) else {
-                continue;
-            };
-
-            // LAN sharing is an extra hostname and nothing more, so it joins
-            // the list the manifest already has rather than growing a second
-            // path through the renderer. Added here rather than in
-            // `manifest::read`, because `read` answers what is on disk and this
-            // name is not: it is computed from the address this machine has
-            // right now, and a manifest that reported it would be reporting
-            // something that expires with a DHCP lease.
-            if m.lan_share {
-                if let Some(ip) = lan_address {
-                    m.aliases.push(crate::lan::domain_for(name, ip));
-                }
-            }
-
-            // Node writes into the project source dir, PHP into generated/ (C-19).
-            // C-19, generalised: every snapshot runtime builds from the
-            // project source dir, so that is where its Dockerfile lives.
-            let dockerfile_path = if m.runtime != "php" {
-                path.join("Dockerfile")
-            } else {
-                root.join("generated/projects")
-                    .join(name)
-                    .join("Dockerfile")
-            };
-
-            match generator::render_from_manifest(&m, &opts, false) {
-                Ok(content) => files.push(GenFile {
-                    label: format!("{name}/Dockerfile"),
-                    path: dockerfile_path,
-                    scope: "projects",
-                    content,
-                }),
-                Err(e) => errors.push((format!("{name}/Dockerfile"), e)),
-            }
-
-            // A node build context must never swallow host node_modules, so
-            // this is rewritten beside the Dockerfile on every run.
-            let dockerignore = match m.runtime.as_str() {
-                "node" => Some(generator::NODE_DOCKERIGNORE),
-                other => generator::lang_dockerignore(other),
-            };
-            if let Some(content) = dockerignore {
-                files.push(GenFile {
-                    label: format!("{name}/.dockerignore"),
-                    path: path.join(".dockerignore"),
-                    scope: "projects",
-                    content: content.to_string(),
-                });
-            }
-
-            // nginx.conf / supervisord.conf / Caddyfile per server; apache,
-            // swoole and node correctly contribute nothing here.
-            //
-            // The workspace's own directives, plus this project's
-            // directory-listing switch appended to them. Appended rather than
-            // merged: the workspace file is the user's and comes first, and a
-            // switch that silently overrode a directive somebody wrote by hand
-            // would be a setting arguing with a file.
-            let extras =
-                match crate::site::listing_directives(m.server.as_deref().unwrap_or("nginx")) {
-                    Some(directives) if crate::site::read(root, name).directory_listing => {
-                        extras.with_appended(m.server.as_deref().unwrap_or("nginx"), directives)
-                    }
-                    _ => extras.clone(),
-                };
-
-            for (file, content) in generator::render_project_config_files_with(&m, &limits, &extras)
-            {
-                files.push(GenFile {
-                    label: format!("{name}/{file}"),
-                    path: root.join("generated/projects").join(name).join(file),
-                    scope: "projects",
-                    content,
-                });
-            }
-            manifests.push((name.to_string(), m));
-        }
-    }
-
-    // ---- the projects compose file ----
-    let projects = generator::compose_projects_from(&manifests);
-    files.push(GenFile {
-        label: "docker-compose.projects.yml".into(),
-        path: root.join("generated/docker-compose.projects.yml"),
-        scope: "projects",
-        content: generator::render_compose_projects(
-            &projects,
-            &root.display().to_string(),
-            &crate::workspace::require_projects_root(root)?
-                .display()
-                .to_string(),
-        ),
-    });
-
-    // ---- the base compose (stackvo.yml) ----
-    //
-    // Traefik and the network — `generate_base_compose` renders
-    // `core/compose/base.yml` through the same substitution engine the
-    // service templates use. This was the one file the Sprint 15 "verify
-    // covers everything" claim missed; enumerated here, the claim is true.
-    let vars = crate::template::variables(&env, root);
-    if let Some(text) = crate::skeleton::read_template(root, "core/compose/base.yml") {
-        files.push(GenFile {
-            label: "stackvo.yml".into(),
-            path: root.join("generated/stackvo.yml"),
-            scope: "services",
-            content: crate::template::render(&text, &vars),
-        });
-    }
-
-    // ---- services: configs and the dynamic compose ----
-    //
-    // One source. See `service_source` for what happened to the other.
-    {
-        let table = service_source(root)?;
-        {
-            let tree = crate::market::catalogue(root)?;
-            let network = vars
-                .get("DOCKER_DEFAULT_NETWORK")
-                .cloned()
-                .unwrap_or_else(|| "stackvo-net".into());
-            let tld = vars
-                .get("DEFAULT_TLD_SUFFIX")
-                .cloned()
-                .unwrap_or_else(|| "stackvo.loc".into());
-
-            // The keystore, read through the same helper `.env` values go
-            // through — one answer to "what is this secret", not two.
-            let secrets = |reference: &str| {
-                crate::secrets::entry_of(reference)
-                    .and_then(|entry| crate::secrets::read(entry).ok().flatten())
-            };
-
-            let rendered =
-                crate::render::dynamic_compose(root, &table, &tree, &network, &tld, &secrets)?;
-
-            for config in rendered.configs {
-                files.push(GenFile {
-                    label: format!(
-                        "configs/{}",
-                        crate::paths::to_label(
-                            &config
-                                .path
-                                .strip_prefix(root.join("generated/configs"))
-                                .unwrap_or(&config.path)
-                                .display()
-                                .to_string()
-                        )
-                    ),
-                    path: config.path,
-                    scope: "services",
-                    content: config.contents,
-                });
-            }
-            files.push(GenFile {
-                label: "docker-compose.dynamic.yml".into(),
-                path: root.join("generated/docker-compose.dynamic.yml"),
-                scope: "services",
-                content: rendered.compose,
-            });
-        }
-    }
-
-    // ---- traefik ----
-    let catalog = env_schema().service_catalog();
-    let services: Vec<(&str, bool, Option<&str>)> = catalog
-        .iter()
-        .map(|(id, _)| (id.as_str(), env.service_enabled(id), env.service_url(id)))
-        .collect();
-
-    // A route that no longer normalises — a target edited by hand into
-    // something invalid — is dropped from the render rather than failing it.
-    // The whole stack refusing to regenerate because of one optional route is a
-    // worse outcome than that route being absent, and `routes_list` is where
-    // somebody sees why.
-    let suffix = env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc");
-    let user_routes: Vec<crate::routes::Checked> = crate::routes::read(root)
-        .iter()
-        .filter_map(|route| route.normalise(suffix).ok())
-        .collect();
-
-    let traefik = generator::TraefikOptions {
-        tld_suffix: suffix,
-        network: env.get("DOCKER_DEFAULT_NETWORK").unwrap_or("stackvo-net"),
-        ssl_enabled: env.bool("SSL_ENABLE"),
-        redirect_to_https: env.bool("REDIRECT_TO_HTTPS"),
-        services,
-        routes: user_routes,
-    };
-
-    files.push(GenFile {
-        label: "traefik/traefik.yml".into(),
-        path: root.join("generated/traefik/traefik.yml"),
-        scope: "services",
-        content: generator::render_traefik_config(&traefik),
-    });
-    files.push(GenFile {
-        label: "traefik/dynamic/routes.yml".into(),
-        path: root.join("generated/traefik/dynamic/routes.yml"),
-        scope: "services",
-        content: generator::render_traefik_routes(&traefik),
-    });
-
-    // ---- the registry mirror ----
-    //
-    // Last, and over the rendered text rather than inside each renderer. Every
-    // image reference in the workspace passes through this function on its way
-    // to disk, so one pass here covers the project Dockerfiles, both compose
-    // files and every service template at once — and a renderer added next
-    // year is covered without anybody remembering to do it.
-    //
-    // `crate::policy` carries the three references this deliberately leaves
-    // alone, each of which would otherwise break a build.
-    if let Some(prefix) = crate::policy::current().registry_prefix() {
-        for file in &mut files {
-            if crate::policy::rewrites(&file.label) {
-                file.content = crate::policy::rewrite(&file.content, prefix);
-            }
-        }
-    }
-
-    Ok((files, errors))
-}
-
-/// The routing warning, computed the same way the render does — kept separate
-/// so both the verify report and the write report can carry it.
-fn generator_warnings(root: &std::path::Path) -> Vec<String> {
-    let Ok(env) = Env::load(root) else {
-        return Vec::new();
-    };
-    let catalog = env_schema().service_catalog();
-    let services: Vec<(&str, bool, Option<&str>)> = catalog
-        .iter()
-        .map(|(id, _)| (id.as_str(), env.service_enabled(id), env.service_url(id)))
-        .collect();
-    let traefik = crate::generator::TraefikOptions {
-        tld_suffix: env.get("DEFAULT_TLD_SUFFIX").unwrap_or("stackvo.loc"),
-        network: env.get("DOCKER_DEFAULT_NETWORK").unwrap_or("stackvo-net"),
-        ssl_enabled: env.bool("SSL_ENABLE"),
-        redirect_to_https: env.bool("REDIRECT_TO_HTTPS"),
-        services,
-        // The warning this asks for is about entry points, not about routes.
-        routes: Vec::new(),
-    };
-    crate::generator::traefik_routing_warning(&traefik)
-        .map(|w| vec![w])
-        .unwrap_or_default()
-}
-
-/// The command's logic, free of Tauri `State` so the `diagnose` example runs
-/// exactly the same comparison the app does.
-pub fn verify_generator(root: &std::path::Path) -> Result<serde_json::Value> {
-    let (rendered, errors) = render_generated(root)?;
-
-    let mut files: Vec<serde_json::Value> = Vec::new();
-    for f in &rendered {
-        let theirs = std::fs::read_to_string(&f.path).ok();
-        let (status, at) = match &theirs {
-            None => ("missing", None),
-            Some(t) if *t == f.content => ("match", None),
-            Some(t) => (
-                "differ",
-                f.content
-                    .lines()
-                    .zip(t.lines())
-                    .position(|(a, b)| a != b)
-                    .map(|i| i as u64 + 1),
-            ),
-        };
-        files.push(serde_json::json!({
-            "file": f.label,
-            "path": f.path.display().to_string(),
-            "status": status,
-            "firstDifferenceLine": at,
-        }));
-    }
-    for (label, error) in &errors {
-        files.push(serde_json::json!({
-            "file": label,
-            "status": "error",
-            "error": error,
-        }));
-    }
-
-    let matched = files.iter().filter(|f| f["status"] == "match").count();
-    let differed = files.iter().filter(|f| f["status"] == "differ").count();
-
-    Ok(serde_json::json!({
-        "files": files,
-        "matched": matched,
-        "differed": differed,
-        // Named for the question it answers now. It was `readyToTakeOver` —
-        // the gate for a port replacing the generator it was compared against —
-        // and kept that name for months after there was nothing left to take
-        // over from.
-        "inSync": differed == 0,
-        // Surfaced here because the desktop app can say the routing is broken;
-        // StackVo itself never does. See CONFLICTS.md C-20.
-        "warnings": generator_warnings(root),
-    }))
-}
-
-/// Does this generate scope include files of this kind?
-///
-/// The narrowing scopes are exactly `projects` and `services`; **anything
-/// else means everything** — which is the Bash orchestrator's `case` falling
-/// through to "generate all", and the semantics its callers still rely on:
-/// `service_enable` passes `projects_and_services`, and the takeover
-/// initially read that as "matches nothing", wrote zero files, and reported
-/// success — an enabled service whose container could never come up, because
-/// it was never written into the compose file being `up`'d.
-fn scope_includes(scope: &str, file_scope: &str) -> bool {
-    match scope {
-        "projects" | "services" => scope == file_scope,
-        _ => true,
-    }
-}
-
-/// Write the generated files — the Rust generator as the generator, not the
-/// understudy.
-///
-/// Writes are **in place** (truncate-and-write, exactly the shell's `>`),
-/// never staged-and-renamed: Traefik's file provider was measured to ignore an
-/// atomic rename outright — see the `cert_apply` note — and the generated
-/// tree is precisely the directory it watches.
-///
-/// `on_file` is called once per file written, which is what the operation
-/// console shows as progress.
-/// Every managed project's directory and manifest, for the callers that walk
-/// them. Broken ones are skipped: a project that cannot be read has nothing to
-/// write a context for, and it is already reported by `list_projects`.
-fn project_manifests(
-    root: &std::path::Path,
-) -> Vec<(String, std::path::PathBuf, manifest::Manifest)> {
-    let Ok(projects_dir) = workspace::require_projects_root(root) else {
-        return Vec::new();
-    };
-    let Ok(entries) = std::fs::read_dir(&projects_dir) else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if name.starts_with('.') || !path.join("stackvo.json").is_file() {
-            continue;
-        }
-        if let Ok(manifest) = manifest::read(&path.join("stackvo.json"), name) {
-            out.push((name.to_string(), path, manifest));
-        }
-    }
-    out
-}
-
-pub fn write_generated(
-    root: &std::path::Path,
-    scope: &str,
-    mut on_file: impl FnMut(&str),
-) -> Result<serde_json::Value> {
-    let (rendered, errors) = render_generated(root)?;
-
-    // Made before anything is written into them. The log trees matter beyond
-    // the writes below: the generated compose mounts them, and compose does not
-    // create host directories for bind mounts.
-    for dir in [
-        "generated/projects",
-        "generated/configs",
-        "generated/traefik/dynamic",
-        "logs/projects",
-        "logs/services",
-    ] {
-        std::fs::create_dir_all(root.join(dir))
-            .map_err(|e| Error::io(format!("creating {dir}"), e))?;
-    }
-
-    let mut written: Vec<String> = Vec::new();
-    for f in rendered {
-        if !scope_includes(scope, f.scope) {
-            continue;
-        }
-        if let Some(parent) = f.path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
-        }
-        std::fs::write(&f.path, &f.content)
-            .map_err(|e| Error::io(format!("writing {}", f.path.display()), e))?;
-        on_file(&f.label);
-        written.push(f.label);
-    }
-
-    // The agent context, written into each project's own directory
-    // rather than into `generated/`. It is not a file the stack reads — the
-    // reader is an assistant working inside the container, which sees the
-    // project tree and not this app's.
-    //
-    // Best-effort, per project. A directory that has been deleted, or one the
-    // app cannot write to, must not stop the stack being regenerated: this is
-    // a convenience for a reader that may not exist, and the compose files are
-    // the thing somebody is waiting for.
-    if scope_includes(scope, "projects") {
-        for (name, dir, manifest) in project_manifests(root) {
-            if let Ok(context) = crate::agentctx::build(root, &manifest) {
-                if crate::agentctx::write(&dir, &context).is_ok() {
-                    written.push(format!(
-                        "{name}/{}/{}",
-                        crate::agentctx::DIR,
-                        crate::agentctx::FILE
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(serde_json::json!({
-        "engine": "rust",
-        "scope": scope,
-        "written": written.len(),
-        "files": written,
-        "skipped": errors
-            .iter()
-            .map(|(label, error)| serde_json::json!({ "file": label, "error": error }))
-            .collect::<Vec<_>>(),
-        "warnings": generator_warnings(root),
-    }))
+    crate::generator::verify_generator(&state.root()?)
 }
 
 // ---------------------------------------------------------------- staged takeover
@@ -13250,7 +13311,7 @@ pub async fn generate_with(
         GeneratorEngine::Verify => Ok(serde_json::json!({
             "operationId": operation_id,
             "engine": "verify",
-            "report": verify_generator(&root)?,
+            "report": crate::generator::verify_generator(&root)?,
         })),
 
         GeneratorEngine::Rust => {
@@ -13258,7 +13319,7 @@ pub async fn generate_with(
             Ok(serde_json::json!({
                 "operationId": operation_id,
                 "engine": "rust",
-                "report": verify_generator(&root)?,
+                "report": crate::generator::verify_generator(&root)?,
             }))
         }
     }
@@ -14058,217 +14119,9 @@ pub async fn market_bundle(
 
 // ---------------------------------------------------------------- handover
 
-/// What the migration would do, or why it cannot.
-///
-/// The plan is computed and shown before anything is written, because the one
-/// workspace this touches is one somebody is already using — `handover.rs` is
-/// built as plan-then-apply for that reason, and a UI that only offered the
-/// apply half would have thrown the reason away.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HandoverPreview {
-    /// `.env` has service state and no table exists yet.
-    pub pending: bool,
-    /// Already migrated: the table is there.
-    pub migrated: bool,
-    /// What the instances would be, in the order they would be written.
-    pub instances: Vec<HandoverInstance>,
-    /// Human-readable, already translated by the front end through `hint_key`
-    /// where one applies — these carry the moving-tag resolutions and the
-    /// adopted volumes, which are the two things a user should see *before*
-    /// agreeing rather than in a log afterwards.
-    pub notes: Vec<HandoverNote>,
-    pub blockers: Vec<HandoverNote>,
-    /// Whether `.env.pre-market.bak` is already on disk.
-    pub backup: bool,
-    /// Packages the handover needs before it can run. Empty on a workspace
-    /// whose versions are all installed, which is what the happy path is.
-    pub missing: Vec<MissingPackage>,
-}
-
-/// A package the handover needs and this machine does not have.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MissingPackage {
-    pub service: String,
-    pub version: String,
-    /// Whether the cached index offers it, which decides whether the UI can
-    /// offer a button or only an explanation.
-    pub installable: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HandoverInstance {
-    pub id: String,
-    pub service: String,
-    pub version: String,
-    pub ports: BTreeMap<String, u16>,
-    pub volumes: BTreeMap<String, String>,
-}
-
-/// One line of the preview: a machine-readable `kind` and the subject it is
-/// about, so the front end translates rather than parses.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HandoverNote {
-    pub kind: String,
-    pub subject: String,
-    pub detail: String,
-}
-
-fn preview_of(root: &std::path::Path) -> Result<HandoverPreview> {
-    let migrated = crate::instances::path(root).exists();
-    let env = crate::config::Env::load(root)?;
-    let tree = crate::market::catalogue(root)?;
-    let pending = crate::handover::is_pending(root, &env, &tree);
-
-    // A workspace that has already migrated has nothing to plan, and planning
-    // it anyway is not merely wasted work — it is **wrong output**. The plan
-    // reads `.env`, whose service keys are deliberately left behind as a record
-    // (marked, never deleted), so it happily produces blockers about versions
-    // this workspace stopped using the moment the table was written. The panel
-    // upstream shows on `blockers.length > 0`, so a migrated machine was told
-    // it "still keeps its services in .env" — while the Services page was
-    // reading the table and the containers were running from it.
-    //
-    // `handover_apply` already refuses in this state. This is the same refusal
-    // moved to where it is read rather than where it is acted on.
-    if migrated {
-        return Ok(HandoverPreview {
-            pending: false,
-            migrated: true,
-            instances: Vec::new(),
-            notes: Vec::new(),
-            blockers: Vec::new(),
-            backup: crate::handover::backup_path(root).exists(),
-            missing: Vec::new(),
-        });
-    }
-
-    // The timestamp the plan stamps on each package reference. Real, because it
-    // is recorded as when this workspace adopted the package.
-    let now = crate::snapshot::now_rfc3339();
-    let plan = crate::handover::plan(root, &env, &tree, &crate::ports::is_free, &now);
-
-    let notes = plan
-        .notes
-        .iter()
-        .map(|note| match note {
-            crate::handover::Note::ResolvedMovingTag { service, from, to } => HandoverNote {
-                kind: "resolvedMovingTag".into(),
-                subject: service.clone(),
-                detail: format!("{from} → {to}"),
-            },
-            crate::handover::Note::PortMoved {
-                instance,
-                port,
-                from,
-                to,
-            } => HandoverNote {
-                kind: "portMoved".into(),
-                subject: instance.clone(),
-                detail: format!("{port}: {from} → {to}"),
-            },
-            crate::handover::Note::AdoptedVolume { instance, volume } => HandoverNote {
-                kind: "adoptedVolume".into(),
-                subject: instance.clone(),
-                detail: volume.clone(),
-            },
-            crate::handover::Note::SettingHasNoHome { service, key } => HandoverNote {
-                kind: "settingHasNoHome".into(),
-                subject: service.clone(),
-                detail: key.clone(),
-            },
-        })
-        .collect();
-
-    let blockers = plan
-        .blockers
-        .iter()
-        .map(|blocker| match blocker {
-            crate::handover::Blocker::UnknownService { service } => HandoverNote {
-                kind: "unknownService".into(),
-                subject: service.clone(),
-                detail: String::new(),
-            },
-            crate::handover::Blocker::VersionNotInstalled {
-                service,
-                version,
-                available,
-            } => HandoverNote {
-                kind: "versionNotInstalled".into(),
-                subject: format!("{service}@{version}"),
-                detail: available.join(", "),
-            },
-            crate::handover::Blocker::NothingToInstall { service } => HandoverNote {
-                kind: "nothingToInstall".into(),
-                subject: service.clone(),
-                detail: String::new(),
-            },
-            crate::handover::Blocker::NoFreePort { instance, port } => HandoverNote {
-                kind: "noFreePort".into(),
-                subject: instance.clone(),
-                detail: port.clone(),
-            },
-        })
-        .collect();
-
-    // What would unblock this, as data rather than as a sentence to read.
-    //
-    // The blocker above is the truthful statement of the problem; this is the
-    // route out of it. Every version `.env` names has to be installed before
-    // the table can point at it, and on a workspace that has never opened the
-    // Market that is *every* version — so a preview that only refused was a
-    // dead end with the answer one page away and unnamed.
-    //
-    // `installable` is the difference between "press this" and something else
-    // entirely: the registry either publishes that version or it does not, and
-    // a published version is never withdrawn, so the second case is a mistake
-    // somebody made rather than a withdrawal.
-    let registry = crate::market::cached(root)?;
-    let missing: Vec<MissingPackage> = plan
-        .blockers
-        .iter()
-        .filter_map(|blocker| match blocker {
-            crate::handover::Blocker::VersionNotInstalled {
-                service, version, ..
-            } => Some((service.clone(), version.clone())),
-            _ => None,
-        })
-        .map(|(service, version)| MissingPackage {
-            installable: registry
-                .as_ref()
-                .is_some_and(|r| r.version(&service, &version).is_some()),
-            service,
-            version,
-        })
-        .collect();
-
-    Ok(HandoverPreview {
-        missing,
-        pending,
-        migrated,
-        instances: plan
-            .instances
-            .iter()
-            .map(|i| HandoverInstance {
-                id: i.id.clone(),
-                service: i.service.clone(),
-                version: i.version.clone(),
-                ports: i.ports.clone(),
-                volumes: i.volumes.clone(),
-            })
-            .collect(),
-        notes,
-        blockers,
-        backup: crate::handover::backup_path(root).exists(),
-    })
-}
-
 #[tauri::command]
-pub fn handover_preview(state: State<'_, AppState>) -> Result<HandoverPreview> {
-    preview_of(&state.root()?)
+pub fn handover_preview(state: State<'_, AppState>) -> Result<crate::handover::HandoverPreview> {
+    crate::handover::preview(&state.root()?)
 }
 
 /// Write the table, after backing `.env` up.
@@ -14278,7 +14131,9 @@ pub fn handover_preview(state: State<'_, AppState>) -> Result<HandoverPreview> {
 /// was computed, and the machine moves — accepting one over IPC would let a
 /// stale preview claim a port something else has since taken.
 #[tauri::command]
-pub async fn handover_apply(state: State<'_, AppState>) -> Result<HandoverPreview> {
+pub async fn handover_apply(
+    state: State<'_, AppState>,
+) -> Result<crate::handover::HandoverPreview> {
     let root = state.root()?;
 
     if crate::instances::path(&root).exists() {
@@ -14302,7 +14157,7 @@ pub async fn handover_apply(state: State<'_, AppState>) -> Result<HandoverPrevie
         crate::audit::Outcome::Ok,
     );
 
-    preview_of(&root)
+    crate::handover::preview(&root)
 }
 
 // ---------------------------------------------------------------- instances
@@ -15325,44 +15180,6 @@ pub async fn instance_promote(state: State<'_, AppState>, id: String) -> Result<
 mod tests {
     use super::*;
 
-    /// The first launch, which used to have nowhere to go.
-    ///
-    /// A workspace that has just been created has no `instances.json` and no
-    /// service in `.env` to migrate. `MigrationGate` reads the second half and
-    /// lets it past; `service_source` read only the first and refused, so the
-    /// bootstrap's opening step — "compose dosyaları yazılıyor" — failed with a
-    /// sentence about a `.env` this workspace had never had, and there was no
-    /// screen anywhere that could produce the table it was asking for.
-    ///
-    /// The catalogue is absent here on purpose: that is a machine that has
-    /// fetched the registry and installed no package yet, which is every first
-    /// launch and is the exact shape the two predicates disagreed on.
-    #[test]
-    fn a_workspace_with_nothing_to_migrate_renders_an_empty_stack() {
-        let root = std::env::temp_dir().join(format!(
-            "stackvo-fresh-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).unwrap();
-
-        assert!(
-            !crate::handover::pending(&root),
-            "a fresh workspace owes no migration"
-        );
-
-        let table = service_source(&root).expect("a fresh workspace can be rendered");
-        assert!(table.instances.is_empty(), "{:?}", table.instances);
-
-        // And the guard is still a guard: give the same workspace a table and
-        // it is read rather than invented.
-        crate::instances::Table::default().save(&root).unwrap();
-        assert!(service_source(&root).is_ok());
-
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     /// The stack answers on more than its projects.
     ///
     /// `hosts_missing` offered project domains and nothing else, so an admin
@@ -15625,23 +15442,6 @@ mod tests {
         // And the suffix itself, which the certificate is already issued for.
         assert!(wanted.contains(&"dev.test".to_string()));
     }
-    #[test]
-    fn every_generate_scope_its_callers_pass_writes_something() {
-        // `projects` and `services` narrow; everything else is "all" — the
-        // Bash case-fallthrough its callers still rely on. The regression this
-        // pins: `service_enable` passes `projects_and_services`, and an exact
-        // match wrote zero files and reported success, so the just-enabled
-        // service was missing from the very compose file being `up`'d.
-        for scope in ["all", "projects_and_services", "anything-future"] {
-            assert!(scope_includes(scope, "projects"), "{scope}");
-            assert!(scope_includes(scope, "services"), "{scope}");
-        }
-        assert!(scope_includes("projects", "projects"));
-        assert!(!scope_includes("projects", "services"));
-        assert!(scope_includes("services", "services"));
-        assert!(!scope_includes("services", "projects"));
-    }
-
     /// A command that waits for a person must not wait on the main thread.
     ///
     /// Tauri runs a synchronous command on the main thread; only `async fn` or

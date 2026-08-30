@@ -92,6 +92,20 @@ pub struct Tool {
     pub description: &'static str,
     /// True when calling it changes something on disk or in the stack.
     pub writes: bool,
+    /// The argument that names the project this tool acts on, if it acts on
+    /// one.
+    ///
+    /// [`crate::grant`] is the only reader, and it needs this because a scope
+    /// cannot be guessed from a schema: `stackvo_project_restart` and
+    /// `stackvo_service_restart` both take a required string and one of them
+    /// is a project. Declaring it is also what makes `--project=shop` remove
+    /// `stackvo_stack_down` rather than pretend to narrow it — a write tool
+    /// with `None` here is a write tool no project bounds.
+    ///
+    /// `None` for `stackvo_logs` and `stackvo_container_stats` deliberately:
+    /// their argument is a container, which is as often a service or an
+    /// instance as a project.
+    pub project_arg: Option<&'static str>,
     /// JSON Schema for `arguments`.
     pub schema: fn() -> Value,
 }
@@ -358,6 +372,7 @@ pub const TOOLS: &[Tool] = &[
                       every startup requirement and how many projects and services are running. \
                       Start here — it is the one call that says whether anything else will work.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -371,6 +386,7 @@ pub const TOOLS: &[Tool] = &[
                       and how much disk unused images and volumes hold. Use this to explain a \
                       failed start — especially \"address already in use\".",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -381,6 +397,7 @@ pub const TOOLS: &[Tool] = &[
                       whether its domain has a hosts entry, and any contract violations in its \
                       stackvo.json.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -399,6 +416,7 @@ pub const TOOLS: &[Tool] = &[
                       site does not load — or why an upload fails at a limit the user believes \
                       they have already raised.",
         writes: false,
+        project_arg: Some("name"),
         schema: project_arg,
     },
     Tool {
@@ -413,6 +431,7 @@ pub const TOOLS: &[Tool] = &[
                       both are recording, which is unsupported and shows up as wrong numbers \
                       rather than an error.",
         writes: false,
+        project_arg: Some("name"),
         schema: project_arg,
     },
     Tool {
@@ -426,6 +445,7 @@ pub const TOOLS: &[Tool] = &[
                       `stackvo_profiler` lists the recordings and their keys, and this reads \
                       one. A very long trace is replayed up to a limit and says so.",
         writes: false,
+        project_arg: Some("name"),
         schema: hotspots_args,
     },
     // The four instruments that were built, tested and unreachable.
@@ -451,6 +471,7 @@ pub const TOOLS: &[Tool] = &[
                       their keys, and this explains one. Names any other recording that \
                       overlaps the same stretch, because that is when the numbers mislead.",
         writes: false,
+        project_arg: Some("project"),
         schema: explain_args,
     },
     Tool {
@@ -463,6 +484,7 @@ pub const TOOLS: &[Tool] = &[
                       recording, only the debug bridge. Says whether the query log was actually \
                       recording, so an empty database half is not read as a quiet page.",
         writes: false,
+        project_arg: Some("project"),
         schema: timeline_args,
     },
     Tool {
@@ -475,6 +497,7 @@ pub const TOOLS: &[Tool] = &[
                       recording is switched on, because 'no queries' and 'not listening' are \
                       different answers.",
         writes: false,
+        project_arg: None,
         schema: service_arg,
     },
     Tool {
@@ -486,6 +509,7 @@ pub const TOOLS: &[Tool] = &[
                       functions flat, this keeps the paths — which is what separates \"this \
                       function is slow\" from \"this function is slow when called from there\".",
         writes: false,
+        project_arg: Some("name"),
         schema: flame_args,
     },
     Tool {
@@ -499,6 +523,7 @@ pub const TOOLS: &[Tool] = &[
                       written, missing or left over from before the values moved. The mapping is \
                       the answer more often than anything else.",
         writes: false,
+        project_arg: Some("name"),
         schema: project_arg,
     },
     Tool {
@@ -508,6 +533,7 @@ pub const TOOLS: &[Tool] = &[
         description: "The shared infrastructure services — databases, caches, search, queues — \
                       with which are enabled, which are running and what they depend on.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -517,6 +543,7 @@ pub const TOOLS: &[Tool] = &[
         description: "The last lines of a container's log. Reads to the end and returns; it does \
                       not follow.",
         writes: false,
+        project_arg: None,
         schema: logs_args,
     },
     Tool {
@@ -530,6 +557,7 @@ pub const TOOLS: &[Tool] = &[
                       the one worth reading. Needs no engine, so it still answers with Docker \
                       stopped.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -540,6 +568,7 @@ pub const TOOLS: &[Tool] = &[
                       its CA is trusted and when it expires. A domain missing here is a browser \
                       warning the user cannot otherwise explain.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -549,6 +578,7 @@ pub const TOOLS: &[Tool] = &[
         description: "The database services that can be dumped, their database names and whether \
                       they are running.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -557,6 +587,7 @@ pub const TOOLS: &[Tool] = &[
         also: &["mail_status"],
         description: "The mail catcher's inbox: what the applications under test have sent.",
         writes: false,
+        project_arg: None,
         schema: limit_arg,
     },
     Tool {
@@ -567,6 +598,7 @@ pub const TOOLS: &[Tool] = &[
                       The inbox listing carries subjects and addresses; this is the body, which \
                       is where a broken reset link or an unrendered Blade variable actually is.",
         writes: false,
+        project_arg: None,
         schema: id_arg,
     },
     Tool {
@@ -579,6 +611,7 @@ pub const TOOLS: &[Tool] = &[
                       reading has no CPU delta to report. Use it before blaming the stack for \
                       being slow — a host at 97% memory is the answer.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -589,6 +622,7 @@ pub const TOOLS: &[Tool] = &[
                       I/O totals. The per-container half of stackvo_system: which one is eating \
                       the machine.",
         writes: false,
+        project_arg: None,
         schema: container_arg,
     },
     Tool {
@@ -601,6 +635,7 @@ pub const TOOLS: &[Tool] = &[
                       and whether its package is actually present on disk. The ids here are what \
                       stackvo_service_start and its pair take.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -612,6 +647,7 @@ pub const TOOLS: &[Tool] = &[
                       this server has no tool that reads a stored credential back, and that is a \
                       rule rather than an omission.",
         writes: false,
+        project_arg: None,
         schema: service_arg,
     },
     Tool {
@@ -623,6 +659,7 @@ pub const TOOLS: &[Tool] = &[
                       here does not resolve, which is the most common reason a site that is \
                       built, running and certificated still does not load.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -634,6 +671,7 @@ pub const TOOLS: &[Tool] = &[
                       that one says which file changed a minute ago, this one reads it. \
                       Application exceptions are here, not in the container log.",
         writes: false,
+        project_arg: Some("name"),
         schema: app_log_args,
     },
     Tool {
@@ -643,6 +681,7 @@ pub const TOOLS: &[Tool] = &[
         description: "The database snapshots this workspace holds, newest first, with which \
                       service each came from, its size and when it was taken.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -653,6 +692,7 @@ pub const TOOLS: &[Tool] = &[
                       version it offers, and which of those are already on disk. Answers \"can I \
                       have PostgreSQL 17\" without guessing.",
         writes: false,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -663,6 +703,7 @@ pub const TOOLS: &[Tool] = &[
                       in, so the project needs regenerating and rebuilding afterwards — the reply \
                       says whether that is outstanding.",
         writes: true,
+        project_arg: Some("name"),
         schema: xdebug_set_args,
     },
     Tool {
@@ -672,6 +713,7 @@ pub const TOOLS: &[Tool] = &[
         description: "Reissue the HTTPS certificate for the domains the projects actually have, \
                       and trust the CA if nothing does yet.",
         writes: true,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -681,6 +723,7 @@ pub const TOOLS: &[Tool] = &[
         description: "Start one project's container. Idempotent: starting a running project \
                       succeeds silently.",
         writes: true,
+        project_arg: Some("name"),
         schema: project_arg,
     },
     Tool {
@@ -689,6 +732,7 @@ pub const TOOLS: &[Tool] = &[
         also: &["projects_list"],
         description: "Stop one project's container. Idempotent, like start.",
         writes: true,
+        project_arg: Some("name"),
         schema: project_arg,
     },
     Tool {
@@ -698,6 +742,7 @@ pub const TOOLS: &[Tool] = &[
         description: "Bring the stack up with docker compose — builds missing images, so the \
                       first run can take minutes. Runs to completion and reports the outcome.",
         writes: true,
+        project_arg: None,
         schema: stack_up_args,
     },
     Tool {
@@ -706,6 +751,7 @@ pub const TOOLS: &[Tool] = &[
         also: &[],
         description: "Bring the whole stack down: every profile, projects included.",
         writes: true,
+        project_arg: None,
         schema: no_args,
     },
     Tool {
@@ -716,6 +762,7 @@ pub const TOOLS: &[Tool] = &[
                       from .env and the project manifests. The doctor's 'generated config is \
                       stale' finding is repaired by exactly this.",
         writes: true,
+        project_arg: None,
         schema: generate_args,
     },
     Tool {
@@ -726,6 +773,7 @@ pub const TOOLS: &[Tool] = &[
                       lifecycle hooks do not run from here — the same limit stackvo_project_start \
                       and stackvo_project_stop have, and for the same reason.",
         writes: true,
+        project_arg: Some("name"),
         schema: project_arg,
     },
     Tool {
@@ -736,6 +784,7 @@ pub const TOOLS: &[Tool] = &[
                       an id from stackvo_service_instances; a service that is switched off has no \
                       container to start and must be enabled from the app first.",
         writes: true,
+        project_arg: None,
         schema: instance_arg,
     },
     Tool {
@@ -745,6 +794,7 @@ pub const TOOLS: &[Tool] = &[
         description: "Stop one service instance. Nothing is deleted — the data directory and the \
                       volume stay exactly as they are.",
         writes: true,
+        project_arg: None,
         schema: instance_arg,
     },
     Tool {
@@ -754,6 +804,7 @@ pub const TOOLS: &[Tool] = &[
         description: "Restart one service instance. What a changed configuration usually needs \
                       before it takes effect.",
         writes: true,
+        project_arg: None,
         schema: instance_arg,
     },
     Tool {
@@ -766,13 +817,20 @@ pub const TOOLS: &[Tool] = &[
                       here: putting data back over live rows is a decision for the app's own \
                       confirmation, not for a tool call.",
         writes: true,
+        project_arg: None,
         schema: snapshot_take_args,
     },
 ];
 
 /// The tools this run offers.
-pub fn visible(allow_writes: bool) -> impl Iterator<Item = &'static Tool> {
-    TOOLS.iter().filter(move |t| allow_writes || !t.writes)
+///
+/// The grant filters the *list*, not only the call. A tool advertised and then
+/// refused is one an assistant retries, reports as broken, and works around —
+/// the list is the only thing it has to reason from, so a tool it may not call
+/// does not belong on it. That was already true of `--allow-writes` and stays
+/// true of everything [`crate::grant`] added to it.
+pub fn visible(grant: &crate::grant::Grant) -> impl Iterator<Item = &'static Tool> + '_ {
+    TOOLS.iter().filter(move |t| grant.opens(t))
 }
 
 // --------------------------------------------------------------- protocol
@@ -836,8 +894,8 @@ fn text_result(id: Value, body: &Value, is_error: bool) -> Value {
     )
 }
 
-pub fn tools_list(allow_writes: bool) -> Value {
-    let tools: Vec<Value> = visible(allow_writes)
+pub fn tools_list(grant: &crate::grant::Grant) -> Value {
+    let tools: Vec<Value> = visible(grant)
         .map(|tool| {
             json!({
                 "name": tool.name,
@@ -853,8 +911,113 @@ pub fn tools_list(allow_writes: bool) -> Value {
     json!({ "tools": tools })
 }
 
+/// One request from an assistant, answered **and recorded**.
+///
+/// ## Why the recording is here rather than in [`call`]
+///
+/// [`crate::audit`] is a record of acts somebody has to account for, and its
+/// bar has always been "would somebody have to account for this?" — which is
+/// why starting a container from the window is not in it. The person who
+/// pressed the button knows they pressed it.
+///
+/// That reasoning does not survive a second caller. The same act asked for by
+/// an assistant is one nobody watched, and the trail was written from eighteen
+/// places with this surface not among them: *"`stackvo_stack_down` was called
+/// at 14:32"* was a sentence the app could not produce. So the act is recorded
+/// **where it has an actor** — this function, which is what the server binary
+/// runs — rather than in `call`, which is also how the loopback surface and an
+/// undo reach a tool, and neither of those is an assistant asking for something.
+///
+/// A refused call is recorded too, and is often the more interesting line: an
+/// assistant that tried to stop the stack and was told it may not is exactly
+/// what somebody reviewing a grant wants to see.
+pub async fn serve(request: &Value, grant: &crate::grant::Grant) -> Option<Value> {
+    let acted = writing_call(request);
+
+    // The plan is built before the call, because two of the twelve are about
+    // the whole stack and the set they change exists only beforehand. Skipped
+    // when the grant is going to refuse: nothing will happen, so there is
+    // nothing to plan for, and `stack_down` would read the engine for nothing.
+    let planned = match &acted {
+        Some((tool, args)) if grant.admit(tool, args).is_ok() => {
+            Some(crate::undo::before(tool, args).await)
+        }
+        _ => None,
+    };
+
+    let response = handle(request, grant).await;
+
+    if let Some((tool, args)) = acted {
+        let failure = response.as_ref().and_then(failed_with);
+        let outcome = outcome_for(failure.as_ref().map(|(code, _)| code.as_str()));
+
+        crate::audit::record_undoable(
+            tool.name,
+            crate::undo::subject_of(tool, &args),
+            outcome,
+            failure.map(|(_, message)| message),
+            // Only a call that happened has something to put back. A plan on a
+            // failed line would offer to reverse an act that never ran.
+            planned.filter(|_| outcome == crate::audit::Outcome::Ok),
+        );
+    }
+
+    response
+}
+
+/// How one answered call ended, in the trail's terms.
+///
+/// The distinction that matters is `Refused` versus `Failed`, and it is not
+/// cosmetic: "an assistant tried to stop the stack and was told it may not" is
+/// the line somebody reviewing a grant is looking for, and "it tried and Docker
+/// was down" is not the same event. The two codes below are the ones
+/// [`crate::grant`] raises, which is exactly `audit`'s own definition of
+/// refused — the app declined before trying.
+fn outcome_for(code: Option<&str>) -> crate::audit::Outcome {
+    match code {
+        None => crate::audit::Outcome::Ok,
+        Some("PERMISSION_DENIED") | Some("FORBIDDEN") => crate::audit::Outcome::Refused,
+        Some(_) => crate::audit::Outcome::Failed,
+    }
+}
+
+/// The tool and arguments of a `tools/call` that changes something.
+fn writing_call(request: &Value) -> Option<(&'static Tool, Value)> {
+    if request.get("method").and_then(Value::as_str) != Some("tools/call") {
+        return None;
+    }
+    let params = request.get("params")?;
+    let name = params.get("name").and_then(Value::as_str)?;
+    let tool = TOOLS.iter().find(|t| t.name == name).filter(|t| t.writes)?;
+    Some((
+        tool,
+        params
+            .get("arguments")
+            .cloned()
+            .unwrap_or_else(|| json!({})),
+    ))
+}
+
+/// The code and message of a tool call that came back an error.
+///
+/// Read out of the body this module wrote rather than guessed from the shape:
+/// `text_result` puts the whole failure in one text block, and that block is
+/// the same JSON [`failure`] built.
+fn failed_with(response: &Value) -> Option<(String, String)> {
+    let result = response.get("result")?;
+    if result.get("isError") != Some(&json!(true)) {
+        return None;
+    }
+    let text = result.get("content")?.get(0)?.get("text")?.as_str()?;
+    let body: Value = serde_json::from_str(text).ok()?;
+    Some((
+        body.get("code")?.as_str()?.to_string(),
+        body.get("error")?.as_str()?.to_string(),
+    ))
+}
+
 /// Handle one request. `None` for a notification, which takes no reply.
-pub async fn handle(request: &Value, allow_writes: bool) -> Option<Value> {
+pub async fn handle(request: &Value, grant: &crate::grant::Grant) -> Option<Value> {
     let method = request.get("method")?.as_str()?;
     let id = request.get("id").cloned();
 
@@ -877,7 +1040,7 @@ pub async fn handle(request: &Value, allow_writes: bool) -> Option<Value> {
             }),
         ),
         "ping" => ok(id, json!({})),
-        "tools/list" => ok(id, tools_list(allow_writes)),
+        "tools/list" => ok(id, tools_list(grant)),
         "tools/call" => {
             let params = request.get("params").cloned().unwrap_or_else(|| json!({}));
             let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
@@ -886,7 +1049,7 @@ pub async fn handle(request: &Value, allow_writes: bool) -> Option<Value> {
                 .cloned()
                 .unwrap_or_else(|| json!({}));
 
-            match call(name, &args, allow_writes).await {
+            match call(name, &args, grant).await {
                 Ok(body) => text_result(id, &body, false),
                 // Returned as tool output rather than a JSON-RPC error: an
                 // assistant can read and act on "Docker is not running", which
@@ -898,8 +1061,28 @@ pub async fn handle(request: &Value, allow_writes: bool) -> Option<Value> {
     })
 }
 
+/// The projects a grant may see. Identity when it names none.
+///
+/// The two listing tools go through this rather than only the per-project ones,
+/// because a scope that hides `blog` from every tool and then lists it by name
+/// in the overview is telling an assistant exactly what to try next. It also
+/// makes the counts in `stackvo_overview` describe the surface this run
+/// actually has.
+fn in_scope(
+    grant: &crate::grant::Grant,
+    projects: Vec<crate::commands::Project>,
+) -> Vec<crate::commands::Project> {
+    if !grant.is_scoped() {
+        return projects;
+    }
+    projects
+        .into_iter()
+        .filter(|p| grant.covers_project(&p.name))
+        .collect()
+}
+
 /// Run one tool.
-pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value> {
+pub async fn call(name: &str, args: &Value, grant: &crate::grant::Grant) -> Result<Value> {
     use crate::error::{Code, Error};
 
     let tool = TOOLS
@@ -907,12 +1090,17 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
         .find(|t| t.name == name)
         .ok_or_else(|| Error::new(Code::NotFound, format!("no tool named {name}")))?;
 
-    if tool.writes && !allow_writes {
-        return Err(Error::new(
-            Code::PermissionDenied,
-            format!("{name} changes the stack and this server was started read-only"),
-        )
-        .with_hint(crate::hints::MCP_NEEDS_ALLOW_WRITES));
+    // One funnel, before anything is resolved or read: which tools, which
+    // project, and whether the grant's time is up. `Forbidden` rather than
+    // `PermissionDenied` for the two new refusals, for the reason `error.rs`
+    // gives — nothing here is fixed by a password, and a client that offered
+    // to elevate would be offering the wrong thing.
+    if let Err(refusal) = grant.admit(tool, args) {
+        let code = match refusal {
+            crate::grant::Refusal::NotGranted { .. } => Code::PermissionDenied,
+            _ => Code::Forbidden,
+        };
+        return Err(Error::new(code, refusal.to_string()).with_hint(refusal.hint()));
     }
 
     let ws = crate::workspace::resolve();
@@ -923,9 +1111,12 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
         "stackvo_overview" => {
             let preflight = crate::preflight::run().await;
             let engine = crate::engine::status().await;
-            let projects = crate::commands::list_projects(&root)
-                .await
-                .unwrap_or_default();
+            let projects = in_scope(
+                grant,
+                crate::commands::list_projects(&root)
+                    .await
+                    .unwrap_or_default(),
+            );
 
             Ok(json!({
                 "workspace": { "root": ws.root, "version": ws.stackvo_version },
@@ -943,7 +1134,10 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
 
         "stackvo_log_files" => Ok(json!(crate::applog::candidates_all(&root)?)),
 
-        "stackvo_projects" => Ok(json!(crate::commands::list_projects(&root).await?)),
+        "stackvo_projects" => Ok(json!(in_scope(
+            grant,
+            crate::commands::list_projects(&root).await?
+        ))),
 
         "stackvo_project" => {
             let name = string("name")
@@ -1435,7 +1629,7 @@ pub async fn call(name: &str, args: &Value, allow_writes: bool) -> Result<Value>
         "stackvo_generate" => {
             // The Rust writer directly — same renderer the app uses, no shell.
             let scope = string("scope").unwrap_or_else(|| "all".into());
-            let report = crate::commands::write_generated(&root, &scope, |_| {})?;
+            let report = crate::generator::write_generated(&root, &scope, |_| {})?;
             Ok(report)
         }
 
@@ -1518,6 +1712,16 @@ async fn run_headless(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::grant::Grant;
+
+    /// The two grants these tests used to pass as a boolean.
+    fn ro() -> Grant {
+        Grant::read_only()
+    }
+
+    fn rw() -> Grant {
+        Grant::everything()
+    }
 
     /// The check that makes the table trustworthy: every tool names a command
     /// the contract actually declares. Without it, a command renamed in
@@ -1630,7 +1834,7 @@ mod tests {
     /// somebody's stack unasked.
     #[test]
     fn writing_tools_are_hidden_unless_asked_for() {
-        let listed = tools_list(false);
+        let listed = tools_list(&ro());
         let names: Vec<&str> = listed["tools"]
             .as_array()
             .unwrap()
@@ -1645,15 +1849,109 @@ mod tests {
             "the gate needs something to gate"
         );
 
-        let with_writes = tools_list(true);
+        let with_writes = tools_list(&rw());
         assert!(with_writes["tools"].as_array().unwrap().len() > names.len());
+    }
+
+    /// Only a writing call is an act, and reads must not become trail noise.
+    #[test]
+    fn a_reading_call_is_not_something_to_record() {
+        let call = |name: &str| json!({ "method": "tools/call", "params": { "name": name, "arguments": { "name": "shop" } } });
+
+        assert!(writing_call(&call("stackvo_doctor")).is_none());
+        assert!(writing_call(&json!({ "method": "tools/list" })).is_none());
+        assert!(writing_call(&call("stackvo_no_such_tool")).is_none());
+
+        let (tool, args) = writing_call(&call("stackvo_project_stop")).expect("an act");
+        assert_eq!(tool.name, "stackvo_project_stop");
+        assert_eq!(args["name"], json!("shop"));
+    }
+
+    /// "Refused" and "failed" are different events and the trail says which.
+    #[test]
+    fn a_refusal_is_recorded_as_a_refusal_rather_than_a_failure() {
+        use crate::audit::Outcome;
+
+        assert_eq!(outcome_for(None), Outcome::Ok);
+        assert_eq!(outcome_for(Some("PERMISSION_DENIED")), Outcome::Refused);
+        assert_eq!(outcome_for(Some("FORBIDDEN")), Outcome::Refused);
+        assert_eq!(outcome_for(Some("ENGINE_UNREACHABLE")), Outcome::Failed);
+
+        // And the code is read out of the body this module writes, so the two
+        // halves cannot drift: a real refusal, round-tripped.
+        let refused = crate::error::Error::new(
+            crate::error::Code::Forbidden,
+            "stackvo_stack_down is not one of the tools this server was granted",
+        );
+        let response = text_result(json!(1), &failure(&refused), true);
+        let (code, message) = failed_with(&response).expect("an error body");
+        assert_eq!(code, "FORBIDDEN");
+        assert!(message.contains("stack_down"));
+        assert!(
+            failed_with(&text_result(json!(1), &json!({ "ok": true }), false)).is_none(),
+            "a successful call was read as a failure"
+        );
+    }
+
+    /// The wiring, which is the part a later simplification would undo.
+    ///
+    /// `handle` still exists and still works, and a binary calling it would
+    /// answer every request correctly while recording nothing — the exact state
+    /// this change was made to leave. Nothing else in the tree would notice.
+    #[test]
+    fn the_server_binary_answers_through_the_recording_path() {
+        let binary = include_str!("bin/stackvo-mcp.rs");
+        assert!(
+            binary.contains("mcp::serve(&request, &grant)"),
+            "the MCP binary no longer answers through `serve`, so nothing it does is recorded"
+        );
+        assert!(
+            !binary.contains("mcp::handle("),
+            "the MCP binary calls `handle` directly, which records nothing"
+        );
+    }
+
+    /// The grant filters the advertised list, not only the call.
+    ///
+    /// A tool advertised and then refused is one an assistant retries and
+    /// reports as broken; the list is the only thing it has to reason from.
+    #[test]
+    fn a_scoped_grant_advertises_fewer_tools() {
+        let names = |listed: &Value| -> Vec<String> {
+            listed["tools"]
+                .as_array()
+                .expect("tools is an array")
+                .iter()
+                .map(|t| t["name"].as_str().unwrap_or_default().to_string())
+                .collect()
+        };
+
+        let wide = names(&tools_list(&rw()));
+        let scoped = names(&tools_list(
+            &Grant::everything().scoped_to(vec!["shop".to_string()]),
+        ));
+
+        assert!(wide.contains(&"stackvo_stack_down".to_string()));
+        assert!(
+            !scoped.contains(&"stackvo_stack_down".to_string()),
+            "a project scope advertised a tool no project bounds"
+        );
+        assert!(scoped.contains(&"stackvo_project_restart".to_string()));
+        assert_eq!(
+            wide.len() - scoped.len(),
+            TOOLS
+                .iter()
+                .filter(|t| t.writes && t.project_arg.is_none())
+                .count(),
+            "the list dropped a different number of tools than the scope removes"
+        );
     }
 
     /// Every advertised tool is annotated, so a client can decide about a tool
     /// it has never seen.
     #[test]
     fn tools_carry_read_only_annotations() {
-        let listed = tools_list(true);
+        let listed = tools_list(&rw());
         for entry in listed["tools"].as_array().unwrap() {
             let name = entry["name"].as_str().unwrap();
             let tool = TOOLS.iter().find(|t| t.name == name).unwrap();
@@ -1665,7 +1963,7 @@ mod tests {
     #[tokio::test]
     async fn initialize_reports_the_protocol_and_the_tool_capability() {
         let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" });
-        let response = handle(&request, false)
+        let response = handle(&request, &ro())
             .await
             .expect("initialize is answered");
 
@@ -1679,13 +1977,13 @@ mod tests {
     #[tokio::test]
     async fn notifications_are_not_answered() {
         let request = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
-        assert!(handle(&request, false).await.is_none());
+        assert!(handle(&request, &ro()).await.is_none());
     }
 
     #[tokio::test]
     async fn an_unknown_method_is_a_json_rpc_error_not_a_panic() {
         let request = json!({ "jsonrpc": "2.0", "id": 7, "method": "resources/list" });
-        let response = handle(&request, false).await.unwrap();
+        let response = handle(&request, &ro()).await.unwrap();
         assert_eq!(response["error"]["code"], -32601);
         assert_eq!(response["id"], 7);
     }
@@ -1699,7 +1997,7 @@ mod tests {
             "params": { "name": "stackvo_xdebug_set", "arguments": { "name": "shop", "enabled": true } }
         });
 
-        let response = handle(&request, false).await.unwrap();
+        let response = handle(&request, &ro()).await.unwrap();
         assert_eq!(response["result"]["isError"], json!(true));
 
         let text = response["result"]["content"][0]["text"].as_str().unwrap();
@@ -1757,7 +2055,7 @@ mod tests {
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
                 "params": { "protocolVersion": asked }
             });
-            let response = handle(&request, false).await.unwrap();
+            let response = handle(&request, &ro()).await.unwrap();
             assert_eq!(response["result"]["protocolVersion"], json!(asked));
         }
     }
@@ -1863,7 +2161,7 @@ mod tests {
             "params": { "name": "stackvo_delete_everything", "arguments": {} }
         });
 
-        let response = handle(&request, true).await.unwrap();
+        let response = handle(&request, &rw()).await.unwrap();
         assert_eq!(response["result"]["isError"], json!(true));
     }
 }

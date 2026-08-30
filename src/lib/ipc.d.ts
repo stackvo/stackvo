@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 158 named types, 307 wrappers, 5 field(s) the
+ * Measured at generation: 160 named types, 318 wrappers, 6 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -140,6 +140,8 @@ export interface CertStatus {
     missing: string[];
     /** bool */
     stale: boolean;
+    /** Array<{ id: 'system' | 'firefox', trusted?: bool, detail?: string }> */
+    trust: Record<string, unknown>[];
 }
 
 export interface Checkout {
@@ -431,8 +433,10 @@ export interface Detected {
     framework?: string;
     /** 'php'|'node' */
     runtime: 'php' | 'node';
-    /** string */
-    server: string;
+    /**
+     * string? — null unless something in the folder actually named a web server. A folder of PHP files says nothing about which server should run it, so there is nothing to detect; DDEV's `webserver_type` is the one input that does say. It was a bare string spelling 'nginx' at every site, which read as a finding and was a default in a module that cannot see SUPPORTED_SERVERS_DEFAULT — so `detected_spec` resolved the setting first and imported a DDEV project configured for Apache as whatever the setting named
+     */
+    server?: string;
     /** string? */
     documentRoot?: string;
     /** string? */
@@ -645,8 +649,8 @@ export interface EngineStatus {
     apiVersion?: string;
     /** string? */
     context?: string;
-    /** 'docker-desktop'|'colima'|'orbstack'|'engine'|'unknown' */
-    platform: 'docker-desktop' | 'colima' | 'orbstack' | 'engine' | 'unknown';
+    /** 'docker-desktop'|'colima'|'orbstack'|'podman'|'engine'|'unknown' */
+    platform: 'docker-desktop' | 'colima' | 'orbstack' | 'podman' | 'engine' | 'unknown';
     /** string? */
     socketPath?: string;
     /** string? */
@@ -1090,6 +1094,19 @@ export interface MailStatus {
     error?: string;
 }
 
+export interface MachineCommands {
+    /** string — where the file is, or would be. Shown so somebody can go and write one */
+    path: string;
+    /** bool */
+    exists: boolean;
+    /**
+     * Record<string, { exec: string[], about?: string, interactive?: bool }> — keyed by id, in file order
+     */
+    commands: Record<string, unknown>;
+    /** Finding[] — code is always COMMAND */
+    problems: unknown;
+}
+
 export interface Manifest {
     /** string */
     name: string;
@@ -1382,6 +1399,21 @@ export interface PhpIniStatus {
     overlayPath: string;
 }
 
+export interface PolicyImage {
+    /** string — the key a pin is written under */
+    repository: string;
+    /** string — what this image is for, so the list reads as an inventory */
+    usedFor: string;
+    /** string — the reference this build carries */
+    shipped: string;
+    /** string — what will actually run, after the policy's pin and its registry prefix */
+    effective: string;
+    /** bool — whether `effective` is still on a tag that can change under it */
+    moving: boolean;
+    /** bool — whether a policy pin produced `effective` */
+    pinned: boolean;
+}
+
 export interface PolicyMarket {
     /** boolean — whether the policy says anything about the market at all */
     constrained: boolean;
@@ -1431,12 +1463,28 @@ export interface Preferences {
     locale: 'tr' | 'en' | null;
     /** 'light' | 'dark' | 'system' */
     theme: 'light' | 'dark' | 'system';
-    /** string | null */
+    /** string | null — an id from `appsAvailable().editors`, or 'custom' */
     editorCommand: string | null;
-    /** string | null */
+    /**
+     * string | null — the command line to run when `editorCommand` is 'custom'. Split on quotes into argv and handed to the OS unexpanded; there is no shell, so $HOME, pipes and && are literal text. The path being opened is appended as the last argument
+     */
+    editorCustom: string | null;
+    /** string | null — an id from `appsAvailable().terminals`, or 'custom' */
     terminalApp: string | null;
-    /** string | null */
+    /**
+     * string | null — as `editorCustom`, with the command line the terminal should run appended as the last argument. The flag that takes it (`-e`, `--`, `/K`) belongs in this string, because it differs per emulator and guessing it wrong opens a terminal running the wrong thing
+     */
+    terminalCustom: string | null;
+    /**
+     * string | null — an id from `appsAvailable().browsers`, or 'custom'. Empty means the system default
+     */
     browserCommand: string | null;
+    /** string | null — as `editorCustom`, with the URL appended last */
+    browserCustom: string | null;
+    /**
+     * string | null — as `editorCustom`, with the connection URI appended last. It has no `dbClient` companion because the client is chosen per service in the endpoint menu rather than stored: which clients are offered depends on the scheme that service speaks
+     */
+    dbClientCustom: string | null;
     /** bool */
     startMinimized: boolean;
     /** 'ask' | 'quit' | 'tray' */
@@ -1449,6 +1497,10 @@ export interface Preferences {
     backupSchedule: string;
     /** number */
     backupKeep: number;
+    /**
+     * bool — whether the introduction has been shown. Absent means "not yet", which is what a fresh install is. It is a preference rather than a session flag because "once" has to survive a restart or it is not once, and Settings can set it back to false: a one-shot screen somebody skipped in their first minute is one they can never get back, which is the failure mode of every welcome flow with a single chance to land
+     */
+    tourSeen: boolean;
     /** string[] */
     favourites: string[];
     /** Record<string, unknown> */
@@ -1708,7 +1760,9 @@ export interface QuickCommand {
     id: string;
     /** string */
     display: string;
-    /** string */
+    /**
+     * string — the English one-liner. The window shows `quickCommands.<id>` from its locale and falls back to this
+     */
     about: string;
     /** bool */
     interactive: boolean;
@@ -1717,12 +1771,16 @@ export interface QuickCommand {
 }
 
 export interface RecipeCard {
-    /** string */
+    /**
+     * string — the key it is written under, and the locale key `providerRecipes.<name>` translates
+     */
     name: string;
-    /** string */
+    /** string — the English one-liner. The window shows the translation and falls back to this */
     about: string;
-    /** string[] */
-    edit: string[];
+    /**
+     * { key: string, english: string }[] — what has to be changed before the recipe will work. A pair rather than a sentence because the window is bilingual: `key` is looked up as `providerRecipeEdits.<key>`, `english` is what the CLI, the MCP surface and the log get. Keyed rather than positional because both database recipes need the same instruction, and positions are not names
+     */
+    edit: (Record<string, unknown>)[];
     /** string */
     image: string;
     /** string[] */
@@ -2160,8 +2218,8 @@ export interface Timeline {
 export interface TimelineMoment {
     /** number */
     at: number;
-    /** 'dump' | 'query' | 'mail' */
-    source: 'dump' | 'query' | 'mail';
+    /** 'dump' | 'query' | 'mail' | 'request' | 'job' */
+    source: 'dump' | 'query' | 'mail' | 'request' | 'job';
     /** string */
     summary: string;
     /** string | null */
@@ -2831,6 +2889,10 @@ export interface StackvoApi {
    */
   spxRecordRequest(name: string, path?: string | null): Promise<unknown>;
   /**
+   * The commonest loop in performance work takes four steps today: change the code, open the site, find the page, come back and hunt for the new recording among twenty. explain.rs opens by saying no new measurement is needed and it is right about this too — the recording that names a request, the sender that can issue one with the profiler on, and the observation window a query log is joined against all exist. What was missing was the act.
+   */
+  requestReplay(name: string, key: string): Promise<Record<string, unknown>>;
+  /**
    * The slow thing is often not a page. A queue worker, a migration or a test suite is where minutes go, and none of them can be profiled from a browser.
    */
   spxRecordCommand(name: string, id: string): Promise<OperationId>;
@@ -2918,6 +2980,16 @@ export interface StackvoApi {
    * P3-19 was "a tinker quick action — the PTY exists, so it is nearly free". It is, and on its own it is also one button. What is worth building is the set it belongs to: artisan tinker, artisan migrate, composer install, npm install, wp shell. Each of those today means opening a terminal, remembering the container name and typing `docker exec -it stackvo-<project> …`.
    */
   quickCommands(name: string): Promise<QuickCommand[]>;
+  /**
+   * Four rivals sell "add your own command" on the front page — DDEV drops a file in `.ddev/commands/`, Lando has a `tooling:` block, dde and Laragon each have their own — and this application had exactly one way to do it: edit a repository somebody else owns. `<root>/commands.json` is the layer above the project, and this reads it.
+   */
+  machineCommands(): Promise<MachineCommands>;
+  /**
+   * The application could crash, write a perfectly good report, and never mention it. So "I would like to report this" never started — not because reporting is hard, but because nobody knew there was anything to report.
+   */
+  crashReports(): Promise<Record<string, unknown>[]>;
+  /** So the notice does not repeat every launch. */
+  crashReportsSeen(): Promise<null>;
   /** Runs one, by id. */
   quickCommandRun(name: string, id: string): Promise<OperationId>;
   /**
@@ -3251,6 +3323,10 @@ export interface StackvoApi {
    */
   auditTrail(limit?: number): Promise<Record<string, unknown>>;
   /**
+   * A record that says what an assistant did and cannot put it back is half of the answer. The compensation is worked out BEFORE the tool runs — what `stackvo_stack_down` stopped exists only before it stopped it — and stored on the line, so what is offered later is what was true at the time rather than a guess about a machine that has since changed.
+   */
+  auditUndo(at: string): Promise<Record<string, unknown>>;
+  /**
    * "Run only what this project needs and stop the rest" is the most-wanted verb on a laptop, and this app is the only one in its category that can pose the question: stackvo.json DECLARES what a project needs around it, and the instance table says what is installed. Competitors switch services on and off one at a time because they have no manifest to declare a need in.
    */
   focusPlan(project: string): Promise<Record<string, unknown>>;
@@ -3263,9 +3339,21 @@ export interface StackvoApi {
    */
   policyStatus(): Promise<Record<string, unknown>>;
   /**
+   * policy_status answers what the administrator's file SAYS. Nothing answered whether any of it is in force on this machine, which is the question the person who deployed the file has. The two come apart for one reason and it is not misconduct: a policy arrives on a machine that was already set up. The registry mirror rewrites references as files are GENERATED, so a project nobody regenerated since Tuesday still pulls from Docker Hub. allowedPackages is checked as something is INSTALLED, so a service installed last month stays installed when the list that would have refused it lands today. requireSignature decides what the NEXT refresh accepts and says nothing about the index already cached.
+   */
+  policyCompliance(): Promise<Record<string, unknown>>;
+  /**
    * The Settings pane has to draw a row per credential saying where it lives, and it has to know before it offers a Move button whether this machine has a keystore at all — a headless Linux box with no Secret Service is a real machine somebody runs this on.
    */
   secretsStatus(): Promise<Record<string, unknown>>;
+  /**
+   * secrets.rs moves a password out of .env and into the OS keystore, which is the direction somebody takes AFTER they know there is a problem. The other one — "there is an AWS key in your .env that is not in the keystore", and harder, "that key is in a file git is tracking" — did not exist, so nobody found out until the repository was already public.
+   */
+  leaksScan(name?: string): Promise<Record<string, unknown>>;
+  /**
+   * A finding people cannot act on is a finding they turn off, and this repair is easy to get half right: the common half-fix is deleting the file in a later commit, which takes it out of the working tree and leaves every value in the history.
+   */
+  envUntrack(name: string): Promise<Record<string, unknown>>;
   /**
    * On a company machine ~/.stackvo/.env is backed up, synced and DLP-scanned, and it holds database passwords in plain text. This moves one into Keychain / Credential Manager / Secret Service and leaves `keychain:<entry>` in its place.
    */
@@ -3281,7 +3369,7 @@ export interface StackvoApi {
   /**
    * Writes the `stackvo` MCP entry into one client's configuration file, so registering the server is a click rather than hand-edited JSON. Returns the path written.
    */
-  agentsInstall(client: string, allowWrites: boolean): Promise<string>;
+  agentsInstall(client: string, allowWrites: boolean, projects?: string[], minutes?: number): Promise<string>;
   /** The way back out. A registration that can only be added is one people avoid adding. */
   agentsRemove(client: string): Promise<string>;
   /**
@@ -3323,6 +3411,18 @@ export interface StackvoApi {
    * Settings could open the log folder and nothing more, which leaves the reporter to find the right file among seven daily ones, know that the doctor output is separate, and remember the version and platform. One archive gets the maintainer the same set every time.
    */
   diagnosticsBundle(path: string): Promise<Record<string, unknown>>;
+  /**
+   * "It works on my machine" is the oldest complaint in this category and every product in it answers that the container solves the problem — which it does not: the same compose file on two Docker versions is two different things. This app already packages the state of a machine; what it could not do was put two of them side by side.
+   */
+  diagnosticsCompare(path: string): Promise<Record<string, unknown>>;
+  /**
+   * Docker is expensive and this app's own README says so rather than arguing with it. Every rival built on containers has the same cost and none of them measures it, which leaves "why is my laptop hot" to Activity Monitor and its nine processes called com.docker.backend. Being the one product that can answer "shop has held 4.2 GB-hours and used 38 minutes of CPU today" is a better position than denying the cost.
+   */
+  usageReport(date?: string): Promise<Record<string, unknown>>;
+  /**
+   * Every tool in this category does the setting-up half of onboarding and none does the checking half — which is the question somebody actually has an hour after cloning: not "how do I set this up" but "I did set it up; why does it still not work?". The repository already declares what it needs; what was missing was the sentence back.
+   */
+  projectVerify(name: string): Promise<Record<string, unknown>>;
   /**
    * The window and the tray have to open in the same language, and neither could read the machine's on its own. The tray fell back to $LANG, which a Finder-launched app does not have; the window fell back to navigator.language, which in a WKWebView answers from the bundle's localised resources — this app ships none. Both defaulted to English on a Turkish machine.
    */

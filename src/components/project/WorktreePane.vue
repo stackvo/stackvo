@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useWorktrees } from '@/composables/useWorktrees';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import { useCopyTick } from '@/composables/useCopyTick';
 
 /**
  * N — a branch with an environment of its own.
@@ -35,6 +36,7 @@ const props = defineProps({
 const emit = defineEmits(['changed', 'removed']);
 
 const { t } = useI18n();
+const { copied, copy } = useCopyTick();
 
 const {
   support,
@@ -66,6 +68,8 @@ const form = reactive({
   name: '',
   database: 'none',
   instance: null,
+  /** Minutes, or null for "until somebody says otherwise". */
+  minutes: null,
 });
 
 /**
@@ -106,7 +110,33 @@ const options = computed(() => ({
   name: form.name.trim() || null,
   database: form.database,
   instance: form.instance,
+  minutes: form.minutes,
 }));
+
+/**
+ * How long the environment is wanted for.
+ *
+ * Empty is the default and means a worktree in the ordinary sense — somebody's
+ * branch, theirs until they say otherwise. Choosing a duration is what makes it
+ * a sandbox: something built for one task, by somebody who is not going to
+ * remember it exists.
+ */
+const ttlOptions = computed(() => [
+  { title: t('worktree.ttlNone'), value: null },
+  { title: t('worktree.ttlHours', { count: 2 }), value: 120 },
+  { title: t('worktree.ttlHours', { count: 8 }), value: 480 },
+  { title: t('worktree.ttlDays', { count: 1 }), value: 1440 },
+  { title: t('worktree.ttlDays', { count: 7 }), value: 10080 },
+]);
+
+/** `2 h 15 m` left, in the units somebody reads rather than in minutes. */
+function left(minutes) {
+  if (minutes === null || minutes === undefined) return null;
+  if (minutes <= 0) return t('worktree.expired');
+  if (minutes < 60) return t('worktree.leftMinutes', { count: minutes });
+  if (minutes < 60 * 24) return t('worktree.leftHours', { count: Math.floor(minutes / 60) });
+  return t('worktree.leftDays', { count: Math.floor(minutes / (60 * 24)) });
+}
 
 /**
  * Re-plan whenever anything the plan depends on changes.
@@ -117,7 +147,7 @@ const options = computed(() => ({
  * character, which is exactly when somebody reads it.
  */
 watch(
-  () => [form.branch, form.newBranch, form.name, form.database, form.instance],
+  () => [form.branch, form.newBranch, form.name, form.database, form.instance, form.minutes],
   () => preview(form.branch.trim(), options.value)
 );
 
@@ -128,6 +158,7 @@ function openForm() {
   form.name = '';
   form.database = 'none';
   form.instance = instances.value.find((i) => i.running)?.id ?? null;
+  form.minutes = null;
   plan.value = null;
 }
 
@@ -261,12 +292,59 @@ watch(
           }}
         </span>
       </div>
+      <!-- The fact that decides whether "its own database" also means "not the
+           parent's". Stated either way: on PostgreSQL and MongoDB the shared
+           login is the only answer there is, and a field that appeared only in
+           the good case would read as a feature that sometimes forgets. -->
+      <div v-if="record.database" class="field">
+        <span class="field-key">{{ t('worktree.login') }}</span>
+        <span class="field-val">
+          {{ support?.isolated ? t('worktree.ownLogin') : t('worktree.sharedLogin') }}
+        </span>
+      </div>
+      <p v-if="record.database && !support?.isolated" class="text-caption text-medium-emphasis">
+        {{ t('worktree.sharedLoginExplain') }}
+      </p>
       <!-- Whether the branch started from a copy of the data or an empty
            schema is the question somebody asks three weeks later. -->
       <div v-if="record.database?.seededFrom" class="field">
         <span class="field-key">{{ t('worktree.seededFrom') }}</span>
         <span class="field-val field-mono">{{ record.database.seededFrom }}</span>
       </div>
+      <div v-if="record.expiresAt" class="field">
+        <span class="field-key">{{ t('worktree.expiresAt') }}</span>
+        <span class="field-val field-mono">
+          {{ new Date(record.expiresAt).toLocaleString() }}
+          <template v-if="support?.expired"> — {{ t('worktree.expired') }}</template>
+        </span>
+      </div>
+
+      <v-divider class="my-3" />
+
+      <!-- The sentence this whole arrangement is for: give an assistant this
+           branch and nothing else. Rendered by the backend from the same grant
+           the server enforces, so what is copied here is what is applied
+           there — a second spelling on this screen would be a second thing to
+           get wrong. -->
+      <template v-if="support?.grantArgs?.length">
+        <div class="section-head mb-2">
+          <v-icon size="16" class="mr-2">mdi-robot-outline</v-icon>{{ t('worktree.forAgent') }}
+        </div>
+        <p class="text-caption text-medium-emphasis mb-2">{{ t('worktree.forAgentExplain') }}</p>
+        <div class="d-flex align-center ga-2 mb-3">
+          <code class="text-caption flex-grow-1" style="word-break: break-all">{{
+            support.grantArgs.join(' ')
+          }}</code>
+          <v-btn
+            size="small"
+            variant="text"
+            :prepend-icon="copied === 'grant' ? 'mdi-check' : 'mdi-content-copy'"
+            @click="copy(support.grantArgs.join(' '), 'grant')"
+          >
+            {{ t('app.copy') }}
+          </v-btn>
+        </div>
+      </template>
 
       <v-divider class="my-3" />
 
@@ -369,6 +447,27 @@ watch(
         <v-chip v-if="row.database" size="x-small" label class="field-mono">
           {{ row.database.name }}
         </v-chip>
+        <!-- Only the state worth acting on. A chip on every isolated row would
+             be a badge on the normal case, which is how a list stops being
+             read. -->
+        <v-chip v-if="row.database && !row.isolated" size="x-small" color="warning" label>
+          {{ t('worktree.sharedLogin') }}
+        </v-chip>
+        <!-- A sandbox says how long it has. Nothing removes it on a timer: an
+             app that deleted a directory by itself would eventually delete one
+             with a morning's uncommitted work in it. -->
+        <v-chip
+          v-if="row.expired"
+          size="x-small"
+          color="warning"
+          label
+          data-test="worktree-expired"
+        >
+          {{ t('worktree.expired') }}
+        </v-chip>
+        <v-chip v-else-if="row.remainingMinutes !== undefined" size="x-small" label>
+          {{ left(row.remainingMinutes) }}
+        </v-chip>
         <!-- Three states about the checkout, and only two of them are trouble. -->
         <v-chip v-if="row.orphaned" size="x-small" color="warning" label>
           {{ t('worktree.orphaned') }}
@@ -459,6 +558,20 @@ watch(
           class="mb-3"
         />
 
+        <!-- The field that turns a worktree into a sandbox. Empty is the
+             default, because a branch somebody made for themselves is theirs
+             until they say otherwise. -->
+        <v-select
+          v-model="form.minutes"
+          :items="ttlOptions"
+          :label="t('worktree.ttl')"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="mb-1"
+        />
+        <p class="text-caption text-medium-emphasis mb-3">{{ t('worktree.ttlExplain') }}</p>
+
         <!-- What would actually be made. Every string here is the backend's
              own derivation, not a second one. -->
         <template v-if="plan">
@@ -478,6 +591,13 @@ watch(
                 — {{ t('worktree.copiedFrom', { source: plan.database.source }) }}
               </template>
             </span>
+          </div>
+
+          <div v-if="plan.expiresAt" class="field">
+            <span class="field-key">{{ t('worktree.expiresAt') }}</span>
+            <span class="field-val field-mono">{{
+              new Date(plan.expiresAt).toLocaleString()
+            }}</span>
           </div>
 
           <v-alert

@@ -221,20 +221,50 @@
   background: rgba(var(--v-border-color), 0.08);
 }
 
+/* The ramp, in the theme's colours.
+ *
+ * Five fixed greens stood here — #0e2a16 through #66bb6a — tied to nothing:
+ * not the theme, not the accent, not the status palette. Two consequences, and
+ * the second is the one that made this worth doing. On the light theme the two
+ * quiet bands are near-black squares on a white card. And `success` is one of
+ * the three colours the colour-blind palette rewrites, so a person who had
+ * chosen Okabe-Ito got it everywhere in the app except on the one card that is
+ * nothing but a field of colour.
+ *
+ * Intensity through opacity rather than through five hand-picked shades, and
+ * that is what makes it work in both themes: the cell is the theme's `success`
+ * laid over the card, so the ramp runs from the card's own surface up to the
+ * full colour whatever that surface happens to be. Five hues cannot do this —
+ * they are picked against one background.
+ *
+ * `rgb(var(--v-theme-success))` is Vuetify's own runtime channel: it publishes
+ * every theme colour as an "R, G, B" triple on `:root` and rewrites them when
+ * the theme changes, so this follows the palette live, with no build step.
+ *
+ * Opacity and not `color-mix`, which would say the same thing more directly.
+ * This ships inside whichever WebView the machine has — WKWebView, WebView2,
+ * WebKitGTK — and none of those is a version this repository pins or can test
+ * against, which is the same reason `ci.yml` refuses to make claims about the
+ * runtime engine. `opacity` needs no such claim. */
 .detail-content .heat-cell.l0 {
-  background: #0e2a16;
+  background: rgb(var(--v-theme-success));
+  opacity: 0.16;
 }
 .detail-content .heat-cell.l1 {
-  background: #1b5e20;
+  background: rgb(var(--v-theme-success));
+  opacity: 0.35;
 }
 .detail-content .heat-cell.l2 {
-  background: #2e7d32;
+  background: rgb(var(--v-theme-success));
+  opacity: 0.55;
 }
 .detail-content .heat-cell.l3 {
-  background: #43a047;
+  background: rgb(var(--v-theme-success));
+  opacity: 0.78;
 }
 .detail-content .heat-cell.l4 {
-  background: #66bb6a;
+  background: rgb(var(--v-theme-success));
+  opacity: 1;
 }
 
 .detail-content .heat-legend {

@@ -21,6 +21,7 @@
 //! a test.
 
 use stackvo_desktop_lib::agents;
+use stackvo_desktop_lib::grant::Grant;
 
 fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("stackvo-agents-{name}-{}", std::process::id()));
@@ -69,7 +70,8 @@ fn the_whole_round_trip_against_a_real_home_directory() {
     std::fs::create_dir_all(cursor.parent().unwrap()).unwrap();
     std::fs::write(&cursor, before).unwrap();
 
-    let written = agents::install("cursor", false, Some("/srv/stack")).expect("install");
+    let written =
+        agents::install("cursor", &Grant::read_only(), Some("/srv/stack")).expect("install");
     assert_eq!(written, cursor.display().to_string());
 
     let after: serde_json::Value =
@@ -113,7 +115,8 @@ fn the_whole_round_trip_against_a_real_home_directory() {
 
     let gemini = agents::config_path("gemini-cli").unwrap();
     assert!(!gemini.exists());
-    agents::install("gemini-cli", true, None).expect("install into a fresh directory");
+    agents::install("gemini-cli", &Grant::everything(), None)
+        .expect("install into a fresh directory");
 
     let fresh: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&gemini).unwrap()).unwrap();
@@ -125,6 +128,24 @@ fn the_whole_round_trip_against_a_real_home_directory() {
     assert!(fresh["mcpServers"]["stackvo"].get("env").is_none());
     // And nothing was backed up, because there was nothing to lose.
     assert!(!agents::backup_path(&gemini).exists());
+
+    // ---- a scoped registration is what the file says it is ----------------
+    //
+    // The reason this is asserted on disk rather than on the grant: the file is
+    // the artifact somebody opens six months later to answer "what did we let
+    // this assistant do", and the flags in it are the only record of it.
+
+    let scoped = Grant::everything()
+        .scoped_to(vec!["shop".to_string()])
+        .lasting(std::time::Duration::from_secs(1800));
+    agents::install("gemini-cli", &scoped, None).expect("install a scoped grant");
+
+    let narrowed: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&gemini).unwrap()).unwrap();
+    assert_eq!(
+        narrowed["mcpServers"]["stackvo"]["args"],
+        serde_json::json!(["--allow-writes", "--project=shop", "--for=30m"])
+    );
 
     // ---- removing leaves the file the way it was --------------------------
 
@@ -141,7 +162,7 @@ fn the_whole_round_trip_against_a_real_home_directory() {
     std::fs::create_dir_all(windsurf.parent().unwrap()).unwrap();
     std::fs::write(&windsurf, comments).unwrap();
 
-    assert!(agents::install("windsurf", false, None).is_err());
+    assert!(agents::install("windsurf", &Grant::read_only(), None).is_err());
     assert_eq!(
         std::fs::read_to_string(&windsurf).unwrap(),
         comments,

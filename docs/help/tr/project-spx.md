@@ -32,6 +32,14 @@ Bir yol yazın ve kaydet deyin. Uygulama o tek isteği projenin kendi adresine, 
 
 Adres projenindir, manifestosundan gelir. Yalnız yol sizindir ve başka bir konağı adlandıran bir yol reddedilir.
 
+### Aynı isteği yeniden
+
+Bir GET'in her kaydında **yeniden gönder** düğmesi var. Tam olarak o isteği profilleyici açıkken yeniden gönderir ve iki sayıyı farkıyla birlikte gösterir — performans işinin en sık döngüsü budur, ve normalde dört adım sürer: kodu değiştir, siteyi aç, sayfayı bul, geri dön ve yirmi kaydın arasından yenisini ara.
+
+Ekranda bilerek bir **hüküm** yok. Bir koşuya karşı bir koşu, bir kıyaslama değildir: soğuk bir opcache, soğuk bir sorgu önbelleği ve makinenin o saniyede yaptığı her şey farkın içindedir. İki sayı, uygulamanın size ne anlama geldiklerini söylemesi için değil, sizin okumanız için gösteriliyor.
+
+**Yalnız bir GET yeniden gönderilebilir**, ve düğme gizlenmek yerine reddin sebebi söyleniyor. Bir kayıt isteğin *satırını* tutar — `GET /checkout` — başka bir şeyini değil: başlıklarını değil, gövdesini değil, altında koştuğu oturumu değil; çünkü bunları kaydeden bir şey yok. Bunlar olmadan yeniden gönderilen bir POST, farklı bir istektir; CSRF'i olan herhangi bir çatıda sayfa yerine 419 cevabı verir. Cevap gibi görünüp cevap olmayan bir sonuç, bir retten daha kötü olurdu.
+
 ### Tek bir komut
 
 Bir göç, bir kuyruk işçisi, bir test koşusu. Yavaş olan çoğu zaman bir sayfa değildir ve bunların hiçbiri tarayıcıdan profillenemez. Projenin kendi komutlarından birini seçin; profilleyicinin altında, işlem konsolunda çalışır ve aynı listeye düşer.

@@ -60,6 +60,32 @@ pub enum Channel {
 }
 
 impl Channel {
+    /// ## Beta is declared and not yet reachable, and that is written down
+    ///
+    /// This enum, [`offer`] and the whole rollout shape are here and tested.
+    /// What is **not** here is a way for somebody to be on beta, and the reason
+    /// is a dependency rather than an omission:
+    ///
+    /// * `tauri.conf.json` declares one endpoint. The updater plugin walks its
+    ///   endpoint list until one answers, so a second entry would not select a
+    ///   channel — it would be a fallback, and a stable install whose manifest
+    ///   momentarily failed would take the beta one. There is no channel
+    ///   placeholder in an endpoint and no endpoint override on `check()`.
+    /// * Nothing has been published yet. `beta.json` does not exist, and
+    ///   `checkForUpdate` takes a channel that nothing supplies.
+    ///
+    /// So adding a *setting* today would build the exact failure the note above
+    /// warns about: a channel nobody publishes to is a setting that silently
+    /// stops updates. Somebody would tick "beta", the endpoint would keep
+    /// answering `latest.json`, [`offer`] would correctly say `otherChannel`,
+    /// and they would receive nothing at all — with no error, because none of
+    /// that is wrong.
+    ///
+    /// The unblocking step is the first release, not more code here: once a
+    /// version number is chosen and a publish happens, `beta.json` is one more
+    /// artefact from the same run, and the endpoint question becomes a real one
+    /// with a real answer to test against.
+    ///
     /// The name this channel's manifest is published under.
     ///
     /// Stable keeps `latest.json` because that is the name `tauri-action`

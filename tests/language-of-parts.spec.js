@@ -31,6 +31,17 @@ import { resolve } from 'node:path';
  * Read from the sources for the passages, because a mount test asserts on text
  * and roles and would pass with every attribute missing — the same reason
  * `a11y.spec.js` scans rather than renders.
+ *
+ * ## The third answer, which is neither
+ *
+ * Forty-seven sentences reached the window from Rust catalogues as English
+ * literals, and marking them `en` was one way to be honest about it. Translating
+ * them was the better one, and is what happened: `catalogue-text.js` looks each
+ * up by the id its catalogue already carries, and `hint_translations.rs` fails
+ * if a row is untranslated in either locale. So those passages carry **no**
+ * `lang` — the text in them is the window's own language now, and marking a
+ * translated sentence as English would be the same class of lie as marking a
+ * container's output that way.
  */
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -81,6 +92,16 @@ const PASSAGES = [
     file: 'src/components/project/WhySlowPane.vue',
     anchor: 'lang=""',
     what: 'the same three, joined to one request',
+  },
+  {
+    file: 'src/components/project/SidecarsPane.vue',
+    anchor: 'lang=""',
+    what: "a sidecar's description, written in the project's own stackvo.json",
+  },
+  {
+    file: 'src/views/Settings.vue',
+    anchor: 'lang=""',
+    what: "the publisher's release note, out of the updater manifest",
   },
 ];
 

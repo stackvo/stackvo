@@ -40,6 +40,7 @@ const search = ref('');
 const useRegex = ref(false);
 const only = ref('');
 const kinds = ref([]);
+const signals = ref([]);
 const overview = ref([]);
 const busy = ref('');
 const error = ref(null);
@@ -212,10 +213,18 @@ function resume() {
 async function copyVisible() {
   const text = visible.value
     .map((r) => {
-      const where = [r.file && `${r.file}${r.line ? `:${r.line}` : ''}`, r.request]
+      const where = [
+        r.file && `${r.file}${r.line ? `:${r.line}` : ''}`,
+        r.request,
+        r.outcome,
+        took(r),
+      ]
         .filter(Boolean)
         .join('  ');
-      return [`# ${clock(r.at)}  ${r.project}${where ? `  ${where}` : ''}`, r.text].join('\n');
+      const head = `# ${clock(r.at)}  ${r.project}  ${kindOf(r)}${where ? `  ${where}` : ''}`;
+      // A job has no captured value, and a trailing blank line under it reads
+      // as a dump whose value went missing.
+      return [head, r.text].filter((part) => part !== '').join('\n');
     })
     .join('\n\n');
   await copyText(text);
@@ -287,13 +296,15 @@ const visible = computed(() => {
   const match = matcher.value;
   return rows.value
     .filter((r) => !only.value || r.project === only.value)
+    .filter((r) => !signals.value.length || signals.value.includes(kindOf(r)))
     .filter((r) => !kinds.value.length || kinds.value.includes(sapiGroup(r)))
     .filter(
       (r) =>
         !match ||
         // Across everything on the row: "where did I dump that" is answered by
-        // the request or the file as often as by the value.
-        [r.text, r.label, r.file, r.request, r.project].some((f) => match(f ?? ''))
+        // the request or the file as often as by the value. The outcome is in
+        // there too, because `failed` and `503` are searches somebody types.
+        [r.text, r.label, r.file, r.request, r.project, r.outcome].some((f) => match(f ?? ''))
     );
 });
 
@@ -314,21 +325,66 @@ function flat(row) {
 }
 
 /**
- * Web, CLI or queue — the three places a dump comes from.
+ * Web, CLI or queue — the three places a row comes from.
  *
  * Derived from the SAPI rather than reported by the bridge: `fpm-fcgi` is a
  * web request and everything else is a script, and the one distinction worth
  * drawing inside "script" is whether it was a queue worker, which is visible
  * in the command line the bridge already captured.
+ *
+ * A job is the exception, because it is not reported by PHP at all — see
+ * below.
  */
 function sapiGroup(row) {
+  // A job is reported by the worker, not by PHP, so it carries no SAPI at all
+  // — and "no SAPI" is not "a script somebody ran". Answered first, or every
+  // job would file itself under CLI.
+  if (kindOf(row) === 'job') return 'queue';
   if ((row.sapi ?? '') === 'fpm-fcgi') return 'web';
   return /queue:(work|listen)/.test(row.request ?? '') ? 'queue' : 'cli';
+}
+
+/**
+ * What kind of signal a row is, with a fallback that is not silence.
+ *
+ * A worker keeps the bridge it booted with, so a build can meet a kind it has
+ * no case for. It is shown as a dump rather than dropped: the row is still an
+ * event that happened, and hiding it would make an upgrade look like a bug in
+ * the application.
+ */
+const SIGNALS = ['dump', 'request', 'job'];
+function kindOf(row) {
+  return SIGNALS.includes(row.kind) ? row.kind : 'dump';
+}
+
+/** `200`, `ok`, `failed` — what a stretch ended as, where it ended. */
+function outcomeColour(row) {
+  const outcome = String(row.outcome ?? '');
+  if (outcome === 'ok') return 'success';
+  if (outcome === 'failed') return 'error';
+  // An HTTP status. 4xx is the application answering, which is not a fault of
+  // itself; 5xx is the row somebody opened this pane to find.
+  if (/^5/.test(outcome)) return 'error';
+  if (/^4/.test(outcome)) return 'warning';
+  return undefined;
+}
+
+/** Milliseconds, in the unit that keeps the number readable. */
+function took(row) {
+  const ms = row.duration;
+  if (typeof ms !== 'number') return '';
+  return ms >= 10000 ? `${(ms / 1000).toFixed(1)} s` : `${ms.toFixed(1)} ms`;
 }
 
 const counts = computed(() => {
   const out = { web: 0, cli: 0, queue: 0 };
   for (const r of rows.value) out[sapiGroup(r)] += 1;
+  return out;
+});
+
+const signalCounts = computed(() => {
+  const out = { dump: 0, request: 0, job: 0 };
+  for (const r of rows.value) out[kindOf(r)] += 1;
   return out;
 });
 
@@ -454,14 +510,38 @@ function openSource(row) {
             icon
             variant="text"
             size="small"
-            :color="kinds.length ? 'primary' : undefined"
-            :aria-label="t('dumps.filterSource')"
+            :color="kinds.length || signals.length ? 'primary' : undefined"
+            :aria-label="t('dumps.filterRows')"
           >
             <v-icon>mdi-filter-variant</v-icon>
-            <v-tooltip activator="parent">{{ t('dumps.filterSource') }}</v-tooltip>
+            <v-tooltip activator="parent">{{ t('dumps.filterRows') }}</v-tooltip>
           </v-btn>
         </template>
         <v-list density="compact">
+          <!-- Two axes, not one list. What a row IS (a dump, an execution, a
+               job) and where it RAN are different questions, and folding them
+               into one set of chips would make "every job" and "everything
+               from the queue container" the same filter — which they are not,
+               because a dump raised inside a job is both. -->
+          <v-list-subheader class="text-caption">{{ t('dumps.filterSignal') }}</v-list-subheader>
+          <v-list-item
+            v-for="k in SIGNALS"
+            :key="k"
+            @click="
+              signals = signals.includes(k) ? signals.filter((x) => x !== k) : [...signals, k]
+            "
+          >
+            <template #prepend>
+              <v-checkbox-btn :model-value="signals.includes(k)" density="compact" />
+            </template>
+            <v-list-item-title class="text-caption">
+              {{ t(`dumps.signal.${k}`) }}
+              <span class="text-medium-emphasis"> · {{ signalCounts[k] }}</span>
+            </v-list-item-title>
+          </v-list-item>
+
+          <v-divider class="my-1" />
+          <v-list-subheader class="text-caption">{{ t('dumps.filterSource') }}</v-list-subheader>
           <v-list-item
             v-for="k in ['web', 'cli', 'queue']"
             :key="k"
@@ -609,12 +689,29 @@ function openSource(row) {
               {{ row.label }}
             </v-chip>
 
+            <!-- The two stretches say how they ended and how long they took,
+                 in place of a captured value they do not have. A dump is a
+                 moment and says what it caught. -->
+            <template v-if="kindOf(row) !== 'dump'">
+              <v-chip v-if="row.outcome" size="x-small" variant="tonal" :color="outcomeColour(row)">
+                {{ row.outcome }}
+              </v-chip>
+              <span v-if="took(row)" class="text-caption text-medium-emphasis dump-took">
+                {{ took(row) }}
+              </span>
+              <span v-if="kindOf(row) === 'request' && !row.request" class="dump-peek">
+                {{ t(`dumps.signal.request`) }}
+              </span>
+            </template>
+
             <!-- A value with nothing behind it is rendered in place, typed and
                  coloured like it would be in the tree. Anything else shows what
                  it is and how big — never the first line of a formatting, which
                  for every array in existence was `[`. -->
-            <DumpValue v-if="flat(row)" :node="row.value" class="dump-flat" />
-            <span v-else class="dump-peek">{{ summary(row.value) }}</span>
+            <template v-else>
+              <DumpValue v-if="flat(row)" :node="row.value" class="dump-flat" />
+              <span v-else class="dump-peek">{{ summary(row.value) }}</span>
+            </template>
 
             <v-spacer />
 
@@ -805,6 +902,13 @@ function openSource(row) {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+/* A duration sits beside the outcome and never pushes the row wider: it is a
+   number of fixed shape, so it is given the room it needs and no stretch. */
+.dump-took {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The source is a link to a line of code, and reads as one. It keeps its whole

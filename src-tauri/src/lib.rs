@@ -11,6 +11,7 @@ pub mod channel;
 pub mod cli;
 pub mod commands;
 pub mod completions;
+pub mod compliance;
 pub mod compose_policy;
 pub mod config;
 pub mod connect;
@@ -37,6 +38,7 @@ pub mod explain;
 pub mod focus;
 pub mod generator;
 pub mod git;
+pub mod grant;
 pub mod handover;
 pub mod help;
 pub mod hints;
@@ -44,11 +46,13 @@ pub mod hooks;
 pub mod hosts;
 pub mod ide;
 pub mod idle;
+pub mod images;
 pub mod imports;
 pub mod inflight;
 pub mod instances;
 pub mod lan;
 pub mod landing;
+pub mod leaks;
 pub mod licences;
 pub mod locale;
 pub mod logging;
@@ -75,6 +79,7 @@ pub mod provider;
 pub mod pty;
 pub mod qr;
 pub mod querylog;
+pub mod queuelog;
 pub mod quickcmd;
 pub mod release;
 pub mod render;
@@ -102,6 +107,9 @@ pub mod tray;
 pub mod tui;
 pub mod tunnel;
 pub mod tunnelid;
+pub mod undo;
+pub mod usage;
+pub mod verify;
 pub mod watcher;
 pub mod websurface;
 pub mod worker;
@@ -590,6 +598,7 @@ pub fn run() {
             commands::spx_clear,
             commands::spx_options,
             commands::spx_record_request,
+            commands::request_replay,
             commands::spx_record_command,
             commands::spx_report,
             commands::ide_debug_status,
@@ -626,6 +635,9 @@ pub fn run() {
             commands::site_settings,
             commands::site_save,
             commands::quick_commands,
+            commands::machine_commands,
+            commands::crash_reports,
+            commands::crash_reports_seen,
             commands::quick_command_run,
             commands::repl_runners,
             commands::repl_run,
@@ -689,9 +701,11 @@ pub fn run() {
             commands::websurface_stop,
             commands::licences_notice,
             commands::audit_trail,
+            commands::audit_undo,
             commands::focus_plan,
             commands::focus_apply,
             commands::policy_status,
+            commands::policy_compliance,
             commands::secrets_status,
             commands::secret_move,
             commands::secret_restore,
@@ -707,8 +721,13 @@ pub fn run() {
             commands::tooling_install,
             commands::tooling_remove,
             commands::system_accent,
+            commands::project_verify,
+            commands::leaks_scan,
+            commands::env_untrack,
+            commands::usage_report,
             commands::logs_info,
             commands::diagnostics_bundle,
+            commands::diagnostics_compare,
             commands::locale_get,
             commands::tray_relabel,
             commands::window_close_action,

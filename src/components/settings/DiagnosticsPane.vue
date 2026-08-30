@@ -56,6 +56,44 @@ async function saveDiagnosticBundle() {
     bundling.value = false;
   }
 }
+// Somebody else's machine, held against this one. `comparison` is kept so the
+// pane can show the answer rather than a toast that says it looked.
+const comparing = ref(false);
+const comparison = ref(null);
+const comparisonError = ref(null);
+
+/**
+ * Compare a bundle somebody sent with what this machine is right now.
+ *
+ * The open dialog, for the mirror of the reason the save one is used: this
+ * reads a file outside everything the app owns, and the only acceptable
+ * authority for choosing it is the person at the keyboard. A cancelled dialog
+ * is an answer.
+ *
+ * Both filters are offered because both are what people actually send — the
+ * zip the app produces, and the `environment.json` somebody extracted and
+ * pasted into a chat window.
+ */
+async function compareWithBundle() {
+  comparisonError.value = null;
+  comparison.value = null;
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const path = await open({
+      multiple: false,
+      filters: [{ name: 'Diagnostic bundle', extensions: ['zip', 'json', 'txt'] }],
+    });
+    if (!path) return;
+
+    comparing.value = true;
+    comparison.value = await api.diagnosticsCompare(path);
+  } catch (e) {
+    comparisonError.value = e;
+  } finally {
+    comparing.value = false;
+  }
+}
+
 /**
  * The open pane, persisted for the session only.
  *
@@ -77,8 +115,72 @@ const engineRows = computed(() => {
   ];
 });
 
+/**
+ * The images this app runs and did not build.
+ *
+ * `pkg::MOVING_TAGS` forbids `latest` for a third-party package — *"an image
+ * that changes under a fixed manifest has no digest the manifest can pin"* —
+ * and six of these ship on it. So the rule applied to everybody except this
+ * application, and the day a broken `cloudflared:latest` is published every
+ * user's tunnels stop at once with no version to go back to.
+ *
+ * Shown here because "what will this machine pull, and from where" is a fact
+ * about the machine, which is what this pane is. Shown to everyone rather than
+ * only on a managed machine: the moving tag is true either way, and the person
+ * whose tunnels break is not usually the one with a policy file.
+ */
+const images = ref([]);
+const moving = computed(() => images.value.filter((i) => i.moving));
+
+/**
+ * Is any of the administrator's policy actually in force on this machine?
+ *
+ * `policyStatus` above answers what the file says. This answers whether it
+ * holds here, and most of what it finds is not somebody breaking a rule — it is
+ * a rule that arrived on a machine that was already set up and still has work
+ * to do: a project generated before the registry mirror, a package installed
+ * before the list that would have refused it, an index cached before the
+ * signature became mandatory.
+ *
+ * Rendered only on a managed machine. On every other one the honest report is
+ * "there is no policy", which the pane above already says by not appearing.
+ *
+ * The states are ordered by what somebody has to do about them, not by name:
+ * bypassed is work, unmeasured is a question, silent is nothing at all.
+ */
+const compliance = ref(null);
+const ORDER = { bypassed: 0, unmeasured: 1, holding: 2, silent: 3 };
+const STATE_COLOUR = {
+  bypassed: 'warning',
+  unmeasured: 'info',
+  holding: 'success',
+  silent: 'surface-variant',
+};
+
+const clauses = computed(() =>
+  [...(compliance.value?.clauses ?? [])].sort(
+    (a, b) => (ORDER[a.state] ?? 9) - (ORDER[b.state] ?? 9)
+  )
+);
+
+/**
+ * `market.allowedPackages` → `market_allowedPackages`.
+ *
+ * The ids are dotted because they name a path into the policy file, which is
+ * how an administrator reads them. vue-i18n splits a dotted key into a nested
+ * lookup, and two of these ids are both a leaf and a prefix — `settings` and
+ * `settings.locked` — which no nested object can hold at once. Substituting the
+ * separator keeps the id meaningful on the wire and flat in the locale file.
+ */
+const labelKey = (id) => `settings.compliance.clause.${id.replace(/\./g, '_')}`;
+
 onMounted(async () => {
   logs.value = await api.logsInfo().catch(() => null);
+  const policy = await api.policyStatus().catch(() => null);
+  images.value = Array.isArray(policy?.images) ? policy.images : [];
+  // Only on a managed machine, and only after the status call has said so —
+  // one round trip rather than two on the overwhelming majority of machines.
+  if (policy?.active) compliance.value = await api.policyCompliance().catch(() => null);
 });
 </script>
 
@@ -166,7 +268,177 @@ onMounted(async () => {
         <code class="text-caption log-path d-block mt-1">{{ bundle.path }}</code>
         <div class="mt-1">{{ bundle.entries.map((e) => e.name).join(', ') }}</div>
       </v-alert>
+
+      <!-- The other direction: a bundle somebody sent, against this machine.
+           "It works on mine" is the question this whole file exists around and
+           nothing could answer it until there were two of them. -->
+      <v-divider class="my-4" />
+      <div class="d-flex align-center ga-2 flex-wrap">
+        <v-btn
+          size="small"
+          variant="tonal"
+          prepend-icon="mdi-compare-horizontal"
+          :loading="comparing"
+          @click="compareWithBundle"
+        >
+          {{ t('settings.compareBundle') }}
+        </v-btn>
+      </div>
+      <div class="text-caption text-medium-emphasis mt-2">
+        {{ t('settings.compareBundleHint') }}
+      </div>
+
+      <ErrorAlert v-if="comparisonError" :error="comparisonError" class="mt-3" />
+
+      <!-- Two machines that agree is a result, not an empty state: it means
+           the difference is somewhere this cannot see, which is worth being
+           told rather than left to infer from a blank box. -->
+      <v-alert
+        v-if="comparison && !comparison.differences.length"
+        type="success"
+        variant="tonal"
+        density="compact"
+        class="mt-3 text-caption"
+      >
+        {{ t('settings.compareSame', { count: comparison.same }) }}
+      </v-alert>
+
+      <template v-if="comparison?.differences.length">
+        <div class="text-caption text-medium-emphasis mt-3">
+          {{
+            t('settings.compareResult', {
+              count: comparison.differences.length,
+              same: comparison.same,
+            })
+          }}
+        </div>
+        <v-table density="compact" class="mt-2 text-caption">
+          <thead>
+            <tr>
+              <th>{{ t('settings.compareFact') }}</th>
+              <th>{{ t('settings.compareHere') }}</th>
+              <th>{{ t('settings.compareThere') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in comparison.differences" :key="row.key" data-test="diff-row">
+              <td>
+                <code class="text-caption">{{ row.key }}</code>
+              </td>
+              <!-- An absent side is said, not left blank: "you have this and
+                   they do not" is the most actionable of the three answers. -->
+              <td>{{ row.here ?? t('settings.compareAbsent') }}</td>
+              <td>{{ row.there ?? t('settings.compareAbsent') }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </template>
     </template>
+  </SettingsGroup>
+
+  <!-- ---- the images this app pulls ---------------------------------- -->
+  <!-- Answering "what will this machine pull, and from where". The second half
+       was already here as the policy's registry prefix; nothing answered the
+       first, and the ten values lived as literals in four modules. -->
+  <SettingsGroup
+    help="settings-diagnostics-images"
+    icon="mdi-cube-outline"
+    :title="t('settings.images.title')"
+    :description="t('settings.images.desc')"
+  >
+    <!-- The double standard, said plainly rather than left for somebody to
+         notice: this repository forbids a third-party package from using a
+         moving tag and then uses one itself. -->
+    <v-alert v-if="moving.length" type="warning" variant="tonal" density="compact" class="mb-3">
+      {{ t('settings.images.moving', { count: moving.length }) }}
+    </v-alert>
+
+    <v-list density="compact" class="pa-0">
+      <v-list-item v-for="image in images" :key="image.repository" class="px-0">
+        <v-list-item-title class="text-body-2">
+          <code>{{ image.effective }}</code>
+          <v-chip v-if="image.moving" size="x-small" color="warning" variant="tonal" class="ml-2">
+            {{ t('settings.images.movingTag') }}
+          </v-chip>
+          <v-chip v-if="image.pinned" size="x-small" color="success" variant="tonal" class="ml-2">
+            {{ t('settings.images.pinned') }}
+          </v-chip>
+        </v-list-item-title>
+        <v-list-item-subtitle class="text-caption">{{ image.usedFor }}</v-list-item-subtitle>
+      </v-list-item>
+    </v-list>
+
+    <p class="text-caption text-medium-emphasis mt-3">
+      {{ t('settings.images.hint') }}
+    </p>
+  </SettingsGroup>
+
+  <!-- ---- is the policy actually holding? ---------------------------- -->
+  <!-- Only on a managed machine. Elsewhere the report would be a page of
+       "the policy says nothing", which is what an absent pane already says. -->
+  <SettingsGroup
+    v-if="compliance"
+    help="settings-diagnostics-compliance"
+    icon="mdi-clipboard-check-outline"
+    :title="t('settings.compliance.title')"
+    :description="t('settings.compliance.desc')"
+  >
+    <template #append>
+      <v-chip
+        size="small"
+        :color="compliance.attestable ? 'success' : 'warning'"
+        data-test="attestable"
+      >
+        {{
+          compliance.attestable
+            ? t('settings.compliance.accountedFor')
+            : t('settings.compliance.notAccountedFor')
+        }}
+      </v-chip>
+    </template>
+
+    <!-- The summary as four numbers, because the one number people want does
+         not exist: `silent` is the policy saying nothing and must never be
+         read as a pass. -->
+    <div class="text-caption text-medium-emphasis mb-3">
+      {{
+        t('settings.compliance.summary', {
+          holding: compliance.holding,
+          bypassed: compliance.bypassed,
+          unmeasured: compliance.unmeasured,
+          silent: compliance.silent,
+        })
+      }}
+    </div>
+
+    <v-table density="compact" class="text-caption">
+      <tbody>
+        <tr
+          v-for="(clause, i) in clauses"
+          :key="`${clause.id}-${clause.subject}-${i}`"
+          data-test="clause"
+        >
+          <td class="pl-0">
+            <v-chip size="x-small" label :color="STATE_COLOUR[clause.state]">
+              {{ t(`settings.compliance.state.${clause.state}`) }}
+            </v-chip>
+          </td>
+          <td>
+            <div>{{ t(labelKey(clause.id)) }}</div>
+            <code class="text-caption text-medium-emphasis">{{ clause.subject }}</code>
+          </td>
+          <!-- Not translated: what was measured is a path, a key id, a
+               reference, and it reads the same in every language. -->
+          <td class="text-medium-emphasis">{{ clause.detail ?? '—' }}</td>
+        </tr>
+      </tbody>
+    </v-table>
+
+    <!-- Said here as well as in policy.rs, because this is the screen most
+         likely to be read as a certificate. -->
+    <p class="text-caption text-medium-emphasis mt-3">
+      {{ t('settings.compliance.notACertificate') }}
+    </p>
   </SettingsGroup>
 
   <!-- ---- certificates ---------------------------------------------- -->

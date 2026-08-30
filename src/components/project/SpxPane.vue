@@ -167,6 +167,26 @@ const record = () =>
   });
 
 /**
+ * The same request again, and both recordings side by side.
+ *
+ * The loop this closes is the commonest one there is — change the code, does
+ * the page get faster — and it took four steps: open the site, find the page,
+ * come back, hunt for the new recording among twenty.
+ *
+ * Only a GET can be replayed. The refusal comes back from the backend with its
+ * reason in it and is shown as an error rather than as a disabled button,
+ * because the reason is the useful part: a recording names the request line and
+ * nothing else, so a POST re-sent without its body and its session would be a
+ * different request.
+ */
+const replayed = ref(null);
+
+const replay = (report) =>
+  run(`replay:${report.key}`, async () => {
+    replayed.value = await api.requestReplay(props.name, report.key);
+  });
+
+/**
  * A command recording goes through the operation console, like a build: it can
  * be a test suite. The list is re-read when the operation finishes rather than
  * when this call returns.
@@ -355,6 +375,27 @@ defineExpose({ load });
             }}
           </v-alert>
 
+          <!-- Both numbers, and the difference — never a verdict. One run
+               against one run is not a benchmark, and a green "faster" would
+               invite a conclusion the measurement cannot carry. -->
+          <v-alert
+            v-if="replayed"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mt-3 text-caption"
+            data-test="replay-result"
+          >
+            <div>{{ t('spx.replayedWhat', { what: label(replayed.after) }) }}</div>
+            <div class="mono mt-1">
+              {{ micros(replayed.before.wallTimeUs) }} → {{ micros(replayed.after.wallTimeUs) }}
+              <span :class="replayed.wallTimeUs < 0 ? 'text-success' : 'text-medium-emphasis'">
+                ({{ replayed.wallTimeUs < 0 ? '' : '+' }}{{ micros(replayed.wallTimeUs) }})
+              </span>
+            </div>
+            <div class="text-medium-emphasis mt-1">{{ t('spx.replayCaveat') }}</div>
+          </v-alert>
+
           <div class="d-flex align-start ga-2 mt-4">
             <v-select
               v-model="command"
@@ -477,6 +518,20 @@ defineExpose({ load });
                 @click="open(report)"
               >
                 <v-icon size="18">mdi-fire</v-icon>
+              </v-btn>
+              <!-- Offered on every row, refused with a reason on the ones it
+                   cannot serve. A button hidden for a POST would leave somebody
+                   wondering why the row above has one. -->
+              <v-btn
+                icon
+                size="x-small"
+                variant="text"
+                :aria-label="t('spx.replay')"
+                :loading="busy === `replay:${report.key}`"
+                :disabled="working"
+                @click="replay(report)"
+              >
+                <v-icon size="18">mdi-replay</v-icon>
               </v-btn>
               <v-btn
                 v-if="status.viewBase"

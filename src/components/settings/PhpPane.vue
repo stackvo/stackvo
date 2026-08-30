@@ -2,7 +2,7 @@
 import { onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useSharedEnvEditor } from '@/composables/useEnvEditor';
-import { useVersionChoices, RUNTIME_DEFAULTS } from '@/composables/useCatalog';
+import { useVersionChoices, RUNTIME_DEFAULTS, VERSION_LISTS } from '@/composables/useCatalog';
 import SettingsGroup from '@/components/SettingsGroup.vue';
 
 /**
@@ -68,6 +68,37 @@ onMounted(loadCatalog);
         />
       </v-col>
     </v-row>
+
+    <!-- Which versions the pickers above are allowed to offer.
+         Behind a disclosure because it is the rarer question — most people
+         want the default, not the list — but it is here rather than nowhere,
+         which is where it was. The catalog is compiled into the binary, so a
+         runtime that shipped a release yesterday could not be selected until
+         this application shipped one too. See `VERSION_LISTS`. -->
+    <v-expansion-panels variant="accordion" class="mt-4">
+      <v-expansion-panel :title="t('settings.runtimes.offered')">
+        <v-expansion-panel-text>
+          <div class="text-caption text-medium-emphasis mb-4">
+            {{ t('settings.runtimes.offeredHint') }}
+          </div>
+          <v-combobox
+            v-for="list in VERSION_LISTS"
+            :key="list.key"
+            :model-value="listOf(list.key)"
+            :label="list.id"
+            :prepend-inner-icon="list.icon"
+            multiple
+            chips
+            closable-chips
+            density="comfortable"
+            variant="outlined"
+            hide-details
+            class="mb-3"
+            @update:model-value="(v) => setList(list.key, v)"
+          />
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
   </SettingsGroup>
 
   <SettingsGroup

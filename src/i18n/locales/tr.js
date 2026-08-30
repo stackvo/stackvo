@@ -283,6 +283,25 @@ export default {
     instance: 'Hangi motorda',
     stopped: 'durdurulmuş',
     noDatabase: 'Yok',
+    ttl: 'Ne kadar süre için',
+    ttlNone: 'Ben kaldırana kadar',
+    ttlHours: '{count} saat',
+    ttlDays: '{count} gün | {count} gün',
+    ttlExplain:
+      'Kendi dalınız için boş bırakın. Bir süre seçmek onu bir kum havuzuna çevirir — tek bir iş için kurulmuş, ve kuran kişinin var olduğunu hatırlamayacağı bir ortam. Zamanlayıcıyla hiçbir şey silinmez: liste süresinin geçtiğini söyler, kaldırmak bir karar olarak kalır.',
+    expiresAt: 'Şu ana kadar isteniyor',
+    expired: 'Süresi geçti',
+    leftMinutes: '{count} dk kaldı',
+    leftHours: '{count} sa kaldı',
+    leftDays: '{count} gün kaldı | {count} gün kaldı',
+    forAgent: 'Bir asistana bu dalı ver',
+    forAgentExplain:
+      'MCP sunucusunu bu bayraklarla tanıtın; asistan yalnız bu dal üzerinde çalışabilir: on iki yazma aracı bir projenin sınırlayabildiği dörde iner ve bir projeyi adlandıran hiçbir araç başka bir proje için cevap vermez. Ayarlar → Yapay zekâ asistanları da aynı bayrakları yazıyor.',
+    login: 'Veritabanı girişi',
+    ownLogin: 'Kendine ait — o örnekteki başka bir veritabanına erişemez',
+    sharedLogin: 'Örnekle ortak',
+    sharedLoginExplain:
+      'Bu dal, veritabanına örneğin kendi girişiyle bağlanıyor; dolayısıyla o örnekteki diğer bütün veritabanlarına da erişebilir — dallandığı proje dahil. Kendine ait bir giriş MySQL ve MariaDB’de düzenleniyor; PostgreSQL kopyalamadan sonra nesneler üzerinde yetki verilmesini gerektiriyor ve bu henüz yapılmadı, MongoDB ise sınırlanacak bir veritabanı adı yayımlamıyor.',
     seededFrom: 'Şuradan kopyalandı',
     copiedFrom: '{source} kopyalanarak',
     willBeCalled: 'Adı şu olacak',
@@ -801,6 +820,7 @@ export default {
       'docker-desktop': 'Docker Desktop',
       colima: 'Colima',
       orbstack: 'OrbStack',
+      podman: 'Podman',
       engine: 'Docker Engine',
       unknown: 'Bilinmiyor',
     },
@@ -1213,7 +1233,10 @@ export default {
 
   dumps: {
     source: { web: 'Web', cli: 'CLI', queue: 'Kuyruk' },
+    signal: { dump: 'Dump', request: 'İstek', job: 'İş' },
     regex: 'Düzenli ifade',
+    filterRows: 'Satırları süz',
+    filterSignal: 'Sinyal',
     filterSource: 'Kaynağa göre süz',
     copy: 'Görünenleri kopyala',
     copyValue: 'Değeri kopyala',
@@ -1341,6 +1364,10 @@ export default {
     recordPathHint: 'Bu sitede bir yol. Adres projeden gelir.',
     record: 'Bu isteği kaydet',
     recording: 'Sayfa bekleniyor…',
+    replay: 'Bu isteği yeniden gönder',
+    replayedWhat: '{what} yeniden gönderildi ve kaydedildi.',
+    replayCaveat:
+      'Bir koşuya karşı bir koşu, bir kıyaslama değildir — soğuk bir opcache, soğuk bir sorgu önbelleği ve bu makinenin o sırada yaptığı her şey farkın içindedir. Yalnız bir GET yeniden gönderilebilir: bir kayıt, isteğin satırını tutar, başka bir şeyini değil.',
     recordedOne: '{what} kaydedildi — {took}.',
     recordCommand: 'Ya da bir komut',
     recordCommandGo: 'Kaydet',
@@ -1533,6 +1560,10 @@ export default {
       '.env içinde SSL_ENABLE kapalı, yani yığın HTTP üzerinden sunuluyor ve sertifika kullanılmıyor.',
     current: 'Güncel',
     stale: 'Yeniden üretilmeli',
+    store: {
+      system: 'Bu makinenin güven deposu — Safari, Chrome, curl',
+      firefox: 'Firefox’un kendi deposu',
+    },
     caTrusted: 'CA güveniliyor',
     caUntrusted: 'CA güvenilmiyor',
     caUnknown: 'CA güveni bilinmiyor',
@@ -1820,6 +1851,9 @@ export default {
     preferences: 'Tercihler',
     stackSub: 'Compose seviyesinde: yeniden üretir ve konteynerleri yeniden kurar.',
     runtimes: {
+      offered: 'Hangi sürümler sunuluyor',
+      offeredHint:
+        'Yukarıdaki seçicilerin beslendiği listeler. Bu uygulama bir liste ile geliyor ve sürümler arasında bayatlıyor; hiç duymadığı bir sürüm beklenmek yerine buraya eklenebilir. Kayıt defterinde olmayan bir sürüm imaj derlenirken hata verir.',
       desc: 'Her çalışma ortamında yeni bir projenin başlayacağı sürüm. Hangi sürümlerin var olduğu uygulamanın kendi kataloğudur, ayar değildir.',
     },
     php: {
@@ -1876,6 +1910,64 @@ export default {
       tokenPlaceholder: '<token>',
       example: 'Deneyin',
       served: '{count} araç servis ediliyor',
+    },
+    showTour: 'Tanıtım',
+    showTourHint:
+      'Uygulamanın yaptığı, bulunması en zor altı şey. Bir sonraki açılışta bir kez gösterilir.',
+    showTourAction: 'Tekrar göster',
+    compliance: {
+      title: 'Politika gerçekten tutuyor mu?',
+      desc: 'Bir yöneticinin gönderdiği kurallar, bu makinenin şu anki hâline karşı ölçüldü.',
+      accountedFor: 'Hesabı verilmemiş bir şey yok',
+      notAccountedFor: 'Bakılması gereken bir şey var',
+      summary:
+        '{holding} tutuyor, {bypassed} baypas edilmiş, {unmeasured} ölçülemedi, {silent} için politikanın görüşü yok. Politikanın hakkında bir şey söylemediği madde asla geçer not değildir.',
+      notACertificate:
+        'Bu bir rapordur, sertifika değil. Politika katmanı bir güvenlik sınırı değildir — dosya da onu yönlendiren değişken de genellikle makineyi elinde tutan kişinin erişebileceği yerdedir — dolayısıyla burada yazan, ölçülen şeydir; birinin neyi değiştirebileceği hakkında bir şey söylemez.',
+      state: {
+        holding: 'Tutuyor',
+        bypassed: 'Baypas',
+        silent: 'Görüş yok',
+        unmeasured: 'Ölçülemedi',
+      },
+      clause: {
+        settings: 'Yönetilen ayarlar',
+        settings_managed: 'Politikanın gönderdiği bir ayar',
+        settings_locked: 'Politikanın kilitlediği bir ayar',
+        registry_mirror: 'İmgeler aynadan geliyor',
+        images_pin: 'Bu deponun çalıştırdığı imge sabitlenmiş',
+        market_allowedPackages: 'Yalnızca izin verilen paketler kurulu',
+        market_allowedRegistries: 'Paket imgeleri izin verilen bir kayıt defterinden',
+        market_allowedSources: 'Katalog izin verilen bir kaynaktan geldi',
+        market_requireSignature: 'Önbellekteki katalogun imzası doğrulandı',
+        market_allowOverrides: 'Yayımlanmış bir dosyanın önünde çalışma alanı dosyası yok',
+        market_autoUpdate: 'Paketler yalnızca istenince değiştirilir',
+        hooks: 'Yaşam döngüsü kancaları',
+        hooks_enabled: 'Kancalar çalışmıyor',
+        hooks_allowHost: 'Kancalar bu makinede çalışmıyor',
+        providers: 'Veri sağlayıcıları',
+        providers_enabled: 'Sağlayıcılar çalışmıyor',
+        providers_allowPush: 'Sağlayıcılar dışarı veri gönderemez',
+      },
+    },
+    images: {
+      title: 'Bu uygulamanın çektiği imgeler',
+      desc: 'StackVo’nun çalıştırdığı ama derlemediği konteynerler — tüneller, karşılama sayfası, tünel muhafızı ve performans yardımcısı.',
+      moving:
+        'Bunların {count} tanesi altınızdan değişebilen bir etikette. Yayıncı bozuk bir sürüm gönderirse, siz hiçbir şey yapmadan makinenize gelir.',
+      movingTag: 'Hareketli etiket',
+      pinned: 'Sabitlenmiş',
+      hint: 'Bir politika dosyası bunların herhangi birini `imagePins` bloğuyla depo adına göre sabitleyebilir — sabit bir etiket ya da bir digest. Aynı dosyanın kayıt defteri öneki nereden geleceklerine karar verir.',
+    },
+    machineCommands: {
+      title: 'Makine geneli komutlar',
+      sectionDesc: 'Buradaki her projede çalıştırabileceğiniz komutlar',
+      desc: 'Tek bir dosya, kimsenin deposunu düzenlemeden bu çalışma alanındaki her projeye komut ekler.',
+      absent:
+        'Henüz bir commands.json yok. Yukarıdaki yolda bir `commands` bloğuyla oluşturun — bir projenin stackvo.json’unun kullandığı şeklin aynısı.',
+      empty: 'Dosya var ve hiçbir komut tanımlamıyor.',
+      interactive: 'Etkileşimli',
+      hint: 'Her komut, projenin konteynerinin içinde çalışan bir argv listesidir — asla bir kabuk dizgesi, asla bu makinede. Burada çalışması gereken bir adım kancadır (hook) ve önce bir özete karşı onaylanır. Aynı id’yi kullanıyorsa projenin kendi komutu kazanır; hâlihazırda gömülü olan bir id ise reddedilir.',
     },
     tooling: {
       title: 'Araçlar',
@@ -1947,6 +2039,16 @@ export default {
       allowWrites: 'Asistan değişiklik yapabilsin',
       allowWritesDetail:
         'Kapalıyken asistan yalnızca okuyabilir. Açıkken stack_up, stack_down, project_start, project_stop, project_restart, service_start, service_stop, service_restart, generate, xdebug_set, certificates_reissue ve snapshot_take de eklenir — yani stack’in tamamını durdurmak ve her projenin bağlı olduğu ortak bir servisi durdurmak dahil. Bu ayar, eklediğiniz bir sonraki asistan için geçerlidir.',
+      scopeLabel: 'Yalnız bu projeler',
+      scopeEvery: 'Her proje',
+      lastsLabel: 'Yazma süresi',
+      forever: 'Kaldırılana kadar',
+      minutes: '{count} dakika',
+      hours: '{count} saat',
+      unscopedDetail:
+        'Bir proje seçmek asistanı ona sınırlar — on iki yazma aracı, bir projenin sınırlayabildiği dörde iner ve stack_down onlardan biri değildir. Bir projeyi adlandıran hiçbir araç da artık başka bir proje için cevap vermez.',
+      scopedDetail:
+        'Yukarıda adı geçen projelere sınırlı. Hiçbir projenin sınırlayamadığı yazma araçları — stack_down, stack_up, generate, certificates_reissue, üç servis aracı ve snapshot_take — hiç sunulmuyor, ve bir projeyi adlandıran hiçbir araç listenin dışındaki bir proje için cevap vermiyor. Makine geneli cevaplar çalışmayı sürdürüyor: doctor, hosts tablosu, posta yakalayıcı.',
       state: {
         registered: 'Tanıtıldı',
         stale: 'Tanıtıldı, ama başka bir kopyayı işaret ediyor',
@@ -2067,6 +2169,16 @@ export default {
     saveBundleHint:
       'Log, başlangıç kontrolleri, doktor raporu ve varsa çökme raporları tek bir arşivde — bir hata bildirimi için gereken her şey, yalnızca log yerine.',
     saveBundleDone: 'Kaydedildi ({bytes}). İçi düz metindir; göndermeden önce bir bakın.',
+    compareBundle: 'Başka bir makineyle karşılaştır',
+    compareBundleHint:
+      'Bir meslektaşınızın gönderdiği paketi açın — zip’in tamamı ya da içinden çıkan environment.json — ve bu makinede şu anda neyin farklı olduğunu görün. Sürümler, motor, servisler ve her projenin beyanı; yol yok, kimlik bilgisi yok — zaten gönderilmesinin güvenli olmasının sebebi de bu.',
+    compareSame:
+      'Hiçbir fark yok. {count} olgunun her birinde iki makine aynı değeri söylüyor — yani farklı olan şey, buranın göremediği bir yerde.',
+    compareResult: '{count} fark. {same} olguda anlaşıyorlar.',
+    compareFact: 'Olgu',
+    compareHere: 'Bu makine',
+    compareThere: 'Onlarınki',
+    compareAbsent: '— belirtilmemiş',
     verifyNow: 'Üreteci şimdi doğrula',
     checkForUpdates: 'Güncellemeleri denetle',
     updates: 'Güncellemeler',
@@ -2090,6 +2202,14 @@ export default {
       '“Ziyaret et” düğmelerinin tamamı bunu kullanır — proje ve servis alan adları burada açılır.',
     appsHint: 'Kurulu olmayanlar seçilemez.',
     appDefault: 'Varsayılan',
+    appCustomTerminal: 'Terminal komutu',
+    appCustomEditor: 'Editör komutu',
+    appCustomBrowser: 'Tarayıcı komutu',
+    appCustomDbClient: 'Veritabanı istemcisi komutu',
+    appCustomHint:
+      'Başlatıcı ve ihtiyaç duyduğu bayraklar. Açılacak şey son argüman olarak eklenir; uygulamanızın beklediği bayrağı buraya yazın — örneğin “alacritty -e sh -c”. Boşluk içeren yolu tırnak içine alın. Burası bir kabuk değildir: $HOME, borular ve && düz metindir.',
+    appCustomDbHint:
+      "Bir servisteki “istemcide aç” menüsünün “Other…” satırı bunu kullanır. Bağlantı URI'si son argüman olarak eklenir.",
     startMinimized: 'Tepsiye küçültülmüş başlat',
     autostart: 'Açılışta başlat',
     save: '{count} değişikliği kaydet',
@@ -2140,6 +2260,10 @@ export default {
     description:
       'Ortam tanımının repoyla birlikte gelen yarısı: bir iş arkadaşı klonluyor, burayı açıyor ve eksik olanı açıyor.',
     none: 'Bu proje hiçbir servis beyan etmiyor ve .env dosyasından da bir şey çıkmadı.',
+    preset: {
+      pending: 'Bu proje bir yığın ön ayarı taşıyor — uygulamak {count} ayarı değiştirir.',
+      apply: 'Ön ayarı uygula',
+    },
     declaredBy: 'stackvo.json içinde beyan edilmiş',
     suggestedBy: 'Projenin kendi .env dosyasından çıkarıldı',
     suggestedCaveat:
@@ -2310,7 +2434,7 @@ export default {
       'Bu projenin kendi container’ında supervisord çalışıyor: php-fpm ve web sunucusu onun altında. Eklenecek bir şey yok — container zaten biliniyor.',
     needsRunning: 'Önce projeyi başlatın.',
     noSupervisord:
-      'Bu proje sunucusunu supervisord olmadan çalıştırıyor (apache, frankenphp, swoole ya da PHP dışı bir runtime). Gösterilecek süreç yok.',
+      'Bu proje sunucusunu supervisord olmadan çalıştırıyor (apache, frankenphp, swoole, roadrunner ya da PHP dışı bir runtime). Gösterilecek süreç yok.',
     noSocket:
       'supervisord çalışıyor ama konuşmuyor: bu imaj, StackVo üretilen yapılandırmaya soketi eklemeden önce derlenmiş. Projeyi yeniden derleyin.',
     stopped: 'Container çalışmıyor.',
@@ -2641,6 +2765,102 @@ export default {
       '{host} üretilmiş dosyalara yazılı ve bu makine artık o ağda değil. Yeniden üretin — o zamana kadar bu ad, adresi devralan makineye çözülür.',
   },
 
+  leaks: {
+    explain:
+      'Diğer yön: yukarıdaki liste, bir kimlik bilgisinin varlığını bildiğinizde onu .env’den taşır. Bu ise kimsenin taşımadıklarını bulur — anahtarın adına değil, değerin şekline bakarak; çünkü herhangi bir adı olan bir değişken bir AWS anahtarı tutabilir. Bir bulgu, değerin kendisini asla taşımaz.',
+    run: 'Kimlik bilgisi tara',
+    project: 'Bir depoyu da tara',
+    machineOnly: 'Yalnız bu makinenin .env’i',
+    untrack: '.env’i git’ten çıkar',
+    untrackedDone:
+      'Takipten çıkarıldı, yok sayıldı, ve {example} anahtarla — değersiz — .env.example yazıldı.',
+    needsCommit:
+      'Kaldırma hazırlandı (staged). Commit’leyip push edin; yoksa bu makineden hiçbir şey çıkmadı.',
+    rotate:
+      'Bir noktada commit’lenmiş, dolayısıyla içindeki her değer hâlâ geçmişte. Onları döndürün — dosyayı sonraki bir commit’te silmek onu geçmişten çıkarmaz.',
+    envInHistory:
+      '.env şu anda takip edilmiyor ama bir noktada commit’lenmiş. İçinde olan her şey hâlâ geçmişte — döndürün.',
+    committed: 'zaten commit’lenmiş',
+    none: 'Bir şey bulunmadı. {scanned} takip edilen dosya okundu, .env’de kimlik bilgisi şekli yok.',
+    envTracked:
+      '.env git tarafından takip ediliyor. İçindeki her değer, neye benzediğinden bağımsız olarak geçmişte duruyor — takipten çıkarın, içindekileri döndürün ve .gitignore’a ekleyin.',
+    skipped:
+      '{scanned} dosya okundu, {skipped} atlandı — çok büyük, metin değil, ya da bu taramanın okuduğu sınırın ötesinde.',
+    source: {
+      env: 'bu makinedeki .env içinde',
+      tracked: 'git’in takip ettiği bir dosyada',
+    },
+    rule: {
+      awsAccessKey: 'AWS erişim anahtarı kimliğine benziyor',
+      privateKey: 'Özel anahtara benziyor',
+      githubToken: 'GitHub jetonuna benziyor',
+      slackToken: 'Slack jetonuna benziyor',
+      stripeLiveKey: 'Stripe canlı gizli anahtarına benziyor',
+      googleApiKey: 'Google API anahtarına benziyor',
+      sendgridKey: 'SendGrid anahtarına benziyor',
+      openaiKey: 'OpenAI anahtarına benziyor',
+      unstoredSecret: 'Adı kimlik bilgisi diyor ve hâlâ dosyada — anahtar deposuna taşıyın',
+    },
+  },
+  verify: {
+    title: 'Bu makine uyuyor mu?',
+    explain:
+      'Depo, projenin neye ihtiyacı olduğunu beyan ediyor — servisleri, alan adı, manifesti. Bu bölüm, bu makinede onların olup olmadığını satır satır cevaplıyor. Zaten bilinmeyen hiçbir şey ölçülmüyor; bu, işe başlamanın diğer yarısı — ve kimsenin yapmadığı yarısı.',
+    run: 'Kurulumumu kontrol et',
+    ready: 'Bu projenin beyan ettiği her şey burada.',
+    notReady: 'Bu projenin beyan ettiği bir şey eksik ya da kapalı — aşağıdaki satırlar.',
+    check: {
+      manifest: '{subject} içindeki stackvo.json',
+      service: '{subject} servisi',
+      serviceOff: '{subject} servisi',
+      unknownService: '{subject} servisi',
+      built: '{subject} için imaj',
+      generated: '{subject} için üretilmiş yapılandırma',
+      domain: 'hosts dosyasında {subject}',
+    },
+    fix: {
+      manifest: 'Doğrulamadan geçmiyor. Sorunlar yukarıda listeleniyor.',
+      service: 'Beyan edilmiş ama bu makinede kurulu değil. Market’ten kurun.',
+      serviceOff:
+        'Kurulu ama kapalı. Servisler bölümünden açın — sahip olduğunuz sürümler sağda yazıyor.',
+      unknownService:
+        'Bu yapı o servisi hiç duymadı, dolayısıyla sizde olup olmadığını söyleyemez. Ya ad yanlış yazılmış ya da katalog bu uygulamadan yeni.',
+      built: 'Burada hiç derlenmemiş. Projeyi bir kez derleyin.',
+      generated: 'stackvo.json’dan eski. Yeniden üretin.',
+      domain: 'hosts dosyasında yok, yani çözümlenmiyor. Yukarıdaki uyarıdan düzeltin.',
+    },
+  },
+  usage: {
+    title: 'Bugün neye mal oldu',
+    sub: 'UTC gece yarısından beri kullanılan CPU ve tutulan bellek — konteyner başına.',
+    cpu: 'CPU',
+    memory: 'Tutulan bellek',
+    budget: 'Bütçe',
+    what: 'Konteyner',
+    min: 'dk',
+    gbh: 'GB·sa',
+    over: 'Bütçe aşıldı',
+    nothingYet:
+      'Bugün henüz bir ölçüm yok. Bir konteynerin ilk okuması saatini başlatır; toplamı veren ikincisidir.',
+    unreadable: 'Kullanım kaydı okunamadı.',
+    sharedNote:
+      'Ortak bir servisin kendi satırı vardır ve onu kullanan projelere asla bölüştürülmez — her bölüşüm uydurma olurdu. Yalnız bir proje bütçe taşıyabilir; bütçeyi projenin Ayarlar bölümünden verirsiniz.',
+    setBudget: '{name} için bütçe belirle',
+    budgetFor: '{name} için bütçe',
+    budgetExplain:
+      'Bütçe depoya değil bu makineye aittir: aynı proje bir meslektaşınızın dizüstünde farklı bir alana sahiptir. Sınır istemiyorsanız alanı boş bırakın. Bütçe aşıldığı gün size bir kez söylenir.',
+    budgetCpu: 'Günlük CPU dakikası',
+    budgetMemory: 'Günlük gigabayt-saat',
+    noBudget: 'Sınır yok',
+    saveBudget: 'Kaydet',
+    overNotice: '{name} bütçesini aştı',
+    overDetail: 'Bugün {cpu} CPU dakikası ve {gb} GB·sa.',
+    kind: {
+      project: 'proje',
+      service: 'servis',
+      stack: 'yığın',
+    },
+  },
   audit: {
     title: 'Denetim kaydı',
     sectionDesc: 'Bu makinede yapılan ve geri alınamayacak olanlar.',
@@ -2649,6 +2869,12 @@ export default {
     empty: 'Henüz geri alınamayacak bir işlem yapılmadı.',
     truncated: 'Toplam {total} girdinin en yeni {shown} tanesi gösteriliyor.',
     unreadable: 'Kayıttaki {count} satır okunamadı ve atlandı. Geri kalanı sağlam.',
+    undo: 'Geri al',
+    undone: 'Geri alındı',
+    noUndo: 'Geri alınamaz — {because}.',
+    undoSteps: '{count} çağrı çalıştırır: {steps}.',
+    assistant:
+      'MCP sunucusu üzerinden bir asistan tarafından istendi. Bu pencerede yapılan işlemler burada listelenmez — düğmeye basan kişi olup bittiğini zaten gördü.',
   },
   doctor: {
     title: 'Doktor',
@@ -2891,6 +3117,142 @@ export default {
   // and the same test pins the two equal. Deliberate: it turns an edit to the
   // English into a change that has to pass through the translations, instead of
   // one that silently leaves Turkish describing the old behaviour.
+  /**
+   * The one-liner under each quick command, from `quickcmd.rs`'s catalogue.
+   *
+   * Keyed by the `Spec.id` the catalogue already carries, which is why there is
+   * no second name here to get wrong. The English stays in Rust and is what the
+   * CLI, the MCP surface and the log record; this is what the window shows, and
+   * `hint_translations.rs` fails if the two sets ever stop matching.
+   *
+   * `hints.rs` says why it is this text and not another: it is the sentence
+   * that tells someone what a command will do, under a command they are about
+   * to run in their own container.
+   */
+  quickCommands: {
+    tinker: 'Uygulama önyüklenmiş bir REPL.',
+    migrate: 'Bekleyen göçleri çalıştırır.',
+    'migrate-status': 'Hangi göçlerin çalıştığı.',
+    'optimize-clear': 'Önbelleğe alınmış tüm yapılandırma, rota ve görünümleri temizler.',
+    'route-list': 'Kayıtlı bütün rotalar.',
+    'queue-restart': 'Kuyruk işçilerine yeni kodu almalarını söyler.',
+    'storage-link': 'public/storage sembolik bağını oluşturur.',
+    'composer-install': 'PHP bağımlılıklarını kilit dosyasından kurar.',
+    'composer-dump': 'Sınıf eklendikten sonra otomatik yükleyiciyi yeniden kurar.',
+    'npm-install': 'JavaScript bağımlılıklarını kurar.',
+    'npm-build': 'Ön yüz varlıklarını derler.',
+    'wp-shell': 'WordPress yüklenmiş bir REPL.',
+    'wp-plugin-list': 'Kurulu eklentiler ve durumları.',
+    'symfony-cache-clear': 'Derlenmiş konteyneri ve önbelleklenmiş yapılandırmayı yeniden kurar.',
+    'symfony-router': 'Kayıtlı bütün rotalar.',
+    'symfony-migrate': 'Bekleyen Doctrine göçlerini çalıştırır.',
+    'symfony-migrate-status': 'Hangi Doctrine göçlerinin çalıştığı.',
+    'django-migrate': 'Bekleyen göçleri uygular.',
+    'django-migrate-status': 'Hangi göçlerin çalıştığı.',
+    'django-collectstatic': 'Statik dosyaları sunulan dizinde toplar.',
+    'django-shell': 'Uygulama önyüklenmiş bir REPL.',
+    'rails-migrate': 'Bekleyen göçleri çalıştırır.',
+    'rails-migrate-status': 'Hangi göçlerin çalıştığı.',
+    'rails-routes': 'Kayıtlı bütün rotalar.',
+    'rails-console': 'Uygulama önyüklenmiş bir REPL.',
+    'bundle-install': 'Ruby bağımlılıklarını kilit dosyasından kurar.',
+  },
+
+  /**
+   * What each identity provider will accept as a callback URL, from `oauth.rs`.
+   *
+   * The sentence a person reads immediately before deciding which URL to paste
+   * into someone else's admin console — and getting it wrong there is a round
+   * trip through a website this app does not control.
+   */
+  oauthNotes: {
+    github: 'OAuth uygulaması için her URL’yi kabul eder, özel bir ana bilgisayar adı dahil.',
+    gitlab: 'Her URL’yi kabul eder; http yalnızca localhost için serbest.',
+    entra: 'Her https URL’sini kabul eder. http yalnızca localhost için serbest.',
+    auth0: 'İzin verilen geri çağrı listesindeki her URL’yi kabul eder, joker karakterler dahil.',
+    google:
+      'Genel son ek listesinde olmayan ana bilgisayar adlarını reddeder; yalnızca localhost muaf.',
+    facebook: 'Herkese açık bir https URL’si ister ve alan adını doğrular.',
+    apple: 'Kayıtlı ve herkese açık çözümlenebilir bir alan adı ister; localhost kabul edilmez.',
+  },
+
+  /** Why each required tool is required, from `tooling.rs`. */
+  toolingWhy: {
+    docker: 'Her proje onun içinde koşar. Onsuz buradaki hiçbir şey çalışmaz.',
+    compose: 'Üretilen yığın compose dosyalarıdır; onları çalıştıran budur.',
+    git: 'Çalışma ağaçları, proje sayfalarındaki dal adları, ve bir deponun yeni projeye klonlanması.',
+    mkcert:
+      '.loc alan adları için güvenilir HTTPS. Onsuz yığın yine çalışır ama her tarayıcı uyarır.',
+  },
+
+  /** What each of this repository's own binaries is for, from `tooling.rs`. */
+  toolingOwn: {
+    stackvo: 'Yığın, bir terminalden.',
+    'stackvo-mcp': 'Asistanların konuştuğu MCP sunucusu.',
+  },
+
+  /** One line per shipped provider recipe, from `provider.rs`. */
+  providerRecipes: {
+    'mysql-remote': 'Bu makinenin doğrudan erişebildiği bir MySQL ya da MariaDB sunucusu',
+    'postgres-remote': 'Bu makinenin doğrudan erişebildiği bir PostgreSQL sunucusu',
+    upsun: 'Kendi CLI’si üzerinden bir Upsun (Platform.sh) ortamı',
+  },
+
+  /**
+   * What has to be changed before a shipped recipe will work, from `provider.rs`.
+   *
+   * Keyed rather than positional, and shared where the instruction is the same:
+   * both database recipes need the connection details changed, so both point at
+   * `connection`. The list a person reads is per recipe; the sentences are not.
+   */
+  providerRecipeEdits: {
+    connection: 'iki komuttaki ana bilgisayar, port, kullanıcı ve veritabanı adı',
+    mysqlPassword:
+      'MYSQL_PWD — istemci onu ortamdan okur, böylece parola hiçbir zaman argüman olmaz',
+    postgresPassword: 'PGPASSWORD — libpq onu ortamdan okur',
+    upsunProject: 'proje kimliği ve ortam adı',
+    upsunToken: 'UPSUN_CLI_TOKEN — Upsun konsolundan alınan bir API belirteci',
+  },
+
+  crash: {
+    notice:
+      'StackVo beklenmedik şekilde kapandı. Bu makinede {count} rapor kaydedildi — hiçbir yere bir şey gönderilmedi.',
+    open: 'Göster',
+  },
+
+  tour: {
+    step: 'Adım {n} / {of}',
+    skip: 'Atla',
+    back: 'Geri',
+    next: 'İleri',
+    show: 'Göster',
+    done: 'Bitti',
+    import: {
+      title: 'Halihazırdaki bir projeyi getirin',
+      body: 'StackVo yedi farklı yerel ortamdan içe aktarıyor — XAMPP, Laragon, MAMP, Valet, Sail, Herd ve DDEV. Onları bu makinede buluyor, bulduğunu gösteriyor ve varsayılan olarak kopyalıyor. Okuduğu kuruluma asla tek bayt yazmıyor.',
+    },
+    branch: {
+      title: 'Her git dalı için tam bir ortam',
+      body: 'Bir çalışma ağacı kendi ana bilgisayar adını, kendi veritabanını ve kendi ortam değişkenlerini alıyor — bulut “önizleme ortamları”nın sattığı şey, sizin makinenizde ve ücretsiz. Bir projeyi açıp Çalışma ağaçları’na bakın.',
+    },
+    explain: {
+      title: 'O istek neden yavaştı',
+      body: 'Sorgular, işler ve isteğin kendisi tek bir zaman ekseninde buluşuyor, yanında gerçek bir yığın alev grafiği ile. Bu kategoride üçünü ilişkilendiren başka bir şey yok, ve bakmanın maliyeti yok.',
+    },
+    release: {
+      title: 'Yayınlayacağınız imajı derleyin',
+      body: 'Yerel ortamınızı çalıştıran araç, üretim imajını da derleyip gönderiyor. Yerel ikili bir araç oraya kadar gelemez — onun ortamı sizin makineniz.',
+    },
+    devcontainer: {
+      title: 'Devcontainer dışa aktarın',
+      body: 'Burada kurulan bir proje, aynı manifestten üretilen bir devcontainer olarak VS Code’da ya da bir bulut ortamında açılabiliyor. StackVo’nun kendisi bir masaüstü uygulaması ve oraya kadar gelmiyor.',
+    },
+    audit: {
+      title: 'Ne değişti, ne zaman',
+      body: 'Ayrıcalıklı ya da geri alınamaz her eylem kaydediliyor: ana bilgisayar dosyası yazımları, sertifika güveni, proje silme, değişen .env anahtarları, veritabanı geri yüklemeleri — ve bir asistanın MCP sunucusu üzerinden yaptığı her yazma çağrısı, reddedilenler dahil. Yalnız anahtar ve ad, asla değer, ve uygulama tarafından asla silinmiyor. Asistanın eylemi, çalışmadan önce hesaplanmış "bunu ne geri alır" planını taşıyor; buradan tek tıkla geri alınabiliyor.',
+    },
+  },
+
   errorHints: {
     startDocker: "Docker Desktop'ı başlatıp tekrar deneyin.",
     startDockerOrSetHost:
@@ -3055,6 +3417,12 @@ export default {
       'generate_run kullanın; `verify` modu diskteki duruma göre sapmayı yine de raporlar.',
     mcpNeedsAllowWrites:
       'Yazma araçlarını etkinleştirmek için --allow-writes ile yeniden başlatın.',
+    mcpOutsideGrant:
+      'Bu sunucu, adı verilmiş bir yazma aracı listesiyle başlatıldı ve bu araç o listede yok. İstemcinin yapılandırmasında listeyi genişletin ya da verilmiş araçlardan birini kullanın.',
+    mcpGrantExpired:
+      'Yazma araçları belirli bir süre için verilmişti ve o süre doldu. Okumalar çalışmaya devam ediyor; yeniden vermek için sunucuyu yeniden başlatın.',
+    mcpProjectOutOfScope:
+      'Bu sunucu belirli projelere sınırlandı. O projelerden birini sorun ya da istemcinin yapılandırmasında sınırı genişletin.',
     portRangeExhausted:
       'Bu servisin istediği portun yakınında bir port boşaltın, ya da örneğe ayarlarından açıkça bir port verin.',
     packagePathsStayInside: 'Bir paket yalnızca kendi dizinindeki dosyaları adlandırabilir.',

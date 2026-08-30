@@ -1,0 +1,120 @@
+name: Nightly
+#
+# The one question `ci.yml` cannot ask.
+#
+# Everything in CI is a question about the tree: what the generator renders,
+# which arguments compose would be handed, whether two catalogues agree. Not one
+# of those steps starts a container, so a Dockerfile that stopped building, a
+# compose file that stopped layering and a supervisord configuration that starts
+# nginx without php-fpm are all invisible until somebody presses the button.
+#
+# It is not in `ci.yml` because it builds a PHP image from scratch — apt, the
+# extensions, Composer, Node — and a pull request should not wait minutes for
+# it. Nightly is the right cadence for a check whose answer changes when the
+# world changes rather than when this repository does: an upstream `php:8.4-fpm`
+# tag moving, a Debian package disappearing, Traefik changing a default.
+#
+# NOTE: GitHub disables `schedule` on a repository with no pushes for 60 days,
+# and does so quietly. If this stops producing runs, that is the first thing to
+# check — `workflow_dispatch` is here so it can always be started by hand.
+
+on:
+  schedule:
+    # 03:17 UTC. Not on the hour: every cron in the world fires at :00, and a
+    # queue is a slow place to be for a job that already takes minutes.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: docker smoke
+    runs-on: ubuntu-latest
+    # The image build is the bulk of it. Generous, but bounded: a hung compose
+    # would otherwise hold a runner until GitHub's own six-hour ceiling.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The same list `build` installs, for the same reason: this compiles the
+      # crate, and the crate is a Tauri application whose Linux build needs the
+      # webkit/gtk headers and — for the keystore — `libdbus-1-dev`.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # `tauri-build` checks the two `externalBin` exist on every cargo build of
+      # this package, `cargo test` included. Stubs are enough — nothing here
+      # runs them.
+      - name: Placeholder sidecars, so the Rust steps can build
+        run: node tools/sidecars.mjs --stubs
+
+      # Said out loud before anything depends on it. A runner without an engine
+      # would otherwise fail somewhere inside compose with a message about a
+      # socket, which reads as a bug in this repository.
+      - name: The engine is here
+        run: |
+          docker version
+          docker compose version
+
+      # `working-directory` rather than `--manifest-path`, for the reason
+      # `ci.yml` gives at length: rustup resolves `rust-toolchain.toml` from the
+      # working directory, and a cargo run started at the repository root never
+      # sees the pin.
+      - name: Bring a project up and ask it for a page
+        working-directory: src-tauri
+        env:
+          STACKVO_DOCKER_SMOKE: '1'
+        run: |
+          set -o pipefail
+          cargo test --test docker_smoke -- --nocapture 2>&1 | tee smoke.log
+
+      # A green job has to mean the test RAN. Without the variable above the
+      # test skips and passes, which is exactly the shape the `driver` job was
+      # burned by — "green" and "never ran" must not look the same, and a
+      # mistyped environment variable is the likeliest way for them to.
+      - name: It ran, rather than skipping
+        working-directory: src-tauri
+        run: |
+          if grep -q 'skipping: this test starts containers' smoke.log; then
+            echo "::error::the smoke test skipped — STACKVO_DOCKER_SMOKE did not reach it."
+            exit 1
+          fi
+          if ! grep -qE 'test result: ok\. 2 passed' smoke.log; then
+            echo "::error::both halves of the smoke test were expected to pass; see the log above."
+            exit 1
+          fi
+
+      # What the container and Traefik said, whatever happened. The failure this
+      # job exists to catch is one nobody watched happen, so the evidence has to
+      # outlive the runner.
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-smoke-log
+          path: src-tauri/smoke.log
+          retention-days: 14
+
+      # A runner is thrown away, but a `workflow_dispatch` on a self-hosted one
+      # is not, and this stack binds 80 and 443.
+      - name: Leave nothing running
+        if: always()
+        run: |
+          docker ps -a --filter label=com.docker.compose.project=stackvo -q | xargs -r docker rm -f
+          docker network rm stackvo-net 2>/dev/null || true

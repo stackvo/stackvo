@@ -54,6 +54,31 @@
 //! between platforms, and "keep the last N events across restarts" — a paid
 //! feature elsewhere — is what the design already does.
 //!
+//! ## What the bridge can see, and the one thing it cannot
+//!
+//! Two kinds are written from inside the container. A `dump` is a moment: the
+//! value, the file and the line. A `request` is the *execution* — one row per
+//! page load or per `artisan` command, with the status and how long it took —
+//! and it is raised from `register_shutdown_function` rather than from any
+//! framework's own "request handled" event. That is not a fallback: PHP itself
+//! guarantees the shutdown handler, it runs for a fatal and for an `exit()` as
+//! well as for a clean return, and it needs nothing loaded. So the row appears
+//! for Laravel, for Symfony, for WordPress and for one hand-written
+//! `index.php` alike.
+//!
+//! **A queued job is not one of them, and the reason was measured.** The
+//! obvious design is four listeners on Laravel's own queue events, and there
+//! is no moment in this file where they can be attached: it is loaded before
+//! the container exists. Watching the autoloader for the queue's classes looks
+//! like the way in and is not — Composer registers its own loader with
+//! `$prepend = true`, so it lands in *front* of anything registered here, and
+//! a handler behind it is never reached for a class Composer can resolve. Run
+//! against a real Laravel 12 checkout, `spl_autoload_functions()` comes back
+//! `[Composer\Autoload\ClassLoader::loadClass, <this file>]` in that order and
+//! the queue's events raise nothing. Jobs therefore arrive from the host, out
+//! of the worker's own output — see [`crate::queuelog`], which makes the same
+//! argument [`crate::querylog`] makes about the database.
+//!
 //! ## Verified in a container, not reasoned about
 //!
 //! Every claim above was run against `php 8.4` in one of this checkout's own
@@ -64,13 +89,28 @@
 //! * with it present, `dump()` captures and returns its argument, and `dd()`
 //!   captures and exits 1;
 //! * the emitted line parses as the [`Event`] below, with file, line, request
-//!   and SAPI filled in.
+//!   and SAPI filled in;
+//! * one `request` line follows every execution, carrying the status the web
+//!   SAPI reported (`200` and a deliberate `503` were both read back) and a
+//!   duration measured from `REQUEST_TIME_FLOAT`, and it is still written
+//!   after `dd()` has called `exit()`;
+//! * a `dump()` inside a **queued job** reaches the file — but only once the
+//!   worker sidecar is given the same three mounts as the web container, which
+//!   is a thing [`crate::worker`] had to be taught;
+//! * an `exit()` inside a shutdown function really does skip every handler
+//!   registered behind it — two handlers, the first exiting, and the second
+//!   printed nothing. That is why the request row is registered at prepend
+//!   time rather than anywhere later: first on the stack is the only position
+//!   a framework's own shutdown handler cannot take it out of.
 //!
-//! One thing that only shows up by running it: **`php -r` does not process
-//! `auto_prepend_file` at all.** `ini_get` reports the setting and the file is
-//! never loaded. It costs nothing here — web requests, `artisan` and queue
-//! workers all execute a script — but a `-r` one-liner is not a way to test
-//! this, and half an hour went into finding that out.
+//! Two things only showed up by running it. **`php -r` does not process
+//! `auto_prepend_file` at all** — `ini_get` reports the setting and the file is
+//! never loaded; it costs nothing here, because web requests, `artisan` and
+//! queue workers all execute a script, but a `-r` one-liner is not a way to
+//! test this. And `spl_autoload_register`'s `$do_throw` argument makes PHP 8
+//! print a notice when it is `false`, which a prepend file would put into
+//! everybody's response — the single most visible thing this file could ever
+//! do.
 
 use crate::error::{Code, Error, Result};
 use serde::{Deserialize, Serialize};
@@ -139,8 +179,9 @@ pub fn events_path(root: &Path, project: &str) -> PathBuf {
 pub struct Event {
     /// Seconds since the epoch, with fractions — the bridge's `microtime`.
     pub at: f64,
-    /// `dump` today; the field exists so queries and jobs do not need a second
-    /// file and a second reader when they arrive.
+    /// `dump`, `request` or `job` — see [`KINDS`]. The field was written before
+    /// there was a second value for it, so that a second signal would need no
+    /// second file and no second reader. Two have arrived and it did not.
     pub kind: String,
     /// The variable's name where `dump($user)` makes one available.
     #[serde(default)]
@@ -156,6 +197,22 @@ pub struct Event {
     /// `fpm-fcgi`, `cli`, … — what tells a queue worker from a web request.
     #[serde(default)]
     pub sapi: Option<String>,
+    /// Milliseconds, where the producer knew how long the thing took.
+    ///
+    /// A dump is a moment and carries none; a request and a job are stretches
+    /// and carry one. Optional rather than zero, because "took no measurable
+    /// time" and "nobody measured" are different claims and a screen that
+    /// prints `0 ms` for the second one is lying about the first.
+    #[serde(default)]
+    pub duration: Option<f64>,
+    /// How it ended: an HTTP status for a request, `ok` / `failed` for a job.
+    ///
+    /// A string and not an enum for the same reason [`Event::value`] is
+    /// untyped — this is parsed out of a file that an older bridge may have
+    /// written, and a status nobody anticipated is worth showing verbatim
+    /// rather than dropping the line it arrived on.
+    #[serde(default)]
+    pub outcome: Option<String>,
     /// The captured value: a tree of typed nodes, bounded by the bridge.
     ///
     /// Untyped here on purpose, and not only to avoid restating the bridge's
@@ -167,8 +224,23 @@ pub struct Event {
     /// the bridge emitted before it captured trees at all, which the pane still
     /// renders. A stricter type here would turn "an old event" into "a line
     /// that fails to parse", which [`read_events`] silently drops.
+    ///
+    /// Defaulted for the same reason: a request event carries a small tree and
+    /// a job event carries a smaller one, but neither is a *captured value* the
+    /// way a dump's is, and a future signal that has nothing to show must not
+    /// have to invent a `null` to be readable.
+    #[serde(default)]
     pub value: serde_json::Value,
 }
+
+/// Every `kind` this build's bridge writes.
+///
+/// Here rather than only in the PHP because two things read it and neither can
+/// see the other: [`crate::timeline`] maps a kind to an axis source, and the
+/// pane offers one filter chip per kind. A value that appears in the bridge and
+/// in neither of them is an event that arrives and is silently grouped with
+/// dumps, which is how the field ended up carrying one value for a year.
+pub const KINDS: [&str; 3] = ["dump", "request", "job"];
 
 /// The ini that loads the bridge. Written once and never changed at runtime.
 ///
@@ -317,7 +389,17 @@ if (!function_exists('__stackvo_emit')) {{
             return;
         }}
 
-        [$file, $line] = __stackvo_origin();
+        // Only when the caller did not already answer it. A dump happened at a
+        // line and the backtrace is the only way to find which; a job event is
+        // raised from inside the framework's dispatcher, where every frame
+        // belongs to Illuminate and naming one would point the reader at
+        // somebody else's code. Passing `file` explicitly is how a producer
+        // says "there is no call site here", and it also saves the walk.
+        if (!array_key_exists('file', $payload)) {{
+            [$file, $line] = __stackvo_origin();
+            $payload['file'] = $file !== '' ? $file : null;
+            $payload['line'] = $line;
+        }}
 
         $request = null;
         if (PHP_SAPI === 'cli') {{
@@ -329,8 +411,6 @@ if (!function_exists('__stackvo_emit')) {{
         $event = $payload + [
             'at' => microtime(true),
             'kind' => $kind,
-            'file' => $file !== '' ? $file : null,
-            'line' => $line,
             'request' => $request !== '' ? $request : null,
             'sapi' => PHP_SAPI,
         ];
@@ -344,6 +424,56 @@ if (!function_exists('__stackvo_emit')) {{
         // beyond what the filesystem already gives.
         @file_put_contents('{EVENTS_DIR}/{EVENTS_FILE}', $line . "\n", FILE_APPEND | LOCK_EX);
     }}
+}}
+
+// ----------------------------------------------------- the execution itself
+
+if (!function_exists('__stackvo_finish')) {{
+    /**
+     * One event per execution, written when PHP is finished with it.
+     *
+     * Framework-free, and that is the whole reason it is here rather than in a
+     * listener. Laravel raises `RequestHandled`, Symfony raises
+     * `kernel.terminate`, WordPress raises neither, and this file is loaded
+     * before any of the three exists. `register_shutdown_function` is the one
+     * hook PHP itself guarantees, and it is called for a fatal and for an
+     * `exit()` as well as for a clean return — which are the three endings
+     * somebody most wants a row for.
+     *
+     * The clock is PHP's own `REQUEST_TIME_FLOAT`, stamped before the first
+     * line of any of this ran, so the duration covers the autoloader and the
+     * framework's boot. Starting the clock here would quietly exclude both,
+     * and on a cold opcache those are most of the answer.
+     */
+    function __stackvo_finish(float $started): void
+    {{
+        $payload = ['duration' => round((microtime(true) - $started) * 1000, 3)];
+
+        // `http_response_code()` answers `false` under the CLI SAPI rather
+        // than a number. Under a web SAPI it answers even after a fatal, which
+        // is the case worth having: a 500 nobody logged is exactly the request
+        // somebody is looking for.
+        $code = PHP_SAPI === 'cli' ? false : @http_response_code();
+        if (is_int($code)) {{
+            $payload['outcome'] = (string) $code;
+        }}
+
+        $payload['value'] = __stackvo_capture([
+            'memory' => memory_get_peak_usage(true),
+        ]);
+
+        __stackvo_emit('request', $payload);
+    }}
+
+    // Registered at prepend time, which puts it FIRST on the shutdown stack —
+    // before anything the application registers. That ordering is not
+    // cosmetic: `exit()` inside a shutdown function skips every handler behind
+    // it, and a framework that ends its own request that way would take this
+    // one with it.
+    register_shutdown_function(
+        '__stackvo_finish',
+        (float) ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true))
+    );
 }}
 
 if (!function_exists('dump')) {{
@@ -384,7 +514,7 @@ if (!function_exists('dd')) {{
     )
 }
 
-/// One project's worth of overlay input.
+/// One project's worth of mounts — the overlay's input, and the worker's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub service: String,
@@ -437,6 +567,38 @@ pub fn overlay_yaml(entries: &[Entry]) -> Option<String> {
 
 // ------------------------------------------------------------------- I/O
 
+/// Write one project's half of the bridge and answer with its mounts.
+///
+/// Split out of [`entries`] because a second caller arrived that has nothing
+/// to do with compose: a queue worker is a sidecar this app starts with
+/// `docker run`, and it needs the same three mounts for the same reason.
+/// Without them the bridge is simply absent from the one process where a
+/// `dump()` is hardest to catch by any other means — which is what it was,
+/// unnoticed, until a job was run against a container with the mounts and one
+/// without.
+///
+/// `None` when the directories or the files could not be written. The caller's
+/// honest degradation is "no bridge here", never "this container cannot start".
+pub fn prepare(root: &Path, project: &str) -> Option<Entry> {
+    let conf = conf_dir(root, project);
+    let events = events_dir(root, project);
+    std::fs::create_dir_all(&conf).ok()?;
+    std::fs::create_dir_all(&events).ok()?;
+
+    // Rewritten every time, like every other generated file: an overlay that
+    // is a pure function of the tree cannot be stale.
+    let ini_file = conf.join("stackvo-debug.ini");
+    crate::atomic::write(&conf.join("bridge.php"), &bridge_php()).ok()?;
+    crate::atomic::write(&ini_file, &ini()).ok()?;
+
+    Some(Entry {
+        service: project.to_string(),
+        conf_host: crate::paths::to_docker_mount(&conf.display().to_string()),
+        events_host: crate::paths::to_docker_mount(&events.display().to_string()),
+        ini_host: crate::paths::to_docker_mount(&ini_file.display().to_string()),
+    })
+}
+
 /// Every PHP project with a compose service to mount the bridge on.
 ///
 /// Eligibility is deliberately wide — every PHP project, whether or not anyone
@@ -484,27 +646,10 @@ fn entries(root: &Path) -> Vec<Entry> {
             continue;
         }
 
-        let conf = conf_dir(root, name);
-        let events = events_dir(root, name);
-        if std::fs::create_dir_all(&conf).is_err() || std::fs::create_dir_all(&events).is_err() {
+        let Some(entry) = prepare(root, name) else {
             continue;
-        }
-
-        // Rewritten every time, like every other generated file: an overlay
-        // that is a pure function of the tree cannot be stale.
-        let ini_file = conf.join("stackvo-debug.ini");
-        if crate::atomic::write(&conf.join("bridge.php"), &bridge_php()).is_err()
-            || crate::atomic::write(&ini_file, &ini()).is_err()
-        {
-            continue;
-        }
-
-        out.push(Entry {
-            service: name.to_string(),
-            conf_host: crate::paths::to_docker_mount(&conf.display().to_string()),
-            events_host: crate::paths::to_docker_mount(&events.display().to_string()),
-            ini_host: crate::paths::to_docker_mount(&ini_file.display().to_string()),
-        });
+        };
+        out.push(entry);
     }
 
     out.sort_by(|a, b| a.service.cmp(&b.service));
@@ -641,6 +786,8 @@ pub fn set_enabled(root: &Path, name: &str, on: bool) -> Result<()> {
         std::fs::write(&flag, "")
             .map_err(|e| Error::io(format!("writing {}", flag.display()), e))?;
     } else {
+        // See below: the queue's cursor goes with the switch in both
+        // directions.
         match std::fs::remove_file(&flag) {
             Ok(()) => {}
             // Already off. The caller asked for a state, not an operation.
@@ -648,6 +795,14 @@ pub fn set_enabled(root: &Path, name: &str, on: bool) -> Result<()> {
             Err(e) => return Err(Error::io(format!("removing {}", flag.display()), e)),
         }
     }
+
+    // The worker's log is written whether or not anybody is watching, so the
+    // cursor into it is meaningless across a period when nobody was. Removed
+    // in both directions: switching on must not replay the hour before it, and
+    // switching off must not leave a mark that makes switching on again replay
+    // the gap. `queuelog::ingest` re-seeds from the newest line it can see.
+    let _ = std::fs::remove_file(crate::queuelog::cursor_path(root, name));
+
     Ok(())
 }
 
@@ -674,6 +829,9 @@ pub fn read_events(root: &Path, name: &str) -> Vec<Event> {
 pub fn clear(root: &Path, name: &str) -> Result<()> {
     crate::workspace::project_dir(root, name)?;
     let path = events_path(root, name);
+    // With the cursor gone, the next poll re-seeds from the worker's newest
+    // line — so the jobs somebody just dismissed do not come back on it.
+    let _ = std::fs::remove_file(crate::queuelog::cursor_path(root, name));
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -810,6 +968,71 @@ mod tests {
         )
         .expect("the tree shape does not parse");
         assert_eq!(new.value["t"], serde_json::json!("arr"));
+    }
+
+    /// The execution row is written by PHP's own shutdown hook and not by a
+    /// framework's "request handled" event, so it appears for an application
+    /// that has no such event — and after a fatal, which is the ending most
+    /// worth a row.
+    #[test]
+    fn every_execution_ends_in_a_row_of_its_own() {
+        let php = bridge_php();
+        assert!(php.contains("register_shutdown_function("));
+        assert!(php.contains("__stackvo_emit('request'"));
+        // The clock is PHP's, stamped before this file was loaded, so the
+        // duration covers the autoloader and the framework's boot rather than
+        // starting when the bridge did.
+        assert!(php.contains("REQUEST_TIME_FLOAT"));
+    }
+
+    /// The status is knowable under a web SAPI and is `false` under the CLI.
+    /// Printing `0` for a script would be a number that reads as an answer.
+    #[test]
+    fn the_status_is_only_claimed_where_there_is_one() {
+        let php = bridge_php();
+        assert!(php.contains("PHP_SAPI === 'cli' ? false : @http_response_code()"));
+        assert!(php.contains("is_int($code)"));
+    }
+
+    /// Every kind the bridge writes has to be a kind the readers know: the
+    /// timeline maps it to an axis source and the pane offers a chip for it.
+    /// A value in the PHP and in neither of them is an event that arrives and
+    /// is silently filed as a dump.
+    #[test]
+    fn the_php_writes_no_kind_the_readers_have_not_been_told_about() {
+        let php = bridge_php();
+        let mut written: Vec<String> = Vec::new();
+        for (index, _) in php.match_indices("__stackvo_emit('") {
+            let rest = &php[index + "__stackvo_emit('".len()..];
+            if let Some(end) = rest.find('\'') {
+                written.push(rest[..end].to_string());
+            }
+        }
+        // The declaration itself is `function __stackvo_emit(string $kind` and
+        // does not match; what is left is every call site.
+        assert!(!written.is_empty(), "no emit call sites found at all");
+        for kind in &written {
+            assert!(
+                KINDS.contains(&kind.as_str()),
+                "the bridge writes `{kind}`, which no reader knows"
+            );
+        }
+        assert!(written.iter().any(|k| k == "request"));
+        assert!(written.iter().any(|k| k == "dump"));
+    }
+
+    /// A row this build has never seen must still parse. The queue's half is
+    /// written by the host into the same file, and an event with no captured
+    /// value at all is one of the shapes that arrive.
+    #[test]
+    fn an_event_with_no_value_is_still_an_event() {
+        let event: Event = serde_json::from_str(
+            r#"{"at":1.0,"kind":"job","label":"App\\Jobs\\Send","outcome":"ok","duration":12.5}"#,
+        )
+        .expect("a valueless event no longer parses");
+        assert_eq!(event.value, serde_json::Value::Null);
+        assert_eq!(event.duration, Some(12.5));
+        assert_eq!(event.outcome.as_deref(), Some("ok"));
     }
 
     /// The bounds are the reason this renderer exists rather than a cloner, and

@@ -274,6 +274,49 @@ fn the_readme_states_every_tool_allow_writes_unlocks() {
     }
 }
 
+/// What a project scope leaves, against what the code leaves.
+///
+/// The paragraph above this one in the README is a security claim with a list
+/// in it — "the twelve become the four a project can bound" — and the list is
+/// the part somebody acts on. A thirteenth writing tool that happens to name a
+/// project would join that four in the code and not in the README, and the
+/// person reading the README would be told they had bounded something they had
+/// not.
+#[test]
+fn the_readme_names_the_tools_a_project_scope_leaves() {
+    use stackvo_desktop_lib::mcp;
+
+    let readme = readme();
+    let marker = "a project can bound — ";
+    let start = readme
+        .find(marker)
+        .expect("the README explains what a project scope leaves")
+        + marker.len();
+    let listed: Vec<&str> = readme[start..]
+        .split(" — ")
+        .next()
+        .expect("the list ends with a dash")
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .collect();
+
+    let scopable: Vec<&str> = mcp::TOOLS
+        .iter()
+        .filter(|t| t.writes && t.project_arg.is_some())
+        .map(|t| t.name.strip_prefix("stackvo_").unwrap_or(t.name))
+        .collect();
+
+    assert_eq!(
+        listed, scopable,
+        "the README's list of what a project scope leaves is not the code's"
+    );
+    assert!(
+        readme.contains("--project=shop") && readme.contains("--for=30m"),
+        "the README stopped showing how to write a bounded grant"
+    );
+}
+
 /// Both numbers came from the same paragraph pair, and the paragraphs are only
 /// honest together: a reader who sees "17 tools" needs the same table to have
 /// been counted. Cheap, and it catches a tool added without a `writes` flag
@@ -282,8 +325,10 @@ fn the_readme_states_every_tool_allow_writes_unlocks() {
 fn every_mcp_tool_declares_whether_it_writes() {
     use stackvo_desktop_lib::mcp;
 
-    let readable = mcp::visible(false).count();
-    let all = mcp::visible(true).count();
+    use stackvo_desktop_lib::grant::Grant;
+
+    let readable = mcp::visible(&Grant::read_only()).count();
+    let all = mcp::visible(&Grant::everything()).count();
 
     assert_eq!(all, mcp::TOOLS.len(), "a tool is visible in neither mode");
     assert_eq!(

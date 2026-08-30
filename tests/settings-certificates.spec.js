@@ -197,6 +197,56 @@ describe('the certificates pane', () => {
    * the one thing this app cannot do for itself — `sudo` needs a terminal and
    * root through AppleScript is refused.
    */
+  /**
+   * The state one boolean could not say.
+   *
+   * A machine whose system store has the CA and whose Firefox does not is the
+   * ordinary state after a `mkcert -install` without `certutil` on the machine
+   * — mkcert warns and carries on. The pane showed a green chip and the user
+   * had a browser that refused every page.
+   */
+  it('says which store has the CA, and names the repair for the one that does not', async () => {
+    replies.certStatus = status({
+      trust: [
+        { id: 'system', trusted: true },
+        {
+          id: 'firefox',
+          trusted: false,
+          detail:
+            'certutil is not installed, so mkcert could not add the CA to Firefox’s own store',
+        },
+      ],
+    });
+
+    const wrapper = await render();
+    const stores = wrapper.find('[data-test="trust-stores"]');
+
+    expect(stores.exists()).toBe(true);
+    expect(stores.text()).toContain('Firefox');
+    // The detail names a program, so it is shown as it came rather than
+    // translated into something vaguer.
+    expect(stores.text()).toContain('certutil');
+    wrapper.unmount();
+  });
+
+  /** No Firefox is not a failure — nobody has anything to fix. */
+  it('does not report a browser that is not installed as untrusted', async () => {
+    replies.certStatus = status({
+      trust: [
+        { id: 'system', trusted: true },
+        { id: 'firefox', trusted: null, detail: 'no Firefox profile on this machine' },
+      ],
+    });
+
+    const wrapper = await render();
+    const stores = wrapper.find('[data-test="trust-stores"]');
+
+    expect(stores.text()).toContain('no Firefox profile');
+    // The warning colour belongs to a real problem; this is not one.
+    expect(stores.findAll('.text-warning')).toHaveLength(0);
+    wrapper.unmount();
+  });
+
   it('offers the terminal trust step only while the CA is untrusted', async () => {
     const label = i18n.global.t('certs.trustInTerminal');
 

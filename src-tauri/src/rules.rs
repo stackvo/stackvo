@@ -268,6 +268,18 @@ pub fn text() -> String {
          - `stackvo_generate` overwrites all generated output.\n\
          - `stackvo_xdebug_set` needs a rebuild afterwards before it takes effect.\n\
          \n\
+         Every writing call you make here is recorded in StackVo's audit trail with what it \
+         was done to and how it ended, refusals included, and most of them carry what would \
+         put them back — so a person can reverse one from the app. That is not a reason to be \
+         careless: an undo is a sequence and some acts have none.\n\
+         \n\
+         The tools you can see are the whole of what this server will do. It may have been \
+         started for one project only, or for a fixed length of time, and then the writing \
+         tools it offers are fewer than the twelve above — that is a decision somebody made \
+         deliberately. If a call is refused for being out of scope or out of time, say so and \
+         stop; do not work around it, and do not propose restarting the server with wider \
+         flags unless you are asked to.\n\
+         \n\
          Before anything that could change data — a migration, a seeder, a destructive query — \
          take a snapshot with `stackvo_snapshot_take` first. Restoring one is deliberately not a \
          tool; it is done in the app, by a person.\n\

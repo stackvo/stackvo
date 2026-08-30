@@ -1,6 +1,6 @@
-# Dumps
+# Debug signals
 
-Every project's `dump()` and `dd()` output in one list. For one project's own dumps, see that project's Debugging tab.
+Every capturing project's dumps, requests and queued jobs in one list. For one project on its own, see that project's Debugging tab.
 
 ## What this page is for
 

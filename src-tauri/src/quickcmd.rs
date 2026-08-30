@@ -51,12 +51,41 @@
 //! step, which already exists, already asks, and is a different decision than
 //! the one that was taken here.
 //!
+//! ### And what the *machine* may add
+//!
+//! One layer above the project, and for the request every rival answers first:
+//! four of them sell "add your own command" on the front page, and this one had
+//! exactly one way to do it — edit a repository somebody else owns.
+//!
+//! `<root>/commands.json` is that layer. The **same** schema as the manifest's
+//! block, the same argv rule, the same container boundary — deliberately not a
+//! second shape and deliberately not a second threat model. It is the union of
+//! two decisions already taken: a file on disk may declare a command, and a
+//! declared command runs in the project's container and nowhere else.
+//!
+//! ```json
+//! { "commands": { "tail": { "exec": ["tail", "-f", "storage/logs/laravel.log"] } } }
+//! ```
+//!
+//! It applies to **every** project in the workspace, which is the point — a
+//! command you run in all of them is exactly the one no single repository
+//! should have to carry. What it may not do is reach the host: a step that has
+//! to run on this machine is a hook, approved against a digest first.
+//!
 //! ### An id may not be taken twice
 //!
 //! A declared command whose id is already in [`CATALOG`] is **refused**, and
 //! reported as a manifest problem rather than silently winning or silently
 //! losing. Either of those is the same failure: somebody presses a button
 //! labelled `migrate` believing it is `php artisan migrate`.
+//!
+//! Between the two *declaring* layers the rule is different, and the asymmetry
+//! is deliberate: **the project wins, and the machine file is told.** Refusing
+//! the project's would be refusing a committed, shared file because of a
+//! personal one its author has never seen; silently overriding it would be the
+//! button-that-lies failure again. So the project's command runs, and
+//! [`shadowed`] reports the machine-wide row that stepped aside — in the pane
+//! that shows the machine file, where the person who wrote it is looking.
 //!
 //! Every command is spawned as an argv array — never through a shell — so a
 //! project called `a; rm -rf ~` is a container name that does not exist rather
@@ -116,7 +145,27 @@ pub struct Spec {
     pub about: &'static str,
 }
 
-/// Everything on offer. Adding a row here is the only way to add a command.
+/// The built-in catalogue: the commands most projects have, compiled in.
+///
+/// It used to say "adding a row here is the only way to add a command", and
+/// that stopped being true twice — a project declares its own in
+/// `stackvo.json`, and this machine declares its own in `commands.json`. What
+/// is still true is the part worth stating: **this table is closed to the
+/// webview.** The frontend sends an id; it cannot send a program.
+///
+/// Why the *catalogue* itself is closed, now that two other layers are open:
+/// these eleven rows are the ones this application makes claims about. `migrate`
+/// means `php artisan migrate --force` and the `--force` is a decision with a
+/// paragraph behind it; `optimize-clear` is one command instead of four because
+/// that is what people mean by "clear the cache". A row here is an assertion
+/// this repository is making about somebody else's framework, and it is offered
+/// only when the marker file says the framework is there. That is a different
+/// kind of thing from "run what I wrote", which is what the two declaring
+/// layers are for — and which is why deliberately absent rows stay absent:
+/// `migrate:fresh`, `migrate:reset` and `db:wipe` drop the user's data behind a
+/// button four characters from the safe one, and `composer update` rewrites a
+/// lock file. Those are things to type deliberately, and a project that wants
+/// one can declare it under a name that does not lie about what it does.
 pub const CATALOG: &[Spec] = &[
     Spec {
         id: "tinker",
@@ -434,6 +483,35 @@ fn in_file_order<S: serde::Serializer>(
     map.end()
 }
 
+/// Where a declared command was written down.
+///
+/// Carried on the command rather than passed beside it, so the two layers can
+/// be merged into one set and every reader below still knows which file to name
+/// when it shows a row. `#[serde(skip)]` on the field: neither file writes this,
+/// it is what reading them establishes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Source {
+    /// The project's own `stackvo.json`.
+    #[default]
+    Manifest,
+    /// `<root>/commands.json`, which applies to every project here.
+    Machine,
+}
+
+impl Source {
+    /// The file, as a row's `because` names it.
+    pub fn file(self) -> &'static str {
+        match self {
+            Source::Manifest => "stackvo.json",
+            Source::Machine => MACHINE_FILE,
+        }
+    }
+}
+
+/// The machine-wide declaration file, at the workspace root.
+pub const MACHINE_FILE: &str = "commands.json";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeclaredCommand {
@@ -455,6 +533,9 @@ pub struct DeclaredCommand {
     /// default and a manifest full of restated defaults is one nobody reads.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub interactive: bool,
+    /// Which file declared it. Established by reading, never written.
+    #[serde(skip)]
+    pub source: Source,
 }
 
 impl Declared {
@@ -512,6 +593,19 @@ impl From<&'static Spec> for Resolved {
 /// from loading. A project with one malformed command still has a name, a
 /// domain and a container.
 pub fn parse(json: &serde_json::Value) -> (Declared, Vec<crate::hooks::Problem>) {
+    parse_from(json, Source::Manifest)
+}
+
+/// The same reader, told which file it is reading.
+///
+/// One parser for both layers rather than two, which is the whole design of the
+/// machine-wide file: it is not a second schema, a second argv rule or a second
+/// boundary — it is the same declaration in a file one level up. A second
+/// parser would be two places for the `host` refusal to drift apart.
+pub fn parse_from(
+    json: &serde_json::Value,
+    source: Source,
+) -> (Declared, Vec<crate::hooks::Problem>) {
     use crate::hooks::Problem;
 
     let mut out = Declared::default();
@@ -598,6 +692,7 @@ pub fn parse(json: &serde_json::Value) -> (Declared, Vec<crate::hooks::Problem>)
                     .get("interactive")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false),
+                source,
                 argv,
             },
         );
@@ -721,7 +816,7 @@ pub fn offered(print: &crate::detect::Fingerprint, declared: &Declared) -> Vec<Q
         display: command.argv.join(" "),
         about: command.about.clone(),
         interactive: command.interactive,
-        because: "stackvo.json".to_string(),
+        because: command.source.file().to_string(),
         declared: true,
     }));
     out
@@ -762,6 +857,65 @@ pub fn for_project(root: &Path, name: &str) -> Result<Vec<QuickCommand>> {
     ))
 }
 
+/// The machine-wide commands, and what the file got wrong.
+///
+/// `<root>/commands.json`, read through the same parser the manifest uses. An
+/// absent file is the ordinary case and yields nothing at all — this is an
+/// opt-in layer, and a workspace without one is not misconfigured.
+///
+/// A file that will not parse is one problem rather than a refusal to start:
+/// the built-in commands and every project's own are still perfectly runnable,
+/// and losing them to a stray comma in a file about *convenience* would be the
+/// wrong trade. It is the rule `declared_for` already follows for a manifest.
+pub fn machine_wide(root: &Path) -> (Declared, Vec<crate::hooks::Problem>) {
+    let path = root.join(MACHINE_FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return (Declared::default(), Vec::new());
+    };
+
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(json) => parse_from(&json, Source::Machine),
+        Err(e) => (
+            Declared::default(),
+            vec![crate::hooks::Problem {
+                path: MACHINE_FILE.into(),
+                message: format!("could not be read as JSON: {e}"),
+            }],
+        ),
+    }
+}
+
+/// The machine-wide rows a project's own file takes the id of.
+///
+/// The asymmetry is stated in the module header: between the two declaring
+/// layers **the project wins**, because refusing a committed shared file over a
+/// personal one its author never saw would be hostile, and overriding it
+/// silently is the button-that-lies failure. So the machine file is told
+/// instead — here, per project, because whether a row is shadowed depends on
+/// which project is open and the same file is fine for the next one.
+pub fn shadowed(machine: &Declared, project: &Declared) -> Vec<String> {
+    machine
+        .iter()
+        .filter(|(id, _)| project.get(id).is_some())
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
+/// The two declaring layers as one set: machine-wide first, the project on top.
+///
+/// `extend` rather than a merge with a rule, and the order *is* the rule — the
+/// project's insert overwrites the machine-wide one of the same id, which is
+/// what [`shadowed`] reports.
+pub fn merge(machine: Declared, project: Declared) -> Declared {
+    let mut out = machine;
+    for (id, command) in project.iter() {
+        if out.by_id.insert(id.clone(), command.clone()).is_none() {
+            out.order.push(id.clone());
+        }
+    }
+    out
+}
+
 /// The commands this project declares, or none.
 ///
 /// A manifest that will not parse yields an empty set rather than an error: the
@@ -772,11 +926,13 @@ pub fn for_project(root: &Path, name: &str) -> Result<Vec<QuickCommand>> {
 /// Reads the **effective** manifest, so `stackvo.local.json` can override it —
 /// the same rule hooks follow, and the case the overlay exists for.
 pub fn declared_for(root: &Path, name: &str) -> Declared {
-    crate::workspace::project_dir(root, name)
+    let project = crate::workspace::project_dir(root, name)
         .ok()
         .and_then(|dir| crate::manifest::read(&dir.join("stackvo.json"), name).ok())
         .map(|manifest| manifest.commands)
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    merge(machine_wide(root).0, project)
 }
 
 /// Resolve an id, refusing anything that is neither built in nor declared.
@@ -827,6 +983,222 @@ mod tests {
             package_json: true,
             ..Default::default()
         }
+    }
+
+    // ------------------------------------------- the machine-wide layer
+
+    /// A `Declared` from a fixture, refusing one the parser objected to.
+    ///
+    /// Named `layer` rather than `declared` because the tests below already
+    /// have one of those, taking a different shape — and two helpers with one
+    /// name in one module is the kind of thing that reads fine and compiles
+    /// once.
+    fn layer(json: &str, source: Source) -> Declared {
+        let value: serde_json::Value = serde_json::from_str(json).expect("fixture parses");
+        let (out, problems) = parse_from(&value, source);
+        assert!(problems.is_empty(), "{problems:?}");
+        out
+    }
+
+    /// A directory of this test's own, named so a parallel run cannot collide.
+    fn workspace(name: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("stackvo-quickcmd-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("tempdir");
+        dir
+    }
+
+    /// One parser, two files. The machine-wide layer is not a second schema, a
+    /// second argv rule or a second boundary — this is that claim, asserted.
+    #[test]
+    fn the_machine_file_is_read_by_the_manifest_reader() {
+        let json =
+            r#"{"commands": {"tail": {"exec": ["tail", "-f", "x.log"], "about": "Follow it"}}}"#;
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+
+        let (from_manifest, _) = parse_from(&value, Source::Manifest);
+        let (from_machine, _) = parse_from(&value, Source::Machine);
+
+        let a = from_manifest.get("tail").expect("read");
+        let b = from_machine.get("tail").expect("read");
+        assert_eq!(a.argv, b.argv);
+        assert_eq!(a.about, b.about);
+
+        // Everything except where it came from, which is the only difference
+        // there is supposed to be.
+        assert_eq!(a.source, Source::Manifest);
+        assert_eq!(b.source, Source::Machine);
+        assert_eq!(Source::Machine.file(), "commands.json");
+    }
+
+    /// The container boundary holds in the machine file too, and the refusal
+    /// names `host` rather than ignoring it — somebody who tried it has a
+    /// mental model to correct.
+    #[test]
+    fn the_machine_file_may_not_reach_the_host_either() {
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"commands": {"deploy": {"host": ["make", "ship"]}}}"#)
+                .unwrap();
+        let (out, problems) = parse_from(&value, Source::Machine);
+
+        assert!(out.is_empty());
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].message.contains("host"), "{problems:?}");
+        assert!(problems[0].message.contains("hook"), "{problems:?}");
+    }
+
+    /// And it may not take a built-in id, for the reason the manifest may not:
+    /// a button labelled `migrate` that is not `php artisan migrate`.
+    #[test]
+    fn the_machine_file_may_not_shadow_the_catalogue() {
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"commands": {"migrate": {"exec": ["true"]}}}"#).unwrap();
+        let (out, problems) = parse_from(&value, Source::Machine);
+
+        assert!(out.is_empty());
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].message.contains("built-in"), "{problems:?}");
+    }
+
+    /// The asymmetry between the two declaring layers, which is the one rule
+    /// that is not simply inherited: **the project wins, and the machine file
+    /// is told.** Refusing the project's would be refusing a committed, shared
+    /// file over a personal one its author has never seen.
+    #[test]
+    fn a_project_command_beats_a_machine_wide_one_of_the_same_id() {
+        let machine = layer(
+            r#"{"commands": {"seed": {"exec": ["machine"]}, "tail": {"exec": ["tail"]}}}"#,
+            Source::Machine,
+        );
+        let project = layer(
+            r#"{"commands": {"seed": {"exec": ["project"]}}}"#,
+            Source::Manifest,
+        );
+
+        assert_eq!(shadowed(&machine, &project), vec!["seed".to_string()]);
+
+        let merged = merge(machine, project);
+        let seed = merged.get("seed").expect("kept");
+        assert_eq!(
+            seed.argv,
+            vec!["project"],
+            "the machine file overrode the project"
+        );
+        assert_eq!(seed.source, Source::Manifest);
+
+        // And the row it did not collide with survives, with its own source.
+        assert_eq!(merged.get("tail").expect("kept").source, Source::Machine);
+        assert_eq!(merged.len(), 2);
+    }
+
+    /// Each row says which file it came from, which is the whole of how a
+    /// shadowed command is visible to somebody looking at the menu.
+    #[test]
+    fn the_offer_names_the_file_each_row_came_from() {
+        let merged = merge(
+            layer(
+                r#"{"commands": {"tail": {"exec": ["tail"]}}}"#,
+                Source::Machine,
+            ),
+            layer(
+                r#"{"commands": {"seed": {"exec": ["seed"]}}}"#,
+                Source::Manifest,
+            ),
+        );
+
+        let rows = offered(&laravel(), &merged);
+        let by = |id: &str| {
+            rows.iter()
+                .find(|r| r.id == id)
+                .unwrap_or_else(|| panic!("{id} not offered"))
+                .because
+                .clone()
+        };
+
+        assert_eq!(by("tail"), "commands.json");
+        assert_eq!(by("seed"), "stackvo.json");
+        // The built-in rows keep naming their marker file, unchanged.
+        assert_eq!(by("migrate"), "artisan");
+    }
+
+    /// An absent file is the ordinary case and yields nothing at all; an
+    /// unreadable one is a single problem rather than a refusal to offer
+    /// anything, which is the rule a malformed manifest already follows.
+    #[test]
+    fn an_absent_machine_file_is_not_a_problem_and_a_broken_one_is_one() {
+        let dir = workspace("machine-file");
+
+        let (commands, problems) = machine_wide(&dir);
+        assert!(commands.is_empty());
+        assert!(problems.is_empty(), "an absent file was reported as broken");
+
+        std::fs::write(dir.join(MACHINE_FILE), "{not json").unwrap();
+        let (commands, problems) = machine_wide(&dir);
+        assert!(commands.is_empty());
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].path, MACHINE_FILE);
+
+        std::fs::write(
+            dir.join(MACHINE_FILE),
+            r#"{"commands": {"tail": {"exec": ["tail", "-f", "x"]}}}"#,
+        )
+        .unwrap();
+        let (commands, problems) = machine_wide(&dir);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(commands.get("tail").expect("read").source, Source::Machine);
+    }
+
+    /// The wiring, which the tests above cannot see: `commands.json` sitting at
+    /// the workspace root reaches the menu of a project that never mentioned it.
+    ///
+    /// Written after a mutation went unnoticed. Deleting the merge from
+    /// `declared_for` — the one line that makes the whole feature do anything —
+    /// left all six tests above green, because every one of them assembles its
+    /// two layers by hand. A feature whose only failure mode is "the parts were
+    /// never joined" needs a test that reads the disk.
+    #[test]
+    fn a_file_at_the_workspace_root_reaches_a_project_that_never_mentioned_it() {
+        let root = workspace("wiring");
+        let projects = root.join("projects");
+        let dir = projects.join("shop");
+        std::fs::create_dir_all(&dir).expect("project dir");
+        crate::workspace::point_at_projects(&root, &projects).expect("pointer");
+
+        std::fs::write(
+            dir.join("stackvo.json"),
+            r#"{"name": "shop", "runtime": "php", "domain": "shop.loc",
+                "php": {"version": "8.3", "extensions": []},
+                "commands": {"seed": {"exec": ["php", "artisan", "db:seed"]}}}"#,
+        )
+        .expect("manifest");
+        std::fs::write(
+            root.join(MACHINE_FILE),
+            r#"{"commands": {"tail": {"exec": ["tail", "-f", "storage/logs/laravel.log"]}}}"#,
+        )
+        .expect("machine file");
+
+        let rows = for_project(&root, "shop").expect("offered");
+        let row = |id: &str| rows.iter().find(|r| r.id == id);
+
+        assert!(
+            row("tail").is_some(),
+            "the machine-wide command never reached the project's menu"
+        );
+        assert_eq!(row("tail").unwrap().because, MACHINE_FILE);
+        assert_eq!(row("seed").expect("declared").because, "stackvo.json");
+
+        // And it is runnable, not merely listed: `resolve` is the only place an
+        // id becomes an argv, and a row the menu offers but resolution refuses
+        // is a button that fails when pressed.
+        let resolved = resolve(&root, "shop", "tail").expect("resolves");
+        assert_eq!(
+            resolved.argv,
+            vec!["tail", "-f", "storage/logs/laravel.log"]
+        );
+        assert!(resolved.declared);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// The security model in one assertion, and the unlock did not weaken it: an id

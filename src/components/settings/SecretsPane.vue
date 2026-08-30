@@ -26,6 +26,62 @@ const error = ref(null);
 const busy = ref(null);
 const loading = ref(false);
 
+/**
+ * The other direction.
+ *
+ * This pane moves a credential out of `.env` once somebody knows there is one.
+ * Nothing said *"there is one, and it is also in a file git is tracking"* — so
+ * nobody found out until the repository was already public. Asked rather than
+ * run on mount: it reads every tracked file in a repository, which is work
+ * nobody asked for while they were looking at a list of keys.
+ */
+const scan = ref(null);
+const scanning = ref(false);
+const scanError = ref(null);
+const projects = ref([]);
+/** `null` scans only this machine's `.env`; a project adds its repository. */
+const project = ref(null);
+
+async function findLeaks() {
+  scanning.value = true;
+  scanError.value = null;
+  try {
+    scan.value = await api.leaksScan(project.value ?? undefined);
+  } catch (e) {
+    scan.value = null;
+    scanError.value = e;
+  } finally {
+    scanning.value = false;
+  }
+}
+
+/**
+ * The repair, and the two halves it does not do.
+ *
+ * A finding people cannot act on is a finding they turn off — and this one is
+ * easy to get half right: the common half-fix is deleting the file in a later
+ * commit, which takes it out of the working tree and leaves every value in the
+ * history. So the button does the mechanical part and the result says the rest.
+ */
+const untracking = ref(false);
+const untracked = ref(null);
+
+async function untrackEnv() {
+  untracking.value = true;
+  scanError.value = null;
+  try {
+    untracked.value = await api.envUntrack(project.value);
+    // Re-read, so the finding that prompted this stops being on screen once it
+    // is no longer true.
+    scan.value = await api.leaksScan(project.value ?? undefined);
+  } catch (e) {
+    untracked.value = null;
+    scanError.value = e;
+  } finally {
+    untracking.value = false;
+  }
+}
+
 const moved = computed(() => status.value.keys.filter((k) => k.moved));
 const broken = computed(() => moved.value.filter((k) => !k.resolvable));
 
@@ -37,6 +93,8 @@ async function load() {
   error.value = null;
   try {
     status.value = await api.secretsStatus();
+    // Not fatal: a machine with no workspace still has a keystore and a list.
+    projects.value = (await api.projectsList().catch(() => []))?.map((p) => p.name) ?? [];
   } catch (e) {
     error.value = e;
   } finally {
@@ -137,5 +195,134 @@ onMounted(load);
         </template>
       </v-list-item>
     </v-list>
+
+    <!-- The scan. Below the list because it is about the same values from the
+         other side: this pane says where a credential lives, and that says
+         where one is that nobody moved. -->
+    <v-divider class="my-4" />
+    <div class="text-caption text-medium-emphasis mb-2">{{ t('leaks.explain') }}</div>
+    <div class="d-flex align-center ga-2 flex-wrap mb-1">
+      <!-- Without a project only this machine's .env is read. With one, every
+           file git is tracking in that repository — which is the half that
+           leaves the machine. -->
+      <v-select
+        v-model="project"
+        :items="projects"
+        :label="t('leaks.project')"
+        :placeholder="t('leaks.machineOnly')"
+        persistent-placeholder
+        clearable
+        density="compact"
+        variant="outlined"
+        hide-details
+        style="min-width: 14rem"
+      />
+      <v-btn
+        size="small"
+        variant="tonal"
+        prepend-icon="mdi-magnify-scan"
+        :loading="scanning"
+        @click="findLeaks"
+      >
+        {{ t('leaks.run') }}
+      </v-btn>
+    </div>
+
+    <ErrorAlert v-if="scanError" :error="scanError" class="mt-3" />
+
+    <template v-if="scan">
+      <!-- The finding that outranks every other one: it means every value in
+           the file is in the history whatever its shape. -->
+      <v-alert
+        v-if="scan.envTracked || scan.envInHistory"
+        :type="scan.envTracked ? 'error' : 'warning'"
+        variant="tonal"
+        density="compact"
+        class="mt-3 text-caption"
+      >
+        <div>{{ scan.envTracked ? t('leaks.envTracked') : t('leaks.envInHistory') }}</div>
+        <!-- The repair, offered only where it can be made: it needs a
+             repository, and without a project named there is none. -->
+        <v-btn
+          v-if="scan.envTracked && project"
+          size="small"
+          variant="tonal"
+          class="mt-2"
+          prepend-icon="mdi-wrench-outline"
+          :loading="untracking"
+          @click="untrackEnv"
+        >
+          {{ t('leaks.untrack') }}
+        </v-btn>
+      </v-alert>
+
+      <!-- What it did, and the two halves it did not: the history it cannot
+           rewrite, and the commit it is not this app's to make. -->
+      <v-alert
+        v-if="untracked"
+        type="info"
+        variant="tonal"
+        density="compact"
+        class="mt-3 text-caption"
+        data-test="untracked"
+      >
+        <div>
+          {{
+            t('leaks.untrackedDone', {
+              example: untracked.exampleKeys,
+            })
+          }}
+        </div>
+        <div v-if="untracked.needsCommit" class="mt-1">{{ t('leaks.needsCommit') }}</div>
+        <div v-if="untracked.stillInHistory" class="mt-1 font-weight-medium">
+          {{ t('leaks.rotate') }}
+        </div>
+      </v-alert>
+
+      <v-alert
+        v-if="!scan.findings.length && !scan.envTracked"
+        type="success"
+        variant="tonal"
+        density="compact"
+        class="mt-3 text-caption"
+      >
+        {{ t('leaks.none', { scanned: scan.scanned }) }}
+      </v-alert>
+
+      <v-list v-else density="compact" class="bg-transparent pa-0 mt-2">
+        <v-list-item
+          v-for="(finding, i) in scan.findings"
+          :key="`${finding.subject}-${i}`"
+          class="px-0"
+          data-test="leak"
+        >
+          <template #prepend>
+            <v-icon color="warning" size="18" class="mr-3">mdi-alert-circle-outline</v-icon>
+          </template>
+          <v-list-item-title class="text-body-2">
+            <code>{{ finding.subject }}</code>
+            <span v-if="finding.line" class="text-medium-emphasis">:{{ finding.line }}</span>
+          </v-list-item-title>
+          <v-list-item-subtitle class="text-caption">
+            {{ t(`leaks.rule.${finding.id}`) }} — {{ t(`leaks.source.${finding.source}`) }}
+            <span v-if="finding.inHistory"> · {{ t('leaks.committed') }}</span>
+          </v-list-item-subtitle>
+          <!-- Enough to recognise which secret this is, and never enough to be
+               it: the ends of the value, and a fingerprint two rows share when
+               they are one key in two places. -->
+          <template #append>
+            <span class="text-caption text-medium-emphasis mono">
+              {{ finding.preview }} · {{ finding.fingerprint }}
+            </span>
+          </template>
+        </v-list-item>
+      </v-list>
+
+      <!-- A scan that passed over four hundred files and said nothing reads as
+           a clean repository. -->
+      <div v-if="scan.skipped" class="text-caption text-medium-emphasis mt-2">
+        {{ t('leaks.skipped', { skipped: scan.skipped, scanned: scan.scanned }) }}
+      </div>
+    </template>
   </SettingsGroup>
 </template>

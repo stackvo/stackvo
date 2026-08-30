@@ -25,6 +25,7 @@
 //! structure: bytes in, bytes out, and which of the two edits changed what.
 
 use stackvo_desktop_lib::agents;
+use stackvo_desktop_lib::grant::Grant;
 
 fn main() {
     let scratch = std::env::temp_dir().join(format!("stackvo-agent-probe-{}", std::process::id()));
@@ -53,12 +54,17 @@ fn main() {
         // The two edits, on the text — never on the file.
         let command = "/opt/stackvo/bin/stackvo-mcp";
         let inserted = if client.shape.is_toml() {
-            agents::toml_insert(&original, command, false, Some("/workspace"))
+            agents::toml_insert(&original, command, &Grant::read_only(), Some("/workspace"))
         } else {
             agents::insert(
                 &original,
                 client.shape,
-                agents::entry(client.shape, command, false, Some("/workspace")),
+                agents::entry(
+                    client.shape,
+                    command,
+                    &Grant::read_only(),
+                    Some("/workspace"),
+                ),
             )
         };
 

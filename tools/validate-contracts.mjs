@@ -159,6 +159,17 @@ const EMBEDDED_VALUES = (() => {
     // normal state now — so `SUPPORTED_LANGUAGES_PHP_VERSIONS` resolved to
     // nothing and every project was reported as running an unlisted PHP.
     for (const m of block[1].matchAll(/\(\s*"([A-Z0-9_]+)"\s*,\s*"([^"]*)"/g)) out[m[1]] = m[2];
+
+    // A value can also be a *named constant*, and three of them are. Those
+    // three were literals in fourteen places with two derivations that
+    // disagreed, so they became `config::DEFAULT_TLD_SUFFIX`, `DEFAULT_NETWORK`
+    // and `DEFAULT_SERVER` — at which point this scraper stopped seeing their
+    // rows and reported all three as absent from `.env`. Third time the same
+    // regex has died quietly on a refactor; the count below is what notices.
+    for (const m of block[1].matchAll(/\(\s*"([A-Z0-9_]+)"\s*,\s*([A-Z][A-Z0-9_]*)\s*\)/g)) {
+      const named = text.match(new RegExp(`const ${m[2]}:\\s*&str\\s*=\\s*"([^"]*)"`));
+      if (named) out[m[1]] = named[1];
+    }
   }
   return out;
 })();

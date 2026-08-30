@@ -315,6 +315,7 @@ fn the_worktrees_variables_reach_the_compose_overlay() {
             database: None,
             env: std::collections::BTreeMap::from([("APP_ENV".into(), "branch".into())]),
             created_at: "2026-01-01T00:00:00Z".into(),
+            expires_at: None,
         })
         .unwrap();
     table.save(&root).unwrap();

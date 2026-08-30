@@ -1057,6 +1057,63 @@ describe('php-spx', () => {
     wrapper.unmount();
   });
 
+  /**
+   * The loop this closes: change the code, does the page get faster.
+   *
+   * Both numbers are shown and the difference is named, and there is
+   * deliberately no verdict on the screen — one run against one run is not a
+   * benchmark, and a green "faster" would invite a conclusion the measurement
+   * cannot carry.
+   */
+  it('sends a recorded request again and shows both numbers with the difference', async () => {
+    replies.quickCommands = [];
+    const before = {
+      key: 'spx-full-1',
+      recordedAt: 1787426207,
+      cli: false,
+      request: 'GET /api/health',
+      wallTimeUs: 912_000,
+      peakMemory: 1,
+      callCount: 2,
+      bytes: 3,
+    };
+    replies.spxStatus = {
+      ...replies.spxStatus,
+      enabled: true,
+      running: true,
+      active: true,
+      reports: [before],
+    };
+    replies.requestReplay = {
+      before,
+      after: { ...before, key: 'spx-full-2', wallTimeUs: 412_000 },
+      wallTimeUs: -500_000,
+      peakMemory: 0,
+    };
+
+    const wrapper = mountPane();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('GET /api/health'));
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.attributes('aria-label') === 'Send this request again')
+      .trigger('click');
+
+    await vi.waitFor(() => expect(wrapper.find('[data-test="replay-result"]').exists()).toBe(true));
+    const shown = wrapper.find('[data-test="replay-result"]').text();
+    expect(shown).toContain('912.0 ms');
+    expect(shown).toContain('412.0 ms');
+    // The caveat travels with the number rather than living in the help file:
+    // it is the sentence that stops one run being read as a benchmark.
+    expect(shown).toContain('not a benchmark');
+    expect(calls.find(([n]) => n === 'requestReplay')).toEqual([
+      'requestReplay',
+      'shop',
+      'spx-full-1',
+    ]);
+    wrapper.unmount();
+  });
+
   /** Interactive commands are not offered: a recording has to finish. */
   it('leaves an interactive command out of the ones it can record', async () => {
     replies.spxStatus = { ...replies.spxStatus, enabled: true, running: true, active: true };

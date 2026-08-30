@@ -32,6 +32,14 @@ Type a path and press record. The app sends that one request to the project's ow
 
 The address is the project's, from its manifest. Only the path is yours, and a path naming another host is refused.
 
+### The same request again
+
+Every recording of a GET carries a **send it again** button. It re-issues exactly that request with the profiler on and shows both numbers with the difference — which is the commonest loop in performance work, and one that otherwise takes four steps: change the code, open the site, find the page, come back and hunt for the new recording among twenty.
+
+There is deliberately no verdict on the screen. One run against one run is not a benchmark: a cold opcache, a cold query cache and whatever else the machine was doing at that second are all inside the difference. The two numbers are shown so you can read them, not so the app can tell you what they mean.
+
+**Only a GET can be sent again**, and the refusal says why rather than hiding the button. A recording names the request *line* — `GET /checkout` — and nothing else: not its headers, not its body, not the session it ran under, because nothing records those. A POST re-sent without them is a different request, and against any framework with CSRF it answers 419 rather than the page. A result that looks like an answer and is not would be worse than a refusal.
+
 ### One command
 
 A migration, a queue worker, a test run. The slow thing is often not a page, and none of those can be profiled from a browser. Pick one of the project's own commands and it runs under the profiler, in the operation console, landing in the same list.

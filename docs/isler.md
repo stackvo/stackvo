@@ -890,7 +890,7 @@ Tek satırlık bir düzenli ifade. Prettier `api` ile `.appsAvailable()` arasın
 koyduğu için eşleşme olmuyor. Yani bu bir **denetleyici hatası**, ölü kod değil — ve
 yanlış yönde: var olan bir çağrıyı yok sayıyor.
 
-> **Yapıldı.** `validate-contracts.mjs`'in `UNUSED_API` düzeni artık `api` ile noktanın
+> **✅ Yapıldı.** `validate-contracts.mjs`'in `UNUSED_API` düzeni artık `api` ile noktanın
 > arasında boşluk ve satır sonu kabul ediyor (`api\s*\.\s*<method>`), ve neden orada
 > olduğu satırın yanında yazılı. `[F] reachability` temiz; `contracts:check` 0 hata /
 > **11** uyarı. Aynı düzeltme, bugün var olmayan ama yarın Prettier'ın böleceği her çağrıyı
@@ -2204,19 +2204,45 @@ Bu blok tek bakışta nerede olunduğunu söylüyor. Her satırın gerekçesi ke
 burada yalnız sayı var, çünkü bir yol haritasının en çok bayatlayan yeri bu ve bayat bir
 "tamamlandı" işareti hiç işaret olmamasından kötü.
 
+**Maddelerin işaretlenişi.** Her madde numarasından hemen sonra bir **işaretle** başlar ve
+başlığının sonunda **parantez içinde hükmünü** taşır — göz, satırın başında durumu görüyor,
+ve okuyan cümlenin sonunda onu okunabilir hâliyle buluyor.
+
+| İşaret | Hüküm | Başlığın üstü | Ne demek |
+| --- | --- | --- | --- |
+| ✅ | `(yapıldı)` | **çizili** | Tam bitti |
+| ⚠️ | `(yarım)` | çizili değil | Bir yarısı bitti; hangi yarının **neden** kalmadığı maddenin içinde yazılı |
+| ❌ | `(yapılmadı)` | çizili değil | Hiç başlanmadı — çoğu dışsal bir şeyi bekliyor |
+| 🚫 | `(yapılmayacak)` | **çizili** | Ölçüldü ve bırakıldı: bir eksik değil, **alınmış bir karar**, gerekçesi maddenin içinde |
+
+Üstü çizili olmak "bu madde kapandı" demek; işaret hangi biçimde kapandığını söylüyor.
+
 | Blok | Yapıldı | Yarım | Açık | Yapılmayacak |
 | --- | --- | --- | --- | --- |
 | **N1** — yarım günlük blok | 7 / 7 | — | — | — |
 | **N2** — yayın bloklayıcıları | 9 | 1 (#4 README) | — | 1 (#8 TLD) |
 | **N3** — yayın koşusu | — | 1 (#0 anahtarlar) | 5 | — |
-| **N4** — yayından sonra | 9 | — | 2 (#6, #11) | — |
-| **N5** — bakım borcu | — | — | 5 | — |
-| **N6** — arayüz/hardcode borcu | — | — | 14 | — |
-| **N7** — stratejik | — | — | 10 | — |
+| **N4** — yayından sonra | 10 | — | 1 (#6) | — |
+| **N5** — bakım borcu | 4 | — | 1 | — |
+| **N6** — arayüz/hardcode borcu | 11 | 3 (#7, #12, #14) | — | — |
+| **N7** — stratejik | 5 (#1, #2, #3, #5, #6) | 4 (#4, #7, #8, #10) | — | 1 (#9 ACME) |
 
-**Ölçülen durum.** Rust 1786 → **1868** test, vitest 1275 → **1297**,
-`contracts:check` 12 uyarı → **1** (beklenen `NO_MANIFESTS`), IPC yüzeyi 309 → **314**
-komut, MCP 34 → **38** araç, servis kataloğu 31 → **33**, şablon 28 → **29**.
+**Ölçülen durum.** Rust 1786 → **1918** test, vitest 1275 → **1349**,
+`contracts:check` 12 uyarı → **1** (beklenen `NO_MANIFESTS`), IPC yüzeyi 309 → **324**
+komut (`machine_commands`, `crash_reports`, `crash_reports_seen`, `audit_undo`,
+`diagnostics_compare`, `usage_report`, `request_replay`,
+`project_verify`, `leaks_scan`,
+`env_untrack`),
+MCP 34 → **38** araç,
+servis kataloğu 31 → **33**, şablon 28 → **29**, Rust modülü **119** (bu turlarda
+`queuelog`, `images`, `grant`, `undo`, `usage`, `verify` ve `leaks` eklendi),
+köprünün `kind` alanı 1 değer → **3**, web sunucusu 5 → **6** (RoadRunner), tanınan motor
+3 → **4** (Podman).
+Kapsam: Rust %64,05 → **%68,05** (taban 60 → **65**), ön yüz %89,65 → **%92,20**
+(taban 85 → **90**). Paket: eager 1547 → **1248,8 KB** (tavan 1700 → **1400**),
+toplam 3001,5 → **2705,9 KB** — ikon stil dosyası 408 → **32 KB**; son 2,4 KB
+alt kümeleyicinin `src-tauri/src`'yi de okumasının bedeli, ve karşılığı üç
+seçicinin boş kare çizmemesi.
 
 **Yayını tutan şey hâlâ kod değil.** N1 ve N2'nin kod tarafı bitti; N3'ün beş maddesi
 dışsal — kimlikler, bir sürüm numarası kararı, bir Publish tuşu ve bir Windows makinesi.
@@ -2228,6 +2254,15 @@ kalmış), bir yanlış çatı cevabı (PrestaShop → symfony), var olmayan bir
 düşüyordu), iki farklı ana bilgisayar adı üreten iki benimseme yolu, ve rotasyonun
 ortaya çıkardığı elle kopyalanmış ikinci bir sabitlenmiş anahtar. Üçü rapordaki teşhisin
 **yanlış** olduğu yerlerdi ve her biri maddesinde ölçümüyle duruyor.
+
+Son tur bunlara **dört** tane daha ekledi, hepsi N4 #11'in içinde yazılı: kuyruk
+işçisi sidecar'ının hata ayıklama köprüsünü hiç taşımaması (yani bir kuyruk işinin
+içindeki `dump()` hiçbir yere gitmiyordu, ve iki ayrı belge çalıştığını söylüyordu),
+`spl_autoload_register`'ın PHP 8'de herkesin yanıtına bir notice basması, ilk işi
+yutan bir imleç tohumu, ve zaman çizelgesinin bilinmeyen bir kaynağı sorgu olarak
+çizmesi. **Ve bir tanesi rapordaki reçetenin uygulanamaz olduğu yerdi:** R-8'in
+istediği dört Laravel dinleyicisi `auto_prepend_file`'dan kurulamıyor, çünkü Composer
+kendi otomatik yükleyicisini önden kaydediyor.
 
 ---
 
@@ -2268,31 +2303,31 @@ işleri açık.
 
 Kendi içinde sıra: gizli hata → görünen hata → yalan söyleyen denetleyici → temizlik.
 
-1. ~~**`NGINX_DIRECTIVES[0]` / `[4]` indeks erişimini anahtar aramasıyla değiştir.**~~
-   **Yapıldı** — `generator::directive(key)` eklendi, Caddy iki yönergesini anahtarla
+1. ✅ ~~**`NGINX_DIRECTIVES[0]` / `[4]` indeks erişimini anahtar aramasıyla değiştir.**~~ (yapıldı)
+   `generator::directive(key)` eklendi, Caddy iki yönergesini anahtarla
    alıyor. Üç test: konum yerine anahtar (gövde zaman aşımını `max_size`'a kaydıran
    sürüm kırılıyor), her anahtarın kendi satırına çözülmesi, ve **tablonun dokuz
    varsayılanının `config::SETTINGS` ile eşitliği** — B-1'in ikinci yarısı, daha önce
    hiçbir şey karşılaştırmıyordu. *(B-1)*
-2. ~~**`OverviewPane.vue`'nun kapsayıcı yolunu runtime'dan türet.**~~ **Yapıldı** —
+2. ✅ ~~**`OverviewPane.vue`'nun kapsayıcı yolunu runtime'dan türet.**~~ (yapıldı)
    `containerPath`, `render_dockerfile`'ın kendi dağıtımını aynalıyor (PHP değilse `/app`),
    yani dokuzuncu bir çalışma zamanı iki tarafta da düzenleme istemiyor.
    `tests/project-overview.spec.js`, 9 test. *(G-1)*
-3. ~~**`validate-contracts.mjs` regex'ini `api\s*\.\s*<method>` yap** ve P2-5'ten
-   `appsAvailable` maddesini çıkar.~~ **Yapıldı** — `[F] reachability` temiz,
+3. ✅ ~~**`validate-contracts.mjs` regex'ini `api\s*\.\s*<method>` yap** ve P2-5'ten
+   `appsAvailable` maddesini çıkar.~~ (yapıldı) — `[F] reachability` temiz,
    `contracts:check` 0 hata / 11 uyarı. *(H-1)*
-4. ~~**`validate-contracts.mjs`'deki `'8.2'` yedeğini `8.4` yap.**~~ **Yapıldı** — ama
+4. ✅ ~~**`validate-contracts.mjs`'deki `'8.2'` yedeğini `8.4` yap.**~~ (yapıldı) — ama
    beşinci bir literal yazarak değil: yedek artık `envSpec`'ten, yani şemanın kendi
    `default`'undan okunuyor, ve şema onu taşımıyorsa bu bir **hata**. Dört kopya üçe indi.
    *(B-3)*
-5. ~~**Python varsayılanını tek kaynağa indir.**~~ **Yapıldı** — `lang_defaults`
+5. ✅ ~~**Python varsayılanını tek kaynağa indir.**~~ (yapıldı) — `lang_defaults`
    python/go/ruby için `config::SETTINGS`'i okuyor (`settings_version`); rust/bun/deno
    gerekçesi yazılı literallerini koruyor. İki test: üçünün tabloyu okuduğu, ve diğer
    üçünün **okumadığı** — sonraki bir "tutarlılık" turu Deno'yu var olmayan bir etikete
    bağlamasın diye. *(B-4)*
-6. ~~**Kökteki 0 baytlık `version` dosyasını sil.**~~ **Yapıldı** — `git rm`; hiçbir
+6. ✅ ~~**Kökteki 0 baytlık `version` dosyasını sil.**~~ (yapıldı) — `git rm`; hiçbir
    Rust, betik ya da iş akışı onu okumuyordu (arandı). *(P3-2)*
-7. ~~**Paket üstverisi.**~~ **Yapıldı** — `package.json`'a `repository`/`bugs`/`homepage`/
+7. ✅ ~~**Paket üstverisi.**~~ (yapıldı) — `package.json`'a `repository`/`bugs`/`homepage`/
    `author`/`engines`, `Cargo.toml`'a `repository`/`homepage`/`keywords`/`categories`,
    `authors` LICENSE'taki ada çevrildi, `.nvmrc` = 22 (CI ile aynı). İki test
    `version_agreement.rs`'e eklendi: krediyi lisansla, deponun adresini iki manifest
@@ -2304,23 +2339,23 @@ Kendi içinde sıra: gizli hata → görünen hata → yalan söyleyen denetleyi
 
 Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hata üçüncü kez döner.
 
-1. ~~**Bağlantı/iddia denetimini genelleştir.**~~ **Yapıldı** —
+1. ✅ ~~**Bağlantı/iddia denetimini genelleştir.**~~ (yapıldı)
    `every_link_points_at_a_file_that_exists` artık `LINKED_DOCUMENTS` üzerinde: altı
    belge (`ARCHITECTURE`, `README`, `SECURITY`, `CONTRIBUTING`, `PRIVACY`,
    `ACCESSIBILITY`). Ayrıştırıcı koruması belge başına değil **toplam** üzerinde,
    çünkü ikisi meşru olarak hiçbir yere bağlanmıyor. *(P1-2)*
-2. ~~**README üreteç bölümü.**~~ **Yapıldı** — bölüm "devralma nasıl bitti" olarak
+2. ✅ ~~**README üreteç bölümü.**~~ (yapıldı) — bölüm "devralma nasıl bitti" olarak
    yeniden yazıldı, tablo iki davranışı gösteriyor, `verify`'ın anlam değiştirdiği
    söyleniyor. Kendine bağlanan cümle de düzeltildi: `stackvo/stackvo` bağlantısı
    okuyucuyu aynı sayfaya geri getiriyordu. **Yeni gate:**
    `the_readme_names_the_generator_default_the_enum_actually_carries` — `#[default]`'ı
    taşıyan varyantı ayrıştırıyor, README başka bir varsayılan adlandıramıyor. *(P0-5)*
-3. ~~**README Windows paragrafı.**~~ **Yapıldı** — derlendiği ve birim testlerinin
+3. ✅ ~~**README Windows paragrafı.**~~ (yapıldı) — derlendiği ve birim testlerinin
    geçtiği yazıldı; doğrulanmamış olan üç şey (UAC üzerinden hosts yazımı, gerçek Docker
    Desktop'a karşı adlandırılmış boru, tarayıcıda alan adı çözümlemesi) ayrıca sayıldı.
    **Yeni gate:** `the_readme_does_not_deny_a_windows_build_the_matrix_performs` —
    `ci.yml` `windows-latest` içeriyorsa README "hiç derlenmedi" diyemiyor. *(R-1a)*
-4. **README'yi son kullanıcıya çevir** — **YARIM.** Dört bölümün dördü yazıldı, iki
+4. ⚠️ **README'yi son kullanıcıya çevir** (yarım) — dört bölümün dördü yazıldı, iki
    madde açık kaldı:
    - ✅ **Installing it** — altı kurulum biçimi, platform başına sistem gereksinimi,
      Docker gereksinimi. Yayın henüz yok, ve bunu söylüyor. *(P0-4)*
@@ -2341,20 +2376,20 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
    `worktree_*` ve `imports::ALL`'un yedi kaynağını ağaçtan sayıp README'yle
    karşılaştırıyor. `imports.rs`'in başlığı "**Two** of them" derken `ALL` yediyi
    taşıyordu (R-12); aynı sınıfın README tarafı artık kapalı.
-5. ~~**Geçici dosya stage'ini sertleştir.**~~ **Yapıldı** — `elevate::staging_dir`
+5. ✅ ~~**Geçici dosya stage'ini sertleştir.**~~ (yapıldı) — `elevate::staging_dir`
    çağrı başına `0700` bir dizin açıyor (süreç kimliği + sayaç), `create_dir_all` değil
    `create_dir`: var olan bir adı **benimsemek**, onu yaratanı benimsemektir — saldırının
    tam olarak hamlesi buydu. `hosts.rs` ve `dns.rs` ikisi de oraya taşındı, temizlik
    `remove_dir_all`. Üç test: çağrı başına ayrı dizin, `0700` (yazılmadan **önce**),
    ve dolu adın reddi. *(P1-1)*
-6. ~~**`docker run` imgelerini `policy::mirror`'dan geçir.**~~ **Yapıldı** —
+6. ✅ ~~**`docker run` imgelerini `policy::mirror`'dan geçir.**~~ (yapıldı)
    `policy::run_image` eklendi (aynayı okuyan tek nokta), on üç çağrı yeri ona bağlandı:
    `tunnel.rs` ×9, `tunnelid.rs`, `landing.rs`, `perf.rs` ×2. Üç test: `run_image`'in
    `mirror`'ın **her** muafiyetini koruduğu, politikasız makinede kimlik olduğu, ve
    **kapsama gate'i** — `_IMAGE` sabiti taşıyan her üretim modülü `run_image`'i çağırmak
    zorunda, yani beşinci bir modül eklendiğinde bu birinin hava boşluklu makinesinde
    değil burada görünüyor. *(D-2)*
-7. ~~**`detected_spec`'e `Env` geçir.**~~ **Yapıldı** — imza `(name, detected, env)`,
+7. ✅ ~~**`detected_spec`'e `Env` geçir.**~~ (yapıldı) — imza `(name, detected, env)`,
    üç çağrı yeri de `Env::load`'u geçiyor (`adopt_many` toplu iş için bir kez).
    PHP, sunucu ve Node sürümü artık ayardan; **klasörün beyanı ayarı yenmeyi
    sürdürüyor** (bir `package.json` karar, ayar yalnız karar vermemiş klasörün cevabı).
@@ -2363,7 +2398,7 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
    bilerek okunmadığını** kilitliyor: `DEFAULT_TLD_SUFFIX` kendini proje alan adlarının
    kullanmadığı bir anahtar olarak tanımlıyor, ve sonraki bir "işi bitirme" turu onu
    uygulatmasın. *(A-2)*
-8. ~~**Varsayılan TLD'yi `.test` yap.**~~ **Yapılmayacak — karar verildi, `.loc` kalıyor.**
+8. 🚫 ~~**Varsayılan TLD'yi `.test` yap.**~~ (yapılmayacak) — **karar verildi, `.loc` kalıyor.**
 
    Bu bir eksik değil, **verilmiş bir karar**, ve L6'nın kendi tablosuyla aynı sınıfa
    giriyor. Gerekçesi burada duruyor ki dördüncü bir tur maddeyi yeniden açmasın.
@@ -2393,17 +2428,17 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
    Yani: düşük olasılıklı bir gelecek riski ve dar bir joker sızıntısı karşılığında her
    kurulumu göç ettirmek. Takas tutmuyor. **`.loc` kalıyor.**
 
-9. ~~**`contracts:check`'e "şema varsayılanı = kod varsayılanı" suiti.**~~ **Yapıldı** —
+9. ✅ ~~**`contracts:check`'e "şema varsayılanı = kod varsayılanı" suiti.**~~ (yapıldı)
    suite D'ye `DEFAULT_DISAGREES`. `EMBEDDED_VALUES` `SETTINGS`'i zaten anahtar **ve**
    değeriyle ayrıştırıyordu, yani maliyeti bir döngü. **İlk koşuşunda E-2'yi yakaladı:**
    şema `1.62`, kod `1.84` — `"status": "conflicting"` bir insana not, kapı değil. Şema
    `1.84`/`active` yapıldı. Gate boş geçmediği kasıtlı bir ayrışmayla doğrulandı. *(E-2)*
-10. ~~**On `SERVER_*` anahtarını `env.schema.json`'a ekle.**~~ **Yapıldı** — yeni
+10. ✅ ~~**On `SERVER_*` anahtarını `env.schema.json`'a ekle.**~~ (yapıldı) — yeni
     `serverLimits` grubu. Anahtarlar, nginx adları ve varsayılanlar **elle yazılmadı**:
     `generator.rs`'den ve `config::SETTINGS`'ten okunup ikisinin eşit olduğu doğrulanarak
     üretildi. `contracts:check` **12 uyarıdan 1'e** düştü ve `[D] env keys — clean`;
     kalan tek uyarı beklenen olan (`--allow-no-manifests`). *(P2-5 / E-3)*
-11. ~~**Koddaki üç bayat rekabet iddiasını tarihle.**~~ **Yapıldı** — üçü de "Ağustos
+11. ✅ ~~**Koddaki üç bayat rekabet iddiasını tarihle.**~~ (yapıldı) — üçü de "Ağustos
     2026'da ölçüldü" biçiminde yeniden yazıldı ve iddia daraltıldı (worktree'nin önü
     "hiçbiri" değil, dde'nin yapmadığı iki yarım; imports yedi; MCP ≥7/17).
     **Ve gate on modül daha buldu** — rapor üç diyordu. Ölçmediğim için tarihleyemedim;
@@ -2418,7 +2453,7 @@ Kendi içinde sıra: **önce gate, sonra düzeltme** — yoksa aynı sınıf hat
 Bu blok bilerek kod değil. Ama içindeki bir madde bu turda **kısmen** ilerledi, ve
 ilerlemeyen kısmın neden ilerlemediği de yazılı.
 
-0. **İmzalama kimlikleri — YARIM.**
+0. ⚠️ **İmzalama kimlikleri** (yarım)
    - ✅ **StackVo'nun kendi iki anahtarı yapıldı.** `tools/keys.sh generate`, ikisi ayrı:
      güncelleyici anahtarı ikiliyi imzalıyor, içerik anahtarı paket indeksini. Ayrı
      olmalarının bedeli iki sır, karşılığı birinin sızmasının **bir** sahtecilik olması —
@@ -2435,15 +2470,15 @@ ilerlemeyen kısmın neden ilerlemediği de yazılı.
    - ❌ **Apple Developer Program ve Authenticode alınmadı.** Bunlar kurumsal kayıt, kimlik
      doğrulama ve ödeme — günler alıyor, dışsal, ve buradan başlatılamaz. **Takvimin kritik
      yolu hâlâ bu.** *(P0-3)*
-1. ❌ Sürümü yükselt (ör. `0.2.0`), `CHANGELOG.md`'de sürüm başlığını aç, 4300 satırlık
+1. ❌ Sürümü yükselt (ör. `0.2.0`), `CHANGELOG.md`'de sürüm başlığını aç, 4300 satırlık (yapılmadı)
    `Unreleased`'i oraya taşı, etiketle. **Numarayı seçmek kullanıcının kararı**; seçildiği
    an üç dosyadaki yükseltme ve CHANGELOG bölümlemesi buradan yapılabilir. *(P0-1)*
-2. ❌ Kullanıcıya dönük **kısa** sürüm notu yaz — mevcut CHANGELOG bir mühendislik günlüğü ve
+2. ❌ Kullanıcıya dönük **kısa** sürüm notu yaz — mevcut CHANGELOG bir mühendislik günlüğü ve (yapılmadı)
    sürüm notu olarak kullanılamaz. Bu buradan yazılabilir, #1'e bağlı.
-3. ❌ Yayın koşusunu rehearsal'da uçtan uca doğrula, sonra **Publish** et; `releaseDraft: true`
+3. ❌ Yayın koşusunu rehearsal'da uçtan uca doğrula, sonra **Publish** et; `releaseDraft: true` (yapılmadı)
    olduğu için basılmadıkça `latest.json` 404 verir. **Publish bir insanın tuşu.** *(P0-2)*
-4. ❌ `npm run updates:check` ile ucu doğrula. #3'ten sonra anlamlı.
-5. ❌ **Windows makinede elle tur:** `preflight` → proje oluştur → `up` → tarayıcıda aç.
+4. ❌ `npm run updates:check` ile ucu doğrula. #3'ten sonra anlamlı. (yapılmadı)
+5. ❌ **Windows makinede elle tur:** (yapılmadı) — `preflight` → proje oluştur → `up` → tarayıcıda aç.
    Kategorinin 13/17'si Windows'ta ve bir CI koşusu bu soruyu cevaplamıyor. **Bir Windows
    makinesi gerekiyor.** *(R-1b)*
 
@@ -2453,14 +2488,14 @@ ilerlemeyen kısmın neden ilerlemediği de yazılı.
 
 Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog boşlukları.
 
-1. ~~**Dört enstrümanı MCP'ye koy.**~~ **Yapıldı** — `stackvo_explain_request`,
+1. ✅ ~~**Dört enstrümanı MCP'ye koy.**~~ (yapıldı) — `stackvo_explain_request`,
    `stackvo_timeline`, `stackvo_query_log`, `stackvo_flame`. Araç sayısı 34 → **38**.
    İkisinin mantığı Tauri `State`'ten ayrıldı (`explain_request`, `build_timeline`),
    `verify_generator`'ın deseniyle — MCP'de kopyalamak ikinci bir kopya olurdu. README'nin
    araç sayısını **mevcut gate yakaladı** (34→38) ve düzeltildi. Yeni gate: dört komutun
    da bir MCP aracı tarafından uygulandığını araç adıyla değil **komut adıyla** doğruluyor,
    çünkü araç yeniden adlandırılabilir ve boşluk aynı boşluk olurdu. *(S-4)*
-2. ~~**`audit`'e bir okuma komutu + panel.**~~ **Yapıldı** — `audit::tail_of`,
+2. ✅ ~~**`audit`'e bir okuma komutu + panel.**~~ (yapıldı) — `audit::tail_of`,
    `audit_trail` IPC komutu (310. komut), `AuditPane.vue`, sözleşme kaydı, iki dilde
    yardım belgesi. Okuma için ayrı bir `Record` şekli: `Entry::action` bilerek
    `&'static str` ("aynı fiil sonsuza kadar aynı dize") ve derleyici bu sözü böyle
@@ -2469,7 +2504,7 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    takas etmek olurdu. Beş Rust + beş Vue testi. **Testler kendi panelimde gerçek bir
    hata buldu:** hata durumunda hem hata hem "hiçbir şey yapılmadı" görünüyordu —
    "bakamadım" ile "hiçbir şey yok" farklı cümleler. *(S-1 birinci yarısı)*
-3. ~~**Son hatayı yapılandırılmış MCP kaynağı yap.**~~ **Yapıldı — ama raporun çerçevesi
+3. ✅ ~~**Son hatayı yapılandırılmış MCP kaynağı yap.**~~ (yapıldı) — **ama raporun çerçevesi
    değil.** MCP `resources` protokolü bu ağaçta hiç yok (`resources/list` → method not
    found), yani "kaynak" olarak sunmak bir dispatch satırı değil protokol işi. Asıl boşluk
    başka yerdeydi ve ölçüldü: hata yolu `error.rs`'in dört alanından **ikisini
@@ -2480,7 +2515,7 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    yoldan ulaşmak teşhisin ne kadarını aldığın konusunda farklı cevap veriyordu. Ayrıca
    `format!("{:?}", e.code)` silindi: `Code` zaten `Serialize`, o üçüncü yazımdı. İki
    test. *(S-3)*
-4. ~~**Odak modu.**~~ **Yapıldı** — `focus.rs` (saf mantık, 8 test), `focus_plan` +
+4. ✅ ~~**Odak modu.**~~ (yapıldı) — `focus.rs` (saf mantık, 8 test), `focus_plan` +
    `focus_apply` IPC komutları (311. ve 312.), `ProjectDetail`'de plan diyaloğu, iki dilde
    metin. Plan/uygula ayrımı `preset`/`worktree`/`release` deseniyle, ve **plan uygula
    tarafında yeniden yapılıyor** (`provider`'ın kuralı: "düğmeyi sunan ekran dakikalar
@@ -2490,7 +2525,7 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    veritabanını durdurur), ve **hiçbir servis beyan etmeyen proje reddediliyor** —
    `services`'in boş hâli "beyan yok", "ihtiyaç yok" değil, ve ona göre davranmak tüm
    workspace'i doldurulmamış bir alan uğruna durdururdu. *(U-2)*
-5. ~~**Açık kaynak dosyaları.**~~ **Yapıldı** — `dependabot.yml` (üç ekosistem, gruplu,
+5. ✅ ~~**Açık kaynak dosyaları.**~~ (yapıldı) — `dependabot.yml` (üç ekosistem, gruplu,
    haftalık; **major'lar gruptan çıkarıldı** çünkü Vuetify 4 ve Pinia 4 bump değil göç,
    ve altı yama güncellemesiyle karışmış bir PR ne incelenebilir ne geri alınabilir),
    `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `ISSUE_TEMPLATE/config.yml` (boş issue kapalı,
@@ -2505,11 +2540,11 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    sonuna dördünü sayan bir bölüm kondu — yoksa GitHub bulur, okuyucu bulmaz. Aynı
    turda README'nin bayat `contracts:check` sayısı da düzeltildi: "altı uyarı" diyordu,
    bire düşmüştü. *(P4 + R-15)*
-6. **Homebrew cask + winget manifesti — AÇIK, ve bilerek sıradan sonra.** `release.yml`
+6. ❌ **Homebrew cask + winget manifesti** (yapılmadı) — bilerek sıradan sonra. `release.yml`
    altı hedefin sha256'sını zaten üretiyor, ama bir cask **gerçek bir indirme URL'si ve
    gerçek bir sha256** istiyor: ikisi de N3 #3 etiketlendikten sonra var olur. Şimdi
    yazılan bir manifest, doğrulanamayacak iki alan taşıyan bir dosya olurdu. *(R-9)*
-7. ~~**`installers:check` script'ini düzelt.**~~ **Yapıldı — ama teşhis düzeltilerek.**
+7. ✅ ~~**`installers:check` script'ini düzelt.**~~ (yapıldı) — **ama teşhis düzeltilerek.**
    Ölçüldü: CI aracı **doğrudan** çağırıyor (`release.yml:534`), npm script'ini değil.
    Yani script'in hiç çağıranı yok ve kırık olan CI değil, script'in kendisi.
 
@@ -2519,7 +2554,7 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    dönüştürüldü — `rustc -vV`'den bu makinenin üçlüsünü basıyor ve npm'in yuttuğu `--`'yi
    söylüyor, yani çıkmaz değil kopyalanabilir bir satır. `package.json`'daki girinti
    farkı da düzeltildi; o zaten satırın hiç koşturulmadığının işaretiydi. *(P2-3)*
-8. ~~**Şablon ↔ tespit kapsama testi.**~~ **Yapıldı — ve teşhisin bulmadığı iki hata
+8. ✅ ~~**Şablon ↔ tespit kapsama testi.**~~ (yapıldı) — **ve teşhisin bulmadığı iki hata
    çıktı.** `tests/scaffold_coverage.rs` (3 test) iki katalogu birbirine bağlıyor;
    `detect::FRAMEWORKS` yazıldı ve `detect.rs`'te bir **erişilebilirlik testi** ile
    tutuluyor: her ada, `infer`'i o adı döndürmeye zorlayan gerçek bir checkout şekli.
@@ -2565,7 +2600,7 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    çeviri anahtarı olarak görünür. Bölüm bazlı arama, dosya bazlı değil — `astro`
    drawer'ın düzyazısında da geçiyor ve tüm dosyayı tarayan bir kontrol bir yorumla
    tatmin olurdu. *(R-4 + B-5)*
-9. ~~**Üç sağlayıcı reçetesi sevk et.**~~ **Yapıldı — ama üçü rapordakiler değil, ve
+9. ✅ ~~**Üç sağlayıcı reçetesi sevk et.**~~ (yapıldı) — **ama üçü rapordakiler değil, ve
    nedenleri ölçüldü.** `provider::RECIPES` (üç reçete), `provider_recipes` ve
    `provider_recipe_add` IPC komutları (313. ve 314.), `ProvidersPane`'de başlangıç
    noktaları bölümü, iki dilde metin ve yardım belgesi. 5 Rust + 1 manifest + 6 Vue testi.
@@ -2605,7 +2640,7 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
    tarif **değiştirilmiyor, reddediliyor**: diskteki kopya tanımı gereği düzenlenmiş
    (çalışabilmiş olan tek sürüm o) ve "ekle" yazan bir düğmeye karşılık birinin bulup
    yazdığı sunucu adını sessizce atmak olurdu. *(R-5)*
-10. ~~**MSSQL ve Beanstalkd paketleri.**~~ **Yapıldı** — paketler
+10. ✅ ~~**MSSQL ve Beanstalkd paketleri.**~~ (yapıldı) — paketler
     `stackvo-service-packages`'te (33 servis, 122 sürüm), uygulama tarafında sözcük
     dağarcığı, sürücü eşlemesi ve **iç çelişkiyi kural hâline getiren yeni bir gate**.
 
@@ -2649,109 +2684,1095 @@ Kendi içinde sıra: var olanın önünü açanlar → dağıtım → katalog bo
     düşürülmez, **reddedilir**. Yan iş olarak `schema/` kopyalarındaki mevcut sapma da
     giderildi (uygulama deposu ADR atıflarını temizlemişti, kopyalar eskimişti) — o
     gate zaten kırmızıydı. *(R-7)*
-11. **`debugbridge`'e kuyruk işi ve istek olayları — AÇIK, ve N4'ün sıradaki işi.**
-    `kind` alanı ve `timeline.rs`'in ekseni ikisi de bekliyor; bugün tek değer `"dump"`.
-    Ücretli rakiplerin ana satış kalemi, ve #6'nın aksine hiçbir dışsal önkoşulu yok.
+11. ✅ ~~**`debugbridge`'e kuyruk işi ve istek olayları.**~~ (yapıldı) — **ama raporun
+    reçetesi ölçülünce uygulanamaz çıktı, ve uygulamaya çalışmak iki gerçek hata
+    buldu.** `kind` artık üç değer taşıyor (`dump`, `request`, `job`),
+    `timeline::Source` beş, ve pane'de sinyal başına bir süzgeç var.
+
+    **İstek olayları — köprüden, çerçevesiz.** Bir `register_shutdown_function`,
+    prepend anında kaydediliyor: her çalıştırma için bir satır, HTTP durumu ve
+    süresiyle. Bir çerçevenin "istek karşılandı" olayına bağlanmamasının sebebi
+    yedeklilik değil — PHP'nin kendi kancası **ölümcül hatada ve `exit()`'te de**
+    koşuyor, ve hiçbir şeyin yüklenmiş olmasını istemiyor. Yani satır Laravel için
+    de, Symfony için de, WordPress için de, elle yazılmış bir `index.php` için de
+    çıkıyor. Saat `REQUEST_TIME_FLOAT`, yani süre otoyükleyiciyi ve çerçevenin
+    açılışını da kapsıyor. Konteynerde ölçüldü: `200`, kasıtlı bir `503`, ve
+    `dd()`'nin `exit(1)`'inden **sonra** yine yazılan satır.
+
+    **Raporun dört dinleyicisi mümkün değil, ve bu ölçüldü.** `auto_prepend_file`
+    konteyner var olmadan koşuyor, dolayısıyla bağlanılacak bir olay yok. Otomatik
+    yükleyiciyi gözlemek yol gibi görünüyor ve değil: **Composer kendi yükleyicisini
+    `$prepend = true` ile kaydediyor**, yani prepend dosyasının kaydettiği her şeyin
+    *önüne* geçiyor ve çözebildiği bir sınıf asla arkadakine ulaşmıyor. Gerçek bir
+    Laravel 12 checkout'unda `spl_autoload_functions()`
+    `[Composer\Autoload\ClassLoader::loadClass, <köprü>]` döndü, bu sırayla, ve
+    kuyruk olayları hiçbir şey ateşlemedi.
+
+    **Bu yüzden iş yarısı ana bilgisayardan geliyor — `querylog`'un argümanıyla.**
+    Yeni `queuelog.rs`, `queue:work`'ün kendi iki sütunlu çıktısını okuyor
+    (`App\Jobs\Hello ... 40.80ms DONE`) ve satırları aynı olay dosyasına
+    `kind: "job"` olarak ekliyor — yani pane, zaman ekseni, MCP araçları ve istek
+    açıklayıcısı tek okuyucuda kalıyor. Saat konteynerin bastığı değil **motorun
+    `--timestamps` öneki**: içerideki damga imajın derlendiği saat diliminde ve
+    aynı eksendeki bir dump'tan saatlerce uzağa düşerdi. Uçtan uca doğrulandı:
+    boş bir işçide tohum, sonra üç satır (`ok`, `failed`, `failed`), sonra
+    tekrar çağrıldığında **0** — ve yeni bir iş sonrası yine üç.
+
+    **Bulunan birinci hata — işçi köprüyü hiç taşımıyordu.** Köprü web
+    konteynerine compose kaplamasıyla ulaşıyor, ama kuyruk sidecar'ı `docker run`
+    ile kalkan ayrı bir konteyner ve tek bir `-v` alıyordu. Yani **bir kuyruk
+    işinin içindeki `dump()` hiçbir yere yazılmıyordu** — üstelik hem modülün
+    kendi başlığı hem `debug_bridge_set`'in sözleşme notu bunun çalıştığını
+    söylüyordu. Aynı iş, mount'lu ve mount'suz iki konteynere karşı koşularak
+    ölçüldü. `run_args` artık üçünü de veriyor, ini bir **dosya** mount'u olarak
+    (dizini bağlamak imajın her ini'sini, profilcinin kendisininkini de gölgeler).
+
+    **Bulunan ikinci hata — `spl_autoload_register`'ın `$do_throw`'u.** `false`
+    geçmek PHP 8'de bir notice bastırıyor, ve bir prepend dosyasının herkesin
+    yanıtına yazdığı notice bu dosyanın yapabileceği en görünür şey olurdu. İlk
+    konteyner koşusunda stdout'ta çıktı.
+
+    **Ve bir üçüncüsü, kendi kodumda, koşturarak bulundu:** yakalama açıldıktan
+    hemen sonra çalıştırılan **ilk iş yutuluyordu**. İmleç yokken tohum "işçinin
+    en yeni satırı" idi, ve o satır tam da az önce çalıştırılan işin satırıydı.
+    Hiç çıktı basmamış bir işçi artık **sıfırdan** tohumlanıyor — "geçmişten
+    sonra başla" ile "hiçbir şeyden sonra başla" farklı cümleler — ve tohum
+    anahtarın kendisinde atılıyor, bir poll sonra değil.
+
+    **Söylenemeyen şey yazıldı:** `FAIL` her **denemede** basılıyor ve konsol
+    bir sonraki denemenin gelip gelmeyeceği hakkında hiçbir şey söylemiyor, o
+    yüzden üç satır üç satır olarak duruyor; ve okunan, bu uygulamanın başlattığı
+    işçi — kendi terminalinde `queue:work` koşturan biri satır üretmiyor.
     *(R-8)*
 
 ---
 
 ## N5. Bakım borcu
 
-**Durum: beş maddenin beşi açık.** Hiçbiri yayını tutmuyor; hepsi
+**Durum: beş maddenin dördü kapandı, biri açık.** Hiçbiri yayını tutmuyor; hepsi
 yayından sonra ölçülebilir hâle gelen ya da yayın sonrası maliyeti düşüren işler.
 
-1. Rust kapsam tabanını ölçülen değere yaklaştır — %64,05 ölçülüyor, taban %60, yani dört
-   puanlık bir gerileme bugün sessizce geçer. *(P2-1)*
-2. Docker'lı nightly duman testi — Linux runner'da Docker hazır geliyor; "Docker açıkken
-   proje kalkıyor mu" sorusunu CI'da soran hiçbir şey yok. *(P2-2)*
-3. Paket bütçesine pay yarat ya da tavanı gerekçeli yükselt — tavana %1,1 kalmış. *(P2-4)*
-4. `commands.rs`'i alt sistemlere böl — 15.6k satır, 303 IPC komutunun tamamı, 113 modülün
-   110'u konusuna göre ayrılmışken. *(P3-1)*
-5. Yedi major bağımlılık geçişi — Dependabot açıldıktan **sonra**, yayın öncesi değil. *(§7)*
+1. ✅ ~~**Rust kapsam tabanını ölçülen değere yaklaştır.**~~ (yapıldı) — **ve önce yeniden
+   ölçüldü, çünkü asıl arıza oradaydı.** Kayıtlı sayı 7 Ağustos'ta donmuştu (%64,05) ve
+   ağaç o gün bu güne dört puan kazanmıştı: gerçek ölçüm **%68,05**, yani taban ölçümün
+   dört değil **sekiz** puan altındaydı — bu bir gerileme alarmı değil, süstür.
+   Taban **%65**'e çekildi, ve mesafe artık aritmetik: ölçüm eksi bir puan platform
+   (macOS/Ubuntu farkının deponun kendi tarihindeki değeri) eksi iki puan
+   "testleri henüz yazılmamış 1.200 satırlık bir modül" (59,5k satırın üzerinden).
+   Ön yüz de aynı şekilde: %89,65 → **%92,20** ölçüldü, taban 85 → **90**, dal 72 → **78**.
+
+   **Ve kapıya bayatlama uyarısı eklendi.** Bu maddeyi doğuran hata "taban çok düşük"
+   değil, *"kayıtlı ölçüm bayatladı ve kimse fark etmedi"*ydi. Rapor kayıtlı sayının iki
+   puan üstüne çıktığında artık bunu söylüyor — kazanç olduğu için hata değil uyarı, ama
+   söylenmemesi çiftin sessizce ayrılmasının yoluydu. Uyarının kendisi kasıtlı bir bayat
+   değerle ateşlenerek doğrulandı. *(P2-1)*
+2. ✅ ~~**Docker'lı nightly duman testi.**~~ (yapıldı) — `tests/docker_smoke.rs` +
+   `.github/workflows/nightly.yml`. Test geçici bir workspace kuruyor, manifesti yazıyor,
+   **uygulamanın kendi `write_generated`'ı** ile üretiyor, `docker compose up --build`
+   koşuyor ve sayfayı iki yerden istiyor: konteynerin içinden (`nginx` + `php-fpm` +
+   bağlama + `document_root`, `PHP_SAPI`'yi basarak — nginx kaynağı düz metin verirse
+   test düşüyor) ve Traefik üzerinden HTTPS ile (etiketin gerçekten router olduğu).
+
+   **Kendi makinesinde koşturulamadı ve bu bir kapı hâline getirildi.** Üretilen compose
+   projesinin adı her makinede `stackvo`, konteynerleri `stackvo-*`, ağı `stackvo-net` —
+   yani ikinci bir yığın ikinci bir yığın değil, *aynısı*. `--remove-orphans` ile geliştirici
+   kendi kurulumunun konteynerlerini sildirirdi. Test bu yüzden **atlamıyor, reddediyor**,
+   ve reddetme yolu bu makinenin canlı yığınına karşı koşturularak doğrulandı.
+
+   Koşulamayan yarının **kurulum yarısı** normal takıma alındı (`--build`'e ihtiyacı yok):
+   servis üretiliyor mu, etiket doğru alan adını mı taşıyor, derleme bağlamında Dockerfile
+   var mı, ve `compose_file_list`'in vereceği her dosya diskte mi. Gece yarısı bir dosya
+   adı yüzünden kırmızıya düşmek yerine commit anında düşüyor.
+
+   **İki sürüklenme kapısı:** nightly'nin apt listesi CI'ınkinin üst kümesi olmak zorunda
+   (`workflow_parity.rs`, release ile aynı kural bir halka ötede), ve iş akışının aradığı
+   "atlandı" cümlesi testin bastığı cümle olmak zorunda — yoksa yeşil bir job "koştu" mu
+   "hiç koşmadı" mı söylemez, ki `driver` job'ının kendi yorumu bu yanığı anlatıyor.
+   İkisi de kasıtlı bozmayla doğrulandı. *(P2-2)*
+3. ✅ ~~**Paket bütçesine pay yarat.**~~ (yapıldı) — **ve tavan aşılmıştı, dar değildi.**
+   Ölçünce `total` **3001,5 KB / 3000** çıktı, yani build o adımda zaten kırmızıydı.
+   Dosyanın kendi sözü ikinci kez "kabul et ve yükselt" demeyi kapatıyordu, o yüzden
+   kırpıldı.
+
+   **Kırpılan şey `totalKb` yorumunun adıyla saydığı şeydi:** *"kazara gelen bir bağımlılık
+   — tam bir ikon fontu"*. Material Design Icons 7.447 cam kuralı, **408 KB**, ve bu
+   uygulama 313 tanesini adlandırıyor. Build artık yalnız erişilebilen kuralları basıyor:
+   stil dosyası 408 → **30 KB**, eager 1547 → **1246 KB**, total 3001,5 → **2700,9 KB**.
+   Font'a dokunulmadı (394 KB, bir font zinciri ister) ve bu bir sonraki adım olarak
+   yazıldı. Eager tavanı 1700 → **1400**'e *indirildi*: 1246'nın üzerinde 1700 %36 boşluk
+   olurdu, ve bir bütçenin alarm olmaktan çıktığı yer o boşluğun içidir.
+
+   **Ve kırpma iki gerçek hata ortaya çıkardı:** `mdi-discord` iki major sürümdür ikon
+   setinde yok (marka işaretleri kaldırıldı) ve `mdi-format-textdirection-r-to-l` yeniden
+   adlandırılmış — yani Discord bağlantısının ve Yerelleştirme panelinin yön başlığının
+   ikonu **bugün boş kare çiziyordu**. Eksik cam, bir ekranın yapabileceği en sessiz hata:
+   hiçbir şey uyarmıyor, ve boşluk bir aralık tercihi gibi okunuyor.
+
+   Kullanılan ikon listesi tek kaynakta (`tools/mdi-icons.mjs`), üç okuyucusu var: kırpan
+   eklenti, derlenmiş stil dosyasını listeye karşı tutan bütçe kapısı (derleme sonrası —
+   emitted dosyanın var olduğu tek an), ve listeyi ikon setine karşı tutan test. **Vuetify'ın
+   kendi 26 ikonu** (onay kutusu, sıralama oku, sayfalama) `src/`'de hiç geçmiyor; yalnız
+   bu ağacı tarayan bir liste onay kutuları boş bir uygulama üretirdi — ilk sürümü tam
+   olarak bunu yaptı. *(P2-4)*
+4. ✅ ~~**`commands.rs`'i alt sistemlere böl.**~~ (yapıldı) — **ama dosyayı bölerek değil,
+   ölçerek.** ARCHITECTURE bu maddeyi zaten tartmış ve reddetmişti: *"dosyanın boyutu
+   rahatsız edici, zararlı değil, ve bölme her komuta aynı anda dokunur."* O cümle
+   yazıldığından beri dosya 12,7k → **16,07k** büyümüştü, yani karar yeniden ölçülmeyi
+   hak ediyordu.
+
+   **Ölçüm kararı doğruladı, ama başka bir şeyi de gösterdi.** Dosyada 391 fonksiyon var
+   ve ortalaması **27 satır** — yani gerçekten "ince fonksiyonlar dizini", ve üç yüz ince
+   fonksiyonu bir dizine taşımak her komuta dokunup karşılığında yalnız daha kısa bir
+   dosya verirdi. Ama en uzun maddeleri **komut değildi**: yüz ile üç yüz satır arasında
+   beş özel yardımcı, `&Path` alıp düz değer dönen, aralarında tek bir Tauri tipi
+   olmayan. Yani **konusundan bir bant yukarıda duran alan mantığı**, ve bedeli kuralın
+   kendi vaadiydi — yukarıdaki bir fonksiyon ne testten, ne `diagnose` örneğinden, ne MCP
+   yüzeyinden çağrılabilir. Beşinin üçünün `mcp.rs`, `cli.rs` ve `examples/diagnose.rs`'te
+   **yukarı doğru** `commands`'a uzanan çağrıcıları vardı; bant oku o yöne çizilmiyor.
+
+   **1.220 satır konusunun yanına indi:** üretilen ağacın tamamı (render + verify + write,
+   577 satır) → `generator`, göç önizlemesi (207) → `handover`, worktree planı (381) →
+   `worktree`, ve "bir projenin dizini ve manifesti" → `workspace`. `commands.rs`
+   16.070 → **14.850** satır, 308 komutun 308'i yerinde, ve taşınan tek satır Tauri state
+   almıyor — bant kapısı iki yönden de tutuyor.
+
+   **Her biri ulaşılabilir olduğu için test kazandı.** Üçü de yazılamayacak testlerdi:
+   göç etmiş bir workspace'in ikinci kez planlanmaması (paket ağacı gerçek olmak zorunda —
+   ilk sürümü boş katalogla yazıldığı için reddi silince de geçiyordu, o yüzden atıldı ve
+   fikstürlü dosyaya taşındı), reddedilen bir worktree planının yine de adını ve alan adını
+   taşıması, ve `scope_includes`/`service_source`'un kendi modüllerindeki testleri.
+   Üçü de kasıtlı bozmayla kırıldı, sonra geri alındı. *(P3-1)*
+5. ❌ **Yedi major bağımlılık geçişi** (yapılmadı) — Dependabot açıldıktan **sonra**, yayın
+   öncesi değil. *(§7)*
 
 ---
 
 ## N6. Arayüz ve hardcode borcu
 
-**Durum: on dört maddenin on dördü açık.**
+**Durum: on dört maddenin on biri ✅ yapıldı (üstü çizili), üçü ⚠️ yarım — ve üç yarımın
+üçü de bir eksik değil, yazılı bir sebep:**
+
+* **#7** — makine geneli `commands.json` yapıldı; **paketin komut getirmesi** yapılmadı,
+  çünkü imza zincirinden geçen ayrı ve daha büyük bir parça.
+* **#12** — sürüm notu **zaten gösteriliyordu** (ölçüldü; yapılan tek şey notu `lang=""`
+  ile işaretlemek oldu, çünkü o metin yayıncının ve dili bilinmiyor). İkinci kanal ilk
+  yayına bağlı ve gerekçesi `channel.rs`'e yazıldı: bugün bir ayar eklemek, kimsenin
+  yayımlamadığı bir kanalı seçen ve güncellemeleri **sessizce durduran** bir ayar kurmak
+  olurdu.
+* **#14** — çökme **bildirimi** yapıldı (asıl eksik oydu: uygulama çöküyor ve söylemiyor);
+  **göndermek** yapılmadı, çünkü `PRIVACY.md` "telemetri yok, çökme raporlama servisi yok,
+  sunucu yok" diye söz veriyor ve gelecekteki her şeyin önce orada yazılı olacağını
+  söylüyor. Gönderilecek yer eklemek kod değil ürün kararı.
 
 Kendi içinde sıra: kullanıcının bugün yapamadığı şeyler → tema tutarlılığı → sürüklenme
 kapıları → yazılmamış kararlar.
 
-1. **Altı `*_VERSIONS` listesine `PhpPane`'de `v-combobox`** — `SETTINGS`'in 36 anahtarından
-   yedisi `src/` ağacında bir kez bile geçmiyor, ve listeler şimdiden geride (Go 1.23, Ruby
-   3.3, Node 23, Rust 1.84). Asıl mesele eksikliğin **yalnız bir yayınla** kapanabilmesi.
-   Desen `PhpPane.vue:158,168`'de hazır, yaklaşık 30 satır. *(A-1)*
-2. **Uygulama seçicilerine "diğer…" seçeneği** — Helix, Neovim, Emacs ya da listelenmeyen
-   sekiz JetBrains IDE'sinden birini kullanan bugün hiçbir şey seçemiyor. *(A-3)*
-3. **Grafik ve ısı ızgarası renklerini temadan oku** — `#1976D2` dört yerde sabit; accent
-   moraldığında üç pasta ve sparkline mavi kalıyor. `useTheme().current.value.colors.primary`
-   çalışma anında okunabilir. *(C-1, C-2, C-3)*
-4. **`quickcmd`/`oauth`/`tooling` düzyazısını `hints.rs` desenine taşı** — 39 İngilizce cümle
-   iki dilli pencereye ham gidiyor; en az `lang="en"` ile işaretle (beş bileşende hiç yok).
-   *(F-1)*
-5. **Literalleri adlandırılmış sabitlere indir** — `stackvo.loc` ×14, `stackvo-net` ×9,
-   `nginx` ×7; `certs::FALLBACK_SUFFIX` zaten bunun için yazılmış ve `commands.rs` sekiz kez
-   görmezden geliyor. Aynı turda `SUPPORTED_SERVERS_DEFAULT`'un beş yerdeki
-   `unwrap_or("nginx")` baypası. *(B-2, A-5)*
-6. **`env.schema.json`'ın `consumers` alanını yeniden ölç ya da sil** — 43 yolun **39'u
-   diskte yok** ve `measure-env-usage.mjs` `core/` olmadığı için çalışamıyor. Ölçülemeyen bir
-   alan sözleşmenin geri kalanına olan güveni aşındırıyor. *(E-1)*
-7. **`<root>/commands.json`** — makine geneli komut, `stackvo.json`'ın `commands` şemasının
-   aynısı, aynı argv kuralı, aynı konteyner sınırı; + paket manifestine `commands` alanı,
-   aynı imza zincirinden. Dört rakip bunu ilk sırada satıyor. *(A-4 / R-6)*
-8. **`<proje>/stackvo.preset.json` yerleşim kuralı** — `preset.rs` doğru sorunu çözmüş;
-   eksik olan tek şey dosyanın nereye konacağı ve klonlayanın onu nasıl bulacağı. *(R-11)*
-9. **Podman rootless soketi** `engine.rs:59-134` listesine + bir uyumluluk fikstürü.
+1. ✅ ~~**Altı `*_VERSIONS` listesine `PhpPane`'de `v-combobox`.**~~ (yapıldı) — ve ilk iş
+   raporun teşhisini düzeltmek oldu. *"`src/` ağacında bir kez bile geçmiyor"* doğru ama
+   *"okunmuyor"* değil: `build_catalog` anahtarı `format!("SUPPORTED_LANGUAGES_{key}_VERSIONS")`
+   ile **kuruyor**, yani anahtar-anahtar arama sıfır gösterirken zincir tıkır tıkır
+   işliyordu — `.env` → `build_catalog` → `catalogGet` → `PhpPane`'in seçicisi. Yani bu
+   altı liste her seçicinin ne sunduğuna karar veriyor, ve bayat olduklarında kullanıcının
+   çıkışı yoktu.
+
+   `RUNTIME_DEFAULTS`'ın yanına `VERSION_LISTS` kondu (altı anahtar, PHP dahil — onun
+   varsayılanı bir grup aşağıda kendi seçicisinde), ve çalışma zamanları grubuna bir
+   açılır bölüm: her liste için `multiple chips closable-chips` bir `v-combobox`,
+   `PHP_DEFAULT_TOOLS`'un deseniyle. Kayıt defterinde olmayan bir sürüm imaj derlenirken
+   motorun kendi mesajıyla düşüyor — aynı takas.
+
+   **Ve bir kapı**, çünkü asıl hata bu maddenin kendisiydi: Rust'a yedinci bir çalışma
+   zamanı eklendiğinde `build_catalog` onu anında okur, seçici anında sunar, ve elle
+   yazılmış ön yüz listesinde olmadığı için **yine kimse düzenleyemez**.
+   `tests/version-lists.spec.js` `config.rs`'i metin olarak okuyup iki listeyi eşitliyor;
+   sahte bir yedinci anahtarla kırıldığı doğrulandı. Panel testi de öyle — ve panelin
+   kapalı açılır bölümü içeriği mount etmediği için testin onu **açması** gerekti; açmayan
+   bir test kontroller silindikten sonra da geçerdi. *(A-1)*
+2. ✅ ~~**Uygulama seçicilerine "diğer…" seçeneği.**~~ (yapıldı) — dört listenin dördüne de.
+   Önce raporun örneklerini düzeltmek gerekti: **Neovim ve Vim zaten listede** (`EDITORS`'ın
+   son iki satırı), yani üç örneğin ikisi yanlıştı. Helix, Emacs ve listelenmeyen JetBrains
+   IDE'leri doğru: onlar için seçilecek hiçbir şey yoktu.
+
+   `apps::CUSTOM` her listenin sonuna eklenen gerçek bir satır, her zaman seçilebilir,
+   ve karşılığı `preferences.json`'da kendi anahtarında duruyor — `editorCustom`,
+   `terminalCustom`, `browserCustom`, `dbClientCustom`. Seçim ile komut **ayrı iki anahtar**:
+   biri "hangisi", öbürü "ne çalıştırılacak"; tek dizgede tutulsaydı "VS Code'a geri dön"
+   demek özel komutu ezmek olurdu.
+
+   İki özellik bilerek korundu. **Otomatik seçim asla özel satır olamaz** — `offer()`
+   önce `mark_default`'ı çalıştırıp satırı ondan sonra ekliyor, ve `open_in_editor`'ün
+   kurulu editörleri gezen yolu onu atlıyor; kimsenin yazmadığı bir komutu yedek olarak
+   başlatmak yedeksizlikten kötüdür. **Ve kabuk yok**: `split_command` yalnız tırnak
+   ayırıyor, kelimeler `Command::new`'e doğrudan gidiyor, yani `$HOME`, `&&`, boru ve
+   yönlendirme düz metin. Ters bölü kaçış *değil*, çünkü Windows'ta yazılacak ilk şey
+   tırnaklı bir mutlak yol ve `C:\Program Files\...` üç kaçış dizisi olarak okunsaydı
+   özelliğin var olma sebebi bozulurdu.
+
+   Terminalin kendi tipi var (`apps::Terminal`), çünkü terminale bir yol değil bir **komut
+   satırı** veriliyor ve her emülatör onu başka bayrakla alıyor. Tek kural: kullanıcının
+   kelimeleri önce, komut tek bir son argüman olarak sonra. Bayrak tahmin edilmiyor —
+   `-e`, `--`, `start --`, `/K` hepsi farklı, ve yanlış tahmin **yanlış şeyi çalıştıran**
+   bir terminal açar; o yüzden bayrak da kutuya yazılıyor.
+
+   **Ve iki ölçülen hata**, ikisi de bunu yazarken çıktı:
+
+   * **On sekiz ikon yalnız Rust'ta adlandırılıyor** ve geçen turun alt kümeleyicisi
+     `src/`'yi okuduğu için hepsini siliyordu — yani terminal, editör ve tarayıcı
+     seçicilerindeki **her ikon** derlenmiş uygulamada boş kare çiziyordu. `apps.rs` bir
+     katalog: `mdi-apple`, `mdi-firefox`, `mdi-powershell` ve on beş tanesi daha hiçbir
+     `.vue` dosyasında geçmiyor. Tarama `src-tauri/src`'yi de okuyor artık; eager sete
+     maliyeti **2,4 KB**, ölçüldü.
+   * Geniş taramanın ilk koşusu **`mdi-vim`**'i buldu: Neovim ve Vim satırlarının ikonu,
+     ve **böyle bir ikon hiç olmadı**. Yazıldığı günden beri iki satır boş kare çiziyor.
+     Okunmayan bir dosyada bulunamazdı.
+
+   Rust tarafı `.rs` için dar okunuyor — orada ikon adı hep dizgi değişmezi, etrafındaki
+   düzyazı ise ikon olmayan adlarla dolu (`mdi-vim` hatanın kendisi olarak yazılı,
+   `mdi-icons.mjs` bu dosyanın adı); ilk geniş koşu ikisini de topladı. *(A-3)*
+3. ✅ ~~**Grafik ve ısı ızgarası renklerini temadan oku.**~~ (yapıldı) — üçü de.
+
+   **C-1.** Üç pastanın renkleri `useContainerStats`'tan tamamen çıktı ve boyamayı
+   `IndicatorPane` yapıyor; sebebi "composable renk bilmesin" değil, buraya ait olan
+   rengin **o anki temanın** rengi olması ve temanın ancak bileşenin içinden okunabilmesi.
+   Ölçülen slice `primary`, kalan `surface-variant` — konuma göre, anahtara göre değil,
+   çünkü üç pasta da *ölçülen* ile *kalan*: kullanılan/boş, indirme/yükleme, okuma/yazma.
+   Sparkline gradyanı `[primary, success]`; `success` olması ayrıca önemli, çünkü o üç
+   rengin biri ve **renk körlüğü paleti onu yeniden yazıyor** — sabit yeşil, o seçimi tam
+   olarak renkten ibaret olan grafikte yok sayıyordu.
+
+   **C-2.** Beş sabit yeşil gitti; hücre artık temanın `success`'i ve yoğunluk **opaklıkla**
+   taşınıyor. Beş ton yerine opaklık olmasının sebebi tam da açık tema: hücre kartın kendi
+   yüzeyinin üstünde duruyor, yani rampa yüzey ne ise ondan başlayıp tam renge çıkıyor. Beş
+   ton bunu yapamaz — hepsi tek bir arka plana göre seçilir. `color-mix` değil `opacity`,
+   çünkü bu uygulama makinede hangi WebView varsa onun içinde koşuyor ve `ci.yml` motor
+   hakkında iddia kurmayı zaten reddediyor; `opacity` böyle bir iddia gerektirmiyor.
+
+   **C-3.** `#12121a` tek sabit oldu (`appearance::CONSOLE_BACKGROUND`) ve iki yarı da onu
+   okuyor. Ayrıca yarısı koşulluydu: `darkConsoles` kapalıyken xterm kendi varsayılanına
+   düşüyor, CSS çerçevesi ise `#12121a` kalmaya devam ediyordu — yani 8 piksellik çerçeve
+   bulgunun tarif ettiği hâliyle **zaten oradaydı**. Artık ikisi de aynı `computed`'i
+   okuyor, kapalıyken çerçeve `transparent`.
+
+   Kapı: `tests/theme-colours.spec.js`, dördü de mutasyonla kırıldı. Kapının kendisi bir
+   şey ölçtü — ilk koşusunda **kendi açıklama yorumlarında** düştü, çünkü bu depoda bir
+   kuralın gerekçesi kuralın yaşadığı dosyaya yazılıyor ve o gerekçe `#1976D2`'yi anıyor.
+   Kapı artık yorumları soyup koda bakıyor. *(C-1, C-2, C-3)*
+4. ✅ ~~**`quickcmd`/`oauth`/`tooling` düzyazısını `hints.rs` desenine taşı.**~~ (yapıldı)
+   ve sayı düzeltildi. Raporun *"39 cümle, üç katalog"* ölçümü iki yerden yanlış: o üç
+   katalogda **37** var (`oauth.rs` 9 değil **7** taşıyor), ama bakılmayan iki katalogda
+   **11** tane daha var — `tooling::OWN` (2, `ToolingPane:196`) ve `provider::RECIPES`
+   (3 `about` + 6 `edit`, `ProvidersPane:225,233`). Gerçek toplam **47 cümle**.
+
+   Anahtar, kataloğun **zaten taşıdığı id**: `Spec.id`, `Provider.id`, `Tool.id`,
+   `Recipe.name`. Yani yazılacak ikinci bir ad yok ve düzeyde tutulacak bir eşleme yok —
+   `hints.rs`'in "her iki yarı da tek yerde" pazarlığı, ikinci yarıyı yerel dosyaya
+   koyarak. İngilizce Rust'ta kalıyor: CLI'nin bastığı, MCP istemcisinin okuduğu ve
+   günlüğe düşen o; pencere çeviriyi gösteriyor, çeviri yoksa İngilizceye düşüyor.
+
+   Tek istisna `provider::Edit`: bir tarifin `edit` listesinin kendi id'si yok ve **konum
+   ad değildir** — iki veritabanı tarifi aynı cümleye ihtiyaç duyuyor, konuma göre
+   anahtarlansaydı tek cümlenin iki çevirisi olurdu. O yüzden `edit` artık `hints.rs`'in
+   tam şekli: `{ key, english }`.
+
+   Kapı `hint_translations.rs`'e eklendi (4 test → 8), dört mutasyonla kırıldı: çevrilmemiş
+   satır, İngilizce bırakılmış Türkçe, Rust'tan sapan İngilizce, ve karşılığı olmayan öksüz
+   anahtar. Okuyucunun kendisi de bir şey ölçtü — quick command id'lerinin yarısı tireli
+   (`migrate-status`, `optimize-clear`), yani Prettier onları **tırnaklı** yazıyor ve eski
+   ayrıştırıcı yalnız çıplak tanımlayıcıyı biliyordu: yirmi altının on üçünü sessizce
+   düşürüp kalanı eksiksiz diye rapor ederdi.
+
+   **İkinci yarısı — `lang="en"` — uygulanmadı, çünkü artık yanlış olurdu.** Rapor "en az
+   işaretle" diyordu; çevirmek daha iyi olanıydı ve yapılan o, dolayısıyla o metinler artık
+   pencerenin kendi dilinde. Ama tarama bir şey buldu: `SidecarsPane:77` **başka** sınıftan
+   bir metin oluşturuyor — sidecar açıklaması projenin kendi `stackvo.json`'ından geliyor,
+   yani dili bilinmiyor. `lang=""` aldı, `LogView` ve `DumpValue` ile aynı kural, ve
+   `language-of-parts.spec.js`'in listesine eklendi. *(F-1)*
+5. ✅ ~~**Literalleri adlandırılmış sabitlere indir.**~~ (yapıldı) — ve mesele tekrar değil,
+   **anlaşmazlıktı**. Üretim kodunda ölçüldü: `stackvo.loc` 13, `stackvo-net` 5, `nginx` 25
+   (rapordaki 14/9/7 testleri de sayıyordu). Ama önemli olan sayı değil: her üçünün de
+   **birbiriyle çelişen iki türetmesi** vardı.
+
+   `certs::suffix` kırpıp küçültüyor ve boşu yok sayıyordu; on çağrı noktası düz
+   `unwrap_or("stackvo.loc")` diyordu. Ölçüldü:
+
+   ```
+   DEFAULT_TLD_SUFFIX=            çağrı noktaları ""          certs::suffix "stackvo.loc"
+   DEFAULT_TLD_SUFFIX=Shop.LOC    çağrı noktaları "Shop.LOC"  certs::suffix "shop.loc"
+   ```
+
+   Boş olanı kullanıcıya ulaşıyordu: `Env::parse` dosyadaki boş değeri gömülü varsayılanın
+   önüne koyuyor, yani anahtarı yazıp karşısını boş bırakan bir `.env` her projeye **çıplak
+   noktayla biten** bir alan adı veriyor, sertifika ise hâlâ `stackvo.loc` için kesiliyordu.
+
+   Artık üç sabit (`config::DEFAULT_TLD_SUFFIX`, `DEFAULT_NETWORK`, `DEFAULT_SERVER`),
+   `EMBEDDED` onlara işaret ediyor, ve üç tek türetme: `Env::tld_suffix` (küçültür),
+   `Env::docker_network` (küçültmez — Docker ağ adları büyük/küçük harfe duyarlı) ve
+   `Env::default_server`.
+
+   **A-5 gerçekten kapandı.** `SUPPORTED_SERVERS_DEFAULT` beş render noktasına ulaşıyor;
+   `Manifest::server_or` seçim yapmamış projenin cevabını veriyor. Ve bunu yaparken
+   **rapordaki teşhisin ötesinde bir hata** çıktı: `detect.rs`'in dört `server: "nginx"`'i
+   hiç tespit değildi, ama `imports.rs` orayı **gerçek kanıtla** yazıyor (DDEV'in
+   `webserver_type`'ı). `detected_spec` ayarı tespitin önünde okuduğu için, Apache'ye
+   yapılandırılmış bir DDEV projesi ayarın söylediği sunucuyla içe aktarılıyordu — kanıt
+   kaydedilip yok sayılıyordu. `Detected.server` artık `Option`, ve sıra o fonksiyondaki
+   diğer her alanla aynı: klasör ne diyorsa o kazanır, ayar hiçbir şey demeyene cevap verir.
+
+   Kapı `tests/named_constants.rs`: iki değer için "tek dosya, tek kez", `nginx` içinse
+   **yedek deyimi** yasak — çünkü `"nginx"` aynı zamanda bir sunucunun *adı* ve
+   `Server::parse`'ta, geçerli adlar listesinde, nginx'e özgü render'da meşru olarak
+   geçiyor; onu topyekûn yasaklayan bir kapı daha kötü bir kod isterdi. Üç mutasyonla
+   kırıldı.
+
+   Bir de tooling gerilemesi yakalandı: `validate-contracts.mjs` `EMBEDDED`'ı metin olarak
+   okuyor ve satırlar sabit referansına dönünce üçünü birden "`.env`'de yok" diye
+   raporladı — aynı regex'in sessizce ölmesinin **üçüncü** kezi. Artık adlandırılmış sabiti
+   de çözüyor. *(B-2, A-5)*
+6. ✅ ~~**`env.schema.json`'ın `consumers` alanını yeniden ölç ya da sil.**~~ (yapıldı)
+   ölçüldü, silinmedi. Sayı 43/39 değil **45/39**: kırk beş yolun otuz dokuzu `core/` altında,
+   yani Rust'ın yerini aldığı Bash/Node uygulamasında. Altısı canlı ağacı gösteriyordu.
+
+   Aracın kendisi de `core/`'a bakıyordu, yani her koşuda `exit 2` verip bunu **kimseye
+   söylemiyordu** — alanın ölmesini engellemek için yazılmış araç, tam olarak o şekilde öldü.
+
+   `measure-env-usage.mjs` artık bu depoyu okuyor (`src-tauri/src`, `src`, `skeleton`,
+   `tools`) ve iki kuralı var. **Bildirim tüketim değildir:** her anahtar `config.rs`'in
+   tablolarında yazılı, o dosya sayılsaydı yetmiş ikisi de "aktif" çıkar ve ölçüm hiçbir şey
+   söylemezdi. **Yorumlar soyuluyor** — ve bu süs değil: bu depo bir anahtarın ölü olduğunu
+   *o anahtarın adını anan bir cümlede* yazıyor, `skeleton.rs` `DOCKER_REMOVE_ORPHANS` ile
+   `HOST_PORT_ADMINER`'ı tam da öyle anıyor, ve soyulmamış tarama ikisini de canlı okudu.
+   (Aynı yanlış pozitif sınıfının bu turda **üçüncü** görülüşü.)
+
+   Sonuç: 72 anahtarın 72'sinin etiketi ölçümle uyuşuyor, `consumers` 35 yol taşıyor ve
+   **hepsi diskte var**. Kapı `tests/env-consumers.spec.js` (6 test): yollar var mı, listeler
+   taze taramayla aynı mı, etiketler ölçümle uyuşuyor mu, bildirim sitesi sayılmıyor mu.
+
+   Ve şemanın başlığında **iki bayat iddia** daha bulundu: `source` alanı `.env.example`
+   diyordu — **öyle bir dosya yok**, o da Bash uygulamasıyla gitti — ve "159 anahtar"
+   diyordu; belgelenen sayı **72**. İlk paragrafı yanlış olan bir sözleşmenin gerisine kimse
+   güvenmez, o yüzden ikisi de düzeltildi ve sayı kapıya bağlandı.
+
+   `npm run env:usage` okur, `npm run env:usage:fix` yazar ve ardından Prettier'i koşturur —
+   `JSON.stringify(…, 2)` ile Prettier kısa dizilerde ayrışıyor. *(E-1)*
+7. ⚠️ **`<root>/commands.json`** (yarım) — İlk yarısı yapıldı, ikinci yarısı (paket
+   manifestine `commands` alanı) açık. (Üstü çizilmedi: madde tam bitmedi.)
+
+   **Yapılan.** `<root>/commands.json`, `stackvo.json`'ın `commands` bloğunun **aynı**
+   şeması, aynı argv kuralı, aynı konteyner sınırı — ve *aynı ayrıştırıcı*: `parse_from`
+   hangi dosyayı okuduğunu bilen tek okuyucu. İkinci bir ayrıştırıcı, `host` reddinin iki
+   yerde ayrışması demekti. Yeni bir tehdit modeli yok; zaten alınmış iki kararın birleşimi.
+
+   **Katmanlar arası kural, ve asimetrisi bilinçli: proje kazanır, makine dosyasına
+   söylenir.** Projenin komutunu reddetmek, yazarının hiç görmediği kişisel bir dosya
+   yüzünden işlenmiş ve paylaşılmış bir dosyayı reddetmek olurdu; sessizce ezmek ise
+   kataloğun zaten reddettiği "etiketi yalan söyleyen düğme" hatası. `shadowed()` gölgede
+   kalan satırı raporluyor, ve her satır `because` alanında geldiği dosyayı taşıyor.
+
+   Yüzey: `machine_commands` IPC komutu, `MachineCommandsPane` (salt okunur — dosyanın
+   kendisi arayüz, DDEV/Lando/dde/Laragon'da olduğu gibi; bir form aynı JSON'u yazmanın
+   ikinci yolu olurdu ve bir editör kullanılan ilk anda çelişirdi), iki dilde yardım konusu,
+   README bölümü. `stackvo commands` ve `stackvo run` bedavaya aldı — ikisi de zaten
+   `for_project`/`resolve` üzerinden geçiyor.
+
+   **Ve bir mutasyon boşluk buldu.** `declared_for`'daki birleştirmeyi silmek — özelliğin
+   tamamını hiçbir şey yapmaz hâle getiren tek satır — altı testin altısını da yeşil
+   bıraktı, çünkü hepsi iki katmanı elle kuruyordu. Tek arıza biçimi "parçalar hiç
+   birleştirilmedi" olan bir özellik, diski okuyan bir teste ihtiyaç duyar; yazıldı ve
+   mutasyon artık yakalanıyor.
+
+   **Kalan.** Bir paketin komut getirmesi (`ddev-redis`'in `ddev redis-cli`'yi de
+   getirmesi) — imza zincirinden geçen ayrı ve daha büyük bir parça, ve bu maddede
+   bilerek ayrı tutuldu. *(A-4 / R-6)*
+8. ✅ ~~**`<proje>/stackvo.preset.json` yerleşim kuralı.**~~ (yapıldı) — `preset.rs`'in doğru
+   sorunu çözdüğü doğruydu; eksik olan **dosyanın olacağı yerdi**. Dışa aktarma bir dosya
+   yazıyor, içe aktarma bir dosya okuyor, ve ikisinin arasında birinin "onu şuraya koydum"
+   demesi gerekiyordu — bu özelliğin ortadan kaldırmak için var olduğu cümlenin ta kendisi.
+   DDEV'de böyle bir soru yok: dosya `.ddev/config.yaml` ve `ddev start` onu okuyor.
+
+   `preset::CONVENTIONAL_FILE` = `stackvo.preset.json`, manifestin yanında, depoda — yani
+   klon onu getiriyor. `.stackvo/` dizini içinde değil, çünkü ona eşlik edecek ikinci bir
+   dosya yok: tek dosya için bir dizin, tutacağı bir şey olmayan bir kuraldır.
+
+   Gereksinimler kartı artık bunu görüyor: proje bir ön ayar taşıyorsa ve uygulamak hâlâ
+   bir şeyi değiştirecekse bir satır çıkıyor, düğmesi `preset_apply`'a gidiyor — Ayarlar'ın
+   içe aktarımıyla **aynı** plan-sonra-uygula komutu, çünkü başkasının klonuyla gelen bir
+   dosya, siz bir sayfayı açtınız diye yığınınızı yeniden yazmamalı. Yığın uyuştuğunda satır
+   kayboluyor; kalıcı bir afiş üçüncü ziyarette kimsenin okumadığı bir satırdır ve bunun
+   önem taşıdığı an klondan sonraki ilk açılıştır.
+
+   **Ve bir ayrışma bulundu:** dışa aktarma `<ad>.stackvo-preset.json` öneriyordu, yani
+   aynı fikrin iki yazımı ve yalnız biri okunuyordu — hiçbir okuyucunun bakmadığı bir dosya
+   yazan bir dışa aktarma, sessizce çalışmayan bir özelliktir. Tek yazıma indi ve
+   `tests/preset-convention.spec.js` iki tarafı eşit tutuyor.
+
+   (Kapı yorumları soyup koda bakıyor — aynı yanlış pozitif sınıfının bu depodaki
+   **dördüncü** görülüşü: bir adın neden yanlış olduğunu anlatan cümle o adı içeriyor.)
+   *(R-11)*
+9. ✅ ~~**Podman rootless soketi** + bir uyumluluk fikstürü.~~ (yapıldı) — ve iş tam da
+   bulgunun dediği kadardı: Podman zaten Docker API'sini bir unix soketinde konuşuyor,
+   yani o satırın üstündeki her şey çalışıyordu ve eksik olan tek şey **yoldu**.
+
+   İki soket, rootless önce — çünkü rootless Podman'in amacı ve Lerd'in tüm ürününü
+   üzerine kurduğu durum:
+
+   ```
+   $XDG_RUNTIME_DIR/podman/podman.sock   rootless, kullanıcı başına
+   /run/podman/podman.sock               rootful, sistem geneli
+   ```
+
+   `XDG_RUNTIME_DIR` **okunuyor**, varsayılmıyor. `/run/user/<uid>` neredeyse her Linux'ta
+   doğru, ve sorun "neredeyse"de: dizini tanımlayan şey o değişken, ve onu başka yere koyan
+   bir oturum var olmayan bir yol alırken soket hiç bakılmayan bir yerde dururdu.
+
+   **Uyumluluk fikstürü** Podman'ın compat `/version` cevabı, ve içindeki ayrım şu:
+   `Version` Podman'ın **kendi** sürümü (`5.1.1`, bir Docker sürümü değil), `ApiVersion`
+   ise taklit ettiği Docker API seviyesi (`1.41`). Hiçbir yerde ikisi de bir asgariyle
+   karşılaştırılmıyor, ve **Docker olmayan bir motoru çalıştıran şey tam olarak bu**: bir
+   "Docker >= 20" kontrolü, API'yi gayet iyi konuşan bir motoru başka bir ürünün sürüm
+   dizgesine bakarak reddederdi.
+
+   Motor adı bir **etiket, bir dal değil**: bu uygulamada hiçbir şey dördünden hangisinin
+   cevapladığına göre başka türlü davranmıyor.
+
+   **Yazılı bir sınır:** `podman-docker` Podman'ın soketini Docker'ın adı altına kuruyor —
+   o paketin amacı bu — dolayısıyla `Engine` olarak okunuyor ve çalışıyor. Orada platformu
+   doğru raporlamak, sunucuya ne olduğunu sormak demekti ve cevap uygulamanın sonrasında
+   yaptığı hiçbir şeyi değiştirmezdi.
+
+   (Bulgunun ikinci yarısı — karşılaştırmanın README'ye konması — motor paragrafına girdi.)
    *(R-2 ikinci yarısı / §8.6)*
-10. **RoadRunner sürücüsü** — Octane'ın iki sürücüsünden ikincisi; Swoole var, çift yarım.
+10. ✅ ~~**RoadRunner sürücüsü**~~ (yapıldı) — Octane'ın tam olarak iki sürücüsü var ve bu
+    uygulama birini gönderiyordu — Octane kullanan bir proje için bu "eksik özellik" değil,
+    kaybedebileceği bir yazı tura: yarısı burada olmayan yarıyı seçmiş.
+
+    Şekil Swoole'unki: `php-cli` imajı, kendi HTTP sunucusu 8000'de, FPM yok, dizin listesi
+    yok, Traefik 80'e değil 8000'e yönlendiriliyor. **Ayrım maliyette**: Swoole yorumlayıcıya
+    derlenen bir PHP uzantısı (PECL modülü + iki geliştirme kütüphanesi), RoadRunner ise
+    PHP ile boru üzerinden konuşan bir **Go ikilisi** — yani PHP derlemesi hakkında hiçbir
+    şey değişmiyor. Blok bir indirme ve bir `chmod`.
+
+    `rr get-binary` betiği, sabitlenmiş bir sürüm bağlantısı değil: imajın mimarisine uygun
+    derlemeyi kendisi çözüyor, ve bu imaj geliştiricinin makinesi neyse onun üzerinde
+    derleniyor.
+
+    **Yedek yolu Swoole'unkinden daha önemli.** `artisan` yoksa Octane yok, ve Octane'sız
+    RoadRunner bir `.rr.yaml` ile bir PSR-7 işçisi istiyor — bu uygulamanın kimse adına
+    yazamayacağı iki şey. O yüzden Laravel olmayan bir proje aynı portta PHP'nin kendi
+    geliştirme sunucusunu alıyor: çalışan bir site, çıkan bir konteyner değil. Swoole on iki
+    satırlık bir betiğe düşebiliyor çünkü uzantının kendisi bir HTTP sunucusu; Go ikilisinin
+    bir işçi olmadan sunacak bir şeyi yok.
+
+    Ve **hiçbir yapılandırma dosyası üretmiyor**: Octane bir `.rr.yaml` yayımlıyor, o dosya
+    projenin; ikincisini üretmek uygulamanın çerçevenin kendi dosyasıyla tartışması olurdu.
     *(R-10)*
-11. **Yazılmamış kararları yaz** — çalışma zamanı sınırı neden sekiz
-    (`manifest::LANG_RUNTIMES` başlığı), CLI neden yalnız İngilizce (§8.4), bulut/Codespaces
-    sınırı (R-14), taşınabilirliğin neden imkânsız olduğu (R-16), quickcmd kataloğunun neden
-    kapalı olduğu (A-4). Bir eksik ile bir karar arasındaki fark, kararın yazılı olmasıdır.
-12. **Kanal ve sürüm başına yükseltme notu** — `channel.rs` yazılmış, `tauri.conf.json` tek
-    uç tanımlıyor, `updates.js` manifesti zaten okuyor. *(§8.3, §8.5, U-5)*
-13. **İlk açılış turu** — 309 komut, 26 panel; dört Gate var ama hepsi engel, tanıtım değil.
-    *(§8.2, U-6)*
-14. **Kullanıcı isteğiyle çökme raporu gönderme** — `crash.rs` kaydı zaten tutuyor,
-    `diagnostics.rs` paketine iliştirilir, `PRIVACY.md`'nin sözü bozulmaz. *(§8.1)*
+11. ✅ ~~**Yazılmamış kararları yaz.**~~ (yapıldı) — beşi de, ve her biri kararın
+    yaşadığı yere:
+
+    * **Çalışma zamanı sınırı neden altı+iki** — `manifest::LANG_RUNTIMES` başlığı. Java ve
+      .NET bilerek yok: ikisi de `COPY . .` + başlatma komutu değil. Java bir yapı aracının
+      (Maven/Gradle) bu uygulamanın modellemediği yaşam döngüsünden bir artefakt üretmesi,
+      .NET ise çıktı düzeni SDK sürümüne ve hedef çerçeveye bağlı bir `publish` adımı.
+      Eklemek yedinci ve sekizinci satır değil, **ikinci bir üreteç şekli** olurdu. Yedinci
+      satırın barajı popülerlik değil şekil: üç komutla kurulup derlenip tek portta başlayan
+      bir dil buraya ait ve neredeyse bedava.
+    * **CLI neden yalnız İngilizce** — `cli.rs` başlığı. Bir CLI'nin çıktısı insanlar kadar
+      **makineler** tarafından okunuyor: `grep`'e giriyor, bir issue'ya yapıştırılıyor, geçen
+      sene yazılmış bir CI adımıyla eşleşiyor. Çevirmek bunların hepsini yerel ayara bağlardı
+      ve arıza sessiz olurdu. `git`, `docker` ve `kubectl` de bu yüzden İngilizce, ve bu depo
+      `consoleLocale`'i zaten tam bu sebeple bir *ayar* olarak taşıyor. İngilizce olmayan
+      şey hata kataloğu: `hints.rs` her öneriyi çeviriyor, masaüstü çeviriyi gösteriyor,
+      CLI aynı `Hint`'in taşıdığı İngilizce yedeği basıyor.
+    * **quickcmd kataloğu neden kapalı** — `CATALOG`'un başlığı. Eski cümle ("buraya satır
+      eklemek komut eklemenin tek yolu") **iki kez** doğruluğunu yitirdi; hâlâ doğru olan
+      kısım yazıldı: tablo *webview'e* kapalı. Kataloğun kendisinin kapalı kalmasının sebebi
+      ayrı: bu on bir satır uygulamanın **başkasının çerçevesi hakkında iddia** ettiği
+      şeyler. "Ne yazdıysam onu çalıştır" farklı bir şey, ve iki bildirim katmanı tam onun
+      için.
+    * **Taşınabilir kurulum neden imkânsız** ve **bulut/Codespaces sınırı** — README, Docker
+      takasının anlatıldığı yere. İkisi de eksik değil sınır, ve "bu eksik mi karar mı?"
+      sorusunun cevabı kurulumdan **önce** okunmalı.
+12. ⚠️ **Kanal ve sürüm başına yükseltme notu** (yarım) — Sürüm notu zaten yapılmıştı
+    (ölçüldü), ikinci kanal ilk yayına bağlı ve gerekçesi artık yazılı. (Üstü çizilmedi:
+    madde tam bitmedi.)
+
+    **Sürüm notu zaten gösteriliyor** — `Settings.vue`'nun güncelleme kartı `update.notes`'u
+    basıyor, `updates.js` onu manifestten okuyor. Bulgunun bu yarısı ölçüldüğünde kapalıydı.
+    Bulunan tek şey metnin **işaretsiz** olmasıydı: o not yayıncının, uygulamanın değil, ve
+    dili bilinmiyor — `lang=""` aldı ve `language-of-parts.spec.js`'in listesine girdi.
+
+    **İkinci kanal bir bağımlılık, eksik değil** — ve `channel.rs`'e yazıldı. `tauri.conf.json`
+    tek uç tanımlıyor; güncelleyici eklentisi uç listesini biri cevap verene kadar geziyor,
+    yani ikinci bir girdi kanal *seçmez*, **yedek** olur: manifesti bir an cevap vermeyen bir
+    kararlı kurulum beta'yı alırdı. Uçta kanal yer tutucusu yok, `check()`'te uç geçersiz
+    kılma yok.
+
+    Bugün bir *ayar* eklemek, `channel.rs`'in kendi notunun uyardığı hatayı kurmak olurdu:
+    *"kimsenin yayımlamadığı bir kanal, güncellemeleri sessizce durduran bir ayardır."*
+    Biri "beta"yı işaretler, uç `latest.json` vermeye devam eder, `offer` doğru şekilde
+    `otherChannel` der, ve o kişi **hiçbir şey almaz** — hatasız, çünkü hiçbiri yanlış değil.
+
+    Engeli kaldıran adım burada daha fazla kod değil, **ilk yayın**: bir sürüm numarası
+    seçilip bir publish olduğunda `beta.json` aynı koşunun bir çıktısı daha oluyor ve uç
+    sorusu karşısında gerçek bir cevabı olan gerçek bir soru hâline geliyor. *(§8.3, §8.5,
+    U-5)*
+13. ✅ ~~**İlk açılış turu**~~ (yapıldı) — Dört Gate vardı ve **hepsi engel**: bir şey eksik
+    ya da kurulmamış, halledilene kadar uygulama kullanılamaz. Hiçbiri bir şey tanıtmıyor,
+    ve içeri girerken dört kez durdurulmak tanıtım değil.
+
+    `WelcomeTour` bunun tersi bir ekran ve öyle davranıyor: yığın **ayağa kalktıktan sonra**
+    geliyor, her noktada bırakılabiliyor, ve bırakmak bir hata durumu değil. Beş tam pencere
+    ekranının sonuncusu ve gate olmayan tek ekran — ulaşamayacağınız bir özellikle
+    tanıştırılmak, hiç tanıştırılmamaktan kötü.
+
+    **İçeriği M7'nin listesi**, ve seçim ölçülmüş: kimsenin kendi başına bulamayacağı altı
+    şey — yedi araçtan içe aktarma, dal başına tam ortam, yavaş isteğin açıklaması, üretim
+    imajı, devcontainer ihracı, denetim kaydı. Altısı da yazılmış ve test edilmiş, ve
+    **dördü hiçbir kullanıcı belgesinde geçmiyor**. Panoyu tanıtan bir tur, kendini zaten
+    tanıtan kısmı tanıtırdı.
+
+    Her kartın gideceği bir yer var: yalnız anlatan bir tur, insanların kapattığı turdur.
+
+    **Bir kez, ama geri alınabilir.** `tourSeen` oturum bayrağında değil tercihlerde, çünkü
+    "bir kez"in yeniden başlatmayı atlatması gerekiyor yoksa bir kez değil. Ve Ayarlar'dan
+    yeniden açılabiliyor: ilk dakikasında atlanan tek atışlık bir ekran, bir daha asla
+    geri gelmeyen bir ekrandır — tek şansı olan her karşılama akışının arıza biçimi bu.
+
+    Yazarken bir sıra hatası yakalandı: tercihler boot'tan **sonra** okunuyor, yani
+    `prefs.value?.tourSeen !== true` optional chain'i tercihler inmeden `undefined !== true`
+    → doğru cevaplıyordu ve tur, çoktan kapatmış biri için her açılışta bir an parlardı.
+    Koşul artık tercihlerin **yüklenmiş olmasını** şart koşuyor. *(§8.2, U-6)*
+14. ⚠️ **Çökme raporu** (yarım) — Bildirme yapıldı, gönderme yapılmadı ve sebebi
+    aşağıda yazılı. (Üstü çizilmedi: madde tam bitmedi.)
+
+    Ölçüm iki şey buldu. **Rapor zaten teşhis paketine giriyor** — `diagnostics::parts`
+    günlük dizinini gezip `crash-` ile başlayanları `crashes/` klasörüne koyuyor; bulgunun
+    "iliştirilir" dediği yarı zaten kapalıydı.
+
+    **Göndermek yapılmadı, çünkü gönderilecek yer yok ve olmaması bir söz.** `PRIVACY.md`
+    açık: *"telemetri yok ve eklemek gibi bir plan yok… çökme raporlama servisi yok ve
+    uygulamanın arkasında sunucu yok"*, ve gelecekteki her şeyin **opt-in, varsayılan kapalı
+    ve gönderilmeden önce orada yazılı** olacağı. Bir uç eklemek kod değişikliği değil, ürün
+    kararı — ve o kararı alana kadar bu maddenin "yapılmadı"sı bir eksik değil, bir söze
+    uymak.
+
+    **Asıl eksik daha küçük ve daha kötüydü: uygulama çöküyor ve bunu hiç söylemiyor.**
+    Rapor yazılıyor, biri paket oluşturursa onunla yolculuk ediyor, ve o kişi ekleyecek bir
+    şey olduğunu hiç öğrenmiyor. Yani "bunu bildirmek isterim" hiç başlamıyor — bildirmek zor
+    olduğu için değil, bildirilecek bir şey olduğu bilinmediği için.
+
+    Yapılan: `crash::reports` / `unseen` / `mark_seen`, iki IPC komutu, ve kabukta bir
+    satır — sonraki açılışta bir kez, kapatılabilir, düğmesi teşhis paneline gidiyor.
+    Karşılaştırma **ada göre**, sayıya göre değil: budanmış bir rapor (10 tutuluyor) sayıyı
+    düşürür ve sonraki çökme sessizce geçerdi. İşaret okunduğunda değil **görüldüğünde**
+    yazılıyor; okunduğunda yazmak, kimsenin bakmadığı bir bildirimi kapatmak olurdu.
+
+    Yan olarak `Settings` artık `?tab=` okuyor — bildirimin doğru panele inmesi için;
+    "teşhis" işiyle Görünüm panelinde açılan bir bağlantı teknik olarak çalışan bir bağlantı.
+    *(§8.1)*
 
 ---
 
 ## N7. Stratejik — hendek
 
-**Durum: on maddenin onu açık.** Bu blok bilerek en sona konmuş: her maddesi
-yayınlanmış bir ürünün üzerine kuruluyor.
+**Durum: on maddenin beşi ✅ yapıldı (#1, #2, #3, #5, #6), dördü ⚠️ yarım (#4, #7, #8,
+#10), biri 🚫 yapılmayacak (#9) — hiç dokunulmamış madde kalmadı.** Bu blok bilerek en
+sona konmuş: her maddesi yayınlanmış bir ürünün üzerine kuruluyor.
 
 Kendi içinde sıra bağımlılığa göre: ilk üçü bir arada bir cümleyi tamamlıyor, dördüncüsü
 kendi önkoşulunu taşıyor.
 
-1. **Ajan kum havuzu** ⭐ — `worktree::create` + `db::copy_database` + TTL + kapsamlı MCP.
-   **Yeni modül yok**; yedi parçanın yedisi de ağaçta. 17 rakibin hiçbirinde ajan izolasyonu
-   yok ve yerel ikili mimaride kopyalanamaz. Ürünün konumunu değiştiren tek madde. *(K-1)*
-2. **Telafi eylemi ve geri alma** — K-1'i güvenli yapan şey; `contracts/ipc.json` her komutun
-   `query` mi `mutation` mı olduğunu zaten biliyor. *(S-1 ikinci yarısı)*
-3. **Kapsamlı ajan yetkisi** — bugün `--allow-writes` 12 aracı birden açıyor ve içinde
-   `stack_down` var. `websurface.rs` bu sorunun aynısını çözmüş: koşu başına üretilen token +
-   loopback + salt-okuma. *(S-2)*
-4. **Kendi imgelerini sürüme sabitle → kilit dosyası.** Önce D-1 (altısı `:latest`, ve
-   `pkg::MOVING_TAGS` bunu üçüncü taraflara **yasaklıyor**), sonra `stackvo.lock`. En zor
-   yarısı — belirlenimci üreteç, digest zinciri, imzalı doğrulama — çoktan bitmiş.
-   Kategoride "npm ci" karşılığı yok. *(D-1 → K-2)*
-5. **Ortam farkı** — `diagnostics.rs` üzerine bir karşılaştırma fonksiyonu; yeni ölçüm yok.
-   *(K-3)*
-6. **Kaynak bütçesi ve proje başına atıf** — `stats_store.rs` + `idle.rs` hazır. Stratejik
-   değeri: **R-2'yi savunmaya çevirir** — Docker pahalı, ama pahalılığını ölçen tek ürün
-   olmak, ölçmeyip inkâr etmekten iyi bir konumdur. *(U-1)*
-7. **İstek tekrarı**, sonra anlık görüntüye bağlı hâli. `explain.rs`'in başlığı zaten
-   *"no new measurement is needed"* diyor. *(K-4 → K-5)*
-8. **Paylaşılabilir teşhis bağlantısı** ve **onboarding doğrulaması** — ikincisi K-2'den
-   sonra kesinleşiyor. *(U-3, U-4)*
-9. **ACME seçeneği** — DDEV'in planında yazılı, ServBay satıyor; kapanan pencere. *(M8)*
-10. **Uzun kuyruk** — monorepo *(K-7)*, tedarik zinciri raporu *(Z-1)*, sır sızıntı taraması
-    *(Z-2)*, politika uyum raporu *(Z-3)*, ortamla bisect *(K-6)*, çıkış görünürlüğü *(K-8)*.
+1. ✅ ~~**Ajan kum havuzu** ⭐~~ (yapıldı) — yalıtım, süre ve kapsanmış kayıt: üçü de
+   yerinde ve birbirine bağlı.
+
+   **Ölçüm, maddenin kendi cümlesini yanlışladı.** K-1 *"Ajan ana veritabanını göremez —
+   konteynerinde yok"* diyor. Ağaçta ölçüldü: `worktree::env_for`, dala **örneğin kendi
+   girişini** veriyordu — ana projenin kullandığı hesabın aynısını. Yani "kendi veritabanı
+   var" doğruydu, "ana projeninkine erişemez" **değildi**: bir `USE shop;` uzaktaydı. Bu,
+   worktree birinin ikinci dalıyken küçük bir şey. İçinde çalışan şey, "şu düşen testi
+   düzelt" denip migration koşmaya karar veren bir asistan olduğunda **maddenin tamamı**.
+
+   **Yapılan:** worktree'ye kendi şeması üzerinde yetkilendirilmiş bir veritabanı hesabı
+   veriliyor. MySQL ve MariaDB'de bu tam cevap: hesap başka bir şemayı okuyamaz, `SHOW
+   DATABASES` yetkisi olmayanı listelemez bile, ve yetki uygulamanın *sonradan* yarattığı
+   tabloları da kapsar — ki veri hesaptan sonra geldiği için bu önemli.
+
+   **PostgreSQL ve MongoDB yaklaşık olarak yapılmadı, reddedildi.** Postgres'in modeli o
+   şekilde değil: `GRANT ALL ON DATABASE` bağlanma/yaratma/geçici yetkisi verir, tek satır
+   değil; kopyalanan veritabanının tabloları onları geri yükleyen superuser'ın malı olur —
+   yani yetkilerin kopyalamadan **sonra**, o veritabanının içindeki nesnelere, artı
+   sonradan yaratılacaklar için varsayılan yetkilere verilmesi gerekir. Bunun yarısı,
+   uygulaması kendi tablolarını okuyamayan bir dal üretir. Mongo'nun ise sınırlanacak bir
+   veritabanı adı yok — `copy_database`'in onu reddetme gerekçesinin aynısı. İkisinde de dal
+   ortak girişi tutuyor ve **uygulama bunu söylüyor**: `worktree_list` `isolated`
+   raporluyor, panel cümleyi yazıyor, yardım belgesi iki motoru adıyla anıyor. *İddia edilip
+   düzenlenmemiş bir yalıtım, hiç sunulmamış olandan kötüdür — kimsenin kontrol etmeyi
+   bıraktığı yalıtım odur.*
+
+   **Parola `worktree-logins.json`'da, `0600`, ve kayıtta değil.** `Table` tek bir derive ile
+   iki yere seri hâle geliyor: dosyaya **ve** `worktree_list` üzerinden bir webview'a. `Record`
+   üzerindeki bir parola tarayıcıya onunla birlikte giderdi, ve tek savunma her çağrı yerinde
+   onu ayıklamayı hatırlamak olurdu. Webview'a asla ulaşmaması gereken bir alan, oraya giden
+   bir struct'ta durmaz.
+
+   **Üç küçük karar.** Hesap adı, veritabanı adının MySQL'in 32 karakterine kısaltılmışı —
+   **artı tam adın özetinden yedi hex karakter**: bir projenin iki dal veritabanı yapıları
+   gereği uzun bir öneki paylaşır, yani yalnız kısaltmak ikinci worktree'ye **birincinin
+   girişini** verirdi, sessizce. Hesabı yaratmayı reddeden bir sunucu worktree'yi
+   düşürmüyor: bu, `GRANT` yetkisi olmayan herkesten bugün çalışan bir özelliği alırdı;
+   dürüst alternatif, dalın hangi girişi aldığını söylemek. Ve hesap, **veri hakkında ne
+   karar verilmiş olursa olsun** kaldırmada düşürülüyor — `dropDatabase`'i kapalı tutmak
+   "verime dokunma" demektir, "ona erişebilen bir hesabı geride bırak" değil.
+
+   **İkinci yarı: süre, ve onu bir kum havuzuna çeviren şey.** Worktree oluşturma artık bir
+   süre alıyor (`minutes`, yedi güne kırpılı). Boş bırakılan alan sıradan anlamda bir
+   worktree veriyor — birinin kendi dalı, kaldırana kadar onun. Bir süre seçmek onu **kum
+   havuzu** yapıyor: tek bir iş için kurulmuş, ve kuran kişinin var olduğunu hatırlamayacağı
+   bir ortam.
+
+   **Kartta artık K-1'in istediği cümle bayrak olarak yazıyor:** `--allow-writes
+   --project=<dal> --for=<kalan>`. Bu satır ekranda kurulmuyor, sunucunun uyguladığı
+   `Grant`'ten üretiliyor (N7 #3) — kopyalanan şeyle uygulanan şey aynı olsun diye; ikinci
+   bir yazım, yanlış olabilecek ikinci bir şeydir. O sınırın altında on iki yazma aracı
+   dörde iniyor ve `stack_down` onlardan biri değil. **Süresi geçmiş bir kum havuzunun
+   kaydı boş** — süresi dolmuş bir `--for`'u düşürmek, sessizce *sınırsız* bir yetki
+   dağıtmak olurdu.
+
+   **Zamanlayıcıyla hiçbir şey silinmiyor, ve silinmeyecek.** Saate bakarak dizin kaldıran
+   bir uygulama er ya da geç içinde bir sabahın commit'lenmemiş işi olan bir dizini kaldırır;
+   hiçbir süre politikası buna değmez. Tarihin yaptığı şey, listenin "zamanı geçti"
+   diyebilmesi — kaldırmak tek tık ve bir **karar** olarak kalıyor. Çıktı her hâlükârda
+   duruyor: bir kum havuzunun ürünü **daldır**, veritabanı iskeledir.
+
+   İki ayrıntı: süre **oluşturma anında** yeniden hesaplanıyor, plandan alınmıyor — birinin
+   okuduğu ekranda dakikalar önce yapılmış bir plan, istenen sürenin bir kısmını harcamış
+   olmamalı. Ve "geçti mi" bir **metin** karşılaştırması; bu yalnızca damgalar sabit
+   genişlikte UTC olduğu için doğru. Gerçek aritmetik gereken tek yer — *kaç dakika kaldı*,
+   ki grant'in `--for`'u o — uygulamada zaten olan `civil_from_days`'in yanına
+   `days_from_civil` konarak çözüldü, ve çift birbirine karşı test ediliyor; birinin yanlış
+   sabiti, diğerinde tam olarak aynı biçimde yanlış olmadıkça bu testten geçemez.
+
+   **Bilerek yapılmayan:** `stackvo sandbox <ad>` diye bir **CLI fiili** yok. Oluşturma akışı
+   ilerlemesini Tauri olayları üzerinden yayınlıyor ve komut katmanında duruyor; CLI için
+   ikinci bir uygulama, `worktree.rs`'in kendi kuralının ihlali olurdu — *"bir proje olan
+   şey için paralel bir yaşam döngüsü, her hatanın ikinci bir kopyası demektir."* Fiil,
+   akışın olduğu yerde: panelde. CLI'a taşımak önce oluşturmayı komut katmanından çıkarmayı
+   gerektiriyor, ve bu ayrı bir iş. *(K-1)*
+2. ✅ ~~**Telafi eylemi ve geri alma.**~~ (yapıldı) — `undo.rs`, ve önce bir ölçüm düzeltmesi.
+
+   **Raporun ilk yarısı çoktan kapanmıştı, ikinci yarısı ise raporun sandığından beterdi.**
+   S-1 *"`audit.rs` yazıyor ama okunamıyor — 309 komut içinde adı `audit` geçen sıfır komut
+   var"* diyordu; o madde daha önce kapandı (`audit_trail` + `AuditPane.vue`). Ama ölçünce
+   çıkan asıl boşluk şuydu: **denetim kaydı on sekiz yerden yazılıyordu ve MCP yüzeyi
+   onlardan biri değildi.** Yani *"14:32'de `stackvo_stack_down` çağrıldı"* — maddenin
+   kendi örnek cümlesi — bu uygulamanın **üretemediği** bir cümleydi, hem de insan olmayan
+   tek çağıran hakkında.
+
+   **Kaydın eşiği bilerek genişletildi, ve gerekçesi yazılı.** `audit.rs` "aynı düğmeye
+   basınca geri alınan" işlemleri dışarıda bırakıyor — `project_start` bu yüzden yok. Ama o
+   dışarıda bırakma hiçbir zaman *işlem* hakkında değildi, **özne** hakkındaydı: pencereden
+   bir konteyner başlatan kişi, kaydı okuyan kişidir ve olup bittiğini gördü. Aynı işlemi
+   bir asistan istediğinde onu **kimse görmedi**. Bu yüzden kayıt, işlemin **öznesi olduğu
+   yere** kondu — sunucu ikilisinin çalıştırdığı `mcp::serve` — `call`'a değil; çünkü
+   loopback yüzeyi ve geri almanın kendisi de `call`'dan geçiyor ve ikisi de "bir asistan
+   bir şey istiyor" değil. **Reddedilen çağrı da kaydediliyor** ve çoğu zaman daha değerli
+   satır odur: yığını durdurmayı deneyip reddedilmiş bir asistan, bir sonraki yetkiyi
+   verirken görülmek istenen tam olarak budur.
+
+   **Telafi eylemi çağrıdan önce hesaplanıyor.** `stack_down`'ın durdurduğu küme yalnızca
+   durdurmadan **önce** vardır; düğmeye basıldığında hesaplanan bir plan, çoktan değişmiş
+   bir makineye göre hesaplanmış olurdu. Bu yüzden plan, araç çalışmadan önce kurulup
+   satıra yazılıyor. Yığının tamamını durdurmanın telafisi, **öncesinde çalışanları**
+   başlatmak — önce servisler, sonra projeler, çünkü veritabanı olmadan kalkan bir proje
+   bozuk kalkar.
+
+   **On iki aracın çoğunun telafisi yok, ve hangisinin olmadığını söylemek maddenin
+   kendisi.** Bir *yeniden başlatma* geri alınacak durumun içinden zaten geçti; *generate*
+   saklanmayan bir çıktının üzerine yazdı (onarım girdiyi değiştirmek); *sertifika
+   yenilemesi* de saklanmayanın yerine geçti; *anlık görüntü almak* bir dosya ekledi ve
+   hiçbir şeyi değiştirmedi. `stack_up`'ınki daha ince: **hangi konteynerleri gerçekten
+   başlattığı çağrıdan önce bilinemez**, ve "kapalı olan her projeyi durdur", hiç
+   dokunmadığı konteynerleri adlandıran bir geri alma olurdu. Her satır kendi cümlesini
+   taşıyor; panel o cümleyi gösteriyor — tutamayacağı sözü veren bir düğme yerine.
+
+   **Dosyanın iki özelliği işin gerisini yaptı.** Yalnızca eklenen bir dosya olduğu için
+   geri alınan işlem **düzenlenmiyor**: geri alma satırı, geri aldığı satırın `at`'ini
+   anıyor ve okuyucu ikisini birleştiriyor — böylece kayıt iki yarıyı da tutuyor, işlemin
+   olduğunu **ve** birinin onu geri aldığını. Ve geri alma bir **dizi**, işlem değil: altı
+   çağrının dördüncüsü düşerse ilk üçü yapılmış kalıyor ve kayıt nerede durduğunu söylüyor.
+
+   Yüzey: `undo.rs` (+7 test), `audit.rs`'e `undo`/`undoes` alanları ve okuma tarafında
+   türetilen `undone`, `mcp::serve`, `audit_undo` komutu, `AuditPane`'de geri al düğmesi /
+   "geri alındı" rozeti / gerekçe satırı, i18n iki dilde, yardım belgesi iki dilde,
+   `rules.rs`'te asistana "yaptığın her yazma kaydediliyor" cümlesi, README ve ARCHITECTURE.
+   Eski satırlar yeni alanlar olmadan okunmayı sürdürüyor (bir test bunu kilitliyor).
+   *(S-1 ikinci yarısı)*
+3. ✅ ~~**Kapsamlı ajan yetkisi.**~~ (yapıldı) — `grant.rs`, üç sınır, ve biri dişli.
+
+   **Teşhis doğruydu:** `--allow-writes` on iki aracı birden açıyordu ve içlerinde
+   `stack_down` vardı. README bunu bir paragrafla uyarıyordu — *"read that list before
+   passing the flag"* — ki bir uyarı, kod sınırı ifade edemediğinde budur. Oysa neye izin
+   verdiği sorulan bir insanın kurduğu cümlenin üç parçası var: *"bu asistan `shop`'u
+   yeniden başlatabilir, önümüzdeki yarım saat boyunca."* Bayrak üçünü de söyleyemiyordu.
+
+   **Üç sınır, ve her biri diğer ikisi yetmediği için orada:** `--allow=project_restart,
+   project_start` araçları sayarak değil **adlandırarak** açıyor (bir "güvenli olanlar"
+   listesi, bir sonraki araç eklendiğinde anlamı değişen listedir); `--project=shop`
+   sunucuyu bir projeye bağlıyor; `--for=30m` yazma yarısını sunucunun başlamasından o
+   kadar sonra bitiriyor — çünkü bir asistanın oturumu, verildiği işten uzun yaşıyor.
+
+   **Dişli kural: bir kapsam, sınırlayamadığını kaldırır.** `--project=shop`
+   `stackvo_stack_down`'ı güvenli yapamaz — o araç proje almıyor ve var olan her konteyneri
+   durduruyor. Yani proje kapsamı böyle bir aracı *daraltmıyor*, **kaldırıyor**: on iki
+   yazma aracı, bir projenin sınırlayabildiği dörde iniyor (`xdebug_set`, `project_start`,
+   `project_stop`, `project_restart`) ve hiçbir projenin sınırlayamadığı sekizi hiç
+   sunulmuyor. `--project`'i kabul edip `stack_down`'ı sunmayı sürdüren bir yüzey,
+   **uygulamadığı bir sınırı raporlamış** olurdu — ki bu sınırsız olmaktan kötüdür: sınırı
+   koyan kişi izlemeyi bırakır.
+
+   **Okumalar da sınırlanıyor — ve tam olarak şu kadar.** Cazip kural "kapsam yazmaları
+   sınırlar, okuma zararsızdır" ve burada yanlış: `stackvo_explain_request` başka bir
+   projenin istek izlerini ve sorgularını, `stackvo_log_read` onun kayıt dosyalarını
+   döndürüyor. "Bu asistan `shop` üzerinde çalışıyor" diyen kişi "ve diğer on bir projenin
+   ne yaptığını okuyabilir" dememiştir. Proje listeleri **kapsamdakini** raporluyor,
+   dokunulamayanı adlandırmıyor — dokunulamayanların listesi denemeye davettir.
+
+   **Ve bu bir bilgi yalıtımı değil; öyle anlatmak tehlikeli yarısı olurdu.** Makine geneli
+   enstrümanlar cevap vermeyi sürdürüyor, çünkü onlar bir projeye değil makineye ve ortak
+   servislere dair: doctor, hosts tablosu, sertifikanın alan adı listesi, posta yakalayıcı,
+   bir veritabanı servisinin sorgu kaydı, kimliğiyle bir konteynerin kaydı. Bunları da
+   sınırlamak, kapsanmış asistanı **verilen projeyi** teşhis edemez hâle getirirdi — ki bu
+   yüzeyin var olma sebebi odur. Kapsamın satın aldığı şey: projeyi adlandıran hiçbir
+   aracın verilmemiş bir proje için cevap vermemesi, ve on iki yazma aracının dörde inmesi.
+   Erişime konan bir sınır, verinin etrafına örülmüş bir duvar değil. Aynı gerekçeyle
+   `stackvo_logs` ve `stackvo_container_stats` açık kalıyor: argümanları bir *konteyner*,
+   ve `redis-7-2`'yi "`shop` değil" diye reddetmek kimsenin bir şey yapamayacağı bir sınır
+   olurdu.
+
+   **İki küçük karar daha.** Yetki, yalnız çağrıyı değil ilan edilen **listeyi** de
+   süzüyor — ilan edilip sonra reddedilen bir araç, asistanın tekrar denediği, bozuk diye
+   raporladığı ve etrafından dolaştığı araçtır. Ve tanınmayan bir bayrak **sunucuyu
+   başlatmıyor**: yanlış yazılmış bir `--project=shpo`, yapılandırma dosyası başka bir şey
+   söylerken sessizce hiçbir şey vermeyen bir sunucu olurdu.
+
+   Yüzey: `stackvo-mcp` bayrakları, `stackvo mcp-install --project= --for=`, Ayarlar
+   panelinde proje ve süre seçicileri (yazılacak bayrakların önizlemesiyle),
+   `agents_install`'a iki alan, üç yeni ipucu iki dilde, README paragrafı ve onu ölçen
+   gate (`the_readme_names_the_tools_a_project_scope_leaves` — dörtlüyü koddan okuyup
+   README ile karşılaştırıyor), yardım belgesi iki dilde, ve `rules.rs`'te asistana
+   söylenen cümle: *kapsam dışı bir ret, etrafından dolaşılacak bir arıza değil, birinin
+   verdiği karardır.* *(S-2)*
+4. ⚠️ **Kendi imgelerini sürüme sabitle → kilit dosyası** (yarım) — D-1'in
+   *sabitlenebilirlik* yarısı yapıldı; etiketlerin kendisi ve `stackvo.lock` açık.
+
+   **Çifte standart doğrulandı.** `pkg::MOVING_TAGS` üçüncü taraf paketlere `latest`'i
+   yasaklıyor — *"sabit bir manifestin altında değişen bir imgenin manifestin
+   sabitleyebileceği bir digest'i yoktur"* — ve bu uygulamanın çalıştırıp derlemediği on
+   imgenin **altısı** o etikette. Yani kural bu uygulama dışında herkese uygulanıyordu.
+
+   **Etiketler bilerek sabitlenmedi.** Bir sabitleme seçmek var olan bir sürümü adlandırmak
+   demek, ve bir kaynak dosyası bir etiketin ya da digest'in gerçek olduğunu **doğrulayamaz**;
+   uydurmak, bilinen-hareketli bir referansı uydurma-sabit bir referansla değiştirmek olurdu
+   ki daha kötü. Sabitlemeleri seçmek yayın anında, bir kayıt defterine karşı, cevabı
+   doğrulayabilen birinin işi.
+
+   **Düzelen şey: sabitlenecek yer yoktu.** On değer dört modülde literal olarak duruyordu,
+   hiçbir arayüzde, `.env`'de ya da politika dosyasında görünmüyordu, ve uygulama
+   hangilerinin hareket ettiğini **söyleyemiyordu bile**. Şimdi tek tablo (`images.rs`),
+   her biri politikanın `imagePins` bloğuyla geçersiz kılınabilir, ve uygulama kendi
+   hareketli etiketlerini başkasınınkini raporladığı gibi raporluyor.
+
+   Üç karar yazılı: **sabitleme aynayı önceler** (ayna önce olsaydı referans öneklenir ve
+   sabitleme kurumun ana bilgisayarı önüne geçmiş bir depo altında aranırdı — yani
+   sabitleme, tam da onu ayarlayan yönetilen makinelerde çalışmayı bırakırdı); **başka depoyu
+   gösteren sabitleme reddedilir ve adı söylenir** (`"nginx": "alpine:3"` bir yazım hatası,
+   sessizce başka bir şey çalıştırmak düzeltmeye çalıştığı hatadan kötü); ve **`moving`
+   sabitlemeden sonra hesaplanır**, yoksa sabitlenmiş bir satır hâlâ kırmızı kalır ve ekran
+   çalışan bir ayar hakkında yalan söyler. *(D-1 → K-2)*
+5. ✅ ~~**Ortam farkı.**~~ (yapıldı) — ve maddenin "yeni ölçüm yok" tarifi doğruydu, ama
+   eksikti: **karşılaştırılabilir bir yarı da yoktu.**
+
+   **Neden bugüne kadar yapılamıyordu.** Paket bir **insan** için yazılmış: `about.txt`
+   düzyazı, `doctor.json` ve `preflight.json` okunmak için biçimlenmiş. Bunları
+   farklamak gürültü üretir — bir soket yolu, bir pid, kaymış bir bayt sayısı — ve çıktısı
+   çoğunlukla gürültü olan bir karşılaştırma, ikinci kez okunmayan bir karşılaştırmadır. Bu
+   yüzden karşılaştırılabilir yarı ayrı türetildi ve bilerek **düz**: olgu başına tek satır,
+   yüksek sesle söylenebilecek bir anahtar, ve iki makine anlaştığında iki makinede de aynı
+   olan bir değer.
+
+   `environment.json` artık pakette: sürümler, motor, her servis örneği (sürümü ve açık mı),
+   ve her projenin **beyanı** — çalışma zamanı, sürümü, sunucusu, Xdebug açık mı. İkisi
+   bilerek **dışarıda**: **yol yok** (ev dizini her makinede farklıdır ve birebir aynı iki
+   kurulumu beş yerde farklı gösterirdi) ve **kimlik bilgisi / `.env` değeri yok** — içinde
+   durduğu paketin gönderilebilir olmasının sebebiyle aynı sebep. Bir test ikisini de
+   listeye güvenmek yerine **doğruluyor**.
+
+   **Karşılaştırma yalnız anlaşmazlığı listeliyor, gerisini sayıyor.** İki yüz özdeş satır
+   basan bir rapor, önemli olan dördünü gömer. **Tek tarafın söylediği bir olgu, yarısı
+   eksik bir farktır** — *"sende redis-7-2 var, onda yok"*, *"sen 7.2'desin, o 7.0'da"*dan
+   farklı bir cümledir ve bir kesişim, ikisinden daha işe yarar olanı düşürürdü.
+
+   Üç küçük karar: **önce onların dosyası okunuyor** — okunamayan bir dosya cevabın kendisi,
+   ve bunu öğrenmek için bu makineyi dolaşmanın anlamı yok; karşılaştırma bu makinenin
+   **şu anki** hâline karşı, saklanmış bir kopyasına karşı değil (soru her zaman *şimdi*
+   neyin farklı olduğu); ve dosya **zip mi JSON mu diye uzantıdan tahmin edilmiyor**, önce
+   zip denenip olmazsa JSON okunuyor — doğru bir dosyayı adı değiştirildi diye reddetmemek
+   için. Bu özellikten eski bir paket, hiçbir şeyi karşılaştırmak yerine durumu **adıyla**
+   söylüyor. *(K-3)*
+6. ✅ ~~**Kaynak bütçesi ve proje başına atıf.**~~ (yapıldı) — `usage.rs`, ve gerçekten
+   **yeni ölçüm yok.**
+
+   **Zaten okunuyordu, atılıyordu.** `sample_container_stats` yazıldığından beri dakikada
+   bir CPU ve bellek okuyor — sparkline için — ve okumaları iki saat sonra atıyordu, çünkü
+   sparkline hepsi buydu. Aynı okumalar artık atılmak yerine toplanıyor. Madde "R-2'yi
+   savunmaya çevirir" diyor ve bu doğru: README'de Docker'ın maliyetini söyleyen bir tablo
+   vardı, arkasında sayı yoktu.
+
+   **Yanlış yapılması en kolay yer aralık.** Toplam = hız × aralık, ve aralık kimsede yok:
+   örnekleyici altmış saniyelik bir zamanlayıcıda, yani altmış cazip bir sabit — ve
+   kapatılmış her makinede yanlış. Cuma kapatılıp pazartesi açılan bir dizüstü, hafta sonu
+   için cuma günkü hızından faturalanırdı. Bu yüzden **boşluk konteyner başına ölçülüyor**,
+   ve beş dakikayı aşan bir boşluk **hiçbir şey** katmıyor: okuma yine sayılıyor, saat yine
+   ilerliyor, yalnız *zaman* reddediliyor. En kötü hâl "toplam birkaç dakika eksik", "hafta
+   sonu faturada" değil — `stats_store`'un aynı soruya aynı cevabı.
+
+   **Ortak servisler projelere bölüştürülmüyor.** `shop` ve `blog` aynı MySQL'i kullanır;
+   belleğini aralarında bölmek uydurma olurdu, ve üzerine karar verilebilecek bir sayı,
+   kontrol edilebilen bir sayıdır. Servisin kendi satırı var ve ne olduğunu söylüyor; aynı
+   sebeple **bütçeyi yalnız bir proje taşıyabiliyor**. Yığının kendi konteynerleri de
+   listeleniyor — router'ı sessizce dışarıda bırakan bir toplam, Docker'ın buradaki
+   maliyetini olduğundan az gösterirdi.
+
+   **Bütçe tercihlerde, `stackvo.json`'da değil:** bir eşik **makinenin** kararıdır — aynı
+   depo bir meslektaşın dizüstünde farklı bir alana sahiptir, ve git'e commit edilmiş bir
+   eşik, birinin diğeriyle pull request üzerinden tartışması olurdu. Aşım **proje başına
+   günde bir kez** bildiriliyor: örnekleyici dakikada bir çalışıyor ve saat ikide aşmış bir
+   proje ikibuçukta hâlâ aşmış olur; tur başına bildirim akşama dört yüz eder, ve bir saat
+   içinde kapatılan özellik, yarın haber verecek olandır. Sıfır bütçe = bütçe yok, çünkü
+   temizlenmiş bir alan sıfır olarak gelir.
+
+   Yüzey: `usage.rs` (+9 test), `usage_report` komutu, `usage:over-budget` olayı,
+   Kontrol Panelinde "Bugün neye mal oldu" kartı — bütçe, sayının gösterildiği yerde
+   veriliyor, çünkü bütçe bir sayıya verilen tepkidir — yeni vitest dosyası (5 test),
+   i18n ve yardım belgesi iki dilde, README, ARCHITECTURE, CHANGELOG. *(U-1)*
+7. ⚠️ **İstek tekrarı** (yarım) — GET yarısı yapıldı; oturuma bağlı yarısı ve K-5 açık.
+
+   **`explain.rs`'in cümlesi bu madde için de doğruydu:** kaydın kendisi, profilleyici açık
+   bir istek gönderebilen `spx::send`, ve sorgu kaydının eklendiği gözlem penceresi — üçü de
+   ağaçtaydı. Eksik olan **fiil**di. Bir GET kaydı artık *yeniden gönder* düğmesi taşıyor:
+   tam olarak o isteği yeniden gönderiyor ve **iki raporu birden** farkıyla döndürüyor.
+   Kapattığı döngü performans işinin en sığı: kodu değiştir, siteyi aç, sayfayı bul, geri
+   dön, yirmi kaydın arasından yenisini ara.
+
+   **İki karar.** Tekrar, `spx_record_request`'in gönderdiği isteğin **aynısını** gönderiyor
+   — iki uygulama değil tek fonksiyon, çünkü ikisi tam da tekrarı orijinalle
+   karşılaştırılabilir kılan ayrıntılarda ayrışırdı: profilleyici çerezi, yönlendirme
+   politikası, ve `request_explain`'in sorguları eklediği gözlem penceresi. Ve ekranda
+   bilerek **hüküm yok**: `faster` alanı yok, yeşil tik yok. Bir koşuya karşı bir koşu bir
+   kıyaslama değildir — soğuk bir opcache ve makinenin o an yaptığı her şey farkın
+   içindedir — ve bir boolean, ölçümün taşıyamayacağı bir sonucu davet ederdi.
+
+   **Yalnız GET, ve ret düğmeyi gizlemek yerine sebebini söylüyor.** Bir kayıt isteğin
+   *satırını* tutar, başka bir şeyini değil: başlıklarını, gövdesini, altında koştuğu
+   oturumu değil — çünkü bunları kaydeden bir şey yok. Bunlar olmadan yeniden gönderilen bir
+   POST **farklı bir istektir** ve CSRF'i olan bir çatıda sayfa yerine 419 döner. Cevap gibi
+   görünüp cevap olmayan bir sonuç, retten kötüdür.
+
+   **Açık kalan yarı ve neden bugün yapılmadığı.** K-4'ün örnek cümlesi — *"bu hata yalnız o
+   sepette oluyordu"* — oturuma bağlı olan; onu tekrarlamak isteğin **çerezlerini ve
+   gövdesini** kaydetmek demek, yani birinin oturum jetonunu ve form girdisini diske yazmak.
+   Mekanizma duruyor (`debugbridge`'in `auto_prepend_file` köprüsü zaten istek başına olay
+   yazıyor ve sentinel dosyasıyla açılıp kapanıyor), ama bu, uygulamanın **açıkça sorması**
+   gereken bir karar — `PRIVACY.md`'nin duruşu ve bu uygulamanın maskeleme disiplini bunu
+   sessizce ayarlanacak bir şey olmaktan çıkarıyor. K-5 (tekrarın anlık görüntüye bağlanması)
+   onun üzerine kuruluyor: yakalanan istek yoksa, başında alınacak anlık görüntünün
+   bağlanacağı bir şey de yok. *(K-4 → K-5)*
+8. ⚠️ **Paylaşılabilir teşhis bağlantısı ve onboarding doğrulaması** (yarım) — U-4
+   yapıldı; U-3 bilerek bekliyor.
+
+   **U-4 ✅ — `stackvo verify <proje>`, ve proje sayfasında bir düğme.** Bu kategorideki her
+   araç işin **kurma** yarısını yapıyor; **kontrol** yarısını hiçbiri yapmıyor — ki klonlamadan
+   bir saat sonra insanın gerçekten sorduğu soru odur: *"kurdum; peki neden hâlâ çalışmıyor?"*
+   Depo neye ihtiyacı olduğunu zaten beyan ediyordu; eksik olan **geri dönen cümle**ydi.
+
+   **Yeni ölçüm yok, ve bu yüzden bir prob değil saf bir fonksiyon.** Beş olgunun dördü
+   `projects_list`'in zaten hesapladıkları: manifest doğrulamadan geçti mi, imaj burada hiç
+   derlendi mi, üretilmiş ağaç `stackvo.json`'dan eski mi, alan adı hosts'ta mı. Beşincisi
+   örnek tablosu. Herhangi birinin ikinci bir türetimi, birincisiyle çelişebilirdi.
+
+   **Beyan edilmiş bir servis üç şekilde düşer ve bunlar üç ayrı cümledir:** katalogda var
+   ama kurulu değil (kur) · kurulu ama **kapalı** (aç — ve sahip olunan sürümler adıyla
+   yazılıyor, çünkü "kur" yanlış talimat olurdu) · bu yapının hiç duymadığı bir ad (yazım
+   hatası ya da uygulamadan yeni bir katalog) → **`unknown`**, `missing` değil. Ve
+   `unknown` projeyi **düşürmüyor**: uygulamanın yapmaktan kaçındığı bir kontrol, bir şeyin
+   bozuk olduğunun kanıtı değildir, ve sormadığı bir soru için "hazır değil" diyen bir
+   doğrulayıcı, insanların görmezden gelmeyi öğrendiği doğrulayıcıdır.
+
+   **Geçenler dahil her satır dönüyor.** Her şey uyduğunda hiçbir şey söylemeyen bir
+   doğrulayıcı, "kontrol etti ve iyiyim" ile "kontrol etmedi"yi ayırt edilemez kılardı. Ve
+   beyanın sabitlemediği bir **sürüm** yargılanmıyor, bulunan sürüm satırın yanına
+   yazılıyor — hangisinin olması gerektiğini söylemek K-2'nin kilit dosyasını ister, ve bu
+   madde kontrol etmediği bir şeyi kontrol etmiş gibi yapmıyor.
+
+   **U-3 (paylaşılabilir teşhis bağlantısı) bilerek beklidi.** Üç parça da ağaçta — paket,
+   dokuz sağlayıcılı tünel, parola muhafızı, sayfa üretimi — ama birleştiren fiil, bu
+   makinenin durumunu **internete yayımlamak**. Maskelenmiş olsa bile bu dışa dönük bir
+   eylem: bir tünel açar, bir adres üretir ve onu birine verir. Bu uygulamanın duruşu böyle
+   bir şeyi *sormadan* yapmamak, ve N7 #5'te (K-3) bir meslektaşın paketini **dosya olarak**
+   karşılaştırmak zaten yapıldı — yani bugün cevaplanabilen soru, zip göndermeden de
+   cevaplanıyor. Bağlantı, tünel yığınının üzerine kurulacak ayrı bir onay akışı; sırası
+   gelmedi, ve sebebi burada yazılı. *(U-3, U-4)*
+9. 🚫 ~~**ACME seçeneği.**~~ (yapılmayacak) — **ve ölçüm başka bir işi gösterdi; o yapıldı.**
+
+   **ACME bu adlar için verilemez, ve sebepleri keşfedilmek yerine yazıldı:**
+
+   | Engel | Ölçüm |
+   | --- | --- |
+   | Kamu otoritesi neyi doğrular | **Kamuya açık DNS'te bir adı kontrol ettiğinizi.** `shop.loc` orada değil ve hiç olmayacak — otoritenin kontrol edeceği bir şey yok |
+   | HTTP-01 | Bu makinenin 80 portunun **internetten** erişilebilir olmasını ister. Yönlendirici arkasındaki bir dizüstü değildir |
+   | DNS-01 | Bunu aşar, ama gerçek bir alan adı **ve** onu tutan sağlayıcının API jetonunu ister — gerçek bir kurulum, ve yerel bir geliştirme ortamının varsayabileceği bir şey değil |
+   | Traefik tarafı | Yazılabilir bir `acme.json` ister; `./traefik` ve `./certs` mount'ları **salt-okunur**, yani `base.yml`'ye yeni bir mount — ve mevcut her çalışma alanında o dosyanın kendi kopyası var, yani bir göç |
+
+   **Ve rakibin planının hedeflediği asıl sorun ACME değil.** Kamu sertifikasının burada
+   gerçekten kazandıracağı şey, **başka cihazların** — aynı ağdaki telefon, meslektaşın
+   dizüstü — sizin CA'nızı kurmadan güvenmesi. Onun için uygulamada zaten dokuz tünel
+   sağlayıcısı var ve her biri TLS'i her cihazın güvendiği kendi kamu sertifikasıyla
+   sonlandırıyor.
+
+   **Ölçümün gösterdiği gerçek iş ✅ yapıldı: "güveniliyor" tek kelimeydi, oysa birden fazla
+   depo var.** Yerel bir otorite teknik olarak aşağı değil — köke güvenen her şey için
+   yerel bir sertifika kamu sertifikası kadar geçerli. Sorun, **kökün her yerde güvenilmemesi
+   ve uygulamanın nerede olduğunu söyleyememesiydi.**
+
+   Firefox, bir öğleden sonrayı yiyen durum: işletim sisteminin deposunu kullanmaz, profil
+   başına kendi NSS deposunu taşır. mkcert oraya **makinede `certutil` varsa** kurar, yoksa
+   bir uyarı basıp devam eder. Yani taze bir dizüstünün olağan hâli şuydu: sistem güveniyor,
+   Safari ve Chrome çalışıyor, Firefox her sayfayı reddediyor — ve ekranda tek bir yeşil
+   `caTrusted: true`, üzerine hiçbir şey yapılamayan.
+
+   Sertifika kartı artık her depoyu adıyla söylüyor ve hayır dediği yerde onarımı da: **üç
+   düşen durum ayrı tutuluyor**, çünkü onarımları farklı — `certutil` yok (nss kur, güven
+   adımını tekrarla) · okunabilen bir depoda CA yok (güven adımını tekrarla) · depo hiç
+   okunamadı. Ne evet ne hayır diyen bir depo, o tarayıcının burada kurulu olmadığı
+   anlamına geliyor: kimsenin düzeltmesi gereken bir şey değil, ve bir sorun gibi de
+   renklendirilmiyor. *(M8)*
+10. ⚠️ **Uzun kuyruk** (yarım) — altısı ölçüldü, sırayla en hazır olanlar alındı:
+    **Z-2 sır sızıntı taraması** ve **Z-3 politika uyum raporu** yapıldı; dördü açık.
+
+    | Madde | Ölçüm | Karar |
+    | --- | --- | --- |
+    | **Z-2** sır sızıntı taraması | Tamamen **yerel**, ağ yok, saf eşleme + `git ls-files`. Gereken her okuyucu ağaçta | ✅ **Yapıldı** |
+    | **Z-3** politika uyum raporu | Yerel ve yakın: `policy.rs` + `images::listed()` (N7 #4'te yazıldı) + `market` doğrulama sonucu | ✅ **Yapıldı** |
+    | Z-1 tedarik zinciri | Bir **ağ çağrısı**; `PRIVACY.md`'nin "erişilebilir hostlar" listesine yazılmadan yapılamaz, ve buradan doğrulanamaz | Açık |
+    | K-7 monorepo | Tek projede çok çalışma zamanı — manifest **şeması** ve üreteç değişikliği; küçük değil | Açık |
+    | K-6 ortamla bisect | `git bisect` sarmalayıcısı + her adımda yeniden üretim; uzun koşan, etkileşimli bir akış | Açık |
+    | K-8 çıkış görünürlüğü | **Yeni ölçüm**: konteyner ağ trafiği. "Ağaçta zaten var" olmayan tek madde | Açık |
+
+    **Z-2'nin yaptığı iş: hiçbir şeyin gitmediği yön.** `secrets.rs` bir parolayı `.env`'den
+    anahtar deposuna taşıyor — yani birinin sorunu **bildikten sonra** attığı adım. Diğeri —
+    *"`.env`'inde anahtar deposunda olmayan bir AWS anahtarı var"*, ve daha sertçe *"o anahtar
+    git'in takip ettiği bir dosyada"* — yoktu; dolayısıyla kimse depo çoktan herkese açık
+    olana kadar öğrenmiyordu.
+
+    **Anahtarın adına değil, değerin şekline bakıyor**, ve tasarımın tamamı bu.
+    `Env::is_secret` adları sonekle eşliyor; maskeleme için doğru, burada yetersiz — ve
+    gerekçeyi `preset.rs` zaten yazmıştı: *"a key added upstream tomorrow called
+    `SERVICE_FOO_APIKEY` would sail straight through."* Bu yüzden her kural, sahibinin
+    yayımladığı bir şekil (`AKIA…`, `ghp_…`, `xoxb-…`, `sk_live_…`, PEM özel anahtar
+    başlığı), ve ad kuralı **ikinci, bağımsız bir ağ** olarak duruyor. Farklı biçimde
+    başarısız olan iki ağ, iki kat zeki tek ağdan fazlasını yakalar.
+
+    **Entropi sezgiseli bilerek yok** — ve özelliği kullanılabilir tutan karar bu. "Uzun ve
+    rastgele görünen dize" kuralı küçültülmüş JavaScript'te, kilit dosyasındaki özette ve
+    base64 görselde ateşlenir; insanların görmezden gelmeyi öğrendiği bir tarayıcı, hiç
+    tarayıcı olmamasından kötüdür: bir kaçırma bir bulguya, bir yanlış pozitif **özelliğin
+    tamamına** mal olur. PEM başlığı da yalnız gerçekten özel anahtar olan blok türleri için
+    sayılıyor — bu deponun gönderdiği sertifikalar bulgu değil.
+
+    **İki karar daha.** *Komut satırına hiçbir şey konmuyor:* bir değerin commit'lenip
+    commit'lenmediğini git'e sormanın bariz yolu `git log -S<değer>` ve yanlış olan yol —
+    sır bir argüman olur, argüman ise makinedeki her sürece `ps`'te görünür; bu yüzden
+    takip edilen dosyalar **bu süreçte** okunup eşleniyor ve git'in argüman listesine ulaşan
+    tek şey `ls-files`. Ve *bir bulgu değeri asla taşımıyor*: sırrı alıntılayan bir rapor,
+    insanların fotoğrafını çekip yapıştırdığı bir ekranda onun ikinci kopyasıdır.
+
+    `.env`'in takip ediliyor olması diğer her bulgunun **önüne geçiyor** ve kendi
+    cümlesiyle raporlanıyor — içindeki her değer, neye benzediğinden bağımsız olarak
+    geçmiştedir, ve bunun doğru olması için hiçbir kuralın eşleşmesi gerekmez. Tarama 2.000
+    dosya / 512 KB ile sınırlı ve **kaçını atladığını söylüyor**: dört yüz dosyanın üzerinden
+    geçip hiçbir şey söylemeyen bir tarama, temiz bir depo gibi okunurdu.
+
+    **Üç "hayır"ın üçü de bir "evet"le değiştirildi** — çünkü yapamayacağını söyleyen bir
+    özellik, yapılabilecek olanı da yapmamış olur:
+
+    | Önceki hüküm | Yerine konan standart çözüm |
+    | --- | --- |
+    | *"Değer asla taşınmıyor"* | Taşınmıyor — ama bulgu artık **parmak izi** (değerin sha256'sının ilk 12 hex'i) ve **maskeli önizleme** (`AKIA…MPLE`, yalnız 16 karakterden uzun değerler için) taşıyor. Bu alandaki her tarayıcının yaptığı şey: **tanıtır, ifşa etmez.** İki satırda tek parmak izi, iki yerde tek sır demek — "bir anahtar döndür" ile "iki anahtar döndür" arasındaki fark. Parmak izi eşleşen **koşudan** alınıyor, satırdan değil: aynı anahtar bir dosyada `AWS_KEY=…`, ötekinde `key: "…"` yazıldığında tek sır olsun diye |
+    | *"Komut satırına hiçbir şey konmuyor"* | Konmuyor — ve soru artık **yol üzerinden** soruluyor: `git log --all -- <yol>`. Bir yol sır değildir, ve cevap **daha güçlü**: commit'lenip sonra silinmiş bir dosya, içindeki her şeyle birlikte hâlâ geçmiştedir; değer araması ise birinin yarısını döndürdüğü anda onu kaçırırdı. `envInHistory` ayrı bir alan, çünkü **insanların en çok yanıldığı yer orası**: dosyayı bugün takipten çıkarmak onu geçmişten çıkarmaz |
+    | *".env'in takip edilmesi her şeyin önüne geçiyor"* (yalnız bir bulgu) | Artık bir **onarım**: `env_untrack` standardın yaptığını standardın sırasıyla yapıyor — `git rm --cached` (`git rm` değil: o, çalışan yığının yapılandırmasını silerdi), `check-ignore` ile **sorup** gerekiyorsa `.gitignore`'a satır, ve yoksa `.env.example` (aynı anahtarlar, değersiz; yorumlar ve gruplama korunur, çünkü örnek dosya bir belgedir). Var olan bir örneğin üzerine yazılmıyor: birinin sonraki kişi için yazdığı yorumları atmak olurdu |
+
+    **Ve onarımın yapmadığı iki yarı, yapıldığında ekrana yazılıyor:** geçmiş yeniden
+    yazılmıyor (dosya bir kez commit'lendiyse içindeki her değer hâlâ orada — **döndürün**),
+    ve `git rm --cached` **index'e** yazar: kaldırma, biri commit'leyip push edene kadar bu
+    makineden çıkmaz. Birinin yaptığını sandığı bir düzeltme, hiç düzeltme yapmamaktan
+    kötüdür.
+
+    Yüzey: `leaks.rs` (+8 test), `leaks_scan` ve `env_untrack` komutları, Gizli Bilgiler
+    panelinde proje seçici / tarama / bulgu listesi / onarım, vitest (7 test), denetim
+    kaydına yeni bir söz (`env_untrack`) ve onu tutan gate, i18n ve yardım belgesi iki
+    dilde, README, ARCHITECTURE, CHANGELOG.
+
+    ---
+
+    **Z-3'ün yaptığı iş: politikanın hangi maddesi fiilen tutuyor.** `policy_status` bir
+    yöneticinin dosyasının **ne dediğini** cevaplıyordu. Dosyayı gönderen kişinin sorusunu —
+    *"bunun herhangi biri o makinede yürürlükte mi"* — hiçbir şey cevaplamıyordu. Ve ikisi
+    tek bir sebeple ayrışıyor, o sebep de kural ihlali değil.
+
+    **Politika, çoktan kurulmuş bir makineye gelir.** Ayna, imge referanslarını dosyalar
+    **üretilirken** yeniden yazar: salıdan beri kimsenin yeniden üretmediği bir proje hâlâ
+    Docker Hub'dan çeker — ve Docker Hub'a erişilemeyen bir ağda bu bir uyum ayrıntısı
+    değil, yığının neden kalkmadığıdır. `allowedPackages` bir paket **kurulurken**
+    denetlenir: geçen ay kurulmuş bir servis, onu reddedecek liste bugün gelince de kurulu
+    kalır. `requireSignature` **bir sonraki** yenilemenin neyi kabul edeceğine karar verir,
+    önbellekte duran dizin hakkında hiçbir şey söylemez. `allowOverrides: false` yeni bir
+    üstünyazım oluşturulmasını durdurur, diskte olanlara dokunmaz — onlar yayımlanmış
+    paketin önünde okunmaya devam eder. Bunların her birinin bir onarımı var (yeniden üret,
+    kaldır, yenile, sil) ve şimdiye kadar hiçbir şey kime, nerede olduğunu söylemiyordu.
+
+    **Dört durum, ve raporu dürüst yapan üçüncüsü.** `holding` · `bypassed` · `silent` ·
+    `unmeasured`. `market` bloğundaki her liste boşken *görüş yok* demektir, asla "hiçbiri"
+    değil — dolayısıyla sessizliği yeşil bir tike katlayan bir rapor, **hiç politikası
+    olmayan** bir makineyi tam uyumlu diye puanlardı; bir uyum raporunun yapabileceği en
+    yanıltıcı şey budur. `unmeasured` ise iki şeyi birden kapsıyor: uygulamanın göremediği
+    bir olgu (üretilen ağaç okunamadı, bir paket manifestosu yüklenemedi) **ve** uygulanacak
+    bir şeyi olmayan bir madde — bu yapının hiç çalıştırmadığı bir depoyu adlandıran
+    `imagePins` girdisi hiçbir şey yapmayan bir satırdır, ki bu `policy.rs`'in kendi
+    kurmadığı bir anahtarı kilitlemek için zaten koyduğu adın aynısı. İkisi de uyum kanıtı
+    değil.
+
+    **`attestable`, `compliant` değil.** `verify.rs` aynı şekle sahip ve **ters** karar
+    veriyor: onun `unknown`'ı `ready`'yi tutmuyor, çünkü sormaktan kaçındığı bir soru
+    projenin bozuk olduğunun kanıtı değil. Bu, *"çalışabilir miyim?"* için doğru. Burada
+    sorulan soru başka: *"biri bunun altına imzasını atabilir mi?"* — ve orada sorulmamış
+    soru tam da yutulmaması gereken şeydir; bu yüzden `bypassed` **ya da** `unmeasured` olan
+    her şey hükmü geri tutuyor. Adın kendisi de kasıtlı: raporlanan katman bir güvenlik
+    sınırı değil — `policy.rs` bunu ilk paragrafında söylüyor — ve sertifika bu uygulamanın
+    vereceği bir şey değil.
+
+    **Hiçbir yeni ölçüm yok ve motora hiç sorulmuyor:** yazıldığı hâliyle `.env`
+    (`Env::parse`, `load` değil — `load` politikayı en sona uygular, yani yüklenmiş ortama
+    "politika tuttu mu" diye sormak cevabı yapısı gereği `true` olan bir soru sormaktır),
+    üretilen ağaç, paket dizini, hatırlanan katalog kaynağı, üstünyazım dosyaları, proje
+    manifestoları. Docker kapalıyken çalıştırılamayan bir uyum raporu, en çok ihtiyaç
+    duyulduğunda çalıştırılamayan rapordur. Ayna maddesini **aynanın kendisi** cevaplıyor —
+    bir dosyanın kendi baytlarına `policy::rewrite` uygulamak onları değiştirecekse, ayna o
+    dosyaya hiç ulaşmamıştır — burada ikinci bir tarayıcı yazmak yerine: derleme aşamaları
+    ve zaten kayıt defteri adı taşıyan referanslar hakkında ikinci bir görüş olurdu ve
+    yanlış olan bu olurdu.
+
+    Yüzey: `compliance.rs` (+8 test), `policy_compliance` komutu, `Policy::image_pins`,
+    Tanılama panelinde yalnız yönetilen makinede görünen uyum kartı, i18n ve yardım belgesi
+    iki dilde, README, ARCHITECTURE, CHANGELOG. *(Z-2 ✅, Z-3 ✅; K-7, Z-1, K-6, K-8 açık)*
 
 ---
 

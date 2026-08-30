@@ -31,6 +31,20 @@ import { api } from '@/lib/ipc';
  * a `v-if`, so mounting it *is* opening it, and there is no key to keep in step
  * with anything.
  */
+/**
+ * Where a preset lives in a project, and what the save dialog offers.
+ *
+ * `preset::CONVENTIONAL_FILE` in Rust, and it has to be the same string: the
+ * project page looks for a file with exactly this name, so an export that
+ * suggested a different one would write a file nothing looks for. It suggested
+ * `<name>.stackvo-preset.json` — two spellings of the same idea, and only one
+ * of them was read. `preset-convention.spec.js` holds the two sides equal.
+ *
+ * The dialog still asks where. The name is the part that matters: drop it in a
+ * project directory and a clone brings it, which is the whole feature.
+ */
+export const PRESET_FILE = 'stackvo.preset.json';
+
 export function useStackPreset() {
   const name = ref('');
   const preset = ref(null);
@@ -58,8 +72,7 @@ export function useStackPreset() {
 
   /** Write the current stack out. The path comes from the system save dialog. */
   async function exportTo(save) {
-    const suggested = name.value.trim() || 'stack';
-    const target = await save(`${suggested}.stackvo-preset.json`);
+    const target = await save(PRESET_FILE);
     if (!target) return false;
 
     busy.value = true;

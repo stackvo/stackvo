@@ -399,7 +399,7 @@ fn which(name: &str) -> Option<PathBuf> {
 pub fn entry(
     shape: Shape,
     command: &str,
-    allow_writes: bool,
+    grant: &crate::grant::Grant,
     root: Option<&str>,
 ) -> serde_json::Value {
     let mut object = serde_json::Map::new();
@@ -409,11 +409,15 @@ pub fn entry(
     }
     object.insert("command".into(), command.into());
 
-    let args: Vec<serde_json::Value> = if allow_writes {
-        vec!["--allow-writes".into()]
-    } else {
-        Vec::new()
-    };
+    // Rendered by the grant rather than assembled here: what a person reads in
+    // this file has to be the authority the server enforces, and two places
+    // that both know how to spell `--allow-writes` are two places that can
+    // disagree about what it now means.
+    let args: Vec<serde_json::Value> = grant
+        .to_args()
+        .into_iter()
+        .map(serde_json::Value::from)
+        .collect();
     object.insert("args".into(), args.into());
 
     if let Some(root) = root {
@@ -458,7 +462,7 @@ fn toml_document(text: &str) -> Result<toml_edit::DocumentMut> {
 pub fn toml_insert(
     text: &str,
     command: &str,
-    allow_writes: bool,
+    grant: &crate::grant::Grant,
     root: Option<&str>,
 ) -> Result<String> {
     use toml_edit::{value, Array, Item, Table};
@@ -493,8 +497,8 @@ pub fn toml_insert(
     entry.insert("command", value(command));
 
     let mut args = Array::new();
-    if allow_writes {
-        args.push("--allow-writes");
+    for arg in grant.to_args() {
+        args.push(arg);
     }
     entry.insert("args", value(args));
 
@@ -829,7 +833,7 @@ pub fn backup_path(path: &Path) -> PathBuf {
 }
 
 /// Register the server with one client. Returns the file written.
-pub fn install(id: &str, allow_writes: bool, root: Option<&str>) -> Result<String> {
+pub fn install(id: &str, grant: &crate::grant::Grant, root: Option<&str>) -> Result<String> {
     let Some(client) = client(id) else {
         return Err(Error::new(
             Code::InvalidInput,
@@ -847,10 +851,10 @@ pub fn install(id: &str, allow_writes: bool, root: Option<&str>) -> Result<Strin
 
     let command = binary.display().to_string();
     if client.shape.is_toml() {
-        return rewrite(id, |text| toml_insert(text, &command, allow_writes, root));
+        return rewrite(id, |text| toml_insert(text, &command, grant, root));
     }
 
-    let entry = entry(client.shape, &command, allow_writes, root);
+    let entry = entry(client.shape, &command, grant, root);
     rewrite(id, |text| insert(text, client.shape, entry))
 }
 
@@ -871,6 +875,16 @@ pub fn uninstall(id: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::grant::Grant;
+
+    /// The two grants the registration used to be a boolean between.
+    fn ro() -> Grant {
+        Grant::read_only()
+    }
+
+    fn rw() -> Grant {
+        Grant::everything()
+    }
 
     /// A file's own indentation is what it gets back.
     ///
@@ -883,7 +897,7 @@ mod tests {
         let out = insert(
             four,
             Shape::McpServers,
-            entry(Shape::McpServers, "/bin/x", false, None),
+            entry(Shape::McpServers, "/bin/x", &ro(), None),
         )
         .unwrap();
         assert!(
@@ -900,7 +914,7 @@ mod tests {
         let out = insert(
             tabbed,
             Shape::McpServers,
-            entry(Shape::McpServers, "/bin/x", false, None),
+            entry(Shape::McpServers, "/bin/x", &ro(), None),
         )
         .unwrap();
         assert!(out.contains("\n\t\"a\""), "a tab-indented file: {out}");
@@ -911,7 +925,7 @@ mod tests {
         let out = insert(
             no_newline,
             Shape::McpServers,
-            entry(Shape::McpServers, "/bin/x", false, None),
+            entry(Shape::McpServers, "/bin/x", &ro(), None),
         )
         .unwrap();
         assert!(!out.ends_with("\n\n"), "{out:?}");
@@ -933,7 +947,7 @@ mod tests {
         let out = insert(
             source,
             Shape::McpServers,
-            entry(Shape::McpServers, "/bin/x", false, None),
+            entry(Shape::McpServers, "/bin/x", &ro(), None),
         )
         .unwrap();
 
@@ -985,7 +999,7 @@ command = 'echo "prefer the graph"'
     /// until now: everything already in the file comes back out unchanged.
     #[test]
     fn a_codex_file_survives_being_written_to() {
-        let out = toml_insert(CODEX, "/usr/local/bin/stackvo-mcp", false, None).unwrap();
+        let out = toml_insert(CODEX, "/usr/local/bin/stackvo-mcp", &ro(), None).unwrap();
 
         // Somebody else's server, with its nested table and its extra key.
         assert!(out.contains("[mcp_servers.node_repl]"), "{out}");
@@ -1017,7 +1031,7 @@ command = 'echo "prefer the graph"'
     /// not an empty parent header above it.
     #[test]
     fn a_file_without_the_table_gains_the_shape_codex_writes() {
-        let out = toml_insert("model = \"gpt-5\"\n", "/bin/mcp", true, Some("/w")).unwrap();
+        let out = toml_insert("model = \"gpt-5\"\n", "/bin/mcp", &rw(), Some("/w")).unwrap();
 
         assert!(
             out.contains("model = \"gpt-5\""),
@@ -1044,8 +1058,8 @@ command = 'echo "prefer the graph"'
     /// wins — the same rule the JSON path follows.
     #[test]
     fn registering_codex_twice_replaces_rather_than_appends() {
-        let once = toml_insert(CODEX, "/old/stackvo-mcp", false, None).unwrap();
-        let twice = toml_insert(&once, "/new/stackvo-mcp", true, None).unwrap();
+        let once = toml_insert(CODEX, "/old/stackvo-mcp", &ro(), None).unwrap();
+        let twice = toml_insert(&once, "/new/stackvo-mcp", &rw(), None).unwrap();
 
         assert_eq!(twice.matches("[mcp_servers.stackvo]").count(), 1, "{twice}");
         assert_eq!(
@@ -1060,7 +1074,7 @@ command = 'echo "prefer the graph"'
     /// module does not decide things about a file it does not own.
     #[test]
     fn removing_from_codex_leaves_the_rest_alone() {
-        let with = toml_insert(CODEX, "/bin/mcp", false, Some("/w")).unwrap();
+        let with = toml_insert(CODEX, "/bin/mcp", &ro(), Some("/w")).unwrap();
         let without = toml_remove(&with).unwrap();
 
         assert!(!without.contains("[mcp_servers.stackvo]"), "{without}");
@@ -1076,7 +1090,7 @@ command = 'echo "prefer the graph"'
     #[test]
     fn a_broken_codex_file_is_refused_rather_than_replaced() {
         let broken = "[mcp_servers.node_repl\ncommand = \"x\"\n";
-        let error = toml_insert(broken, "/bin/mcp", false, None).unwrap_err();
+        let error = toml_insert(broken, "/bin/mcp", &ro(), None).unwrap_err();
         assert_eq!(error.code, Code::InvalidInput);
         assert!(
             error.message.contains("not valid TOML"),
@@ -1087,7 +1101,7 @@ command = 'echo "prefer the graph"'
         // And a key that is not a table is refused rather than overwritten.
         let wrong = "mcp_servers = 3\n";
         assert_eq!(
-            toml_insert(wrong, "/bin/mcp", false, None)
+            toml_insert(wrong, "/bin/mcp", &ro(), None)
                 .unwrap_err()
                 .code,
             Code::Conflict
@@ -1102,7 +1116,7 @@ command = 'echo "prefer the graph"'
         let out = insert(
             "{}",
             Shape::Zed,
-            entry(Shape::Zed, "/bin/stackvo-mcp", false, Some("/w")),
+            entry(Shape::Zed, "/bin/stackvo-mcp", &ro(), Some("/w")),
         )
         .unwrap();
 
@@ -1202,7 +1216,7 @@ command = 'echo "prefer the graph"'
 
     #[test]
     fn an_existing_server_is_left_exactly_as_it_was() {
-        let entry = entry(Shape::McpServers, "/opt/stackvo-mcp", false, None);
+        let entry = entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None);
         let out = insert(CURSOR, Shape::McpServers, entry).unwrap();
         let after: serde_json::Value = serde_json::from_str(&out).unwrap();
 
@@ -1229,7 +1243,7 @@ command = 'echo "prefer the graph"'
     #[test]
     fn keys_the_installer_does_not_understand_survive() {
         let before = r#"{"projects":{"/Users/x/work":{"allowedTools":[]}},"numStartups":41}"#;
-        let entry = entry(Shape::McpServers, "/opt/stackvo-mcp", false, None);
+        let entry = entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None);
         let out = insert(before, Shape::McpServers, entry).unwrap();
         let after: serde_json::Value = serde_json::from_str(&out).unwrap();
 
@@ -1249,7 +1263,7 @@ command = 'echo "prefer the graph"'
         let first = insert(
             CURSOR,
             Shape::McpServers,
-            entry(Shape::McpServers, "/old/stackvo-mcp", false, None),
+            entry(Shape::McpServers, "/old/stackvo-mcp", &ro(), None),
         )
         .unwrap();
         let second = insert(
@@ -1258,7 +1272,7 @@ command = 'echo "prefer the graph"'
             entry(
                 Shape::McpServers,
                 "/new/stackvo-mcp",
-                true,
+                &rw(),
                 Some("/srv/stack"),
             ),
         )
@@ -1283,10 +1297,10 @@ command = 'echo "prefer the graph"'
     /// grants an assistant `stack_down`. It must never be on unless asked for.
     #[test]
     fn the_write_flag_is_absent_unless_it_was_asked_for() {
-        let off = entry(Shape::McpServers, "/opt/stackvo-mcp", false, None);
+        let off = entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None);
         assert_eq!(off["args"], serde_json::json!([]));
 
-        let on = entry(Shape::McpServers, "/opt/stackvo-mcp", true, None);
+        let on = entry(Shape::McpServers, "/opt/stackvo-mcp", &rw(), None);
         assert_eq!(on["args"], serde_json::json!(["--allow-writes"]));
     }
 
@@ -1295,7 +1309,7 @@ command = 'echo "prefer the graph"'
         let with = insert(
             CURSOR,
             Shape::McpServers,
-            entry(Shape::McpServers, "/opt/stackvo-mcp", false, None),
+            entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None),
         )
         .unwrap();
         let without = remove(&with, Shape::McpServers).unwrap();
@@ -1316,7 +1330,7 @@ command = 'echo "prefer the graph"'
         let error = insert(
             jsonc,
             Shape::VsCode,
-            entry(Shape::VsCode, "/opt/stackvo-mcp", false, None),
+            entry(Shape::VsCode, "/opt/stackvo-mcp", &ro(), None),
         )
         .unwrap_err();
 
@@ -1338,7 +1352,7 @@ command = 'echo "prefer the graph"'
                 insert(
                     text,
                     Shape::McpServers,
-                    entry(Shape::McpServers, "/opt/stackvo-mcp", false, None)
+                    entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None)
                 )
                 .is_err(),
                 "{text} must not be overwritten"
@@ -1355,7 +1369,7 @@ command = 'echo "prefer the graph"'
             let out = insert(
                 text,
                 Shape::McpServers,
-                entry(Shape::McpServers, "/opt/stackvo-mcp", false, None),
+                entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None),
             )
             .unwrap();
             assert_eq!(stackvo(&out)["command"], "/opt/stackvo-mcp");
@@ -1370,7 +1384,7 @@ command = 'echo "prefer the graph"'
         let null = insert(
             r#"{"mcpServers": null}"#,
             Shape::McpServers,
-            entry(Shape::McpServers, "/opt/stackvo-mcp", false, None),
+            entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None),
         )
         .unwrap();
         assert_eq!(stackvo(&null)["command"], "/opt/stackvo-mcp");
@@ -1378,7 +1392,7 @@ command = 'echo "prefer the graph"'
         let wrong = insert(
             r#"{"mcpServers": ["github"]}"#,
             Shape::McpServers,
-            entry(Shape::McpServers, "/opt/stackvo-mcp", false, None),
+            entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None),
         );
         assert_eq!(wrong.unwrap_err().code, Code::Conflict);
     }
@@ -1391,7 +1405,7 @@ command = 'echo "prefer the graph"'
         let out = insert(
             "{}",
             Shape::VsCode,
-            entry(Shape::VsCode, "/opt/stackvo-mcp", false, None),
+            entry(Shape::VsCode, "/opt/stackvo-mcp", &ro(), None),
         )
         .unwrap();
         let after: serde_json::Value = serde_json::from_str(&out).unwrap();
@@ -1402,7 +1416,7 @@ command = 'echo "prefer the graph"'
 
         // And the other five do not carry `type`, which is not part of their
         // schema.
-        let other = entry(Shape::McpServers, "/opt/stackvo-mcp", false, None);
+        let other = entry(Shape::McpServers, "/opt/stackvo-mcp", &ro(), None);
         assert!(other.get("type").is_none());
     }
 

@@ -14,16 +14,25 @@ import ErrorAlert from '@/components/ErrorAlert.vue';
  * go in. The module states its audience as "whoever has to account for the
  * machine", and that person is usually not the one who wrote the file.
  *
- * Read-only on purpose, and there is no filter box. The trail is short on a
- * normal machine, `total` says when it is not, and a filter over a record is a
- * way to look at a subset and believe it is the whole — which is the one thing
- * a record must not invite.
+ * There is no filter box. The trail is short on a normal machine, `total` says
+ * when it is not, and a filter over a record is a way to look at a subset and
+ * believe it is the whole — which is the one thing a record must not invite.
+ *
+ * The one thing it does besides read is **put an act back**, and only where the
+ * line carries a plan. That plan was written before the act ran — what
+ * `stackvo_stack_down` stopped exists only before it stopped it — so the button
+ * runs what was true at the time rather than something worked out now against a
+ * machine that has changed. Where there is no plan the line says why in its own
+ * words, which is the half that keeps the button honest: an Undo on every row
+ * would be an offer the app cannot keep.
  */
 const { t } = useI18n();
 
 const trail = ref(null);
 const error = ref(null);
 const loading = ref(true);
+/** The `at` of the line being put back — one at a time, and the row says so. */
+const undoing = ref(null);
 
 async function load() {
   loading.value = true;
@@ -36,6 +45,35 @@ async function load() {
     loading.value = false;
   }
 }
+
+/**
+ * Put one act back, then re-read.
+ *
+ * Re-read whichever way it went, and *before* the error is shown — the same
+ * order AgentsPane settled on for the same reason: a partly-completed undo
+ * changed the machine, so a screen still showing the old state would be a claim
+ * nobody checked. `load()` clears the error on its way in, so it is set after.
+ */
+async function undo(entry) {
+  undoing.value = entry.at;
+  error.value = null;
+  try {
+    await api.auditUndo(entry.at);
+    await load();
+  } catch (e) {
+    await load();
+    error.value = e;
+  } finally {
+    undoing.value = null;
+  }
+}
+
+/** The plan, as the calls it will make. */
+function steps(entry) {
+  return (entry.undo?.steps ?? []).map((s) => s.tool.replace(/^stackvo_/, '')).join(', ');
+}
+
+const undoable = (entry) => entry.undo?.kind === 'steps' && !entry.undone;
 
 onMounted(load);
 
@@ -114,9 +152,41 @@ function when(at) {
           <v-list-item-subtitle class="text-caption">
             {{ when(entry.at) }}
             <span v-if="entry.detail"> · {{ entry.detail }}</span>
+            <!-- Why there is no button, in the words the plan recorded. A row
+                 that simply had no button would read as an app that had not
+                 thought about it. -->
+            <span v-if="entry.undo?.kind === 'none'">
+              · {{ t('audit.noUndo', { because: entry.undo.because }) }}
+            </span>
+            <span v-else-if="undoable(entry)">
+              ·
+              {{ t('audit.undoSteps', { count: entry.undo.steps.length, steps: steps(entry) }) }}
+            </span>
           </v-list-item-subtitle>
+
+          <template #append>
+            <!-- The append-only join: the original line still says what it
+                 said, and the undo that names it is what makes this chip
+                 true. -->
+            <v-chip v-if="entry.undone" size="x-small" variant="tonal" color="success">
+              {{ t('audit.undone') }}
+            </v-chip>
+            <v-btn
+              v-else-if="undoable(entry)"
+              size="small"
+              variant="tonal"
+              prepend-icon="mdi-undo-variant"
+              :loading="undoing === entry.at"
+              :disabled="undoing !== null && undoing !== entry.at"
+              @click="undo(entry)"
+            >
+              {{ t('audit.undo') }}
+            </v-btn>
+          </template>
         </v-list-item>
       </v-list>
+
+      <p class="text-caption text-medium-emphasis mt-3">{{ t('audit.assistant') }}</p>
 
       <p v-if="truncated" class="text-caption text-medium-emphasis mt-3">
         {{ t('audit.truncated', { shown: entries.length, total: trail.total }) }}

@@ -186,7 +186,8 @@ fn interpolations_removed(label: &str) -> String {
 /// reach Docker Hub, which is every machine the change would be written on.
 #[test]
 fn every_generated_file_with_images_in_it_is_rewritten() {
-    let commands = read("src/commands.rs");
+    // `generator.rs` since the generated tree moved out of the command band.
+    let commands = read("src/generator.rs");
 
     // The labels `render_generated` pushes, read out of the source rather than
     // listed here — a list would be the same omission one level up.

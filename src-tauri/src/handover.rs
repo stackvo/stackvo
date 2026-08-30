@@ -40,6 +40,7 @@ use crate::config::Env;
 use crate::instances::{Instance, PackageRef, Table};
 use crate::pkg::{self, Catalogue};
 use crate::ports::{self, Claims};
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Something the plan did that the user should be told about.
@@ -467,6 +468,224 @@ fn mark_migrated(text: &str) -> Option<String> {
         joined.push('\n');
     }
     Some(joined)
+}
+
+// ------------------------------------------------- what the migration would do
+
+// The preview and its four shapes used to live in `commands.rs`, and they took
+// nothing from Tauri: a path in, a plain value out. That put a hundred and
+// fifty lines of this module's own reasoning one band above this module, where
+// `ARCHITECTURE.md`'s rule says nothing below the command layer may be — and
+// the cost was not tidiness. Everything below that line "can be called from a
+// test, from the `diagnose` example, or from the MCP surface, with no running
+// application", and this could be called from none of them.
+
+/// What the migration would do, or why it cannot.
+///
+/// The plan is computed and shown before anything is written, because the one
+/// workspace this touches is one somebody is already using — `handover.rs` is
+/// built as plan-then-apply for that reason, and a UI that only offered the
+/// apply half would have thrown the reason away.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoverPreview {
+    /// `.env` has service state and no table exists yet.
+    pub pending: bool,
+    /// Already migrated: the table is there.
+    pub migrated: bool,
+    /// What the instances would be, in the order they would be written.
+    pub instances: Vec<HandoverInstance>,
+    /// Human-readable, already translated by the front end through `hint_key`
+    /// where one applies — these carry the moving-tag resolutions and the
+    /// adopted volumes, which are the two things a user should see *before*
+    /// agreeing rather than in a log afterwards.
+    pub notes: Vec<HandoverNote>,
+    pub blockers: Vec<HandoverNote>,
+    /// Whether `.env.pre-market.bak` is already on disk.
+    pub backup: bool,
+    /// Packages the handover needs before it can run. Empty on a workspace
+    /// whose versions are all installed, which is what the happy path is.
+    pub missing: Vec<MissingPackage>,
+}
+
+/// A package the handover needs and this machine does not have.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissingPackage {
+    pub service: String,
+    pub version: String,
+    /// Whether the cached index offers it, which decides whether the UI can
+    /// offer a button or only an explanation.
+    pub installable: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoverInstance {
+    pub id: String,
+    pub service: String,
+    pub version: String,
+    pub ports: BTreeMap<String, u16>,
+    pub volumes: BTreeMap<String, String>,
+}
+
+/// One line of the preview: a machine-readable `kind` and the subject it is
+/// about, so the front end translates rather than parses.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoverNote {
+    pub kind: String,
+    pub subject: String,
+    pub detail: String,
+}
+
+pub fn preview(root: &std::path::Path) -> crate::error::Result<HandoverPreview> {
+    let migrated = crate::instances::path(root).exists();
+    let env = crate::config::Env::load(root)?;
+    let tree = crate::market::catalogue(root)?;
+    let pending = is_pending(root, &env, &tree);
+
+    // A workspace that has already migrated has nothing to plan, and planning
+    // it anyway is not merely wasted work — it is **wrong output**. The plan
+    // reads `.env`, whose service keys are deliberately left behind as a record
+    // (marked, never deleted), so it happily produces blockers about versions
+    // this workspace stopped using the moment the table was written. The panel
+    // upstream shows on `blockers.length > 0`, so a migrated machine was told
+    // it "still keeps its services in .env" — while the Services page was
+    // reading the table and the containers were running from it.
+    //
+    // `handover_apply` already refuses in this state. This is the same refusal
+    // moved to where it is read rather than where it is acted on.
+    if migrated {
+        return Ok(HandoverPreview {
+            pending: false,
+            migrated: true,
+            instances: Vec::new(),
+            notes: Vec::new(),
+            blockers: Vec::new(),
+            backup: backup_path(root).exists(),
+            missing: Vec::new(),
+        });
+    }
+
+    // The timestamp the plan stamps on each package reference. Real, because it
+    // is recorded as when this workspace adopted the package.
+    let now = crate::snapshot::now_rfc3339();
+    let plan = plan(root, &env, &tree, &crate::ports::is_free, &now);
+
+    let notes = plan
+        .notes
+        .iter()
+        .map(|note| match note {
+            Note::ResolvedMovingTag { service, from, to } => HandoverNote {
+                kind: "resolvedMovingTag".into(),
+                subject: service.clone(),
+                detail: format!("{from} → {to}"),
+            },
+            Note::PortMoved {
+                instance,
+                port,
+                from,
+                to,
+            } => HandoverNote {
+                kind: "portMoved".into(),
+                subject: instance.clone(),
+                detail: format!("{port}: {from} → {to}"),
+            },
+            Note::AdoptedVolume { instance, volume } => HandoverNote {
+                kind: "adoptedVolume".into(),
+                subject: instance.clone(),
+                detail: volume.clone(),
+            },
+            Note::SettingHasNoHome { service, key } => HandoverNote {
+                kind: "settingHasNoHome".into(),
+                subject: service.clone(),
+                detail: key.clone(),
+            },
+        })
+        .collect();
+
+    let blockers = plan
+        .blockers
+        .iter()
+        .map(|blocker| match blocker {
+            Blocker::UnknownService { service } => HandoverNote {
+                kind: "unknownService".into(),
+                subject: service.clone(),
+                detail: String::new(),
+            },
+            Blocker::VersionNotInstalled {
+                service,
+                version,
+                available,
+            } => HandoverNote {
+                kind: "versionNotInstalled".into(),
+                subject: format!("{service}@{version}"),
+                detail: available.join(", "),
+            },
+            Blocker::NothingToInstall { service } => HandoverNote {
+                kind: "nothingToInstall".into(),
+                subject: service.clone(),
+                detail: String::new(),
+            },
+            Blocker::NoFreePort { instance, port } => HandoverNote {
+                kind: "noFreePort".into(),
+                subject: instance.clone(),
+                detail: port.clone(),
+            },
+        })
+        .collect();
+
+    // What would unblock this, as data rather than as a sentence to read.
+    //
+    // The blocker above is the truthful statement of the problem; this is the
+    // route out of it. Every version `.env` names has to be installed before
+    // the table can point at it, and on a workspace that has never opened the
+    // Market that is *every* version — so a preview that only refused was a
+    // dead end with the answer one page away and unnamed.
+    //
+    // `installable` is the difference between "press this" and something else
+    // entirely: the registry either publishes that version or it does not, and
+    // a published version is never withdrawn, so the second case is a mistake
+    // somebody made rather than a withdrawal.
+    let registry = crate::market::cached(root)?;
+    let missing: Vec<MissingPackage> = plan
+        .blockers
+        .iter()
+        .filter_map(|blocker| match blocker {
+            Blocker::VersionNotInstalled {
+                service, version, ..
+            } => Some((service.clone(), version.clone())),
+            _ => None,
+        })
+        .map(|(service, version)| MissingPackage {
+            installable: registry
+                .as_ref()
+                .is_some_and(|r| r.version(&service, &version).is_some()),
+            service,
+            version,
+        })
+        .collect();
+
+    Ok(HandoverPreview {
+        missing,
+        pending,
+        migrated,
+        instances: plan
+            .instances
+            .iter()
+            .map(|i| HandoverInstance {
+                id: i.id.clone(),
+                service: i.service.clone(),
+                version: i.version.clone(),
+                ports: i.ports.clone(),
+                volumes: i.volumes.clone(),
+            })
+            .collect(),
+        notes,
+        blockers,
+        backup: backup_path(root).exists(),
+    })
 }
 
 #[cfg(test)]

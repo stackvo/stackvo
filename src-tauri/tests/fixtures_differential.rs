@@ -82,8 +82,13 @@ fn check(fixture: &str) -> Result<(), String> {
 
     // compat mode: the fixtures were produced by the Bash generator, which
     // skips incompatible extensions silently.
-    let ours = generator::render_from_manifest(&m, &toolchain(), false)
-        .map_err(|e| format!("{fixture}: render failed: {e}"))?;
+    let ours = generator::render_from_manifest(
+        &m,
+        &toolchain(),
+        false,
+        stackvo_desktop_lib::config::DEFAULT_SERVER,
+    )
+    .map_err(|e| format!("{fixture}: render failed: {e}"))?;
     let theirs = std::fs::read_to_string(dir.join("Dockerfile"))
         .map_err(|e| format!("{fixture}: no reference Dockerfile: {e}"))?;
 
@@ -152,7 +157,7 @@ fn compose_projects_matches() {
         manifests.push((name, m));
     }
 
-    let projects = compose_projects_from(&manifests);
+    let projects = compose_projects_from(&manifests, stackvo_desktop_lib::config::DEFAULT_SERVER);
     // The fixture was written with the sandbox path replaced by this
     // placeholder, so rendering with it as the host root makes the two
     // comparable without depending on where the sandbox happened to live. The

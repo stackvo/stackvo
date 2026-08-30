@@ -56,7 +56,12 @@ const SERVER_SUPPORT = {
   caddy: true,
   frankenphp: true,
   apache: false,
+  // Octane's two drivers. Each is its own HTTP server on 8000 and neither
+  // reads a configuration file this application writes — Swoole is configured
+  // by an inline script and RoadRunner by the `.rr.yaml` Octane publishes,
+  // which the project owns.
   swoole: false,
+  roadrunner: false,
 };
 
 // Vuetify's rule shape: `true` when valid, a message when not. Both accept an

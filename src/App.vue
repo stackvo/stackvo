@@ -5,6 +5,7 @@ import { useTheme } from 'vuetify';
 import { useI18n } from 'vue-i18n';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useAppStore } from '@/stores/app';
+import { usePreferences } from '@/composables/usePreferences';
 import { useMetricsStore } from '@/stores/metrics';
 import { useInventoryStore } from '@/stores/inventory';
 import { useOperationsStore } from '@/stores/operations';
@@ -19,6 +20,7 @@ import { notify } from '@/lib/notify';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import RequirementsGate from '@/components/RequirementsGate.vue';
 import BootstrapGate from '@/components/BootstrapGate.vue';
+import WelcomeTour from '@/components/WelcomeTour.vue';
 import CatalogueGate from '@/components/CatalogueGate.vue';
 import MigrationGate from '@/components/MigrationGate.vue';
 import NewProjectDrawer from '@/components/NewProjectDrawer.vue';
@@ -112,6 +114,13 @@ const needsMigration = computed(
  * the screen can be left by skipping past a failure, and without it that would
  * bounce straight back to the same screen.
  */
+/**
+ * Read once on boot, for the one flag the shell needs: whether the
+ * introduction has been shown. Module-scoped in the composable, so the settings
+ * page reads the same object rather than a second copy.
+ */
+const { prefs, load: loadPrefs } = usePreferences();
+
 const bootstrapDone = ref(false);
 const needsBootstrap = computed(
   () =>
@@ -125,6 +134,38 @@ const needsBootstrap = computed(
 );
 
 /**
+ * The introduction, after everything that is an obstacle.
+ *
+ * Last of the five full-window screens and the only one that is not a gate: the
+ * other four stop the app being usable, this one arrives once the stack is up
+ * and can be left at any point. It is behind them all deliberately — being
+ * introduced to a feature you cannot reach yet is worse than not being
+ * introduced.
+ *
+ * `tourSeen` lives in preferences rather than in a session flag, because "once"
+ * has to survive a restart or it is not once. `tourDone` is the session half,
+ * for the same reason `bootstrapDone` is one: the preference is written
+ * asynchronously and the screen should leave the moment somebody dismisses it.
+ */
+const tourDone = ref(false);
+const needsTour = computed(
+  () =>
+    !gated.value &&
+    !needsCatalogue.value &&
+    !needsMigration.value &&
+    !needsBootstrap.value &&
+    !app.booting &&
+    !!app.workspace &&
+    // `prefs.value` and not `prefs.value?.tourSeen`: the preferences are read
+    // after the boot, so before they land the optional chain answers
+    // `undefined !== true` — true — and the tour would flash on every launch
+    // for somebody who had already dismissed it.
+    !!prefs.value &&
+    prefs.value.tourSeen !== true &&
+    !tourDone.value
+);
+
+/**
  * Neither full-window screen wants the shell around it.
  *
  * Same reasoning for both: the bar acts on a stack that is not running yet and
@@ -132,7 +173,12 @@ const needsBootstrap = computed(
  * disabled or misleading.
  */
 const chromeHidden = computed(
-  () => gated.value || needsCatalogue.value || needsMigration.value || needsBootstrap.value
+  () =>
+    gated.value ||
+    needsCatalogue.value ||
+    needsMigration.value ||
+    needsBootstrap.value ||
+    needsTour.value
 );
 
 /**
@@ -157,10 +203,41 @@ const projectSearch = ref('');
 const stackError = ref(null);
 const commandLoading = ref(false);
 
+/**
+ * Crash reports this install has not been told about.
+ *
+ * The application could crash, write a perfectly good report, and never mention
+ * it — so "I would like to report this" never started, because nobody knew
+ * there was anything to report. Nothing leaves the machine; `PRIVACY.md`
+ * promises no telemetry and no crash reporting service, and this keeps that.
+ *
+ * The marker is written when the person dismisses the line or follows it, not
+ * when it is read: marking on read would dismiss a notice nobody looked at,
+ * which is the same as not having one.
+ */
+const crashes = ref([]);
+
+async function seenCrashes() {
+  crashes.value = [];
+  await api.crashReportsSeen().catch(() => {});
+}
+
+async function openDiagnostics() {
+  await seenCrashes();
+  router.push({ name: 'Settings', query: { tab: 'doctor' } }).catch(() => {});
+}
+
 const showCloseDialog = ref(false);
 
 // Opened through the opener plugin rather than <a href>: a webview that
 // navigates away from the app has no way back.
+//
+// Two of these are not brand marks and cannot be: Material Design Icons
+// carries no Bluesky glyph and dropped Discord's, so both fall back to a
+// generic one. The Discord row named the brand glyph until the icon set was
+// actually read against this file — it had not existed for two major
+// versions, and a missing glyph renders as nothing at all, which is what that
+// row had been rendering.
 const SOCIAL = [
   { icon: 'mdi-youtube', title: 'YouTube', url: 'https://www.youtube.com/stackvo' },
   { icon: 'mdi-mastodon', title: 'Mastodon', url: 'https://fosstodon.org/@stackvo' },
@@ -168,7 +245,7 @@ const SOCIAL = [
   { icon: 'mdi-reddit', title: 'Reddit', url: 'https://reddit.com/r/stackvo' },
   { icon: 'mdi-cloud', title: 'Bluesky', url: 'https://bsky.app/profile/stackvo' },
   { icon: 'mdi-twitter', title: 'Twitter/X', url: 'https://twitter.com/stackvo' },
-  { icon: 'mdi-discord', title: 'Discord', url: 'https://discord.gg/stackvo' },
+  { icon: 'mdi-chat', title: 'Discord', url: 'https://discord.gg/stackvo' },
 ];
 
 const LANGUAGES = [
@@ -338,6 +415,12 @@ onMounted(async () => {
   await ops.bind();
   if (disposed) return;
 
+  // After the boot rather than before it: a crash notice competing with the
+  // preflight gate would be two things asking for attention at once, and the
+  // gate is the one that stops the app being usable.
+  crashes.value = await api.crashReports().catch(() => []);
+  await loadPrefs().catch(() => {});
+
   metrics.start();
   if (app.hasWorkspace) inventory.loadAll();
 
@@ -405,6 +488,27 @@ onMounted(async () => {
         // The server first, because the process name means nothing without it
         // — two servers run a `php-fpm` and they are not the same one.
         [alarm.server, alarm.detail].filter(Boolean).join(' · ')
+      );
+    })
+  );
+
+  /**
+   * A project has passed the budget somebody set for it.
+   *
+   * Whether or not the window is in front, and for the same reason the alarm
+   * above is: the point of a budget is that something is happening while you
+   * are looking somewhere else. The backend fires this once a day per project
+   * — see `usage.rs` — so this does not need to remember anything.
+   */
+  keep(
+    await listenAll(['usage:over-budget'], (_event, payload) => {
+      if (!payload?.project) return;
+      notify(
+        t('usage.overNotice', { name: payload.project }),
+        t('usage.overDetail', {
+          cpu: Math.round(payload.cpuMinutes ?? 0),
+          gb: (payload.gbHours ?? 0).toFixed(1),
+        })
       );
     })
   );
@@ -1028,8 +1132,31 @@ onUnmounted(() => {
 
       <BootstrapGate v-else-if="needsBootstrap" @done="bootstrapDone = true" />
 
+      <WelcomeTour v-else-if="needsTour" @done="tourDone = true" />
+
       <router-view v-else />
     </v-main>
+
+    <!-- The app crashed last time and nothing used to say so.
+         A report was written, it travels in a diagnostic bundle if somebody
+         builds one, and they never learned there was anything to attach. This
+         is that line, and it stays on their machine: PRIVACY.md promises no
+         telemetry and no crash reporting service, and this keeps it. -->
+    <v-snackbar
+      :model-value="crashes.length > 0"
+      color="transparent"
+      location="bottom"
+      timeout="-1"
+    >
+      <v-alert type="warning" variant="tonal" density="compact" closable @click:close="seenCrashes">
+        <div class="text-body-2">{{ t('crash.notice', { count: crashes.length }) }}</div>
+        <template #append>
+          <v-btn size="small" variant="tonal" @click="openDiagnostics">
+            {{ t('crash.open') }}
+          </v-btn>
+        </template>
+      </v-alert>
+    </v-snackbar>
 
     <!-- Global overlays --------------------------------------------------- -->
     <v-snackbar :model-value="!!stackError" color="transparent" location="bottom" timeout="8000">

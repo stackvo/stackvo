@@ -5,6 +5,7 @@ import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import { oauthNote } from '@/lib/catalogue-text';
 
 /**
  * The redirect URI to paste into an identity provider's console.
@@ -114,7 +115,7 @@ watch(() => [props.name, path.value], load, { immediate: true });
         {{ provider.accepts === 'any' ? t('oauth.takesLocal') : t('oauth.takesPublic') }}
       </v-chip>
       <span class="font-weight-medium">{{ provider.label }}</span>
-      <span class="text-caption text-medium-emphasis ml-2">{{ provider.note }}</span>
+      <span class="text-caption text-medium-emphasis ml-2">{{ oauthNote(provider) }}</span>
     </div>
   </v-card>
 </template>
