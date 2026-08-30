@@ -989,12 +989,19 @@ async fn serve_with_handle(
                             &serde_json::json!({ "error": why }).to_string(),
                         ),
                         Ok(asked) => {
-                            // `allow_writes: false`, always. The tool table is
-                            // already filtered above; passing false as well
-                            // means a tool that changes its `writes` flag
+                            // A read-only grant, always. The tool table is
+                            // already filtered above; granting nothing here as
+                            // well means a tool that changes its `writes` flag
                             // cannot become writable here by being re-flagged
-                            // in one place only.
-                            match crate::mcp::call(&asked.tool, &asked.arguments, false).await {
+                            // in one place only. This surface takes no grant
+                            // from anywhere — there is no flag that widens it.
+                            match crate::mcp::call(
+                                &asked.tool,
+                                &asked.arguments,
+                                &crate::grant::Grant::read_only(),
+                            )
+                            .await
+                            {
                                 Ok(value) => render_response(200, &value.to_string()),
                                 // The same body the stdio surface returns, from
                                 // the same function. These were two hand-written

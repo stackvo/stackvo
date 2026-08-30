@@ -1,8 +1,16 @@
 //! The MCP server, as a process an assistant can launch.
 //!
-//!   stackvo-mcp                 # read-only, the default
-//!   stackvo-mcp --allow-writes  # plus the few tools that change things
+//!   stackvo-mcp                            # read-only, the default
+//!   stackvo-mcp --allow-writes             # plus the twelve that change things
+//!   stackvo-mcp --allow=project_restart    # or only the ones named
+//!   stackvo-mcp --allow-writes --project=shop --for=30m
 //!   STACKVO_ROOT=/path stackvo-mcp
+//!
+//! What the flags mean, and why there are four of them rather than one, is
+//! [`stackvo_desktop_lib::grant`]. This binary reads them, says what it
+//! understood, and refuses to start on anything it did not — a server that
+//! silently grants something other than what its configuration file says is
+//! worse than one that does not come up.
 //!
 //! Registered with Claude Code as:
 //!
@@ -30,17 +38,19 @@ async fn main() {
     // on. The report lands in the same directory the app writes its own to.
     stackvo_desktop_lib::crash::install();
 
-    let allow_writes = std::env::args().any(|arg| arg == "--allow-writes");
+    let grant = match stackvo_desktop_lib::grant::Grant::parse(std::env::args().skip(1)) {
+        Ok(grant) => grant,
+        Err(bad) => {
+            eprintln!("stackvo-mcp: {bad}");
+            std::process::exit(2);
+        }
+    };
 
     eprintln!(
         "stackvo-mcp {} — {} tools ({})",
         env!("CARGO_PKG_VERSION"),
-        mcp::visible(allow_writes).count(),
-        if allow_writes {
-            "reads and writes"
-        } else {
-            "read-only; pass --allow-writes to enable the rest"
-        }
+        mcp::visible(&grant).count(),
+        grant.describe(),
     );
 
     // Said once, up front: every tool resolves the workspace, and "no StackVo
@@ -74,7 +84,7 @@ async fn main() {
             }
         };
 
-        let Some(response) = mcp::handle(&request, allow_writes).await else {
+        let Some(response) = mcp::serve(&request, &grant).await else {
             continue; // a notification
         };
 

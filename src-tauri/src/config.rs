@@ -75,8 +75,8 @@ pub const SETTINGS: [(&str, &str); 36] = [
     // behind somebody's back and then answers 502 is worse than one that stays
     // up, so this is asked for rather than assumed.
     ("IDLE_SUSPEND_MINUTES", "0"),
-    ("SUPPORTED_SERVERS", "nginx,apache,caddy,frankenphp,swoole"),
-    ("SUPPORTED_SERVERS_DEFAULT", "nginx"),
+    ("SUPPORTED_SERVERS", "nginx,apache,caddy,frankenphp,swoole,roadrunner"),
+    ("SUPPORTED_SERVERS_DEFAULT", DEFAULT_SERVER),
     ("SUPPORTED_LANGUAGES", "php,python,go,ruby,rust,nodejs"),
     ("SUPPORTED_LANGUAGES_PHP_VERSIONS", "5.6,7.0,7.1,7.2,7.3,7.4,8.0,8.1,8.2,8.3,8.4,8.5"),
     ("SUPPORTED_LANGUAGES_PHP_DEFAULT", "8.4"),
@@ -94,7 +94,7 @@ pub const SETTINGS: [(&str, &str); 36] = [
     ("SUPPORTED_LANGUAGES_NODEJS_DEFAULT", "22"),
     // Stack-shaping choices. Editable in Settings; absent from a fresh `.env`
     // because the default is the answer almost everyone keeps.
-    ("DEFAULT_TLD_SUFFIX", "stackvo.loc"),
+    ("DEFAULT_TLD_SUFFIX", DEFAULT_TLD_SUFFIX),
     ("SERVER_MAX_BODY_SIZE", "1m"),
     ("SERVER_FASTCGI_TIMEOUT", "60"),
     ("SERVER_CLIENT_BODY_TIMEOUT", "60"),
@@ -107,7 +107,7 @@ pub const SETTINGS: [(&str, &str); 36] = [
     ("SERVER_FASTCGI_SEND_TIMEOUT", "60"),
     ("SSL_ENABLE", "true"),
     ("REDIRECT_TO_HTTPS", "true"),
-    ("DOCKER_DEFAULT_NETWORK", "stackvo-net"),
+    ("DOCKER_DEFAULT_NETWORK", DEFAULT_NETWORK),
     ("PHP_DEFAULT_TOOLS", "composer,nodejs"),
     ("PHP_TOOL_COMPOSER_VERSION", "latest"),
     ("PHP_TOOL_NODEJS_VERSION", "20"),
@@ -318,6 +318,68 @@ pub const LEGACY_SERVICES: [(&str, &str); 78] = [
     ("SERVICE_TYPESENSE_API_KEY", "stackvo-api-key"),
 ];
 
+/// The domain suffix every service sits under when nothing chooses another.
+///
+/// One literal, and it used to be eleven. `certs::suffix` derived this value
+/// one way — trimmed, lower-cased, an empty string treated as absent — and ten
+/// call sites derived it another, with a bare `unwrap_or("stackvo.loc")`. Same
+/// key, two answers, and the divergence was measurable rather than theoretical:
+///
+/// ```text
+///   DEFAULT_TLD_SUFFIX=            call sites ""          certs::suffix "stackvo.loc"
+///   DEFAULT_TLD_SUFFIX=Shop.LOC    call sites "Shop.LOC"  certs::suffix "shop.loc"
+/// ```
+///
+/// The empty case is the one that bites. `Env::parse` lets a file's empty value
+/// win over the embedded default, so a `.env` carrying the key with nothing
+/// after it gave every project a domain ending in a bare dot while the
+/// certificate was still issued for `stackvo.loc`.
+///
+/// So there is one derivation now — [`Env::tld_suffix`] — and one literal, here,
+/// which `EMBEDDED` and `certs::FALLBACK_SUFFIX` both point at.
+pub const DEFAULT_TLD_SUFFIX: &str = "stackvo.loc";
+
+/// The Docker network every generated compose file joins.
+///
+/// Same story, smaller: five sites, four of them `unwrap_or("stackvo-net")`.
+/// See [`Env::docker_network`]. A network name is not case-folded — Docker's
+/// names are case-sensitive — so that derivation only trims and rejects empty.
+pub const DEFAULT_NETWORK: &str = "stackvo-net";
+
+/// The web server a project that did not choose one runs.
+///
+/// Written five times as `unwrap_or("nginx")` in the render path and read from
+/// the setting in exactly one place — `Catalog.default_server`, which only
+/// decides what the new-project wizard shows preselected. The consequence was
+/// measurable and is the reason this constant exists: with
+/// `SUPPORTED_SERVERS_DEFAULT=caddy` a project opened from the wizard ran
+/// Caddy, an adopted project ran nginx, and a manifest with its `server` line
+/// deleted ran nginx. One setting, three answers.
+///
+/// [`Env::default_server`] is the one derivation now, and
+/// [`crate::manifest::Manifest::server_or`] is where a project that did not
+/// choose gets it.
+pub const DEFAULT_SERVER: &str = "nginx";
+
+/// [`Env::tld_suffix`], for a caller holding the raw value rather than an `Env`.
+///
+/// The generator reaches this one: it resolves its settings into a plain map
+/// before rendering, so it has the string and not the reader. Two entry points,
+/// one rule — which is the point of the whole change.
+pub fn tld_suffix_of(raw: Option<&str>) -> String {
+    raw.map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT_TLD_SUFFIX.to_string())
+}
+
+/// [`Env::docker_network`], for the same caller.
+pub fn docker_network_of(raw: Option<&str>) -> String {
+    raw.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(DEFAULT_NETWORK)
+        .to_string()
+}
+
 /// Both halves, in the order [`Env::parse`] lays them down.
 ///
 /// One name because every consumer wants the merged view — the settings form,
@@ -472,6 +534,41 @@ impl Env {
 
     pub fn get(&self, key: &str) -> Option<&str> {
         self.vars.get(key).map(|s| s.as_str())
+    }
+
+    /// The domain suffix every service sits under.
+    ///
+    /// The one derivation, and it exists because there used to be two — see
+    /// [`DEFAULT_TLD_SUFFIX`] for the measurement. Lower-cased because a domain
+    /// is case-insensitive and the certificate is issued in one case: a `.env`
+    /// spelling it `Shop.LOC` otherwise gave the generator one string and
+    /// `mkcert` another. Empty means absent, because [`Self::parse`] lets a
+    /// file's empty value win over the embedded default, and "the key is there
+    /// with nothing after it" is not a choice of suffix.
+    pub fn tld_suffix(&self) -> String {
+        tld_suffix_of(self.get("DEFAULT_TLD_SUFFIX"))
+    }
+
+    /// The Docker network every generated compose file joins.
+    ///
+    /// Not case-folded, unlike [`Self::tld_suffix`]: Docker network names are
+    /// case-sensitive, so lowering one would name a network that does not
+    /// exist. Empty is still absent, for the same reason as there.
+    pub fn docker_network(&self) -> String {
+        docker_network_of(self.get("DOCKER_DEFAULT_NETWORK"))
+    }
+
+    /// The web server a project that did not choose one runs.
+    ///
+    /// See [`DEFAULT_SERVER`]. Not case-folded: a server id is matched against
+    /// `Server::parse`'s own list, and lowering one here would only hide a
+    /// misspelling that ought to be reported.
+    pub fn default_server(&self) -> String {
+        self.get("SUPPORTED_SERVERS_DEFAULT")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(DEFAULT_SERVER)
+            .to_string()
     }
 
     /// What the **file** says, with no embedded default underneath it.
@@ -764,6 +861,75 @@ SERVICE_REDIS_ENABLE=TRUE
         assert_eq!(
             Env::parse("").get("SUPPORTED_SERVERS_DEFAULT"),
             Some("nginx")
+        );
+    }
+
+    /// The divergence this collapsed, stated as the two cases that produced it.
+    ///
+    /// Before, `certs::suffix` trimmed, lower-cased and treated an empty value
+    /// as absent, while ten call sites did a bare `unwrap_or("stackvo.loc")`.
+    /// Measured on the two inputs that separate them:
+    ///
+    /// ```text
+    ///   DEFAULT_TLD_SUFFIX=            call sites ""          certs::suffix "stackvo.loc"
+    ///   DEFAULT_TLD_SUFFIX=Shop.LOC    call sites "Shop.LOC"  certs::suffix "shop.loc"
+    /// ```
+    ///
+    /// The empty case is the one that reached a user: `Env::parse` lets a
+    /// file's empty value win over the embedded default, so every project got a
+    /// domain ending in a bare dot while the certificate was still `stackvo.loc`.
+    #[test]
+    fn a_blank_or_oddly_cased_suffix_resolves_the_way_the_certificate_does() {
+        assert_eq!(
+            Env::parse("DEFAULT_TLD_SUFFIX=").tld_suffix(),
+            "stackvo.loc"
+        );
+        assert_eq!(
+            Env::parse("DEFAULT_TLD_SUFFIX=   ").tld_suffix(),
+            "stackvo.loc"
+        );
+        assert_eq!(
+            Env::parse("DEFAULT_TLD_SUFFIX=Shop.LOC").tld_suffix(),
+            "shop.loc"
+        );
+        assert_eq!(Env::parse("").tld_suffix(), DEFAULT_TLD_SUFFIX);
+        assert_eq!(
+            Env::parse("DEFAULT_TLD_SUFFIX=dev.test").tld_suffix(),
+            "dev.test"
+        );
+    }
+
+    /// A network name is **not** case-folded, and that difference is the whole
+    /// reason these are two functions rather than one: Docker network names are
+    /// case-sensitive, so lowering `MyNet` would name a network that is not
+    /// there. Empty is still absent, for the reason above.
+    #[test]
+    fn a_network_name_is_trimmed_but_never_case_folded() {
+        assert_eq!(
+            Env::parse("DOCKER_DEFAULT_NETWORK=").docker_network(),
+            "stackvo-net"
+        );
+        assert_eq!(
+            Env::parse("DOCKER_DEFAULT_NETWORK=MyNet").docker_network(),
+            "MyNet"
+        );
+        assert_eq!(Env::parse("").docker_network(), DEFAULT_NETWORK);
+    }
+
+    /// One setting, one answer. It used to be one setting and three: the wizard
+    /// read `SUPPORTED_SERVERS_DEFAULT` and the five render sites did not, so
+    /// `=caddy` gave a wizard project Caddy, an adopted project nginx, and a
+    /// manifest with its `server` line deleted nginx.
+    #[test]
+    fn the_default_server_is_the_setting_and_not_a_literal() {
+        assert_eq!(Env::parse("").default_server(), DEFAULT_SERVER);
+        assert_eq!(
+            Env::parse("SUPPORTED_SERVERS_DEFAULT=caddy").default_server(),
+            "caddy"
+        );
+        assert_eq!(
+            Env::parse("SUPPORTED_SERVERS_DEFAULT=  ").default_server(),
+            DEFAULT_SERVER
         );
     }
 

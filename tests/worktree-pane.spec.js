@@ -67,6 +67,8 @@ const PARENT = {
       exists: true,
       dirty: false,
       orphaned: false,
+      isolated: true,
+      remainingMinutes: 95,
     },
   ],
 };
@@ -76,6 +78,8 @@ const SELF = {
   gitAvailable: true,
   repository: true,
   linked: true,
+  isolated: true,
+  grantArgs: ['--allow-writes', '--project=shop-feature-x', '--for=95m'],
   record: {
     name: 'shop-feature-x',
     parent: 'shop',
@@ -130,6 +134,23 @@ describe('a project that has worktrees', () => {
     // The database is named on the row: "which one is this branch writing to"
     // is the question somebody asks before running a migration.
     expect(rows[0].text()).toContain('stackvo_feature_x');
+  });
+
+  it('says how long a sandbox has left, and says plainly when it has none', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('1 h left');
+
+    api.worktreeSupport.mockResolvedValue({
+      ...PARENT,
+      worktrees: [{ ...PARENT.worktrees[0], expired: true, remainingMinutes: 0 }],
+    });
+    const over = mountPane();
+    await flushPromises();
+
+    expect(over.find('[data-test="worktree-expired"]').exists()).toBe(true);
+    expect(over.text()).toContain('Time passed');
   });
 
   it('draws no environment editor, because this project is not a worktree', async () => {
@@ -254,6 +275,53 @@ describe('a project that is a worktree', () => {
     expect(wrapper.text()).toContain('stackvo');
     // And no way to create a worktree of a worktree.
     expect(wrapper.text()).not.toContain('New worktree');
+  });
+
+  // "Its own database" and "cannot reach the parent's" are two promises, and
+  // the second one is the one somebody hands an assistant a branch on. Both
+  // answers are rendered, because on PostgreSQL and MongoDB the shared login is
+  // the only answer there is — a line that appeared only in the good case would
+  // read as a feature that sometimes forgets.
+  it('says which login the branch reaches its database with', async () => {
+    const wrapper = mountPane('shop-feature-x');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('cannot reach another database');
+    expect(wrapper.text()).not.toContain('Shared with the instance');
+  });
+
+  it('says plainly when the branch shares the instance login, and why', async () => {
+    api.worktreeSupport.mockResolvedValue({ ...SELF, isolated: false });
+    const wrapper = mountPane('shop-feature-x');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Shared with the instance');
+    // Not just the label: the sentence that says what it means, and that the
+    // two engines it is not arranged on are named rather than left as a gap.
+    expect(wrapper.text()).toContain('including the project it was branched from');
+    expect(wrapper.text()).toContain('PostgreSQL');
+  });
+
+  // The sentence the whole arrangement is for. It is rendered by the backend
+  // from the grant the server enforces, so the test checks that the pane shows
+  // what it was given rather than that it can build the string itself — a
+  // second spelling here would be a second thing to get wrong.
+  it('offers the registration that gives an assistant this branch and nothing else', async () => {
+    const wrapper = mountPane('shop-feature-x');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('--project=shop-feature-x');
+    expect(wrapper.text()).toContain('--for=95m');
+  });
+
+  it('offers no registration once the sandbox time has passed', async () => {
+    // Empty rather than a grant with no duration on it: dropping a spent
+    // `--for` would hand out an unlimited one.
+    api.worktreeSupport.mockResolvedValue({ ...SELF, grantArgs: [], expired: true });
+    const wrapper = mountPane('shop-feature-x');
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('--project=shop-feature-x');
   });
 
   it('edits its own variables rather than the project settings file', async () => {

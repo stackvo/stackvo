@@ -34,6 +34,17 @@ const vuetify = createVuetify({ components, directives });
 
 const mountPane = () => mount(AgentsPane, { global: { plugins: [vuetify, i18n] } });
 
+/**
+ * A select by its label rather than by its position.
+ *
+ * There are three on this pane now — the project scope, how long the grant
+ * lasts, and where the rules go — and a positional lookup made the rules test
+ * fail the day a control was added above it, which is a test breaking for a
+ * reason that has nothing to do with what it checks.
+ */
+const selectLabelled = (wrapper, label) =>
+  wrapper.findAllComponents({ name: 'VSelect' }).find((s) => s.props('label') === label);
+
 const client = (over = {}) => ({
   id: 'cursor',
   label: 'Cursor',
@@ -128,7 +139,7 @@ describe('the write flag', () => {
       .find((b) => b.text() === 'Register')
       .trigger('click');
     await flushPromises();
-    expect(api.agentsInstall).toHaveBeenLastCalledWith('cursor', false);
+    expect(api.agentsInstall).toHaveBeenLastCalledWith('cursor', false, [], null);
 
     await wrapper.findComponent({ name: 'VSwitch' }).setValue(true);
     await wrapper
@@ -136,7 +147,50 @@ describe('the write flag', () => {
       .find((b) => b.text() === 'Register')
       .trigger('click');
     await flushPromises();
-    expect(api.agentsInstall).toHaveBeenLastCalledWith('cursor', true);
+    expect(api.agentsInstall).toHaveBeenLastCalledWith('cursor', true, [], null);
+  });
+
+  it('bounds the grant to a project, and says so in the flags it will write', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+
+    await wrapper.findComponent({ name: 'VSwitch' }).setValue(true);
+    await selectLabelled(wrapper, 'Only these projects').setValue(['shop']);
+    await selectLabelled(wrapper, 'Writing lasts').setValue(30);
+    await flushPromises();
+
+    // The preview is the whole point of rendering the flags here: it is what
+    // the file will carry, shown before the file is written.
+    expect(wrapper.vm.grantArgs).toEqual(['--allow-writes', '--project=shop', '--for=30m']);
+    expect(JSON.parse(wrapper.vm.snippet(client())).mcpServers.stackvo.args).toEqual(
+      wrapper.vm.grantArgs
+    );
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Register')
+      .trigger('click');
+    await flushPromises();
+    expect(api.agentsInstall).toHaveBeenLastCalledWith('cursor', true, ['shop'], 30);
+  });
+
+  it('offers the scope without the writes, because it bounds the reads too', async () => {
+    const wrapper = mountPane();
+    await flushPromises();
+
+    await selectLabelled(wrapper, 'Only these projects').setValue(['shop']);
+    await flushPromises();
+
+    expect(wrapper.vm.grantArgs).toEqual(['--project=shop']);
+
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Register')
+      .trigger('click');
+    await flushPromises();
+    // No duration is sent while nothing may be written — a limit on a grant
+    // that grants nothing is a number nobody could act on.
+    expect(api.agentsInstall).toHaveBeenLastCalledWith('cursor', false, ['shop'], null);
   });
 
   it('says what it grants, by name', async () => {
@@ -239,7 +293,7 @@ describe('the rules', () => {
     // takes its own default rather than being handed one from the UI.
     expect(api.rulesStatus).toHaveBeenLastCalledWith(undefined);
 
-    await wrapper.findComponent({ name: 'VSelect' }).setValue('shop');
+    await selectLabelled(wrapper, 'Write workspace rules into').setValue('shop');
     await flushPromises();
     expect(api.rulesStatus).toHaveBeenLastCalledWith('shop');
 

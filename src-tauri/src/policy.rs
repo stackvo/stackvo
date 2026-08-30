@@ -90,6 +90,21 @@ pub struct Policy {
     locked: BTreeSet<String>,
     /// Prepended to image references that do not already name a registry.
     registry_prefix: Option<String>,
+    /// Fixed references for the images this application runs and did not build,
+    /// keyed by repository.
+    ///
+    /// Six of the ten ship on `latest`, which is the tag `pkg::MOVING_TAGS`
+    /// forbids third-party packages from using — so the application had a rule
+    /// it enforced against everybody except itself, and the day a broken
+    /// `cloudflared:latest` is published every user's tunnels stop at once with
+    /// no version to go back to. This is the place to say otherwise.
+    ///
+    /// Keyed by repository rather than by a name this file invents, because
+    /// that is what the pin *means*: whenever you would run this repository,
+    /// run exactly this instead. A digest is the strongest form and a fixed tag
+    /// is the ordinary one; both are accepted, because refusing a tag would be
+    /// refusing the answer most people can actually produce.
+    image_pins: BTreeMap<String, String>,
     /// What an administrator says about where packages come from.
     market: Market,
     /// What an administrator says about a project's lifecycle hooks.
@@ -407,6 +422,22 @@ impl Policy {
         self.registry_prefix.as_deref()
     }
 
+    /// The fixed reference an administrator chose for one repository.
+    pub fn image_pin(&self, repository: &str) -> Option<&str> {
+        self.image_pins.get(repository).map(String::as_str)
+    }
+
+    /// Every pin as written, including one this build has no image for.
+    ///
+    /// [`Self::image_pin`] answers from the running side and so can only ever
+    /// see a pin that matched something. [`crate::compliance`] needs the other
+    /// direction — a pin naming a repository nothing here runs is a line that
+    /// does nothing, and it is invisible to every caller that starts from the
+    /// image list.
+    pub fn image_pins(&self) -> &BTreeMap<String, String> {
+        &self.image_pins
+    }
+
     pub fn source(&self) -> Option<&Path> {
         self.source.as_deref()
     }
@@ -537,6 +568,39 @@ impl Policy {
             }
         }
 
+        // `imagePins`, keyed by repository. Every entry is named in the
+        // complaints when it is wrong rather than dropped in silence: a pin
+        // that did not apply is an image still moving under somebody who
+        // believes they fixed it, which is the failure this field exists to
+        // end.
+        let mut image_pins: BTreeMap<String, String> = BTreeMap::new();
+        if let Some(given) = object.get("imagePins") {
+            match given.as_object() {
+                Some(map) => {
+                    for (repository, value) in map {
+                        match value.as_str().map(str::trim) {
+                            Some("") | None => complaints.push(format!(
+                                "imagePins.{repository} is not a non-empty string and was ignored"
+                            )),
+                            Some(reference) => {
+                                // The pin has to name the repository it pins,
+                                // or it is a rule that silently runs something
+                                // else. `nginx: "alpine:3"` is a typo, not a pin.
+                                if crate::images::repository_of(reference) != repository {
+                                    complaints.push(format!(
+                                        "imagePins.{repository} points at \"{reference}\", which                                          is a different repository, and was ignored"
+                                    ));
+                                    continue;
+                                }
+                                image_pins.insert(repository.clone(), reference.to_string());
+                            }
+                        }
+                    }
+                }
+                None => complaints.push("imagePins is not an object and was ignored".to_string()),
+            }
+        }
+
         let market = parse_market(object.get("market"), &mut complaints);
         let hooks = parse_hooks(object.get("hooks"), &mut complaints);
         let providers = parse_providers(object.get("providers"), &mut complaints);
@@ -545,6 +609,7 @@ impl Policy {
             settings,
             locked,
             registry_prefix,
+            image_pins,
             market,
             hooks,
             providers,
@@ -826,7 +891,19 @@ pub fn mirror(prefix: &str, reference: &str) -> String {
 /// Same rules as [`mirror`] — this only reads the prefix for the caller, so
 /// there is one place the policy is consulted rather than eleven.
 pub fn run_image(reference: &str) -> String {
-    match current().registry_prefix() {
+    let policy = current();
+
+    // Pin first, mirror second, and the order is the rule. A pin says which
+    // *version* to run; a mirror says which *registry* to get it from. Mirroring
+    // first would prefix the reference and then look for a pin under a
+    // repository that now has the organisation's host in front of it — so every
+    // pin would stop applying on exactly the managed machines that set one.
+    let reference = match policy.image_pin(crate::images::repository_of(reference)) {
+        Some(pinned) => pinned,
+        None => reference,
+    };
+
+    match policy.registry_prefix() {
         Some(prefix) => mirror(prefix, reference),
         None => reference.to_string(),
     }
@@ -985,6 +1062,99 @@ mod tests {
 
     fn at(text: &str) -> Policy {
         Policy::parse(text, Path::new("/etc/stackvo/policy.json"))
+    }
+
+    // ---------------------------------------------------------- image pins
+
+    /// The double standard, and the place to end it.
+    ///
+    /// `pkg::MOVING_TAGS` forbids `latest` for third-party packages, and six of
+    /// the ten images this application runs are on it — so the rule applied to
+    /// everybody except us, and the day a broken `cloudflared:latest` ships,
+    /// every user's tunnels stop with no version to go back to.
+    #[test]
+    fn a_pin_replaces_the_reference_the_build_ships() {
+        let policy = at(r#"{
+            "schemaVersion": 1,
+            "imagePins": {
+                "cloudflare/cloudflared": "cloudflare/cloudflared:2024.8.2",
+                "nginx": "nginx@sha256:0123456789abcdef"
+            }
+        }"#);
+
+        assert_eq!(
+            policy.image_pin("cloudflare/cloudflared"),
+            Some("cloudflare/cloudflared:2024.8.2")
+        );
+        // A digest is the strongest form and a fixed tag the ordinary one; both
+        // are accepted, because refusing a tag would refuse the answer most
+        // people can actually produce.
+        assert_eq!(
+            policy.image_pin("nginx"),
+            Some("nginx@sha256:0123456789abcdef")
+        );
+        assert_eq!(policy.image_pin("ngrok/ngrok"), None);
+        assert!(policy.error().is_none(), "{:?}", policy.error());
+    }
+
+    /// A pin that names a different repository is a typo, not a pin — and
+    /// applying it would silently run something else, which is worse than the
+    /// moving tag it was meant to fix.
+    #[test]
+    fn a_pin_that_points_somewhere_else_is_refused_and_named() {
+        let policy = at(r#"{
+            "schemaVersion": 1,
+            "imagePins": { "nginx": "alpine:3", "ngrok/ngrok": "" }
+        }"#);
+
+        assert_eq!(policy.image_pin("nginx"), None);
+        assert_eq!(policy.image_pin("ngrok/ngrok"), None);
+
+        let error = policy.error().unwrap_or_default();
+        assert!(error.contains("nginx"), "{error}");
+        assert!(error.contains("different repository"), "{error}");
+        assert!(error.contains("ngrok"), "{error}");
+    }
+
+    /// Pin first, mirror second, and the order is the rule rather than a
+    /// preference: mirroring first prefixes the reference, and the pin would
+    /// then be looked up under a repository with the organisation's host in
+    /// front of it — so every pin would stop applying on exactly the managed
+    /// machines that set one.
+    #[test]
+    fn a_pin_is_applied_before_the_mirror_and_not_after() {
+        let policy = at(r#"{
+            "schemaVersion": 1,
+            "registryPrefix": "registry.corp.example/proxy",
+            "imagePins": { "cloudflare/cloudflared": "cloudflare/cloudflared:2024.8.2" }
+        }"#);
+
+        // What `run_image` does, spelled out against a policy this test owns —
+        // the function itself reads the machine's policy, which a test must not
+        // depend on.
+        let shipped = "cloudflare/cloudflared:latest";
+        let pinned = policy
+            .image_pin(crate::images::repository_of(shipped))
+            .unwrap_or(shipped);
+        let effective = mirror(policy.registry_prefix().unwrap(), pinned);
+
+        assert_eq!(
+            effective,
+            "registry.corp.example/proxy/cloudflare/cloudflared:2024.8.2"
+        );
+        assert!(
+            !effective.ends_with(":latest"),
+            "the pin did not survive the mirror: {effective}"
+        );
+    }
+
+    /// No policy at all is the ordinary case and must change nothing.
+    #[test]
+    fn an_unmanaged_machine_runs_exactly_what_the_build_ships() {
+        let policy = Policy::none();
+        for own in crate::images::OWN {
+            assert_eq!(policy.image_pin(own.repository), None);
+        }
     }
 
     const GOOD: &str = r#"{

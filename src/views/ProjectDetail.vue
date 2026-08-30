@@ -50,6 +50,7 @@ import PageLayout from '@/components/PageLayout.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import HostsDialog from '@/components/HostsDialog.vue';
 import ProjectSettingsSheet from '@/components/ProjectSettingsSheet.vue';
+import { quickCommandAbout } from '@/lib/catalogue-text';
 
 const props = defineProps({ name: { type: String, required: true } });
 
@@ -655,7 +656,7 @@ onUnmounted(() => {
                 />
               </template>
               <v-list-item-title class="mono">{{ command.display }}</v-list-item-title>
-              <v-list-item-subtitle>{{ command.about }}</v-list-item-subtitle>
+              <v-list-item-subtitle>{{ quickCommandAbout(command) }}</v-list-item-subtitle>
               <v-list-item-subtitle class="text-disabled">
                 {{ t('quickCmd.because', { file: command.because }) }}
               </v-list-item-subtitle>

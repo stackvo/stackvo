@@ -190,3 +190,83 @@ describe('editing', () => {
     wrapper.unmount();
   });
 });
+
+/**
+ * The lists behind the pickers, and the reason they became editable.
+ *
+ * `build_catalog` reads `SUPPORTED_LANGUAGES_{KEY}_VERSIONS` out of `.env` and
+ * the pickers offer what came back, so those six lists decide what anybody can
+ * select. They ship compiled into the binary and go out of date between
+ * releases — Go stopped at 1.23, Ruby at 3.3, Node at 23, Rust at 1.84 — and
+ * until this pane grew a control for them, a version the application had never
+ * heard of could be reached only by editing `.env` by hand or by waiting for a
+ * release of the application. For a number in a list.
+ */
+describe('which versions are offered', () => {
+  /**
+   * The lists sit behind a disclosure, and Vuetify does not mount an expansion
+   * panel's content until it opens — so a test that asserted on them without
+   * opening it would be asserting about nothing, and would go on passing after
+   * the controls were deleted.
+   */
+  async function open(wrapper) {
+    const title = wrapper
+      .findAllComponents({ name: 'VExpansionPanelTitle' })
+      .find((t) => t.text().includes(i18n.global.t('settings.runtimes.offered')));
+    expect(title, 'no disclosure for the offered versions').toBeTruthy();
+    await title.trigger('click');
+    await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wrapper.vm.$nextTick();
+  }
+
+  it('renders one editor per list the binary reads', async () => {
+    const wrapper = await render();
+    await open(wrapper);
+
+    const labels = wrapper.findAllComponents({ name: 'VCombobox' }).map((c) => c.props('label'));
+
+    // The runtimes, plus the two PHP-image lists that were already here.
+    for (const id of ['php', 'python', 'go', 'ruby', 'rust', 'nodejs']) {
+      expect(labels, `no editor for ${id}`).toContain(id);
+    }
+
+    wrapper.unmount();
+  });
+
+  it('shows what .env holds, and writes a comma-separated list back', async () => {
+    replies.envGet = {
+      ...replies.envGet,
+      SUPPORTED_LANGUAGES_GO_VERSIONS: '1.22,1.23',
+    };
+    const wrapper = await render();
+    await open(wrapper);
+
+    const go = wrapper
+      .findAllComponents({ name: 'VCombobox' })
+      .find((c) => c.props('label') === 'go');
+    expect(go.props('modelValue')).toEqual(['1.22', '1.23']);
+
+    // The shape `.env` wants: one key, one comma-separated value. A list
+    // written back as an array would be `[object Object]` in a file the
+    // generator reads.
+    pane(wrapper).setList('SUPPORTED_LANGUAGES_GO_VERSIONS', ['1.22', '1.23', '1.24']);
+    expect(editor.effective('SUPPORTED_LANGUAGES_GO_VERSIONS')).toBe('1.22,1.23,1.24');
+
+    wrapper.unmount();
+  });
+
+  /**
+   * The whole point: a version the binary's catalog has never heard of can be
+   * added, because the catalog is what goes stale.
+   */
+  it('accepts a version the catalog does not know', async () => {
+    const wrapper = await render();
+
+    pane(wrapper).setList('SUPPORTED_LANGUAGES_PHP_VERSIONS', ['8.3', '8.4', '8.6']);
+    expect(editor.effective('SUPPORTED_LANGUAGES_PHP_VERSIONS')).toBe('8.3,8.4,8.6');
+    expect(editor.dirty.value, 'the change has to reach the diff to be saved').toBe(true);
+
+    wrapper.unmount();
+  });
+});

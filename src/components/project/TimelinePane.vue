@@ -52,6 +52,22 @@ const usable = computed(() =>
 const zero = computed(() => (moments.value.length ? moments.value[0].at : 0));
 const offsetOf = (moment) => `+${((moment.at - zero.value) * 1000).toFixed(0)}ms`;
 
+/**
+ * One icon per source, from a map rather than a chain of ternaries.
+ *
+ * The chain had a shape that was fine at three and wrong at five: the last
+ * branch was the *default*, so a source nobody had thought about was drawn as
+ * a query. A map with a fallback says which one is the unknown case.
+ */
+const ICONS = {
+  dump: 'mdi-bug-outline',
+  query: 'mdi-database-search',
+  mail: 'mdi-email-outline',
+  request: 'mdi-swap-horizontal',
+  job: 'mdi-tray-arrow-down',
+};
+const iconOf = (source) => ICONS[source] ?? 'mdi-circle-small';
+
 async function load() {
   loading.value = true;
   error.value = null;
@@ -139,15 +155,7 @@ watch(service, load);
       <div class="axis">
         <div v-for="(moment, i) in moments" :key="i" class="moment" :class="moment.source">
           <span class="moment-at">{{ offsetOf(moment) }}</span>
-          <v-icon size="14" class="moment-icon">
-            {{
-              moment.source === 'dump'
-                ? 'mdi-bug-outline'
-                : moment.source === 'mail'
-                  ? 'mdi-email-outline'
-                  : 'mdi-database-search'
-            }}
-          </v-icon>
+          <v-icon size="14" class="moment-icon">{{ iconOf(moment.source) }}</v-icon>
           <div class="moment-body">
             <!-- WCAG 3.1.2, undetermined: a dump label, a statement or a
                  subject line, all of them the application's own words. -->
@@ -201,6 +209,17 @@ watch(service, load);
 
 .moment.mail .moment-icon {
   color: rgb(var(--v-theme-success));
+}
+
+/* The two stretches. Drawn apart from the three instants because they are a
+   different kind of thing: a request and a job each cover a span the rest of
+   the axis sits inside. */
+.moment.request .moment-icon {
+  color: rgb(var(--v-theme-primary));
+}
+
+.moment.job .moment-icon {
+  color: rgb(var(--v-theme-secondary));
 }
 
 .moment-body {

@@ -46,11 +46,31 @@
 //!     into ahead of the rest of their `PATH`.
 //!   * installing a host tool, which is the only act here that fetches an
 //!     executable over the network and leaves it somewhere a shell will run it.
+//!   * taking a project's `.env` out of git, which edits that repository's
+//!     index and its `.gitignore` — and is done in answer to a credential
+//!     having been committed, which is exactly the kind of act somebody has to
+//!     be able to date afterwards.
 //!
 //! Starting a container is not here, and neither is reading anything. An audit
 //! trail that records routine traffic is one nobody reads, and a trail nobody
 //! reads is not evidence — it is a file. The bar is "would somebody have to
 //! account for this?", not "did something happen?".
+//!
+//! ## The one place that bar is widened, and why
+//!
+//! Every **writing call an assistant makes over MCP** is recorded, refusals
+//! included — including `project_start`, which the paragraph above excludes.
+//! The exclusion was never about the act; it was about the actor. Starting a
+//! container from the window is done by the person reading this trail, and
+//! they watched it happen. The same act asked for by an assistant is the one
+//! nobody saw, and *"`stackvo_stack_down` was called at 14:32"* was a sentence
+//! this app could not produce about the only caller that is not a person.
+//!
+//! Those lines carry one more thing: [`crate::undo`]'s plan, worked out
+//! **before** the call ran, so the app can offer to put the act back. A
+//! compensation computed later would be computed against a machine that has
+//! since changed — what a `stack_down` stopped exists only before it stopped
+//! it.
 //!
 //! ## No identity field, and that is honest rather than lazy
 //!
@@ -98,6 +118,22 @@ pub struct Entry {
     /// trail carrying `.env` values is one nobody can hand to anybody.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// What would put this back, worked out **before** the act — or the
+    /// sentence saying why nothing would. See [`crate::undo`].
+    ///
+    /// Absent on every line written by the app itself, and that is the
+    /// boundary rather than an omission: those acts were asked for by the
+    /// person reading this screen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undo: Option<crate::undo::Undo>,
+    /// The `at` of the line this one put back.
+    ///
+    /// The file is append-only, so an undone act cannot be edited to say so.
+    /// The undo says it instead, and the reader joins the two — which also
+    /// means the record still holds both halves: that it happened, and that
+    /// somebody reversed it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undoes: Option<String>,
 }
 
 /// Where the trail lives.
@@ -191,6 +227,18 @@ pub fn tail_of(path: &Path, limit: usize) -> Trail {
         }
     }
 
+    // An undone act cannot be edited to say so — the file is append-only — so
+    // the join happens here. The undo is always *newer* than the act it
+    // reverses, which is why a window that holds the act holds its undo too.
+    let reversed: std::collections::BTreeSet<String> = entries
+        .iter()
+        .filter(|e| e.outcome == Outcome::Ok)
+        .filter_map(|e| e.undoes.clone())
+        .collect();
+    for entry in &mut entries {
+        entry.undone = reversed.contains(&entry.at);
+    }
+
     Trail {
         entries,
         total,
@@ -222,6 +270,15 @@ pub struct Record {
     pub outcome: Outcome,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undo: Option<crate::undo::Undo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undoes: Option<String>,
+    /// Whether a later line says this one was put back. **Derived on read**,
+    /// never stored: the file is append-only, so the only honest way to know is
+    /// to look for the undo that names it.
+    #[serde(default)]
+    pub undone: bool,
 }
 
 /// What the trail holds, and what could not be read.
@@ -239,6 +296,16 @@ pub struct Trail {
     pub unreadable: usize,
 }
 
+/// What an undo did.
+///
+/// Two numbers rather than a boolean: an undo is a sequence, and "four of six"
+/// is the answer somebody needs when the fifth refused.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Undone {
+    pub steps: usize,
+    pub done: usize,
+}
+
 /// The trail, wherever it happens to live.
 pub fn tail(limit: usize) -> Trail {
     path().map(|p| tail_of(&p, limit)).unwrap_or_default()
@@ -247,6 +314,59 @@ pub fn tail(limit: usize) -> Trail {
 /// Record an act, wherever the trail happens to live.
 pub fn record(action: &'static str, subject: impl Into<String>, outcome: Outcome) {
     record_with(action, subject, outcome, None);
+}
+
+/// As [`record_with`], carrying what would put the act back.
+///
+/// A separate function rather than two more arguments on [`record_with`],
+/// which eighteen call sites use and none of which has a compensation to
+/// offer: an act done by the person at the keyboard is one they can see they
+/// did. This is for the surface where that is not true.
+pub fn record_undoable(
+    action: &'static str,
+    subject: impl Into<String>,
+    outcome: Outcome,
+    detail: Option<String>,
+    undo: Option<crate::undo::Undo>,
+) {
+    let Some(path) = path() else { return };
+    append_to(
+        &path,
+        &Entry {
+            at: now_rfc3339(),
+            action,
+            subject: subject.into(),
+            outcome,
+            detail,
+            undo,
+            undoes: None,
+        },
+    )
+}
+
+/// Record that one earlier line was put back.
+pub fn record_undone(
+    subject: impl Into<String>,
+    outcome: Outcome,
+    detail: Option<String>,
+    undoes: &str,
+) {
+    let Some(path) = path() else { return };
+    append_to(
+        &path,
+        &Entry {
+            at: now_rfc3339(),
+            action: "undo",
+            subject: subject.into(),
+            outcome,
+            detail,
+            // An undo carries no undo of its own. Offering one would put a
+            // button in front of somebody that re-does the thing they just
+            // reversed, labelled as if it were putting something back.
+            undo: None,
+            undoes: Some(undoes.to_string()),
+        },
+    )
 }
 
 /// As [`record`], with the one detail worth keeping.
@@ -265,6 +385,8 @@ pub fn record_with(
             subject: subject.into(),
             outcome,
             detail,
+            undo: None,
+            undoes: None,
         },
     )
 }
@@ -296,6 +418,28 @@ pub(crate) fn rfc3339_of(unix_seconds: i64) -> String {
     )
 }
 
+/// The inverse of [`rfc3339_of`], for the one caller that has to subtract two
+/// timestamps rather than compare them.
+///
+/// Fixed-width and UTC by construction — this only ever reads strings this app
+/// wrote — so it is an offset read rather than a parser, and anything that is
+/// not that shape is `None` rather than a guess. A trail is evidence: a line
+/// whose timestamp cannot be read is one to report, not one to interpret.
+pub(crate) fn seconds_of_rfc3339(text: &str) -> Option<i64> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 20 || bytes[4] != b'-' || bytes[10] != b'T' || bytes[19] != b'Z' {
+        return None;
+    }
+    let at = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
+
+    let days = crate::crash::days_from_civil(
+        at(0, 4)?,
+        u32::try_from(at(5, 7)?).ok()?,
+        u32::try_from(at(8, 10)?).ok()?,
+    );
+    Some(days * 86_400 + at(11, 13)? * 3600 + at(14, 16)? * 60 + at(17, 19)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,7 +458,105 @@ mod tests {
             subject: subject.into(),
             outcome,
             detail: None,
+            undo: None,
+            undoes: None,
         }
+    }
+
+    /// The two directions of one format, held against each other.
+    #[test]
+    fn a_timestamp_this_app_wrote_reads_back_as_the_second_it_was() {
+        for seconds in [0_i64, 1, 1_756_500_000, 1_772_000_000, 253_370_764_800] {
+            let text = rfc3339_of(seconds);
+            assert_eq!(
+                seconds_of_rfc3339(&text),
+                Some(seconds),
+                "{text} did not come back as {seconds}"
+            );
+        }
+
+        // Anything that is not the shape this app writes is refused rather than
+        // half-read: a partial parse of a damaged line is a wrong answer where
+        // "I could not read it" is a true one.
+        for bad in [
+            "",
+            "2026-08-30",
+            "2026-08-30T09:00:00",
+            "2026-08-30T09:00:00+02:00",
+            "not a timestamp at all",
+        ] {
+            assert_eq!(seconds_of_rfc3339(bad), None, "{bad:?} was read anyway");
+        }
+    }
+
+    /// The join that makes an append-only file able to say "this was put back".
+    #[test]
+    fn an_undone_act_is_marked_by_the_line_that_undid_it() {
+        let path = temp("undone");
+
+        let mut down = entry("stackvo_stack_down", "the stack", Outcome::Ok);
+        down.undo = Some(crate::undo::Undo::Steps {
+            steps: vec![crate::undo::Step {
+                tool: "stackvo_project_start".into(),
+                arguments: serde_json::json!({ "name": "shop" }),
+            }],
+        });
+        append_to(&path, &down);
+
+        let mut other = entry("stackvo_project_stop", "blog", Outcome::Ok);
+        other.at = "2026-08-10T09:00:01Z".into();
+        append_to(&path, &other);
+
+        let mut undone = entry("undo", "the stack", Outcome::Ok);
+        undone.at = "2026-08-10T09:05:00Z".into();
+        undone.undoes = Some("2026-08-10T09:00:00Z".into());
+        append_to(&path, &undone);
+
+        let trail = tail_of(&path, 10);
+        let by_at = |at: &str| {
+            trail
+                .entries
+                .iter()
+                .find(|e| e.at == at)
+                .expect("the line is in the trail")
+                .clone()
+        };
+
+        assert!(
+            by_at("2026-08-10T09:00:00Z").undone,
+            "the act its undo names is not marked"
+        );
+        assert!(
+            !by_at("2026-08-10T09:00:01Z").undone,
+            "a line nothing undid was marked anyway"
+        );
+        // The plan survives the round trip, which is what makes the button in
+        // the pane something other than a label.
+        assert_eq!(
+            by_at("2026-08-10T09:00:00Z").undo.expect("a plan").steps()[0].tool,
+            "stackvo_project_start"
+        );
+        // And the record still holds both halves — that it happened, and that
+        // somebody reversed it. An edit in place would have kept only one.
+        assert_eq!(trail.total, 3);
+    }
+
+    /// A trail written before this field existed still reads.
+    #[test]
+    fn a_line_from_an_older_build_reads_without_the_new_fields() {
+        let path = temp("older");
+        std::fs::write(
+            &path,
+            r#"{"at":"2026-01-01T00:00:00Z","action":"hosts_apply","subject":"shop.loc","outcome":"ok"}
+"#,
+        )
+        .unwrap();
+
+        let trail = tail_of(&path, 10);
+        assert_eq!(trail.unreadable, 0, "an older line was counted as damage");
+        assert_eq!(trail.entries.len(), 1);
+        assert!(trail.entries[0].undo.is_none());
+        assert!(!trail.entries[0].undone);
     }
 
     /// The property that makes this a trail rather than a status file.

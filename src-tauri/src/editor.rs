@@ -307,7 +307,7 @@ fn absolute(workdir: &str) -> String {
 /// macOS bundle counts — that is the machine where the launcher is missing and
 /// the application is right there.
 pub fn installed() -> bool {
-    crate::apps::resolve_editor(VSCODE).is_some()
+    crate::apps::resolve_editor(VSCODE, None).is_some()
 }
 
 // -------------------------------------------------------------- the button
@@ -341,7 +341,7 @@ pub fn open(readiness: &Readiness) -> crate::error::Result<String> {
         None => {}
     }
 
-    let Some(launch) = crate::apps::resolve_editor(VSCODE) else {
+    let Some(launch) = crate::apps::resolve_editor(VSCODE, None) else {
         return Err(
             Error::new(Code::NotFound, "VS Code was not found on this machine.")
                 .with_hint(crate::hints::INSTALL_VS_CODE),
@@ -361,6 +361,17 @@ pub fn open(readiness: &Readiness) -> crate::error::Result<String> {
             .args(["-a", bundle])
             .arg(&readiness.handler_url)
             .spawn(),
+        // Unreachable by construction: this asks for VS Code by id and passes
+        // no custom command, which is the only way that variant is returned.
+        // It is refused rather than launched because the two arguments above
+        // are VS Code's own flags — handing them to whatever somebody typed in
+        // the editor box would be a different application opening a URL.
+        crate::apps::Launch::Custom(_) => {
+            return Err(
+                Error::new(Code::NotFound, "VS Code was not found on this machine.")
+                    .with_hint(crate::hints::INSTALL_VS_CODE),
+            )
+        }
     };
 
     spawned.map_err(|e| Error::io("opening VS Code", e))?;
@@ -490,7 +501,7 @@ pub fn jetbrains_status(root: &Path, project: &str, workdir: &str, libc: Libc) -
     let found = std::fs::read_to_string(&path).ok();
 
     Jetbrains {
-        installed: crate::apps::resolve_editor(PHPSTORM).is_some(),
+        installed: crate::apps::resolve_editor(PHPSTORM, None).is_some(),
         path: path.display().to_string(),
         exists: found.is_some(),
         current: found.as_deref() == Some(wanted.as_str()),

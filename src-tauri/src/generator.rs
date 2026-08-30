@@ -17,8 +17,11 @@
 //! The lang runtimes share the node template's shape: snapshot container,
 //! HOST/PORT contract, Traefik to the app port.
 
-use crate::contracts::{cmp_php_version, php_extensions};
-use crate::manifest::Manifest;
+use crate::config::Env;
+use crate::contracts::{cmp_php_version, env_schema, php_extensions};
+use crate::error::{Code, Error};
+use crate::manifest::{self, Manifest};
+use crate::workspace;
 use std::cmp::Ordering;
 
 /// Extensions PHP 8.0+ ships enabled. Skipped entirely — no install line and
@@ -322,7 +325,7 @@ pub struct ToolchainOptions {
     pub nodejs_version: String,
 }
 
-/// The five web servers that have generators.
+/// The six web servers that have generators.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Server {
     Nginx,
@@ -330,6 +333,15 @@ pub enum Server {
     Caddy,
     FrankenPhp,
     Swoole,
+    /// The other half of Laravel Octane.
+    ///
+    /// Octane has exactly two drivers — Swoole and RoadRunner — and this
+    /// application shipped one of them, which for a project using Octane is a
+    /// coin toss it can lose. Everything about the shape is Swoole's: the CLI
+    /// image, its own HTTP server on 8000, no FPM and no directory listing.
+    /// What differs is that the server is a **Go binary** rather than a PHP
+    /// extension, so nothing has to be compiled into PHP for it.
+    RoadRunner,
 }
 
 impl Server {
@@ -340,6 +352,7 @@ impl Server {
             "caddy" => Some(Server::Caddy),
             "frankenphp" => Some(Server::FrankenPhp),
             "swoole" => Some(Server::Swoole),
+            "roadrunner" => Some(Server::RoadRunner),
             _ => None,
         }
     }
@@ -350,7 +363,9 @@ impl Server {
         match self {
             Server::Nginx | Server::Caddy => format!("FROM php:{php_version}-fpm"),
             Server::Apache => format!("FROM php:{php_version}-apache"),
-            Server::Swoole => format!("FROM php:{php_version}-cli"),
+            // Both Octane drivers are the HTTP server themselves, so both run
+            // on the CLI image rather than fpm or apache.
+            Server::Swoole | Server::RoadRunner => format!("FROM php:{php_version}-cli"),
             // FrankenPHP ships its own image with the runtime baked in.
             Server::FrankenPhp => format!("FROM dunglas/frankenphp:1-php{php_version}-bookworm"),
         }
@@ -363,6 +378,7 @@ impl Server {
             Server::Caddy => "Caddy + PHP-FPM",
             Server::FrankenPhp => "FrankenPHP (Caddy + embedded PHP)",
             Server::Swoole => "Swoole",
+            Server::RoadRunner => "RoadRunner",
         }
     }
 
@@ -440,7 +456,48 @@ fn swoole_postamble(document_root: &str) -> String {
     out
 }
 
-/// Render a PHP project's Dockerfile for any of the five servers.
+/// RoadRunner's half of Octane.
+///
+/// Shorter than Swoole's, and the difference is the whole reason both exist:
+/// Swoole is a **PHP extension** that has to be compiled into the interpreter,
+/// so its block installs a PECL module and two dev libraries. RoadRunner is a
+/// **Go binary** that speaks to PHP over a pipe, so it is a download and a
+/// `chmod` — nothing about the PHP build changes.
+///
+/// The fallback matters more here than it does for Swoole. Without `artisan`
+/// there is no Octane, and RoadRunner without Octane needs a `.rr.yaml` and a
+/// PSR-7 worker this application cannot write for somebody — so a non-Laravel
+/// project gets PHP's own development server on the same port, which is a
+/// working site rather than a container that exits. Swoole can fall back to a
+/// twelve-line script because the extension *is* an HTTP server; the Go binary
+/// has nothing to serve without a worker.
+///
+/// `rr get-binary` rather than a pinned URL: it resolves the right build for
+/// the image's architecture, which a hardcoded release asset does not — and
+/// this image is built on whatever the developer's machine is.
+fn roadrunner_postamble(document_root: &str) -> String {
+    let mut out = String::from("\n\n# Expose RoadRunner port\nEXPOSE 8000\n\n");
+
+    out.push_str("# RoadRunner is a Go binary, not a PHP extension: nothing is compiled into PHP\nRUN --mount=type=cache,target=/var/cache/apt,sharing=locked \\\n    --mount=type=cache,target=/var/lib/apt,sharing=locked \\\n    apt-get update && apt-get install -y \\\n    curl \\\n    && rm -rf /var/lib/apt/lists/* \\\n    && curl -sSL https://raw.githubusercontent.com/roadrunner-server/roadrunner/master/download-latest.sh | sh -s -- -b /usr/local/bin \\\n    && chmod +x /usr/local/bin/rr\n\n");
+
+    out.push_str(
+        "# Entrypoint: Laravel Octane if available, otherwise PHP's own server\nRUN { \\\n",
+    );
+    out.push_str("    echo '#!/bin/bash'; \\\n");
+    out.push_str("    echo 'cd /var/www/html'; \\\n");
+    out.push_str("    echo 'if [ -f artisan ]; then'; \\\n");
+    out.push_str("    echo '    exec php artisan octane:start --server=roadrunner --host=0.0.0.0 --port=8000'; \\\n");
+    out.push_str("    echo 'else'; \\\n");
+    out.push_str(&format!(
+        "    echo '    exec php -S 0.0.0.0:8000 -t /var/www/html/{document_root}'; \\\n"
+    ));
+    out.push_str("    echo 'fi'; \\\n");
+    out.push_str("    } > /roadrunner-entrypoint.sh && chmod +x /roadrunner-entrypoint.sh\n\n");
+    out.push_str("WORKDIR /var/www/html\n\nCMD [\"/roadrunner-entrypoint.sh\"]\n");
+    out
+}
+
+/// Render a PHP project's Dockerfile for any of the six servers.
 ///
 /// Byte-for-byte equivalent to the Bash generators. The blank lines and their
 /// placement are load-bearing for the differential test — they are artefacts of
@@ -456,10 +513,14 @@ pub fn render_php_dockerfile(
 ) -> String {
     let mut out = String::from("# syntax=docker/dockerfile:1.4\n\n");
 
-    // Swoole is the only server with a bespoke header; the rest share one.
-    if server == Server::Swoole {
+    // The two Octane drivers have a bespoke header; the rest share one. The
+    // note is not decoration — it is the answer to "why is this a cli image",
+    // which is the first thing anybody reading the file asks.
+    if server == Server::Swoole || server == Server::RoadRunner {
         out.push_str(&format!(
-            "# Auto-generated Dockerfile for {project_name}\n# Server: Swoole\n# PHP Version: {php_version}\n# Note: Uses php-cli image - Swoole IS the HTTP server\n{}\n\n",
+            "# Auto-generated Dockerfile for {project_name}\n# Server: {}\n# PHP Version: {php_version}\n# Note: Uses php-cli image - {} IS the HTTP server\n{}\n\n",
+            server.label(),
+            server.label(),
             server.base_image(php_version)
         ));
     } else {
@@ -535,6 +596,7 @@ pub fn render_php_dockerfile(
             out.push_str("\nWORKDIR /var/www/html\n\nCMD [\"frankenphp\", \"run\", \"--config\", \"/etc/caddy/Caddyfile\"]\n");
         }
         Server::Swoole => out.push_str(&swoole_postamble(document_root)),
+        Server::RoadRunner => out.push_str(&roadrunner_postamble(document_root)),
     }
 
     let _ = server.uses_fpm();
@@ -748,6 +810,7 @@ pub fn render_from_manifest(
     manifest: &Manifest,
     opts: &ToolchainOptions,
     strict: bool,
+    default_server: &str,
 ) -> Result<String, String> {
     if manifest.runtime == "node" {
         let node = manifest
@@ -768,7 +831,7 @@ pub fn render_from_manifest(
     }
 
     let php = manifest.php.as_ref().ok_or("not a PHP project")?;
-    let server = Server::parse(manifest.server.as_deref().unwrap_or("nginx"))
+    let server = Server::parse(manifest.server_or(default_server))
         .ok_or_else(|| format!("unknown server: {:?}", manifest.server))?;
 
     let mut plan = resolve(&php.version, &php.extensions, strict)?;
@@ -1287,11 +1350,15 @@ pub fn render_frankenphp_caddyfile_with(document_root: &str, extra: &str) -> Str
 /// The three that do write a file — nginx, caddy, frankenphp — are exactly the
 /// three that accept extra directives. That is not a coincidence to maintain by
 /// hand: `a_server_that_writes_a_config_file_accepts_directives` asserts it.
-pub fn render_project_config_files(manifest: &Manifest) -> Vec<(&'static str, String)> {
+pub fn render_project_config_files(
+    manifest: &Manifest,
+    default_server: &str,
+) -> Vec<(&'static str, String)> {
     render_project_config_files_with(
         manifest,
         &ServerSettings::from_env(&crate::config::Env::default()),
         &ServerExtras::default(),
+        default_server,
     )
 }
 
@@ -1299,11 +1366,12 @@ pub fn render_project_config_files_with(
     manifest: &Manifest,
     limits: &ServerSettings,
     extra: &ServerExtras,
+    default_server: &str,
 ) -> Vec<(&'static str, String)> {
     if manifest.runtime == "node" {
         return Vec::new();
     }
-    let Some(server) = Server::parse(manifest.server.as_deref().unwrap_or("nginx")) else {
+    let Some(server) = Server::parse(manifest.server_or(default_server)) else {
         return Vec::new();
     };
     let document_root = manifest.document_root.as_deref().unwrap_or("public");
@@ -1336,7 +1404,13 @@ pub fn render_project_config_files_with(
             "Caddyfile",
             render_frankenphp_caddyfile_with(document_root, &extra.frankenphp),
         )],
-        Server::Apache | Server::Swoole => Vec::new(),
+        // Three servers write nothing here, for the same reason: their
+        // configuration is not a file this application copies in. Apache is
+        // configured by `sed` in its own Dockerfile, Swoole by an inline PHP
+        // script, and RoadRunner by a `.rr.yaml` the project owns — Octane
+        // publishes one, and generating a second would be this application
+        // arguing with the framework's own file.
+        Server::Apache | Server::Swoole | Server::RoadRunner => Vec::new(),
     }
 }
 
@@ -1506,9 +1580,13 @@ pub fn render_compose_service(
             ));
             out.push_str(&format!("    networks:\n      - stackvo-net\n{pad}\n"));
 
-            // Swoole is its own HTTP server on 8000; the rest sit behind a web
-            // server on 80.
-            let port = if server == Server::Swoole { 8000 } else { 80 };
+            // Both Octane drivers are their own HTTP server on 8000; the rest
+            // sit behind a web server on 80.
+            let port = if matches!(server, Server::Swoole | Server::RoadRunner) {
+                8000
+            } else {
+                80
+            };
             out.push_str(&traefik_labels(name, project.domain, project.aliases, port));
         }
     }
@@ -1660,7 +1738,10 @@ pub fn render_compose_projects(
 }
 
 /// Build the compose input list from manifests.
-pub fn compose_projects_from<'a>(manifests: &'a [(String, Manifest)]) -> Vec<ComposeProject<'a>> {
+pub fn compose_projects_from<'a>(
+    manifests: &'a [(String, Manifest)],
+    default_server: &'a str,
+) -> Vec<ComposeProject<'a>> {
     manifests
         .iter()
         .filter_map(|(name, m)| {
@@ -1693,7 +1774,7 @@ pub fn compose_projects_from<'a>(manifests: &'a [(String, Manifest)]) -> Vec<Com
                     name,
                     domain,
                     aliases,
-                    runtime_server: Server::parse(m.server.as_deref().unwrap_or("nginx")),
+                    runtime_server: Server::parse(m.server_or(default_server)),
                     node_port: None,
                     php_version: m.php.as_ref().map(|p| p.version.as_str()),
                     sidecars: &m.sidecars,
@@ -1849,8 +1930,664 @@ pub fn traefik_routing_warning(opts: &TraefikOptions) -> Option<String> {
     })
 }
 
+// ------------------------------------------------- the whole generated tree
+
+// The composition layer: which files a workspace produces, whether the ones on
+// disk still match, and writing them. Everything above renders ONE file; this
+// renders the set.
+//
+// It lived in `commands.rs` until it was read against `ARCHITECTURE.md`'s band
+// rule, and it never belonged there — not one function here takes an
+// `AppHandle` or a `State`, and `verify_generator`'s own doc comment said so
+// out loud: "free of Tauri `State` so the `diagnose` example runs exactly the
+// same comparison the app does". The cost was not tidiness. `mcp.rs`, `cli.rs`
+// and `examples/diagnose.rs` all had to reach UP into the command layer to get
+// at it, which is the dependency arrow the band diagram draws pointing the
+// other way.
+
+/// One generated file, rendered in memory and not yet on disk.
+pub struct GenFile {
+    /// Human-facing label — `parser.ajans/Dockerfile`, `configs/mysql.cnf`.
+    pub label: String,
+    /// Absolute target path.
+    pub path: std::path::PathBuf,
+    /// `projects` or `services` — which generate scope owns it, mirroring the
+    /// Bash orchestrator's two subcommands.
+    pub scope: &'static str,
+    pub content: String,
+}
+
+/// Render everything the generator owns, in memory.
+///
+/// The single source both `verify_generator` (compare against disk) and
+/// `write_generated` (write to disk) consume — one enumeration, so the set
+/// that is verified and the set that is written cannot drift apart.
+///
+/// Project render failures come back as `(label, error)` pairs rather than
+/// failing the whole call: one broken manifest must neither hide the other
+/// projects nor abort a stack-wide regenerate, which is also what the Bash
+/// generator did.
+/// What a render produced: the files, and the manifests that were skipped
+/// paired with the reason. The second half is not an error channel — a broken
+/// manifest is reported alongside the projects that rendered fine.
+pub type Rendered = (Vec<GenFile>, Vec<(String, String)>);
+
+/// The services half, rendered from `.env` and the compiled-in templates.
+///
+/// Lifted out of `render_generated` unchanged when the instance table became a
+/// second source. Kept whole rather than merged with the new path: they share
+/// an output and nothing else, and a single function with a branch through the
+/// middle of it would be a function nobody could read either half of.
+/// Where the services half of a render comes from — and there is only one.
+///
+/// The package system is what closed the second one. This used to be a switch: no
+/// `instances.json` meant render from `.env` and the templates compiled into the
+/// binary, an `instances.json` meant render from the table and the package tree.
+/// Both branches existed so that every workspace in existence could keep working
+/// while the second one was built.
+///
+/// The first branch is gone. What made keeping it untenable was not
+/// the code — it was that the two branches knew about **different catalogues**:
+/// `.env` knew the twenty-five services that had a template inside the binary,
+/// the table knows whatever the package tree holds. Adding Solr and ClickHouse
+/// as packages made that concrete rather than theoretical — a project declaring
+/// `services: ["solr"]` got a correct declaration met with a wrong warning, and
+/// the warning could not be fixed without putting a templateless entry into the
+/// `.env` catalogue, where it would have offered a switch that renders nothing.
+///
+/// A workspace that owes a migration is met by `MigrationGate` before it ever
+/// reaches a render, and reaching here still owing one is a bug in the gate —
+/// so it says so with a name. What it does *not* do is read a missing table as
+/// that bug: a workspace that has installed nothing has no table either, and
+/// there the empty stack is the correct answer rather than a symptom.
+pub fn service_source(root: &std::path::Path) -> crate::error::Result<crate::instances::Table> {
+    // The question is "has this workspace a migration owed", not "is there a
+    // file" — and it is asked through the predicate the gate is driven by, so
+    // the two cannot answer differently. They did: a first launch has no table
+    // and nothing in `.env` to migrate, so `MigrationGate` waved it through and
+    // this refused it, and the bootstrap's very first step failed with a
+    // sentence about a `.env` the workspace had never had.
+    if crate::handover::pending(root) {
+        // `Conflict` rather than a new code: the workspace's state and this
+        // version's renderer disagree, which is what that code already means,
+        // and a new variant is a contract change for a message.
+        return Err(Error::new(
+            Code::Conflict,
+            "this workspace still keeps its services in .env, and this version renders them \
+             from instances.json",
+        )
+        .with_hint(crate::hints::MIGRATE_THE_WORKSPACE));
+    }
+    // Absent is empty (`Table::load`), and empty is a stack of the proxy and
+    // the certificate authority with nothing behind them — which is what a
+    // workspace that has installed no service from the Market yet *is*.
+    crate::instances::Table::load(root)
+}
+
+pub fn render_generated(root: &std::path::Path) -> crate::error::Result<Rendered> {
+    let env = Env::load(root)?;
+
+    // Before anything is rendered, because the failure is silent otherwise.
+    //
+    // A key whose keystore entry did not answer is *absent* from the map, so
+    // `{{ SERVICE_MYSQL_ROOT_PASSWORD | default('root') }}` renders `root` and
+    // a database comes up on a password the user last set years ago and does
+    // not know is in force. Every other consumer of `Env` can live with a
+    // missing key; this one writes it into a file that starts a container.
+    let unresolved = env.unresolved_secrets();
+    if !unresolved.is_empty() {
+        return Err(Error::new(
+            Code::PermissionDenied,
+            format!(
+                "the keystore did not produce a value for {}",
+                unresolved.join(", ")
+            ),
+        )
+        .with_hint(crate::hints::UNLOCK_THE_KEYSTORE)
+        .with_details(serde_json::json!({ "keys": unresolved })));
+    }
+
+    let limits = ServerSettings::from_env(&env);
+    let extras = ServerExtras::load(root, &env);
+    // The workspace's answer for a project that did not choose a server. It was
+    // `"nginx"` in five places here, so `SUPPORTED_SERVERS_DEFAULT=caddy` moved
+    // the wizard and nothing else — see `config::DEFAULT_SERVER`.
+    let default_server = env.default_server();
+    let opts = ToolchainOptions {
+        tools: env.list("PHP_DEFAULT_TOOLS"),
+        apt_packages: env.list("PHP_DEFAULT_APT_PACKAGES"),
+        composer_version: env
+            .get("PHP_TOOL_COMPOSER_VERSION")
+            .unwrap_or("latest")
+            .to_string(),
+        nodejs_version: env
+            .get("PHP_TOOL_NODEJS_VERSION")
+            .unwrap_or("20")
+            .to_string(),
+    };
+
+    let mut files: Vec<GenFile> = Vec::new();
+    let mut errors: Vec<(String, String)> = Vec::new();
+
+    // Once, not per project: every project that shares on the LAN shares on the
+    // same address, and asking the routing table in a loop would be asking the
+    // same question once per manifest.
+    let lan_address = crate::lan::address();
+
+    // ---- per-project files ----
+    let mut manifests: Vec<(String, crate::manifest::Manifest)> = Vec::new();
+    if let Some(entries) =
+        crate::workspace::projects_root(root).and_then(|p| std::fs::read_dir(p).ok())
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name.starts_with('.') || !path.join("stackvo.json").is_file() {
+                continue;
+            }
+            let Ok(mut m) = crate::manifest::read(&path.join("stackvo.json"), name) else {
+                continue;
+            };
+
+            // LAN sharing is an extra hostname and nothing more, so it joins
+            // the list the manifest already has rather than growing a second
+            // path through the renderer. Added here rather than in
+            // `manifest::read`, because `read` answers what is on disk and this
+            // name is not: it is computed from the address this machine has
+            // right now, and a manifest that reported it would be reporting
+            // something that expires with a DHCP lease.
+            if m.lan_share {
+                if let Some(ip) = lan_address {
+                    m.aliases.push(crate::lan::domain_for(name, ip));
+                }
+            }
+
+            // Node writes into the project source dir, PHP into generated/ (C-19).
+            // C-19, generalised: every snapshot runtime builds from the
+            // project source dir, so that is where its Dockerfile lives.
+            let dockerfile_path = if m.runtime != "php" {
+                path.join("Dockerfile")
+            } else {
+                root.join("generated/projects")
+                    .join(name)
+                    .join("Dockerfile")
+            };
+
+            match render_from_manifest(&m, &opts, false, &default_server) {
+                Ok(content) => files.push(GenFile {
+                    label: format!("{name}/Dockerfile"),
+                    path: dockerfile_path,
+                    scope: "projects",
+                    content,
+                }),
+                Err(e) => errors.push((format!("{name}/Dockerfile"), e)),
+            }
+
+            // A node build context must never swallow host node_modules, so
+            // this is rewritten beside the Dockerfile on every run.
+            let dockerignore = match m.runtime.as_str() {
+                "node" => Some(NODE_DOCKERIGNORE),
+                other => lang_dockerignore(other),
+            };
+            if let Some(content) = dockerignore {
+                files.push(GenFile {
+                    label: format!("{name}/.dockerignore"),
+                    path: path.join(".dockerignore"),
+                    scope: "projects",
+                    content: content.to_string(),
+                });
+            }
+
+            // nginx.conf / supervisord.conf / Caddyfile per server; apache,
+            // swoole and node correctly contribute nothing here.
+            //
+            // The workspace's own directives, plus this project's
+            // directory-listing switch appended to them. Appended rather than
+            // merged: the workspace file is the user's and comes first, and a
+            // switch that silently overrode a directive somebody wrote by hand
+            // would be a setting arguing with a file.
+            let server = m.server_or(&default_server);
+            let extras = match crate::site::listing_directives(server) {
+                Some(directives) if crate::site::read(root, name).directory_listing => {
+                    extras.with_appended(server, directives)
+                }
+                _ => extras.clone(),
+            };
+
+            for (file, content) in
+                render_project_config_files_with(&m, &limits, &extras, &default_server)
+            {
+                files.push(GenFile {
+                    label: format!("{name}/{file}"),
+                    path: root.join("generated/projects").join(name).join(file),
+                    scope: "projects",
+                    content,
+                });
+            }
+            manifests.push((name.to_string(), m));
+        }
+    }
+
+    // ---- the projects compose file ----
+    let projects = compose_projects_from(&manifests, &default_server);
+    files.push(GenFile {
+        label: "docker-compose.projects.yml".into(),
+        path: root.join("generated/docker-compose.projects.yml"),
+        scope: "projects",
+        content: render_compose_projects(
+            &projects,
+            &root.display().to_string(),
+            &crate::workspace::require_projects_root(root)?
+                .display()
+                .to_string(),
+        ),
+    });
+
+    // ---- the base compose (stackvo.yml) ----
+    //
+    // Traefik and the network — `generate_base_compose` renders
+    // `core/compose/base.yml` through the same substitution engine the
+    // service templates use. This was the one file the Sprint 15 "verify
+    // covers everything" claim missed; enumerated here, the claim is true.
+    let vars = crate::template::variables(&env, root);
+    if let Some(text) = crate::skeleton::read_template(root, "core/compose/base.yml") {
+        files.push(GenFile {
+            label: "stackvo.yml".into(),
+            path: root.join("generated/stackvo.yml"),
+            scope: "services",
+            content: crate::template::render(&text, &vars),
+        });
+    }
+
+    // ---- services: configs and the dynamic compose ----
+    //
+    // One source. See `service_source` for what happened to the other.
+    {
+        let table = service_source(root)?;
+        {
+            let tree = crate::market::catalogue(root)?;
+            let network = crate::config::docker_network_of(
+                vars.get("DOCKER_DEFAULT_NETWORK").map(String::as_str),
+            );
+            let tld =
+                crate::config::tld_suffix_of(vars.get("DEFAULT_TLD_SUFFIX").map(String::as_str));
+
+            // The keystore, read through the same helper `.env` values go
+            // through — one answer to "what is this secret", not two.
+            let secrets = |reference: &str| {
+                crate::secrets::entry_of(reference)
+                    .and_then(|entry| crate::secrets::read(entry).ok().flatten())
+            };
+
+            let rendered =
+                crate::render::dynamic_compose(root, &table, &tree, &network, &tld, &secrets)?;
+
+            for config in rendered.configs {
+                files.push(GenFile {
+                    label: format!(
+                        "configs/{}",
+                        crate::paths::to_label(
+                            &config
+                                .path
+                                .strip_prefix(root.join("generated/configs"))
+                                .unwrap_or(&config.path)
+                                .display()
+                                .to_string()
+                        )
+                    ),
+                    path: config.path,
+                    scope: "services",
+                    content: config.contents,
+                });
+            }
+            files.push(GenFile {
+                label: "docker-compose.dynamic.yml".into(),
+                path: root.join("generated/docker-compose.dynamic.yml"),
+                scope: "services",
+                content: rendered.compose,
+            });
+        }
+    }
+
+    // ---- traefik ----
+    let catalog = env_schema().service_catalog();
+    let services: Vec<(&str, bool, Option<&str>)> = catalog
+        .iter()
+        .map(|(id, _)| (id.as_str(), env.service_enabled(id), env.service_url(id)))
+        .collect();
+
+    // A route that no longer normalises — a target edited by hand into
+    // something invalid — is dropped from the render rather than failing it.
+    // The whole stack refusing to regenerate because of one optional route is a
+    // worse outcome than that route being absent, and `routes_list` is where
+    // somebody sees why.
+    let suffix = env.tld_suffix();
+    let network = env.docker_network();
+    let user_routes: Vec<crate::routes::Checked> = crate::routes::read(root)
+        .iter()
+        .filter_map(|route| route.normalise(&suffix).ok())
+        .collect();
+
+    let traefik = TraefikOptions {
+        tld_suffix: &suffix,
+        network: &network,
+        ssl_enabled: env.bool("SSL_ENABLE"),
+        redirect_to_https: env.bool("REDIRECT_TO_HTTPS"),
+        services,
+        routes: user_routes,
+    };
+
+    files.push(GenFile {
+        label: "traefik/traefik.yml".into(),
+        path: root.join("generated/traefik/traefik.yml"),
+        scope: "services",
+        content: render_traefik_config(&traefik),
+    });
+    files.push(GenFile {
+        label: "traefik/dynamic/routes.yml".into(),
+        path: root.join("generated/traefik/dynamic/routes.yml"),
+        scope: "services",
+        content: render_traefik_routes(&traefik),
+    });
+
+    // ---- the registry mirror ----
+    //
+    // Last, and over the rendered text rather than inside each renderer. Every
+    // image reference in the workspace passes through this function on its way
+    // to disk, so one pass here covers the project Dockerfiles, both compose
+    // files and every service template at once — and a renderer added next
+    // year is covered without anybody remembering to do it.
+    //
+    // `crate::policy` carries the three references this deliberately leaves
+    // alone, each of which would otherwise break a build.
+    if let Some(prefix) = crate::policy::current().registry_prefix() {
+        for file in &mut files {
+            if crate::policy::rewrites(&file.label) {
+                file.content = crate::policy::rewrite(&file.content, prefix);
+            }
+        }
+    }
+
+    Ok((files, errors))
+}
+
+/// The routing warning, computed the same way the render does — kept separate
+/// so both the verify report and the write report can carry it.
+fn generator_warnings(root: &std::path::Path) -> Vec<String> {
+    let Ok(env) = Env::load(root) else {
+        return Vec::new();
+    };
+    let catalog = env_schema().service_catalog();
+    let services: Vec<(&str, bool, Option<&str>)> = catalog
+        .iter()
+        .map(|(id, _)| (id.as_str(), env.service_enabled(id), env.service_url(id)))
+        .collect();
+    let suffix = env.tld_suffix();
+    let network = env.docker_network();
+    let traefik = TraefikOptions {
+        tld_suffix: &suffix,
+        network: &network,
+        ssl_enabled: env.bool("SSL_ENABLE"),
+        redirect_to_https: env.bool("REDIRECT_TO_HTTPS"),
+        services,
+        // The warning this asks for is about entry points, not about routes.
+        routes: Vec::new(),
+    };
+    traefik_routing_warning(&traefik)
+        .map(|w| vec![w])
+        .unwrap_or_default()
+}
+
+/// The command's logic, free of Tauri `State` so the `diagnose` example runs
+/// exactly the same comparison the app does.
+pub fn verify_generator(root: &std::path::Path) -> crate::error::Result<serde_json::Value> {
+    let (rendered, errors) = render_generated(root)?;
+
+    let mut files: Vec<serde_json::Value> = Vec::new();
+    for f in &rendered {
+        let theirs = std::fs::read_to_string(&f.path).ok();
+        let (status, at) = match &theirs {
+            None => ("missing", None),
+            Some(t) if *t == f.content => ("match", None),
+            Some(t) => (
+                "differ",
+                f.content
+                    .lines()
+                    .zip(t.lines())
+                    .position(|(a, b)| a != b)
+                    .map(|i| i as u64 + 1),
+            ),
+        };
+        files.push(serde_json::json!({
+            "file": f.label,
+            "path": f.path.display().to_string(),
+            "status": status,
+            "firstDifferenceLine": at,
+        }));
+    }
+    for (label, error) in &errors {
+        files.push(serde_json::json!({
+            "file": label,
+            "status": "error",
+            "error": error,
+        }));
+    }
+
+    let matched = files.iter().filter(|f| f["status"] == "match").count();
+    let differed = files.iter().filter(|f| f["status"] == "differ").count();
+
+    Ok(serde_json::json!({
+        "files": files,
+        "matched": matched,
+        "differed": differed,
+        // Named for the question it answers now. It was `readyToTakeOver` —
+        // the gate for a port replacing the generator it was compared against —
+        // and kept that name for months after there was nothing left to take
+        // over from.
+        "inSync": differed == 0,
+        // Surfaced here because the desktop app can say the routing is broken;
+        // StackVo itself never does. See CONFLICTS.md C-20.
+        "warnings": generator_warnings(root),
+    }))
+}
+
+/// Does this generate scope include files of this kind?
+///
+/// The narrowing scopes are exactly `projects` and `services`; **anything
+/// else means everything** — which is the Bash orchestrator's `case` falling
+/// through to "generate all", and the semantics its callers still rely on:
+/// `service_enable` passes `projects_and_services`, and the takeover
+/// initially read that as "matches nothing", wrote zero files, and reported
+/// success — an enabled service whose container could never come up, because
+/// it was never written into the compose file being `up`'d.
+fn scope_includes(scope: &str, file_scope: &str) -> bool {
+    match scope {
+        "projects" | "services" => scope == file_scope,
+        _ => true,
+    }
+}
+
+/// Write the generated files — the Rust generator as the generator, not the
+/// understudy.
+///
+/// Writes are **in place** (truncate-and-write, exactly the shell's `>`),
+/// never staged-and-renamed: Traefik's file provider was measured to ignore an
+/// atomic rename outright — see the `cert_apply` note — and the generated
+/// tree is precisely the directory it watches.
+///
+/// `on_file` is called once per file written, which is what the operation
+/// console shows as progress.
+/// Every managed project's directory and manifest, for the callers that walk
+/// them. Broken ones are skipped: a project that cannot be read has nothing to
+/// write a context for, and it is already reported by `list_projects`.
+fn project_manifests(
+    root: &std::path::Path,
+) -> Vec<(String, std::path::PathBuf, manifest::Manifest)> {
+    let Ok(projects_dir) = workspace::require_projects_root(root) else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(&projects_dir) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if name.starts_with('.') || !path.join("stackvo.json").is_file() {
+            continue;
+        }
+        if let Ok(manifest) = manifest::read(&path.join("stackvo.json"), name) {
+            out.push((name.to_string(), path, manifest));
+        }
+    }
+    out
+}
+
+pub fn write_generated(
+    root: &std::path::Path,
+    scope: &str,
+    mut on_file: impl FnMut(&str),
+) -> crate::error::Result<serde_json::Value> {
+    let (rendered, errors) = render_generated(root)?;
+
+    // Made before anything is written into them. The log trees matter beyond
+    // the writes below: the generated compose mounts them, and compose does not
+    // create host directories for bind mounts.
+    for dir in [
+        "generated/projects",
+        "generated/configs",
+        "generated/traefik/dynamic",
+        "logs/projects",
+        "logs/services",
+    ] {
+        std::fs::create_dir_all(root.join(dir))
+            .map_err(|e| Error::io(format!("creating {dir}"), e))?;
+    }
+
+    let mut written: Vec<String> = Vec::new();
+    for f in rendered {
+        if !scope_includes(scope, f.scope) {
+            continue;
+        }
+        if let Some(parent) = f.path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
+        }
+        std::fs::write(&f.path, &f.content)
+            .map_err(|e| Error::io(format!("writing {}", f.path.display()), e))?;
+        on_file(&f.label);
+        written.push(f.label);
+    }
+
+    // The agent context, written into each project's own directory
+    // rather than into `generated/`. It is not a file the stack reads — the
+    // reader is an assistant working inside the container, which sees the
+    // project tree and not this app's.
+    //
+    // Best-effort, per project. A directory that has been deleted, or one the
+    // app cannot write to, must not stop the stack being regenerated: this is
+    // a convenience for a reader that may not exist, and the compose files are
+    // the thing somebody is waiting for.
+    if scope_includes(scope, "projects") {
+        for (name, dir, manifest) in project_manifests(root) {
+            if let Ok(context) = crate::agentctx::build(root, &manifest) {
+                if crate::agentctx::write(&dir, &context).is_ok() {
+                    written.push(format!(
+                        "{name}/{}/{}",
+                        crate::agentctx::DIR,
+                        crate::agentctx::FILE
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "engine": "rust",
+        "scope": scope,
+        "written": written.len(),
+        "files": written,
+        "skipped": errors
+            .iter()
+            .map(|(label, error)| serde_json::json!({ "file": label, "error": error }))
+            .collect::<Vec<_>>(),
+        "warnings": generator_warnings(root),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
+    // The tests below came with the code above, out of `commands.rs`. A test
+    // for a private function has to live in its module, and these two were
+    // reaching for `scope_includes` and `service_source` from a band that no
+    // longer holds either.
+
+    /// The first launch, which used to have nowhere to go.
+    ///
+    /// A workspace that has just been created has no `instances.json` and no
+    /// service in `.env` to migrate. `MigrationGate` reads the second half and
+    /// lets it past; `service_source` read only the first and refused, so the
+    /// bootstrap's opening step — "compose dosyaları yazılıyor" — failed with a
+    /// sentence about a `.env` this workspace had never had, and there was no
+    /// screen anywhere that could produce the table it was asking for.
+    ///
+    /// The catalogue is absent here on purpose: that is a machine that has
+    /// fetched the registry and installed no package yet, which is every first
+    /// launch and is the exact shape the two predicates disagreed on.
+    #[test]
+    fn a_workspace_with_nothing_to_migrate_renders_an_empty_stack() {
+        let root = std::env::temp_dir().join(format!(
+            "stackvo-fresh-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        assert!(
+            !crate::handover::pending(&root),
+            "a fresh workspace owes no migration"
+        );
+
+        let table = service_source(&root).expect("a fresh workspace can be rendered");
+        assert!(table.instances.is_empty(), "{:?}", table.instances);
+
+        // And the guard is still a guard: give the same workspace a table and
+        // it is read rather than invented.
+        crate::instances::Table::default().save(&root).unwrap();
+        assert!(service_source(&root).is_ok());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn every_generate_scope_its_callers_pass_writes_something() {
+        // `projects` and `services` narrow; everything else is "all" — the
+        // Bash case-fallthrough its callers still rely on. The regression this
+        // pins: `service_enable` passes `projects_and_services`, and an exact
+        // match wrote zero files and reported success, so the just-enabled
+        // service was missing from the very compose file being `up`'d.
+        for scope in ["all", "projects_and_services", "anything-future"] {
+            assert!(scope_includes(scope, "projects"), "{scope}");
+            assert!(scope_includes(scope, "services"), "{scope}");
+        }
+        assert!(scope_includes("projects", "projects"));
+        assert!(!scope_includes("projects", "services"));
+        assert!(scope_includes("services", "services"));
+        assert!(!scope_includes("services", "projects"));
+    }
+
     use super::*;
 
     // ------------------------------------------------ extra hostnames
@@ -1932,6 +2669,163 @@ mod tests {
 
     fn exts(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// An empty install plan and a bare toolchain, so a Dockerfile test reads
+    /// the server's own block and nothing else.
+    fn bare_plan() -> Plan {
+        Plan {
+            apt_packages: Vec::new(),
+            configure: Vec::new(),
+            docker_ext: Vec::new(),
+            pecl: Vec::new(),
+            pecl_requested: Vec::new(),
+            skipped: Vec::new(),
+        }
+    }
+
+    fn bare_opts() -> ToolchainOptions {
+        ToolchainOptions {
+            tools: Vec::new(),
+            apt_packages: Vec::new(),
+            composer_version: "latest".into(),
+            nodejs_version: "20".into(),
+        }
+    }
+
+    // ------------------------------------------------- RoadRunner
+
+    /// Octane has exactly two drivers and this application shipped one.
+    ///
+    /// For a project that uses Octane that is not "a missing feature", it is a
+    /// coin toss the project can lose: half of them chose the half that was not
+    /// here. The shape is Swoole's — CLI image, own HTTP server on 8000, no FPM
+    /// — and the difference is what makes it worth the second generator.
+    #[test]
+    fn roadrunner_is_the_other_octane_driver_and_shares_swooles_shape() {
+        assert_eq!(Server::parse("roadrunner"), Some(Server::RoadRunner));
+        assert_eq!(Server::parse("RoadRunner"), None, "ids are lower-case");
+
+        let dockerfile = render_php_dockerfile(
+            Server::RoadRunner,
+            "shop",
+            "8.4",
+            "public",
+            &bare_plan(),
+            &bare_opts(),
+        );
+
+        // The CLI image, for the reason the header states: it *is* the server.
+        assert!(dockerfile.contains("FROM php:8.4-cli"), "{dockerfile}");
+        assert!(dockerfile.contains("# Server: RoadRunner"), "{dockerfile}");
+        assert!(
+            dockerfile.contains("RoadRunner IS the HTTP server"),
+            "{dockerfile}"
+        );
+        assert!(dockerfile.contains("EXPOSE 8000"), "{dockerfile}");
+
+        // No FPM and no web server package — the two things a CLI-image server
+        // must not have, and the way this would go wrong by being copied from
+        // the nginx branch.
+        assert!(!dockerfile.contains("php-fpm.d/www.conf"), "{dockerfile}");
+        assert!(!dockerfile.contains("supervisord"), "{dockerfile}");
+    }
+
+    /// The difference from Swoole, which is the whole reason both exist:
+    /// Swoole is a PHP extension that has to be compiled in, RoadRunner is a Go
+    /// binary that speaks to PHP over a pipe. Nothing about the PHP build
+    /// changes for it.
+    #[test]
+    fn roadrunner_compiles_nothing_into_php() {
+        let mut swoole_plan = bare_plan();
+        apply_swoole_requirements(&mut swoole_plan, "8.4");
+        assert!(
+            swoole_plan.pecl.iter().any(|(e, _)| e == "swoole"),
+            "the comparison is only meaningful if Swoole still needs its extension"
+        );
+
+        let dockerfile = render_php_dockerfile(
+            Server::RoadRunner,
+            "shop",
+            "8.4",
+            "public",
+            &bare_plan(),
+            &bare_opts(),
+        );
+
+        assert!(!dockerfile.contains("pecl install"), "{dockerfile}");
+        assert!(dockerfile.contains("/usr/local/bin/rr"), "{dockerfile}");
+        assert!(
+            dockerfile.contains("download-latest.sh"),
+            "the binary is resolved for the image's architecture rather than pinned to one"
+        );
+    }
+
+    /// Octane when there is an `artisan`, PHP's own server when there is not.
+    ///
+    /// The fallback matters more than Swoole's: without Octane, RoadRunner
+    /// needs a `.rr.yaml` and a PSR-7 worker this application cannot write for
+    /// somebody, so a non-Laravel project would get a container that exits.
+    /// Swoole can fall back to a twelve-line script because the extension *is*
+    /// an HTTP server.
+    #[test]
+    fn roadrunner_starts_octane_when_there_is_one_and_serves_the_site_when_there_is_not() {
+        let dockerfile = render_php_dockerfile(
+            Server::RoadRunner,
+            "shop",
+            "8.4",
+            "web",
+            &bare_plan(),
+            &bare_opts(),
+        );
+
+        assert!(
+            dockerfile.contains("octane:start --server=roadrunner --host=0.0.0.0 --port=8000"),
+            "{dockerfile}"
+        );
+        assert!(dockerfile.contains("if [ -f artisan ]"), "{dockerfile}");
+        assert!(
+            dockerfile.contains("php -S 0.0.0.0:8000 -t /var/www/html/web"),
+            "the fallback ignores the project's document root: {dockerfile}"
+        );
+    }
+
+    /// Traefik has to be told 8000, or the site is a 502 that reads as a broken
+    /// build. Both Octane drivers, one rule.
+    #[test]
+    fn traefik_is_pointed_at_8000_for_both_octane_drivers() {
+        for server in ["swoole", "roadrunner"] {
+            let manifests = vec![(server.to_string(), php_manifest(server))];
+            let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
+            let yaml = render_compose_projects(&projects, "/root", "/root/projects");
+
+            assert!(
+                yaml.contains("loadbalancer.server.port=8000"),
+                "{server} was not routed to 8000:\n{yaml}"
+            );
+        }
+
+        // And a server that is not one of the two still goes to 80.
+        let manifests = vec![("shop".to_string(), php_manifest("nginx"))];
+        let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
+        let yaml = render_compose_projects(&projects, "/root", "/root/projects");
+        assert!(yaml.contains("loadbalancer.server.port=80"), "{yaml}");
+    }
+
+    /// RoadRunner writes no configuration file, and the reason is not that it
+    /// needs none: Octane publishes a `.rr.yaml` the project owns, and
+    /// generating a second would be this application arguing with the
+    /// framework's own file.
+    #[test]
+    fn roadrunner_generates_no_config_file_of_its_own() {
+        let files =
+            render_project_config_files(&php_manifest("roadrunner"), crate::config::DEFAULT_SERVER);
+        assert!(files.is_empty(), "{files:?}");
+
+        // Not because every server writes nothing — nginx writes two.
+        let nginx =
+            render_project_config_files(&php_manifest("nginx"), crate::config::DEFAULT_SERVER);
+        assert_eq!(nginx.len(), 2);
     }
 
     fn php_manifest(server: &str) -> Manifest {
@@ -2258,7 +3152,7 @@ mod tests {
         m.lang = crate::manifest::lang_defaults("go");
 
         let manifests = vec![("svc".to_string(), m)];
-        let projects = compose_projects_from(&manifests);
+        let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].runtime_server, None);
         assert_eq!(projects[0].node_port, Some(8080));
@@ -2289,7 +3183,7 @@ mod tests {
         m.domain = Some("aksoyca.loc".into());
 
         let manifests = vec![("Aksoyca".to_string(), m)];
-        let projects = compose_projects_from(&manifests);
+        let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
         let service = render_compose_service(&projects[0], "/x", "/code");
 
         assert!(
@@ -2358,7 +3252,7 @@ mod tests {
     #[test]
     fn each_server_yields_exactly_the_files_bash_writes_beside_its_dockerfile() {
         let names = |server: &str| -> Vec<&'static str> {
-            render_project_config_files(&php_manifest(server))
+            render_project_config_files(&php_manifest(server), crate::config::DEFAULT_SERVER)
                 .into_iter()
                 .map(|(name, _)| name)
                 .collect()
@@ -2372,7 +3266,7 @@ mod tests {
 
         let mut node = php_manifest("nginx");
         node.runtime = "node".into();
-        assert!(render_project_config_files(&node).is_empty());
+        assert!(render_project_config_files(&node, crate::config::DEFAULT_SERVER).is_empty());
     }
 
     /// The rule the settings pane shows as ticks and dashes, asserted here so
@@ -2397,6 +3291,7 @@ mod tests {
                 &php_manifest(server),
                 &ServerSettings::from_env(&crate::config::Env::default()),
                 &extras,
+                crate::config::DEFAULT_SERVER,
             );
             assert!(
                 !files.is_empty(),
@@ -2412,7 +3307,8 @@ mod tests {
         // pane says so rather than offering a box that does nothing.
         for server in ["apache", "swoole"] {
             assert!(
-                render_project_config_files(&php_manifest(server)).is_empty(),
+                render_project_config_files(&php_manifest(server), crate::config::DEFAULT_SERVER)
+                    .is_empty(),
                 "{server} grew a config file — it can take directives now"
             );
         }
@@ -2558,7 +3454,7 @@ mod tests {
         assert!(m.warnings.is_empty(), "{:?}", m.warnings);
 
         let manifests = vec![("shop".to_string(), m)];
-        let projects = compose_projects_from(&manifests);
+        let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
         let out = render_compose_projects(&projects, "/app", "/code");
 
         // The service key is the container name, not the bare id: two projects
@@ -2626,7 +3522,7 @@ mod tests {
             ("shop".to_string(), with_sidecars("shop", block)),
             ("shop2".to_string(), with_sidecars("shop2", block)),
         ];
-        let projects = compose_projects_from(&manifests);
+        let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
         let out = render_compose_projects(&projects, "/app", "/code");
 
         for name in [
@@ -2660,7 +3556,7 @@ mod tests {
         let json: serde_json::Value = serde_json::from_str(raw).expect("the fixture is JSON");
         let m = crate::manifest::normalize(&json, raw, "shop");
         let manifests = vec![("shop".to_string(), m)];
-        let projects = compose_projects_from(&manifests);
+        let projects = compose_projects_from(&manifests, crate::config::DEFAULT_SERVER);
         let out = render_compose_projects(&projects, "/app", "/code");
 
         assert!(!out.contains("volumes:\n\n"), "{out}");

@@ -16,6 +16,23 @@ import { readable } from '@/lib/contrast';
  * `stores/appearance.js` at boot — not by the settings page, which is opened
  * long after the first paint.
  */
+/**
+ * The surface a console keeps when `darkConsoles` is on.
+ *
+ * One constant because it was two literals, and they were in the same file:
+ * `TerminalPane` set xterm's background in JavaScript and the host element's in
+ * CSS, both spelled `#12121a`, with nothing holding them together. The failure
+ * they invite is quiet and specific — the two drift, and a frame appears around
+ * the terminal in the colour of whichever one moved.
+ *
+ * Darker than any theme's `surface`, and deliberately so: this is the colour
+ * that says "this panel is a console", which is the whole of what `darkConsoles`
+ * asks for. `LogView` and `OperationConsole` get the same effect by switching
+ * to Vuetify's dark theme, which they can because they are made of components;
+ * xterm paints its own canvas and has to be told.
+ */
+export const CONSOLE_BACKGROUND = '#12121a';
+
 export const DEFAULT_APPEARANCE = {
   /** 'system' is Vuetify's own: it follows prefers-color-scheme and updates live. */
   theme: 'system',

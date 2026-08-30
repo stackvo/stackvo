@@ -725,11 +725,11 @@ async fn pg_log_text(root: &std::path::Path, service: &str) -> Result<String> {
         .to_string();
 
     if path.is_empty() {
-        return crate::engine::logs_tail(&container, PG_TAIL).await;
+        return crate::engine::logs_tail(&container, PG_TAIL, false).await;
     }
     match crate::db::read_tail(&container, &path, PG_TAIL).await {
         Ok(text) => Ok(text),
-        Err(_) => crate::engine::logs_tail(&container, PG_TAIL).await,
+        Err(_) => crate::engine::logs_tail(&container, PG_TAIL, false).await,
     }
 }
 

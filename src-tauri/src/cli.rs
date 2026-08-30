@@ -24,6 +24,26 @@
 //! refuses a variant with no arm. There is no "listed but not implemented"
 //! state to test for because there is no way to reach one.
 //!
+//! ## Why this surface is English only
+//!
+//! The window is bilingual and this is not, and that is a decision rather than
+//! an omission — so it is written down here, which is the difference.
+//!
+//! A CLI's output is **read by machines as often as by people**: it is piped
+//! into `grep`, pasted into an issue, matched by a CI step somebody wrote last
+//! year. Translating it would make every one of those depend on a locale, and
+//! the failure mode is silent — a pipeline that worked stops matching because
+//! the machine running it has a different `LANG`. That is why `git`, `docker`
+//! and `kubectl` are English-only too, and why this repository already has
+//! `consoleLocale` as a *setting*: the log and terminal panels can be pinned to
+//! English precisely so that a message pasted into an issue is readable by
+//! somebody who does not share the reader's UI language.
+//!
+//! What is **not** English-only is the error catalogue: `hints.rs` translates
+//! every suggestion, and the desktop shows the translation. The CLI prints the
+//! English fallback that same `Hint` carries. So the two surfaces disagree on
+//! purpose, and each is right for its own reader.
+//!
 //! ## The two pieces that were missing
 //!
 //! Two: an argument parser and a progress writer.
@@ -86,6 +106,7 @@ use std::path::Path;
 pub enum Action {
     Status,
     Doctor,
+    Verify,
     Projects,
     Project,
     Services,
@@ -361,6 +382,21 @@ const ALLOW_WRITES: Flag = Flag {
     help: "Register the server with its writing tools enabled.",
 };
 
+const GRANT_PROJECT: Flag = Flag {
+    long: "project",
+    short: None,
+    value: Some("names"),
+    help: "Bound the registration to these projects, comma separated. Drops every \
+           writing tool a project cannot bound — stack-down among them.",
+};
+
+const GRANT_FOR: Flag = Flag {
+    long: "for",
+    short: None,
+    value: Some("duration"),
+    help: "How long the writing tools last, from each start of the server: 90s, 30m, 2h.",
+};
+
 /// The shell commands, which differ only by what runs before the caller's
 /// arguments. One row each rather than one `stackvo exec php …` for all of
 /// them, because `stackvo artisan migrate` is the line people actually want to
@@ -410,6 +446,18 @@ pub const COMMANDS: &[Command] = &[
         flags: &[],
         summary: "The full diagnosis — requirements, port conflicts by holder, \
                   missing hosts entries, stale generated config, disk.",
+    },
+    Command {
+        name: "verify",
+        action: Action::Verify,
+        backing: Backing::Contract("project_verify"),
+        writes: false,
+        args: "<project>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Whether this machine matches what the repository declares the project \
+                  needs — and which line does not.",
     },
     Command {
         name: "projects",
@@ -698,7 +746,7 @@ pub const COMMANDS: &[Command] = &[
         args: "<client>",
         arity: (1, 1),
         prefix: &[],
-        flags: &[ALLOW_WRITES],
+        flags: &[ALLOW_WRITES, GRANT_PROJECT, GRANT_FOR],
         summary: "Register stackvo-mcp with one assistant. `stackvo mcp` lists the ids.",
     },
     Command {
@@ -2029,6 +2077,34 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
 
         Action::Doctor => value(json!(crate::doctor::run(Some(&root)).await)),
 
+        Action::Verify => {
+            let name = &parsed.args[0];
+            let projects = crate::commands::list_projects(&root).await?;
+            let project = projects
+                .into_iter()
+                .find(|p| &p.name == name)
+                .ok_or_else(|| Error::not_found(format!("project {name}")))?;
+
+            let catalogue: Vec<String> = crate::contracts::env_schema()
+                .service_catalog()
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect();
+
+            value(json!(crate::verify::verify(
+                &crate::verify::Declared {
+                    name: &project.name,
+                    manifest: &project.manifest,
+                    manifest_valid: project.manifest_valid,
+                    built: project.built,
+                    generated_stale: project.generated_stale,
+                    domain_configured: project.domain_configured,
+                },
+                &crate::instances::Table::load(&root).unwrap_or_default(),
+                &catalogue,
+            )))
+        }
+
         Action::Projects => value(json!(crate::commands::list_projects(&root).await?)),
 
         Action::Project => {
@@ -2185,7 +2261,7 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
 
         Action::Generate => {
             let scope = parsed.value("scope").unwrap_or("all").to_string();
-            let report = crate::commands::write_generated(&root, &scope, |file| {
+            let report = crate::generator::write_generated(&root, &scope, |file| {
                 crate::progress::emit(sink, "generate:progress", json!({ "line": file }));
             });
             audit("cli_generate", &scope, report.is_ok());
@@ -2218,13 +2294,41 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
 
         Action::McpInstall => {
             let client = parsed.args[0].clone();
-            let path = crate::agents::install(
-                &client,
-                parsed.on("allow-writes"),
-                workspace.root.as_deref(),
-            );
+
+            // Built here rather than parsed by `grant::parse`, because these
+            // are this command's flags and not the server's: `--project` is
+            // spelled the same on both sides, and `--allow-writes` means the
+            // same thing, but a typo in one is a CLI error and a typo in the
+            // other is a server that will not start.
+            let mut grant = if parsed.on("allow-writes") {
+                crate::grant::Grant::everything()
+            } else {
+                crate::grant::Grant::read_only()
+            };
+
+            if let Some(list) = parsed.value("project") {
+                grant = grant.scoped_to(
+                    list.split(',')
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .map(str::to_string)
+                        .collect(),
+                );
+            }
+
+            if let Some(text) = parsed.value("for") {
+                let lifetime = crate::grant::duration(text).ok_or_else(|| {
+                    Error::new(
+                        Code::InvalidInput,
+                        format!("--for={text} is not a duration — write it as 90s, 30m or 2h"),
+                    )
+                })?;
+                grant = grant.lasting(lifetime);
+            }
+
+            let path = crate::agents::install(&client, &grant, workspace.root.as_deref());
             audit("cli_agent_install", &client, path.is_ok());
-            value(json!({ "client": client, "path": path? }))
+            value(json!({ "client": client, "path": path?, "grant": grant.describe() }))
         }
 
         Action::MarketBundle => {
@@ -2625,6 +2729,7 @@ pub fn render(action: Action, value: &Value, style: &Style) -> String {
         Action::Completions | Action::Complete => String::new(),
         Action::Status => render_status(value, style),
         Action::Doctor => render_doctor(value, style),
+        Action::Verify => render_verify(value, style),
         Action::Projects => render_projects(value, style),
         Action::Project => render_project(value, style),
         Action::Services => render_services(value, style),
@@ -2948,6 +3053,65 @@ fn render_status(value: &Value, style: &Style) -> String {
         out.push_str(&table(&["", "requirement", "detail"], &rows, style));
     }
 
+    out
+}
+
+/// The verification, as the line-by-line answer it is.
+///
+/// Every line, not only the failing ones — unlike the doctor above, which
+/// reports findings. A verifier that printed nothing when everything matched
+/// would leave somebody unable to tell "it checked and I am fine" from "it did
+/// not check", and the whole point of running it is the first sentence.
+fn render_verify(value: &Value, style: &Style) -> String {
+    let checks = value
+        .get("checks")
+        .and_then(Value::as_array)
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
+
+    let rows: Vec<Vec<String>> = checks
+        .iter()
+        .map(|c| {
+            let state = c.get("state").and_then(Value::as_str).unwrap_or("unknown");
+            vec![
+                // `missing` and `different` are this module's words for what
+                // the shared renderer calls `fail` and `warn`; mapping them
+                // here keeps one set of colours across the whole CLI.
+                style.state(match state {
+                    "ok" => "ok",
+                    "different" => "warn",
+                    "missing" => "fail",
+                    other => other,
+                }),
+                c.get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?")
+                    .to_string(),
+                c.get("subject")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                c.get("detail")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+            ]
+        })
+        .collect();
+
+    let mut out = table(&["", "check", "subject", "found"], &rows, style);
+
+    let ready = value.get("ready").and_then(Value::as_bool).unwrap_or(false);
+    let project = value.get("project").and_then(Value::as_str).unwrap_or("");
+    out.push_str(&if ready {
+        style.ok(&format!(
+            "\n{project} matches what its manifest declares.\n"
+        ))
+    } else {
+        style.fail(&format!(
+            "\n{project} does not match its manifest — the lines above that are not `ok`.\n"
+        ))
+    });
     out
 }
 

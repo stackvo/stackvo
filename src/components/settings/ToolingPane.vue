@@ -5,6 +5,7 @@ import { api, asList } from '@/lib/ipc';
 import SettingsGroup from '@/components/SettingsGroup.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import { useCopyTick } from '@/composables/useCopyTick';
+import { toolingOwnAbout, toolingWhy } from '@/lib/catalogue-text';
 
 /**
  * The commands this app puts on `PATH`, and the host tools it needs.
@@ -192,7 +193,8 @@ defineExpose({ shellState, installable });
           <code>{{ row.id }}</code>
         </v-list-item-title>
         <v-list-item-subtitle class="text-caption">
-          {{ row.about }} — <code>{{ row.built ?? t('settings.tooling.commands.notBuilt') }}</code>
+          {{ toolingOwnAbout(row) }} —
+          <code>{{ row.built ?? t('settings.tooling.commands.notBuilt') }}</code>
         </v-list-item-subtitle>
       </v-list-item>
     </v-list>
@@ -326,7 +328,7 @@ defineExpose({ shellState, installable });
           </span>
         </v-list-item-title>
         <v-list-item-subtitle class="text-caption">
-          {{ tool.why }}
+          {{ toolingWhy(tool) }}
         </v-list-item-subtitle>
 
         <template #append>

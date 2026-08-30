@@ -196,6 +196,104 @@ fn prune(dir: &Path) {
 
 /// Is this one of ours? Narrow on purpose: [`prune`] deletes what this matches,
 /// and it runs in a directory that also holds the log files.
+/// One report, as the window shows it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Report {
+    /// `crash-<UTC>-<pid>.txt` — the name is the timestamp, so this sorts.
+    pub name: String,
+    pub path: String,
+    pub bytes: u64,
+}
+
+/// The reports on disk, newest first.
+///
+/// ## Why this exists, and why it is not "send a crash report"
+///
+/// The roadmap asked for sending one. `PRIVACY.md` is explicit that there is no
+/// telemetry, no crash reporting service and no server behind the app, and that
+/// anything future would be opt-in, off by default, and described there *before*
+/// it ships. So there is nowhere to send to, and building one is a product
+/// decision rather than a code change.
+///
+/// What was genuinely missing is smaller and worse: **the app crashes and never
+/// says so.** A report is written here, it travels in a diagnostic bundle if
+/// somebody happens to build one, and nothing ever tells them a crash happened.
+/// So "I would like to report this" never starts — not because reporting is
+/// hard, but because they do not know there is anything to report. That is what
+/// this answers, and it stays entirely on their machine.
+pub fn reports() -> Vec<Report> {
+    let Some(dir) = crate::logging::dir() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+
+    let mut out: Vec<Report> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| is_report(p))
+        .filter_map(|path| {
+            let name = path.file_name()?.to_str()?.to_string();
+            let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            Some(Report {
+                name,
+                path: path.display().to_string(),
+                bytes,
+            })
+        })
+        .collect();
+
+    // Newest first. The name carries the timestamp — see `stamp` — so this is
+    // chronological without a `stat`, which is the same reason `prune` sorts
+    // by name: an mtime is rewritten by a backup restore.
+    out.sort_by(|a, b| b.name.cmp(&a.name));
+    out
+}
+
+/// Where the "you have seen these" marker lives.
+///
+/// Beside the reports rather than in `preferences.json`: it is a fact about
+/// this log directory, and a workspace moved to another machine should not
+/// arrive claiming its crashes were already read.
+fn seen_marker() -> Option<PathBuf> {
+    crate::logging::dir().map(|d| d.join(".crashes-seen"))
+}
+
+/// The reports written since the last time somebody was told about them.
+///
+/// Compared by **name**, not by count: a report that was pruned away would make
+/// a count go down and a newer crash then go unmentioned. The marker holds the
+/// newest name that has been shown, and anything sorting above it is new.
+pub fn unseen() -> Vec<Report> {
+    let seen = seen_marker()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+
+    reports()
+        .into_iter()
+        .take_while(|r| r.name.as_str() > seen.as_str())
+        .collect()
+}
+
+/// Record that the newest report has been shown.
+///
+/// Best effort, and deliberately so: a marker that cannot be written means the
+/// notice appears again next launch, which is a repeated line rather than a
+/// lost crash. The other way round would be worse.
+pub fn mark_seen() {
+    let Some(path) = seen_marker() else {
+        return;
+    };
+    let newest = reports()
+        .first()
+        .map(|r| r.name.clone())
+        .unwrap_or_default();
+    let _ = std::fs::write(path, newest);
+}
+
 fn is_report(path: &Path) -> bool {
     path.is_file()
         && path
@@ -255,9 +353,48 @@ pub(crate) fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
+/// A civil date back to days since 1970-01-01 — the inverse of
+/// [`civil_from_days`], and the same author's `days_from_civil`.
+///
+/// Written because one caller has to read a timestamp this app wrote and answer
+/// "how long is left": [`crate::worktree`] gives a sandbox an expiry, and
+/// "expires in forty minutes" is the sentence somebody acts on, where "expires
+/// at 14:32Z" is arithmetic they have to do. Comparing the strings answers
+/// *whether* it has passed, which is why nothing needed this until now.
+pub(crate) fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400; // [0, 399]
+    let shifted_month = if month > 2 { month - 3 } else { month + 9 } as i64;
+    let day_of_year = (153 * shifted_month + 2) / 5 + day as i64 - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The pair, held against each other rather than against a table somebody
+    /// typed: a wrong constant in one would have to be wrong in the other in
+    /// exactly the same way to survive this.
+    #[test]
+    fn the_calendar_round_trips_across_every_awkward_boundary() {
+        for days in [
+            0,       // 1970-01-01
+            19_782,  // a leap day
+            11_016,  // the leap day the hundred-year rule would have skipped
+            -25_509, // a year that is divisible by 100 and is not a leap year
+            -25_508, 59, 60, 730, 25_000, 40_000,
+        ] {
+            let (year, month, day) = civil_from_days(days);
+            assert_eq!(
+                days_from_civil(year, month, day),
+                days,
+                "{year:04}-{month:02}-{day:02} does not come back as {days}"
+            );
+        }
+    }
 
     #[test]
     fn the_epoch_and_a_known_instant_round_trip() {

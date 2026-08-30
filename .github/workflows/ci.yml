@@ -275,19 +275,27 @@ jobs:
 
   # What is not tested.
   #
-  # 478 Rust tests and 160 front-end tests is a good number and was never a
-  # measurement: nobody could say which of `engine.rs`'s 1,391 lines or which of
-  # `Settings.vue`'s 3,172 any of them reached. A count of tests answers "is
-  # there effort here"; only coverage answers "is there a hole here".
+  # A count of tests was never a measurement — 478 Rust and 160 front-end when
+  # this job was written, several times that now, and at no point could anybody
+  # say which of `engine.rs`'s 1,391 lines or which of `Settings.vue`'s 3,172
+  # any of them reached. A count answers "is there effort here"; only coverage
+  # answers "is there a hole here".
   #
   # **There is a floor now.** This job reported and never failed for four rounds
   # of work, on the argument that a threshold picked before anyone has seen the
   # number is either low enough to bless the gap or high enough to fail on the
   # first run. The numbers have since been watched across those rounds — Rust
-  # 61.60 → 64.34, front end 30.70 → 89.65 — so the floors in
+  # 61.60 → 68.05, front end 30.70 → 92.20 — so the floors in
   # `tools/coverage-floors.mjs` are set from evidence, sit below the measurement
   # with stated headroom, and exist to answer one question the report never
   # could: *did that just get worse.*
+  #
+  # The headroom is arithmetic rather than habit, and it had to become so: the
+  # floors were first set four points under the measurement and were eight under
+  # it by the time anybody looked, which is a decoration and not an alarm. The
+  # gate now also says when the recorded measurement has fallen behind the tree
+  # — a gain, so it is said rather than failed on, but an unsaid one is how the
+  # pair went stale in the first place.
   #
   # The measuring steps stay `continue-on-error` so a failing test still
   # produces a table rather than taking this job down for a reason `build`

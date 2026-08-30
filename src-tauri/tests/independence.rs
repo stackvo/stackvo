@@ -7,7 +7,7 @@
 //! A missing template does not crash, it just renders a shorter file, and the
 //! only way to notice is to check that the output is actually complete.
 
-use stackvo_desktop_lib::{commands, instances, paths, skeleton, workspace};
+use stackvo_desktop_lib::{generator, instances, paths, skeleton, workspace};
 
 /// Installs into a fresh temp directory and renders. No `STACKVO_ROOT`, no
 /// sibling checkout, nothing on disk but what `install` put there.
@@ -75,7 +75,7 @@ fn an_empty_folder_becomes_a_working_workspace() {
         .save(&dir)
         .expect("an empty instance table");
 
-    let (files, skipped) = commands::render_generated(&dir).expect("render");
+    let (files, skipped) = generator::render_generated(&dir).expect("render");
     assert!(
         skipped.is_empty(),
         "a fresh workspace should have nothing to skip, got {skipped:?}"
@@ -222,7 +222,7 @@ fn the_project_tree_can_live_outside_the_app_directory() {
         .save(&app)
         .expect("an empty instance table");
 
-    let (files, skipped) = commands::render_generated(&app).expect("render");
+    let (files, skipped) = generator::render_generated(&app).expect("render");
     assert!(skipped.is_empty(), "{skipped:?}");
 
     let compose = files

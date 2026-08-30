@@ -822,7 +822,13 @@ pub struct Recipe {
     /// Required rather than optional: every recipe here carries a placeholder,
     /// and a starting point that does not say which words are placeholders is
     /// a command somebody will approve as it stands.
-    pub edit: &'static [&'static str],
+    ///
+    /// A [`Edit`] rather than a bare string because the window is bilingual and
+    /// this is the sentence that says *what to change* — the same class
+    /// `hints.rs` calls the worst one to leave untranslated. The English rides
+    /// along for the CLI, the MCP surface and the log; the key is what the
+    /// window looks up.
+    pub edit: &'static [Edit],
     /// The body, exactly as it sits under `providers.<name>` in the manifest.
     ///
     /// Held as the JSON text rather than as a [`Provider`] so the shipped
@@ -831,14 +837,34 @@ pub struct Recipe {
     pub body: &'static str,
 }
 
+/// One thing a person has to change, and the key a locale translates it under.
+///
+/// The shape `hints.rs` settled on, for the same reason: a bare key would leave
+/// the English in this file and the key in another place to typo, and a bare
+/// string leaves a Turkish reader an English instruction. Both halves, declared
+/// once, in the row they belong to.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+pub struct Edit {
+    /// Looked up as `providerRecipeEdits.<key>` in the locale files.
+    pub key: &'static str,
+    /// The fallback, and what the log and the MCP surface get.
+    pub english: &'static str,
+}
+
 pub const RECIPES: [Recipe; 3] = [
     Recipe {
         name: "mysql-remote",
         about: "A MySQL or MariaDB server this machine can reach directly",
         edit: &[
-            "the host, port, user and database name in both commands",
-            "MYSQL_PWD, which the client reads from the environment so the \
-             password is never an argument",
+            Edit {
+                key: "connection",
+                english: "the host, port, user and database name in both commands",
+            },
+            Edit {
+                key: "mysqlPassword",
+                english: "MYSQL_PWD, which the client reads from the environment so the \
+                          password is never an argument",
+            },
         ],
         // `--result-file` rather than a redirect, and `--execute=source …`
         // rather than `< dump.sql`: both are the client's own answer to the
@@ -873,8 +899,14 @@ pub const RECIPES: [Recipe; 3] = [
         name: "postgres-remote",
         about: "A PostgreSQL server this machine can reach directly",
         edit: &[
-            "the host, port, user and database name in both commands",
-            "PGPASSWORD, which libpq reads from the environment",
+            Edit {
+                key: "connection",
+                english: "the host, port, user and database name in both commands",
+            },
+            Edit {
+                key: "postgresPassword",
+                english: "PGPASSWORD, which libpq reads from the environment",
+            },
         ],
         // `--no-owner --no-privileges` because the roles on the far side are
         // not the roles here, and a restore that fails on a missing role is a
@@ -909,8 +941,14 @@ pub const RECIPES: [Recipe; 3] = [
         name: "upsun",
         about: "An Upsun (Platform.sh) environment, through its own CLI",
         edit: &[
-            "the project id and the environment name",
-            "UPSUN_CLI_TOKEN, an API token from the Upsun console",
+            Edit {
+                key: "upsunProject",
+                english: "the project id and the environment name",
+            },
+            Edit {
+                key: "upsunToken",
+                english: "UPSUN_CLI_TOKEN, an API token from the Upsun console",
+            },
         ],
         // No `push`. `upsun db:sql` takes a query rather than a file, so there
         // is no argv that sends this database to that one — and an empty `push`

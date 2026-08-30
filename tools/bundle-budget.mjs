@@ -47,61 +47,75 @@
  */
 
 /**
- * Measured 2026-08-10, on the commit that introduced this file.
+ * Measured 2026-08-29, on a clean `npm run build`.
  *
  * Kept beside the ceilings so the distance is visible — a ceiling far above a
  * number last measured a year ago is not a budget, it is a formality.
  */
 export const measured = {
   /**
-   * index.js 642 KB + vue.js 169 KB + index.css 704 KB — re-measured 23 August
-   * 2026, and the re-measurement is half the point. The old figure was 1344.7
-   * (477 + 169 + 699) and had not been touched while three rounds of feature
-   * work landed, so "since measured: +170 KB" was reporting drift from a number
-   * nobody had checked rather than growth anybody had decided to accept. The
-   * comment below already says what that makes a budget: a formality.
+   * index.js 690 KB + vue.js 173 KB + index.css 404 KB.
    *
-   * What grew is `index.js`, by 165 KB. Not the stylesheet — Vuetify's CSS is
-   * up 5 KB — so this is application code arriving in the eager chunk, which is
-   * the growth this ceiling exists to make visible.
+   * **Down 266 KB, and it is a trim rather than drift.** The stylesheet was 704
+   * KB, of which 408 was Material Design Icons declaring 7,448 glyph rules for
+   * an application that names 356 of them. The build now emits only the rules
+   * something here can reach — see `mdiUsedIconsOnly` in `vite.config.js` and
+   * the list in `tools/mdi-icons.mjs` — which takes that file to 32 KB.
+   *
+   * The 2.4 KB it went back up is the scan learning to read `src-tauri/src`.
+   * Eighteen icons are named only there — the terminal, editor and browser
+   * catalogues live in `apps.rs` — so the first version of this trim was
+   * stripping every icon those three pickers draw. Kilobytes bought back three
+   * lists of blank squares.
+   *
+   * `index.js` grew 48 KB over the same period, which is the growth this
+   * ceiling exists to make visible and is now visible against a smaller number
+   * rather than hidden inside a larger one.
    */
-  eagerKb: 1515.0,
+  eagerKb: 1248.8,
   /**
-   * Every asset, including the lazy route chunks and xterm's 325 KB.
+   * Every asset, including the lazy route chunks and xterm's 333 KB.
    *
    * Byte sums, not `du`. The first figure written here was 2612, taken from
    * `du -sk`, which reports disk blocks — a directory of many small files reads
    * ~4% larger than the bytes in it. A budget measured one way and enforced
    * another is a budget that drifts by a rounding rule.
+   *
+   * The largest single asset left is the icon **font**, 394 KB of woff2 holding
+   * all 7,448 glyphs. Subsetting it needs a font toolchain where the stylesheet
+   * needed no dependency at all, so it is written down here as the next piece
+   * of this work rather than done badly.
    */
-  totalKb: 2911.2,
+  totalKb: 2705.9,
 };
 
 export const ceilings = {
   /**
-   * ~12% over today, which is the same proportional headroom this number was
-   * first given — see the note on `measured` for why the figure it sits above
-   * moved.
+   * ~12% over today, which is the proportional headroom this number has always
+   * been given.
    *
-   * **Raised from 1500, and it is a decision rather than an adjustment.** The
-   * eager set had been over that ceiling since the in-app help round, so CI was
-   * red on this step for three merges and the number stopped being read as a
-   * budget. Two honest answers were available: trim 15 KB out of the eager
-   * chunk, or accept the growth and say so. Trimming is the better one and it
-   * is a piece of work — `index.js` carries 165 KB it did not a month ago, and
-   * finding which imports pulled it in is not a release-day job.
-   *
-   * So this is the second answer, taken deliberately and written down: the
-   * growth is accepted, the measurement beneath it is current, and the gap is
-   * headroom again rather than a number the build has been failing on.
+   * **Lowered from 1700, and that is the other half of a decision made a round
+   * ago.** The last time this ceiling was in the way, two honest answers were
+   * available — trim, or accept the growth and say so — and the note here
+   * recorded taking the second while calling the first the better one. It was
+   * still the better one. The trim has now been done and it was worth 268 KB,
+   * which is eighteen times what was being argued over; a ceiling left at 1700
+   * over a measurement of 1246 would have been 36% of slack, and slack is what
+   * a budget stops being an alarm inside of.
    */
-  eagerKb: 1700,
+  eagerKb: 1400,
 
   /**
-   * ~15% over today. Deliberately looser than `eager`: this number is supposed
+   * ~11% over today. Deliberately looser than `eager`: this number is supposed
    * to grow as features land, and its job is to catch a dependency arriving by
    * accident — a full icon font, a second date library, a locale bundle nobody
    * meant to ship — not to make lazy loading feel expensive.
+   *
+   * Left where it was rather than lowered with the measurement. The trim that
+   * moved the number was the icon stylesheet, and the icon *font* is still
+   * whole: this ceiling has a 300 KB drop coming that nobody has done yet, and
+   * moving it down now only to move it down again is two decisions where one
+   * will do.
    */
   totalKb: 3000,
 };

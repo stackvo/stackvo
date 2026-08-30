@@ -7,6 +7,33 @@
 //!
 //! Resolution order, matching the CLI: `DOCKER_HOST`, then the current
 //! `docker context`, then the well-known socket paths.
+//!
+//! ## Podman
+//!
+//! Podman is here for the same reason Colima and OrbStack are: it speaks the
+//! Docker API on a unix socket, so everything above this line already worked
+//! and the only thing missing was **the path**. Nothing else in this
+//! application knows or needs to know which of the four it is talking to.
+//!
+//! Two sockets, and the rootless one first, because rootless is the point of
+//! Podman and the case Lerd sells its whole product on:
+//!
+//! ```text
+//!   $XDG_RUNTIME_DIR/podman/podman.sock   rootless, per user
+//!   /run/podman/podman.sock               rootful, system-wide
+//! ```
+//!
+//! `XDG_RUNTIME_DIR` is read rather than assumed. `/run/user/<uid>` is what it
+//! is on nearly every Linux, and "nearly" is the problem: it is the variable
+//! that defines the directory, and a session that puts it elsewhere would get a
+//! path that does not exist while the socket sat somewhere this never looked.
+//!
+//! **`podman-docker` is invisible to this**, and that is a limitation worth
+//! stating rather than a gap to close. It installs a `/var/run/docker.sock`
+//! that is Podman's socket under Docker's name — which is the point of the
+//! package — so [`classify`] reports `Engine` and it works. Reporting the
+//! platform correctly there would mean asking the daemon what it is, and the
+//! answer would change nothing about what this application then does.
 
 use crate::error::{Code, Error, Result};
 use bollard::Docker;
@@ -18,6 +45,8 @@ use std::path::PathBuf;
 pub enum Platform {
     DockerDesktop,
     Colima,
+    /// Rootless or rootful Podman, through its Docker-compatible socket.
+    Podman,
     Orbstack,
     Engine,
     Unknown,
@@ -60,6 +89,12 @@ fn classify(socket: &str) -> Platform {
         Platform::Colima
     } else if socket.contains(".orbstack") {
         Platform::Orbstack
+    } else if socket.contains("podman.sock") {
+        // Before the `docker.sock` arm below, which it would not match anyway —
+        // but the order is the rule rather than the coincidence, and a
+        // `podman/docker.sock` in some future layout would otherwise read as
+        // Docker Engine.
+        Platform::Podman
     } else if socket.contains(".docker/run") || socket.contains("docker.desktop") {
         Platform::DockerDesktop
     } else if socket.contains("docker.sock") {
@@ -133,7 +168,17 @@ fn well_known_sockets() -> Vec<PathBuf> {
         out.push(home.join(".colima/default/docker.sock")); // Colima
         out.push(home.join(".orbstack/run/docker.sock")); // OrbStack
     }
+
+    // Podman's rootless socket, from the variable that defines the directory
+    // rather than from `/run/user/<uid>`, which is only *nearly* always right.
+    // Before the system paths below, because rootless is what a person running
+    // Podman on their own machine has.
+    if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
+        out.push(PathBuf::from(runtime).join("podman/podman.sock"));
+    }
+
     out.push(PathBuf::from("/var/run/docker.sock")); // Docker Engine
+    out.push(PathBuf::from("/run/podman/podman.sock")); // Podman, rootful
     out
 }
 
@@ -1328,7 +1373,13 @@ pub struct LogLine {
 /// The name is the container's, not an id this function prefixes: an instance
 /// is `stackvo-postgres-17`, and a caller that already resolved that must not
 /// have `stackvo-` put in front of it a second time.
-pub async fn logs_tail(container: &str, tail: u32) -> Result<String> {
+///
+/// `timestamps` prefixes every line with the RFC 3339 instant the **engine**
+/// received it. Off for the query log, whose lines carry the server's own
+/// clock; on for [`crate::queuelog`], where the alternative is the timestamp
+/// the worker printed in whatever timezone its container was built with — a
+/// number that lands hours away from everything else on the same axis.
+pub async fn logs_tail(container: &str, tail: u32, timestamps: bool) -> Result<String> {
     use bollard::container::LogOutput;
     use bollard::query_parameters::LogsOptionsBuilder;
     use futures_util::StreamExt;
@@ -1338,7 +1389,7 @@ pub async fn logs_tail(container: &str, tail: u32) -> Result<String> {
         .follow(false)
         .stdout(true)
         .stderr(true)
-        .timestamps(false)
+        .timestamps(timestamps)
         .tail(&tail.to_string())
         .build();
 
@@ -1492,6 +1543,168 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ------------------------------------------------------------- Podman
+
+    /// The rootless socket, which is the whole of what was missing.
+    ///
+    /// Podman speaks the Docker API on a unix socket, so everything above the
+    /// path lookup already worked and nothing below it had to change. Lerd
+    /// sells its entire product on *"rootless Podman, zero daemon"*, and this
+    /// application could not find one.
+    #[test]
+    fn the_rootless_socket_is_looked_for_where_the_session_says_it_is() {
+        // Read from `XDG_RUNTIME_DIR` rather than assembled from `/run/user/<uid>`:
+        // that is *nearly* always the value, and "nearly" is the failure — a
+        // session that puts it elsewhere gets a path that does not exist while
+        // the socket sits somewhere nothing looked.
+        let previous = std::env::var_os("XDG_RUNTIME_DIR");
+        // SAFETY: single-threaded test process; restored below.
+        unsafe { std::env::set_var("XDG_RUNTIME_DIR", "/run/user/1000") };
+
+        let paths = well_known_sockets();
+        let names: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+
+        assert!(
+            names
+                .iter()
+                .any(|p| p == "/run/user/1000/podman/podman.sock"),
+            "the rootless socket is not looked for: {names:?}"
+        );
+        assert!(
+            names.iter().any(|p| p == "/run/podman/podman.sock"),
+            "the rootful socket is not looked for: {names:?}"
+        );
+
+        // Rootless before the system paths: it is what a person running Podman
+        // on their own machine has, and a rootful daemon they can also reach is
+        // not the one they meant.
+        let rootless = names.iter().position(|p| p.contains("/podman/podman.sock"));
+        let engine = names.iter().position(|p| p == "/var/run/docker.sock");
+        assert!(
+            rootless < engine,
+            "rootless is not searched first: {names:?}"
+        );
+
+        unsafe {
+            match previous {
+                Some(value) => std::env::set_var("XDG_RUNTIME_DIR", value),
+                None => std::env::remove_var("XDG_RUNTIME_DIR"),
+            }
+        }
+    }
+
+    /// The four engines this application recognises, told apart by path.
+    #[test]
+    fn a_podman_socket_is_reported_as_podman() {
+        assert_eq!(
+            classify("/run/user/1000/podman/podman.sock"),
+            Platform::Podman
+        );
+        assert_eq!(classify("/run/podman/podman.sock"), Platform::Podman);
+
+        // And the three it already knew are unchanged — the new arm sits above
+        // the `docker.sock` one, so this is the assertion that it did not
+        // swallow them.
+        assert_eq!(
+            classify("/Users/x/.colima/default/docker.sock"),
+            Platform::Colima
+        );
+        assert_eq!(
+            classify("/Users/x/.orbstack/run/docker.sock"),
+            Platform::Orbstack
+        );
+        assert_eq!(
+            classify("/Users/x/.docker/run/docker.sock"),
+            Platform::DockerDesktop
+        );
+        assert_eq!(classify("/var/run/docker.sock"), Platform::Engine);
+
+        // `podman-docker` installs Podman's socket under Docker's name, which
+        // is the point of that package. It reads as `Engine` and it works;
+        // asking the daemon what it is would change nothing this app then does.
+        assert_eq!(classify("/var/run/docker.sock"), Platform::Engine);
+    }
+
+    /// `DOCKER_HOST=unix:///run/user/1000/podman/podman.sock` is how Podman
+    /// tells a Docker client where it is, and is the first thing resolution
+    /// reads — before the context and before the well-known paths.
+    #[test]
+    fn podman_reached_through_docker_host_resolves_and_is_named() {
+        let socket = socket_from_host("unix:///run/user/1000/podman/podman.sock")
+            .expect("a unix endpoint resolves to a socket");
+
+        assert_eq!(socket, "/run/user/1000/podman/podman.sock");
+        assert_eq!(classify(&socket), Platform::Podman);
+    }
+
+    /// The compatibility fixture: what Podman's `/version` actually answers,
+    /// and what this application makes of it.
+    ///
+    /// The two fields mean different things and only one of them is Docker's.
+    /// `Version` is **Podman's own** — `5.1.1`, not a Docker version — while
+    /// `ApiVersion` is the Docker API level it emulates. Nothing here compares
+    /// either against a minimum, which is what makes Podman work at all: a
+    /// check for "Docker >= 20" would refuse an engine that speaks the API
+    /// perfectly well, on the strength of a version string from another
+    /// product.
+    #[test]
+    fn podmans_version_answer_is_carried_through_without_being_judged() {
+        let answer: serde_json::Value = serde_json::from_str(PODMAN_VERSION).expect("fixture");
+
+        assert_eq!(answer["Version"], "5.1.1");
+        assert_eq!(answer["ApiVersion"], "1.41");
+        assert_eq!(answer["Os"], "linux");
+
+        // The shape `bollard` reads, and the shape `EngineStatus` reports. The
+        // point of the assertion is the absence of a comparison: both strings
+        // are carried to the screen and to the diagnostic bundle, and neither
+        // is turned into a number anything refuses on.
+        let status = EngineStatus {
+            reachable: true,
+            version: answer["Version"].as_str().map(str::to_string),
+            api_version: answer["ApiVersion"].as_str().map(str::to_string),
+            context: Some("podman".into()),
+            platform: classify("/run/user/1000/podman/podman.sock"),
+            socket_path: Some("/run/user/1000/podman/podman.sock".into()),
+            error: None,
+        };
+
+        assert!(status.reachable);
+        assert_eq!(status.platform, Platform::Podman);
+        assert_eq!(status.version.as_deref(), Some("5.1.1"));
+
+        // Serialised the way the front end reads it: the platform is a
+        // kebab-case tag, and `engine.platform.podman` is the key the
+        // diagnostics pane looks up.
+        let wire = serde_json::to_value(&status).expect("serialises");
+        assert_eq!(wire["platform"], "podman");
+    }
+
+    /// Podman's Docker-compatible `/version`, as its compat endpoint answers.
+    ///
+    /// Trimmed to the fields this application reads plus the two that make it
+    /// recognisably Podman — a fixture that was really a Docker answer with the
+    /// name changed would prove nothing.
+    const PODMAN_VERSION: &str = r#"{
+      "Platform": { "Name": "linux/amd64/fedora-40" },
+      "Components": [
+        {
+          "Name": "Podman Engine",
+          "Version": "5.1.1",
+          "Details": { "APIVersion": "5.1.1", "MinAPIVersion": "4.0.0" }
+        },
+        { "Name": "Conmon", "Version": "conmon version 2.1.12" }
+      ],
+      "Version": "5.1.1",
+      "ApiVersion": "1.41",
+      "MinAPIVersion": "1.24",
+      "GitCommit": "",
+      "GoVersion": "go1.22.4",
+      "Os": "linux",
+      "Arch": "amd64",
+      "KernelVersion": "6.9.7-200.fc40.x86_64"
+    }"#;
 
     /// What the mount table says, and what `editor.rs` compares it against.
     ///

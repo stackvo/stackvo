@@ -59,6 +59,39 @@ export const RUNTIME_DEFAULTS = [
 ];
 
 /**
+ * The `.env` list each version picker draws from, and why it is editable.
+ *
+ * The pickers above read the catalog the binary was built with, and that list
+ * goes stale the moment the world ships a release: `SUPPORTED_LANGUAGES_GO_VERSIONS`
+ * stopped at 1.23, Ruby at 3.3, Node at 23, Rust at 1.84. Every one of those is
+ * a version somebody could build against today and could not select here, and
+ * the only way out was **waiting for a release of this application** — for a
+ * number in a list.
+ *
+ * So the list is a setting, and this is the shape of it. `.env` overrides the
+ * embedded default (`config::SETTINGS`), `build_catalog` reads it back through
+ * `SUPPORTED_LANGUAGES_{KEY}_VERSIONS`, and the picker offers what came out.
+ * Adding a version the registry does not have fails at build time with the
+ * engine's own message, which is the same bargain `PHP_DEFAULT_TOOLS` makes.
+ *
+ * Separate from `RUNTIME_DEFAULTS` because the two answer different questions —
+ * *which* versions exist against *which one* a new project starts on — and
+ * because PHP is in this list and not in that one: its default has a picker of
+ * its own, one group down.
+ *
+ * `nodejs` and not `node`: `.env` spells it the long way and the manifest
+ * spells it the short way. See C-01, and `build_catalog`, which translates.
+ */
+export const VERSION_LISTS = [
+  { id: 'php', key: 'SUPPORTED_LANGUAGES_PHP_VERSIONS', icon: 'mdi-language-php' },
+  { id: 'python', key: 'SUPPORTED_LANGUAGES_PYTHON_VERSIONS', icon: 'mdi-language-python' },
+  { id: 'go', key: 'SUPPORTED_LANGUAGES_GO_VERSIONS', icon: 'mdi-language-go' },
+  { id: 'ruby', key: 'SUPPORTED_LANGUAGES_RUBY_VERSIONS', icon: 'mdi-language-ruby' },
+  { id: 'rust', key: 'SUPPORTED_LANGUAGES_RUST_VERSIONS', icon: 'mdi-language-rust' },
+  { id: 'nodejs', key: 'SUPPORTED_LANGUAGES_NODEJS_VERSIONS', icon: 'mdi-nodejs' },
+];
+
+/**
  * The choices a select offers for one `.env` key.
  *
  * **The current value is always in the list**, even when the catalog does not

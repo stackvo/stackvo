@@ -45,11 +45,13 @@
       "kind": "mutation",
       "args": {
         "client": "string",
-        "allowWrites": "boolean"
+        "allowWrites": "boolean",
+        "projects": "string[]? (every project when omitted)",
+        "minutes": "number? (no limit when omitted or 0)"
       },
       "returns": "string",
       "why": "Writes the `stackvo` MCP entry into one client's configuration file, so registering the server is a click rather than hand-edited JSON. Returns the path written.",
-      "notes": "Reads the file, inserts one key and writes it back — never renders from a template, so every other server and every unknown key survives. Takes a `.stackvo-backup` beside the file first, and writes atomically. `allowWrites` adds `--allow-writes`, which grants that assistant stack_down and project_stop as well as the read tools; it is passed from the UI and defaults to off there. Writes `STACKVO_ROOT` into the entry's env when a workspace is selected. Errors: NOT_FOUND when stackvo-mcp is not on this machine, INVALID_INPUT for an unknown client or a file that is not plain JSON, CONFLICT when the servers key holds something that is not an object. Audited as `agent_install`. Codex is TOML and is edited with toml_edit so comments, key order and quoting survive; the JSON clients keep their own indentation and key order for the same reason. Zed's path is not documented by Zed and differs between ~/.config/zed and ~/Library/Application Support/Zed, so both are looked for and whichever exists is written."
+      "notes": "Reads the file, inserts one key and writes it back — never renders from a template, so every other server and every unknown key survives. Takes a `.stackvo-backup` beside the file first, and writes atomically. The three arguments after `client` are one grant and are rendered by `grant::Grant::to_args`, so the flags in the file and the authority the server enforces are the same sentence. `allowWrites` alone is still all twelve writing tools, `stack_down` among them; `projects` bounds the registration to those projects, which removes every writing tool a project cannot bound (twelve become four) and hides the other projects from the reads as well; `minutes` ends the writing half that long after each start of the server. All three are passed from the UI and default to off, every project and no limit — the server's own defaults. Writes `STACKVO_ROOT` into the entry's env when a workspace is selected. Errors: NOT_FOUND when stackvo-mcp is not on this machine, INVALID_INPUT for an unknown client or a file that is not plain JSON, CONFLICT when the servers key holds something that is not an object. Audited as `agent_install`, with the grant in the detail. Codex is TOML and is edited with toml_edit so comments, key order and quoting survive; the JSON clients keep their own indentation and key order for the same reason. Zed's path is not documented by Zed and differs between ~/.config/zed and ~/Library/Application Support/Zed, so both are looked for and whichever exists is written."
     },
     "agents_remove": {
       "new": true,
@@ -169,7 +171,7 @@
       "args": {},
       "returns": "CertStatus",
       "why": "HTTPS was already working and entirely invisible. `core/cli/utils/generate-ssl-certs.sh` issues an mkcert wildcard covering stackvo.loc and every project domain, and traefik.sh installs it as the default certificate — but nothing in the app could say whether mkcert was installed, whether the CA was trusted, whether the certificate had expired, or which domains it actually covered. A user whose new project shows a browser warning had no way to learn why.",
-      "notes": "Reads only: it never runs mkcert and never writes. The SAN list and expiry are parsed out of the certificate itself rather than inferred from the project list, because the file on disk is what the browser validates against — a list of what SHOULD be covered would agree with the certificate right up until it mattered."
+      "notes": "Reads only: it never runs mkcert and never writes. The SAN list and expiry are parsed out of the certificate itself rather than inferred from the project list, because the file on disk is what the browser validates against — a list of what SHOULD be covered would agree with the certificate right up until it mattered. `trust` reports where the CA is trusted store by store — see the type. It is the measured answer to what the category's leader has published as \"exploring real certificates instead of the mkcert CA\": the problem a public certificate solves here is not that a local root is inferior, it is that the root is not trusted everywhere and nothing said where. Firefox is asked with `certutil` against the first profile that has an NSS database; one profile is enough, because mkcert installs into every profile it finds in one pass."
     },
     "cert_trust_in_terminal": {
       "replaces": "none — new in the desktop app",
@@ -404,7 +406,7 @@
         "since": "number?"
       },
       "returns": "{ total: number, events: Event[] }",
-      "notes": "A cursor, not a stream: the producer is a container appending newline-delimited JSON to a file, and there is nothing to subscribe to. Events are only appended, so everything past `since` is new and a missed poll costs nothing. A `since` past the end means the file was cleared or rotated underneath the caller, and the answer starts again rather than being empty for ever. Each Event carries { at, kind, label?, file?, line?, request?, sapi?, value } — `kind` exists so queries and jobs need no second file when they arrive."
+      "notes": "A cursor, not a stream: the producer is a container appending newline-delimited JSON to a file, and there is nothing to subscribe to. Events are only appended, so everything past `since` is new and a missed poll costs nothing. A `since` past the end means the file was cleared or rotated underneath the caller, and the answer starts again rather than being empty for ever. Each Event carries { at, kind, label?, file?, line?, request?, sapi?, duration?, outcome?, value? } and `kind` is one of `dump`, `request` or `job`. A `dump` is a moment; a `request` is one execution with its status and how long it took, written from PHP's own shutdown hook so it appears for any framework and after a fatal; a `job` is one thing the queue finished with, folded into the same file by the host from the worker's own output — Laravel's queue events cannot be subscribed to from an auto_prepend_file, because Composer registers its autoloader in front of anything that file registers. IMPLEMENTORS: reading this also ingests the queue's half, but only while capture is on; a kind a build does not recognise must be SHOWN, not dropped."
     },
     "debug_bridge_overview": {
       "new": true,
@@ -423,7 +425,7 @@
       },
       "returns": "void",
       "why": "Catching dumps used to cost a container recreate, because the mechanism was two environment variables and a container's environment is fixed at creation. Every debugging session started with a wait.",
-      "notes": "Creates or removes one file in a directory the container already has mounted. No compose command, no recreate, no worker cycle. The bridge re-reads the flag on every request AND inside every emit, so a long-running queue worker stops writing the moment it is switched off rather than at its next restart."
+      "notes": "Creates or removes one file in a directory the container already has mounted. No compose command, no recreate, no worker cycle. The bridge re-reads the flag on every request AND inside every emit, so a long-running queue worker stops writing the moment it is switched off rather than at its next restart. The switch also drops the queue's cursor in both directions, so turning capture on never replays the hour before it."
     },
     "devserver_set": {
       "new": true,
@@ -457,7 +459,17 @@
       },
       "returns": "{ path: string, bytes: number, entries: Array<{ name: string, bytes: number, truncated: boolean }> }",
       "why": "Settings could open the log folder and nothing more, which leaves the reporter to find the right file among seven daily ones, know that the doctor output is separate, and remember the version and platform. One archive gets the maintainer the same set every time.",
-      "notes": "path comes from the system save dialog, as mail_attachment_save's does — the front end names no destination this process did not receive from the user. Contents: about.txt, preflight.json, doctor.json, engine.json, the rotating log and any crash reports. Every log line is passed through logging::redact a second time on the way in, because a bundle built today may hold lines written by a build whose redaction rule was narrower. Logs are capped at 1 MiB each and `truncated` says which were cut. Nothing is read from .env and no project source is included."
+      "notes": "path comes from the system save dialog, as mail_attachment_save's does — the front end names no destination this process did not receive from the user. Contents: about.txt, preflight.json, doctor.json, engine.json, the rotating log and any crash reports. Every log line is passed through logging::redact a second time on the way in, because a bundle built today may hold lines written by a build whose redaction rule was narrower. Logs are capped at 1 MiB each and `truncated` says which were cut. Nothing is read from .env and no project source is included. The archive also carries environment.json, the one file in it written to be read by a program rather than a person — flat, path-free and credential-free, so `diagnostics_compare` can hold two of them against each other."
+    },
+    "diagnostics_compare": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "path": "string (a bundle, or the environment.json out of one)"
+      },
+      "returns": "{ differences: Array<{ key: string, here?: string, there?: string }>, same: number, theirVersion?: string }",
+      "why": "\"It works on my machine\" is the oldest complaint in this category and every product in it answers that the container solves the problem — which it does not: the same compose file on two Docker versions is two different things. This app already packages the state of a machine; what it could not do was put two of them side by side.",
+      "notes": "Compares THEIR file with what this machine is right now, not with a stored copy of ourselves — the question is always what is different now. Their side is read first: a file that cannot be read is the answer, and there is no reason to walk this machine to find that out. The comparison is over `environment.json`, a flat fingerprint the bundle now carries — deliberately NOT over about.txt/doctor.json/preflight.json, which are shaped for a person to read and whose diff is mostly noise (a socket path, a pid, a byte count that moved). It holds no paths, because a home directory differs on every machine and would report two identical setups as different in five places, and no credentials or .env values, because the file is meant to be handed to a colleague. Only differences are returned and agreement is counted: a report that prints two hundred identical lines buries the four that matter. A key only one side states is a difference with a missing half — \"you have redis-7-2 and they do not\" is a different sentence from \"you are on 7.2 and they are on 7.0\". Accepts a whole zip or the extracted JSON, tried in that order rather than guessed by extension, because renaming a correct file must not make it unreadable. Errors: NOT_FOUND when the bundle predates environment.json — named rather than shrugged at — INVALID_INPUT for a file that is neither. Not audited: nothing is changed and nothing leaves the machine. See src-tauri/src/diagnostics.rs."
     },
     "dns_check": {
       "new": true,
@@ -1093,6 +1105,16 @@
       "why": "The language set used to be a constant in three places — locale.rs, i18n/index.js and the tray's fallback table — so a third language meant a source change and a rebuild. Nobody who can actually translate this app can do any of that, which is why this sat on the list as '~2,000 strings': the strings were never the blocker, the rebuild was. The progress figure counted the strings a pack HELD, and the seed is the whole English catalogue — so an untouched pack read `2000 of 2000 (100%)` the moment it was created. It counts what differs from English now.",
       "notes": "A pack that does not parse is LISTED WITH ITS ERROR rather than skipped — a hand-edited file with a trailing comma that simply vanishes from the picker is the worst failure this could have. A pack names itself through `language.label`, because this app cannot hold a name for a language it has never heard of. The tag is validated as a BCP 47 language rather than accepted, because it becomes a file name in a directory this app writes into. Adding a language stops being a code change: a pack is one JSON file in the app's config directory with the same shape as the shipped catalogue. The front end merges it over English and registers it, so an untranslated screen is in English rather than showing raw keys, and vue-i18n's per-key fallback makes a partial pack a working pack — which is what makes starting one possible at all. NO machine translation and no seeding a new pack with English silently relabelled: a missing string that falls back to English is honest, a fabricated one is a sentence somebody has to find and disbelieve. `direction` is how a pack states which way its language reads, and it is the one key whose absence was invisible: layout direction was a single appearance switch applied to every locale at once — right for the two languages shipped here, both left to right, and wrong the moment a pack is Arabic or Farsi. Two of the five languages the nearest competitor ships are right-to-left; before this, such a pack rendered left to right until its reader found a switch in Settings that then mirrored English as well. A pack that states it wins for its own locale, because direction is a FACT about a language and the switch is a PREFERENCE — the preference still decides for every locale that has not stated one. Anything other than the two words reads as absent rather than as an error: a pack is a hand-edited file, and one typo in one optional key should cost the direction, not the language. `locale_pack_write`'s seed carries `\"direction\": \"ltr\"` for the same reason a translator cannot ask for a key they have never seen."
     },
+    "usage_report": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "date": "string? (YYYY-MM-DD UTC; today when omitted)"
+      },
+      "returns": "{ date: string, rows: Array<{ name: string, kind: 'project' | 'service' | 'stack', cpuSeconds: number, gbHours: number, samples: number, budgetCpuMinutes?: number, budgetGbHours?: number, overBudget: boolean }>, cpuSeconds: number, gbHours: number }",
+      "why": "Docker is expensive and this app's own README says so rather than arguing with it. Every rival built on containers has the same cost and none of them measures it, which leaves \"why is my laptop hot\" to Activity Monitor and its nine processes called com.docker.backend. Being the one product that can answer \"shop has held 4.2 GB-hours and used 38 minutes of CPU today\" is a better position than denying the cost.",
+      "notes": "No new measurement: sample_container_stats has read CPU and memory once a minute since the port and threw them away after two hours, because a sparkline was all they were for. This accumulates the same readings. The interval is MEASURED per container rather than assumed to be the sixty-second timer, and a gap longer than five minutes contributes nothing — a laptop closed on Friday and opened on Monday must not be billed for the weekend at its Friday rate; the sample still counts and the clock still moves, only the time is refused. cpuSeconds is seconds of ONE core, directly comparable to what `time` reports; gbHours is memory HELD rather than consumed, because memory is occupied and not spent. Rows are heaviest first, and every container is named including the stack's own router and mail catcher — a total that quietly left them out would understate what Docker costs here. Shared services get their own row and are NEVER divided between the projects that use them: any split would be invented, and a number somebody could act on has to be one they can check. For the same reason only a project carries a budget. Budgets live in preferences under `usageBudgets` (`{ cpuMinutes, gbHours }` per project name) because a threshold is a machine's decision — the same repository on a colleague's laptop has different room to spare — and a zero is treated as no budget rather than as always-over, since a cleared field arrives as zero. A day outside the thirty-day retention is simply absent rather than an error. Not audited: nothing is changed. See src-tauri/src/usage.rs."
+    },
     "logs_info": {
       "new": true,
       "kind": "query",
@@ -1517,15 +1539,33 @@
       },
       "returns": "{ entries: AuditRecord[], total: number, unreadable: number }",
       "why": "The audit trail was written from eighteen places and read from none — of the commands in this contract, not one named it. audit.rs states its audience as \"whoever has to account for the machine\", and that person could only produce the record by knowing it is JSON Lines and knowing which directory the logs go in. Writing a record nobody can be shown is most of the cost of a record and none of the benefit.",
-      "notes": "Newest first, which is the opposite of the order the file is written in and the order somebody scanning for \"what just happened\" reads in. Capped — default 200, ceiling 2000 — because this is the one file in the app that is never rotated, so an uncapped read is worst on exactly the machine where the trail matters most; `total` is every line in the file, so a screen showing fifty of nine thousand can say so rather than implying it is the history. A line that does not parse is SKIPPED and counted in `unreadable` rather than failing the call: the same judgement append_to makes, for the same reason — a half-written final line from a process killed mid-append must not make the rest unreadable, and damage in the file is itself something the reader needs to be told. Read-only and never audited itself: reading a record is not an act the record is for. No workspace is required — the trail lives beside the logs, not in the workspace, so it answers on a machine whose checkout has been moved. An absent file is an empty trail rather than an error, because nothing irreversible having been done yet is the normal state. `action` comes back as a string rather than the writer's &'static str, so a verb this build no longer emits still reads back — which is what an unrotated historical record means. See src-tauri/src/audit.rs."
+      "notes": "Newest first, which is the opposite of the order the file is written in and the order somebody scanning for \"what just happened\" reads in. Capped — default 200, ceiling 2000 — because this is the one file in the app that is never rotated, so an uncapped read is worst on exactly the machine where the trail matters most; `total` is every line in the file, so a screen showing fifty of nine thousand can say so rather than implying it is the history. A line that does not parse is SKIPPED and counted in `unreadable` rather than failing the call: the same judgement append_to makes, for the same reason — a half-written final line from a process killed mid-append must not make the rest unreadable, and damage in the file is itself something the reader needs to be told. Read-only and never audited itself: reading a record is not an act the record is for. No workspace is required — the trail lives beside the logs, not in the workspace, so it answers on a machine whose checkout has been moved. An absent file is an empty trail rather than an error, because nothing irreversible having been done yet is the normal state. `action` comes back as a string rather than the writer's &'static str, so a verb this build no longer emits still reads back — which is what an unrotated historical record means. Each record may carry `undo` — what would put the act back, or the sentence saying why nothing would — and `undone`, which is DERIVED on read rather than stored: the file is append-only, so an act cannot be edited to say it was reversed, and the later `undo` line naming its `at` is the only honest way to know. Lines written before those fields existed read normally; they simply carry neither. See src-tauri/src/audit.rs."
+    },
+    "audit_undo": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "at": "string (the `at` of the line to put back)"
+      },
+      "returns": "{ steps: number, done: number }",
+      "why": "A record that says what an assistant did and cannot put it back is half of the answer. The compensation is worked out BEFORE the tool runs — what `stackvo_stack_down` stopped exists only before it stopped it — and stored on the line, so what is offered later is what was true at the time rather than a guess about a machine that has since changed.",
+      "notes": "Executes the plan on the named line and nothing else: the steps are MCP tool names and they go through `mcp::call`, so the record and the act cannot drift apart. Three refusals, each its own answer: UNSUPPORTED when the line carries no compensation — a restart went through the state an undo would return to, a generate overwrote output that was not kept, a reissue replaced a certificate that was not kept, and the line's own sentence is repeated rather than a second one invented; UNSUPPORTED when the act did not happen, because a refused or failed call carries no plan and reversing something that never ran is a change nobody asked for; CONFLICT when it was already put back, which is a read of the append-only join rather than an edit — the original line still says what it said, and a later `undo` line names its `at`. NOT_FOUND for an `at` that is not in the last 2000 lines. A sequence, not a transaction: if the fourth of six steps fails the first three stay done, `Undone` carries how many of how many ran, and the failing step's error is what comes back. Audited as `undo` whichever way it went — a half-completed undo is the line somebody most needs to find later. The grant used is the full one deliberately: this is the app, with the person at the keyboard, running a plan the app wrote itself; applying an assistant's limit to the human undoing the assistant would be the wrong way round. See src-tauri/src/undo.rs."
     },
     "policy_status": {
       "new": true,
       "kind": "query",
       "args": {},
-      "returns": "{ active: boolean, source: string|null, managed: string[], locked: string[], registryPrefix: string|null, market: PolicyMarket, error: string|null }",
+      "returns": "{ active: boolean, source: string|null, managed: string[], locked: string[], registryPrefix: string|null, images: PolicyImage[], market: PolicyMarket, error: string|null }",
       "why": "A fleet of machines has settings somebody other than the person at the keyboard cares about — the domain suffix, the web server, and on a network without Docker Hub the registry every image is pulled from. Without this the Settings panes can only grey a field out, and a greyed-out field with no reason reads as a broken app rather than a managed one.",
       "notes": "Reads one JSON file: /Library/Managed Preferences/com.stackvo.desktop.json on macOS, %ProgramData%\\StackVo\\policy.json on Windows, /etc/stackvo/policy.json on Linux; STACKVO_POLICY_FILE overrides all three. Read once per process, like every managed-preferences reader — a restart is how a change is picked up. This is NOT a security boundary and must not be presented as one: the override variable and, usually, the file itself are within the user's reach. `managed` and `locked` carry keys only, never values — env_get redacts secrets and this must not be a way around that. `error` is a parse or rule failure and is returned rather than swallowed, because a policy that quietly does nothing is one the administrator believes is in force; a broken file yields an empty policy and never a refusal to start. See src-tauri/src/policy.rs. The `market` block reports where packages may come from. It is reported in full rather than as one flag because its whole purpose is to let somebody who has just been refused an install read WHICH rule refused it. `additionalKeys` is a count, not the keys."
+    },
+    "policy_compliance": {
+      "new": true,
+      "kind": "query",
+      "args": {},
+      "returns": "{ active: boolean, source?: string, clauses: Array<{ id: string, subject: string, state: 'holding' | 'bypassed' | 'silent' | 'unmeasured', detail?: string }>, holding: number, bypassed: number, silent: number, unmeasured: number, attestable: boolean }",
+      "why": "policy_status answers what the administrator's file SAYS. Nothing answered whether any of it is in force on this machine, which is the question the person who deployed the file has. The two come apart for one reason and it is not misconduct: a policy arrives on a machine that was already set up. The registry mirror rewrites references as files are GENERATED, so a project nobody regenerated since Tuesday still pulls from Docker Hub. allowedPackages is checked as something is INSTALLED, so a service installed last month stays installed when the list that would have refused it lands today. requireSignature decides what the NEXT refresh accepts and says nothing about the index already cached.",
+      "notes": "Four states, and the third is the one that makes the report honest. `silent` means the policy has no opinion: every list in the market block means \"no opinion\" when empty, never \"none\", and a report that folded that into a pass would score a machine with no policy at all as fully compliant. `unmeasured` means no evidence either way and its reason is always in `detail` — it covers a fact this app cannot see (the generated tree would not read, a package manifest would not load) AND a clause with nothing here to apply to (a pin naming a repository this build never runs), because neither is evidence of compliance. `attestable` is false while anything is bypassed OR unmeasured, and it is named attestable rather than compliant deliberately: verify makes the OPPOSITE call with its `unknown` because it asks \"can I work?\", where an unasked question is not evidence of trouble; this asks \"can somebody sign their name to this?\", where it is exactly what must not be swallowed. And the layer being reported on is not a security boundary — policy.rs says so in its first paragraph — so this is not a certificate. Every measurement is of state already on disk: the .env as written (Env::parse, not load — load applies the policy last, so asking the loaded environment whether the policy took effect is a question whose answer is true by construction), the generated tree, the package directory, the remembered catalogue source, the override files, the project manifests. The engine is never asked, because a compliance report that needs Docker running is one nobody can run when they most need it. The mirror clause is answered by the mirror itself — if policy::rewrite over a file's own bytes would change them, it never reached that file — rather than by a second scanner here, which would be a second opinion about build stages and already-qualified registries and the wrong one would be this one's. Ids are stable and the UI holds the sentence, the preflight arrangement. Not audited: nothing is changed. See src-tauri/src/compliance.rs."
     },
     "preflight": {
       "new": true,
@@ -1921,9 +1961,9 @@
       "args": {
         "name": "string"
       },
-      "returns": "{ declared: Array<{ id: string, known: boolean, enabled: boolean }>, suggested: Array<{ service: string, key: string }>, plan: Plan }",
+      "returns": "{ declared: Array<{ id: string, known: boolean, enabled: boolean }>, suggested: Array<{ service: string, key: string }>, plan: Plan, preset: { path: string, name: string | null, description: string | null, plan: Plan } | null }",
       "why": "herd.yml, .lerd.yaml and .ddev/config.yaml all describe the whole environment and are committed, so a teammate clones and runs one command. stackvo.json carried the project and a preset carried the stack, and the two never met. `services` in the manifest is the missing half; this reports what the repository declares, what this machine gives it, and the diff.",
-      "notes": "Reads only. `declared` comes from the manifest — the statement a colleague agreed to — and `suggested` from the project's own .env, which is a guess and is kept separate for that reason; suggestions already declared are dropped. A suggestion carries the KEY that implied it and never the value, because that file holds credentials. `plan` is produced by the same planner preset_plan uses, so an unknown service id is rejected there by name rather than becoming a SERVICE_<JUNK>_ENABLE key. See src-tauri/src/detect.rs `services_from_env` for what counts as evidence."
+      "notes": "`preset` is the project's `stackvo.preset.json`, if it ships one — the half a manifest cannot carry: `services` says WHICH services, a preset says which VERSIONS and the shareable settings beside them. The path had no convention before this, which was the whole of what was missing: the export wrote a file, the import read one, and between them somebody had to say where they had put it. It is beside `stackvo.json` now, so a clone brings it. Reported, never applied — `preset_apply` is the same plan-then-apply shape hosts_plan/hosts_apply uses, and a file that arrived with somebody else's clone must not rewrite your stack because you opened a page. A preset that will not parse reads as no preset rather than taking this whole answer off the screen. Reads only. `declared` comes from the manifest — the statement a colleague agreed to — and `suggested` from the project's own .env, which is a guess and is kept separate for that reason; suggestions already declared are dropped. A suggestion carries the KEY that implied it and never the value, because that file holds credentials. `plan` is produced by the same planner preset_plan uses, so an unknown service id is rejected there by name rather than becoming a SERVICE_<JUNK>_ENABLE key. See src-tauri/src/detect.rs `services_from_env` for what counts as evidence."
     },
     "project_requirements_apply": {
       "new": true,
@@ -2028,6 +2068,16 @@
       "kind": "query",
       "args": {},
       "returns": "Project[]"
+    },
+    "project_verify": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string (project)"
+      },
+      "returns": "{ project: string, checks: Array<{ id: string, subject: string, state: 'ok' | 'missing' | 'different' | 'unknown', detail?: string }>, ready: boolean }",
+      "why": "Every tool in this category does the setting-up half of onboarding and none does the checking half — which is the question somebody actually has an hour after cloning: not \"how do I set this up\" but \"I did set it up; why does it still not work?\". The repository already declares what it needs; what was missing was the sentence back.",
+      "notes": "Nothing new is measured. Four of the five facts come from `projects_list` — whether the manifest validated, whether the image was ever built here, whether the generated tree is older than the manifest, whether the domain resolves — and the fifth from the instance table, so a second derivation of any of them cannot disagree with the first. Every check carries a stable `id` and the UI holds the label and what to do about it, the arrangement preflight states for the same reason: a check gains a translation by being added to a locale file rather than by having English compiled into the binary. A declared service has three failure modes and they are three different sentences: in the catalogue but not installed (`service`, missing), installed but switched off (`serviceOff`, different, with the versions that ARE there named — \"install it\" would be the wrong instruction), and a name this build has never heard of (`unknownService`, unknown). `unknown` deliberately does NOT hold `ready` back: a check this app declined to make is not evidence that something is wrong, and a verifier that says not-ready for a question it did not ask is one people learn to override. A version the declaration does not pin is reported as ok with the version found beside it rather than judged — saying which version SHOULD be there needs a lock file, which is a separate item. Also reachable as `stackvo verify <project>`. Not audited: nothing is changed. See src-tauri/src/verify.rs."
     },
     "projects_suspend_idle": {
       "new": true,
@@ -2201,6 +2251,30 @@
       ],
       "why": "Runs one, by id.",
       "notes": "**The fixed catalog is the security model.** The frontend sends an ID, never a command; the argv is built on the Rust side from compiled-in words, so there is no code path by which the webview can name a program to execute — the same handle-not-a-path rule app_log_open uses, for the same reason: a project pane that accepted an arbitrary command string from its own frontend is a remote shell with extra steps. Every command is spawned as an argv ARRAY, never through a shell, so a project called `a; rm -rf ~` is a container name that does not exist rather than a second command. Two kinds, because they behave differently: interactive commands (tinker, wp shell) need a TTY and a human, so they open the user's own terminal and return null — an in-app REPL would be a second, worse one next to the one they have configured; one-shot commands stream through the operation console. `-it` is added only for the interactive ones, because Docker refuses `-t` when stdin is not a TTY. Refuses when the container is not running, so the failure is \"the project is not running\" rather than Docker's \"No such container\". The id may now name a command the project declared in its own stackvo.json as well as one compiled in. The webview still never names a program — `quickcmd::resolve` is the only place either becomes an argv, and a declared command reaches `docker exec` through the same function a built-in does."
+    },
+    "machine_commands": {
+      "new": true,
+      "kind": "query",
+      "args": {},
+      "returns": "MachineCommands",
+      "why": "Four rivals sell \"add your own command\" on the front page — DDEV drops a file in `.ddev/commands/`, Lando has a `tooling:` block, dde and Laragon each have their own — and this application had exactly one way to do it: edit a repository somebody else owns. `<root>/commands.json` is the layer above the project, and this reads it.",
+      "notes": "The SAME schema as a manifest's `commands` block, the same argv rule and the same container boundary — read by the same parser, deliberately not a second shape and deliberately not a second threat model. It is the union of two decisions already taken: a file on disk may declare a command, and a declared command runs in the project's container and nowhere else. There is no `host` form here either; a step that has to run on this machine is a hook, approved against a digest first. `exists` is reported separately from an empty `commands` because an absent file is the ordinary case and not an error, and the pane says something different for each. `problems` are `Finding`s under the `COMMAND` code — the same code a manifest's bad block produces, because it is the same parser reporting the same rule. Shadowing is NOT reported here: a machine-wide row is only shadowed relative to a project that declares the same id, and this command has no project. `quick_commands` marks every row with the file it came from, which is where that shows."
+    },
+    "crash_reports": {
+      "new": true,
+      "kind": "query",
+      "args": {},
+      "returns": "Array<{ name: string, path: string, bytes: number }>",
+      "why": "The application could crash, write a perfectly good report, and never mention it. So \"I would like to report this\" never started — not because reporting is hard, but because nobody knew there was anything to report.",
+      "notes": "Nothing leaves the machine, and that is not an omission: PRIVACY.md promises no telemetry, no crash reporting service and no server behind the app, and says anything future would be opt-in, off by default, and described there BEFORE it ships. This is the local half — the reports already travel in a diagnostic bundle, and this is what tells somebody one exists to send. Returns only the reports newer than the marker `crash_reports_seen` writes, compared by NAME rather than by count: a report pruned away (10 are kept) would make a count go down and a newer crash then go unmentioned. Newest first; the file name carries the UTC timestamp, so it sorts without a stat — an mtime is rewritten by a backup restore."
+    },
+    "crash_reports_seen": {
+      "new": true,
+      "kind": "mutation",
+      "args": {},
+      "returns": "null",
+      "why": "So the notice does not repeat every launch.",
+      "notes": "Separate from reading them because the two are different moments: the window asks on open and marks when the person has actually seen the line. Marking on read would dismiss a notice nobody looked at, which is the same as not having one. Best effort — a marker that cannot be written means the notice appears again, which is a repeated line rather than a lost crash."
     },
     "quick_commands": {
       "new": true,
@@ -2488,6 +2562,26 @@
       "why": "The Settings pane has to draw a row per credential saying where it lives, and it has to know before it offers a Move button whether this machine has a keystore at all — a headless Linux box with no Secret Service is a real machine somebody runs this on.",
       "notes": "Reads the .env text, NOT a loaded Env: loading replaces a keychain: reference with the value it points at, which is exactly the fact this reports. `available` is probed by reading an entry nothing ever writes, so asking leaves nothing behind. No value ever appears in the response — `env_reveal` remains the one deliberate way a password crosses the boundary. See src-tauri/src/secrets.rs."
     },
+    "leaks_scan": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string? (project; without it only .env is read)"
+      },
+      "returns": "{ findings: Array<{ id: string, source: 'env' | 'tracked', subject: string, line?: number, fingerprint: string, preview: string, inHistory: boolean }>, scanned: number, skipped: number, truncated: boolean, envTracked: boolean, envInHistory: boolean }",
+      "why": "secrets.rs moves a password out of .env and into the OS keystore, which is the direction somebody takes AFTER they know there is a problem. The other one — \"there is an AWS key in your .env that is not in the keystore\", and harder, \"that key is in a file git is tracking\" — did not exist, so nobody found out until the repository was already public.",
+      "notes": "Matches the VALUE, not only the key name, and that is the whole design: Env::is_secret matches a key by suffix, which is right for masking and not enough here — preset.rs already wrote the reason, that \"a key added upstream tomorrow called SERVICE_FOO_APIKEY would sail straight through\". So every rule is a vendor-assigned prefix with a known alphabet and length (AKIA…, ghp_…, xoxb-…, sk_live_…, AIza…, SG.…, a PEM private-key header). The key-name rule is kept as a second, independent net. There is deliberately NO entropy heuristic and no long-random-string rule: those fire on minified JavaScript, on a hash in a lockfile and on a base64 image, and a scanner people learn to ignore is worse than no scanner — a miss costs a finding, a false positive costs the feature. A PEM header is matched only for the block types that are actually private keys, so a certificate and a signature are not findings. Nothing puts a secret on a command line: `git log -S<value>` would make the value an argument and therefore visible in `ps`, so the tracked files are read and matched in-process and the only thing reaching git's argument list is `ls-files`. `git ls-files` rather than a directory walk, which is not an optimisation — a walk would read node_modules and every build directory, and what is TRACKED is exactly what leaves the machine. `envTracked` outranks every other finding: it means every value in that file is in the history whatever its shape. `envInHistory` is asked separately and is the one people get wrong — untracking the file today does not take it out of the history, so a repository where this is true and `envTracked` is false is one somebody has already half-fixed. Both are asked BY PATH (`git log --all -- <path>`), never by value: `git log -S<secret>` would put the secret in the argument list where `ps` shows it to every process on the machine, and a path answer is stronger anyway — a file committed and later deleted is still in the history with everything that was in it, which a value search would miss the moment somebody rotated half of it. Each tracked finding carries `inHistory` from the same question. One finding per file, because a private key is fifty lines and fifty findings would bury every other file. Bounded at 2000 files and 512 KB each, with what was skipped and whether the cap bit reported rather than dropped — a scan that passed over four hundred files and said nothing reads as a clean repository. The value is NEVER carried in a finding — a report that quotes the secret is a second copy of it, in a place people paste into chat windows — and \"never print it\" on its own leaves somebody with a finding they cannot act on, so each one carries what every scanner in this field carries instead: a `fingerprint` (the first twelve hex characters of the value's sha256, so two rows with one fingerprint are one secret in two places, which is the difference between rotating one key and rotating two) and a masked `preview` (the first and last four characters, and only for a value of at least sixteen — below that it is masked whole, because four characters at each end of a short password is the password). The fingerprint is taken from the matched RUN and not the line, so the same key written `AWS_KEY=…` in one file and `key: \"…\"` in another is one secret rather than two. Not audited: nothing is changed, and nothing leaves the machine. See src-tauri/src/leaks.rs."
+    },
+    "env_untrack": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string (project)"
+      },
+      "returns": "{ untracked: boolean, ignored: boolean, gitignoreWritten: boolean, exampleWritten?: string, exampleKeys: number, stillInHistory: boolean, needsCommit: boolean }",
+      "why": "A finding people cannot act on is a finding they turn off, and this repair is easy to get half right: the common half-fix is deleting the file in a later commit, which takes it out of the working tree and leaves every value in the history.",
+      "notes": "The standard repair, in the standard order. `git rm --cached` — NOT `git rm`, which would delete the running stack's configuration — with `--ignore-unmatch`, so a file that is already untracked is a success rather than an error: the caller pressed a button that says untrack it, and it being untracked is what they asked for. Whether it is ignored is ASKED with `git check-ignore` rather than parsed, because `.gitignore`, `.git/info/exclude` and a global excludes file all take part and this app is not the authority on any of them; the line is appended only when the answer is no, with a leading newline when the file does not end in one — otherwise `.gitignore` would gain `something.env` rather than a line of its own. `.env.example` is written only when there is none: overwriting somebody's example with a generated one throws away the comments and grouping they wrote for the next person. The example keeps every comment and blank line, because an example file is documentation, and every assignment keeps its key and its `=` and nothing else; `export FOO=bar` keeps its `export`, since some projects source the file from a shell. `stillInHistory` and `needsCommit` are the two halves this does NOT do and reports instead: untracking does not rewrite history, so a file that was ever committed still has every value in it and they have to be rotated, and `git rm --cached` writes the index — the removal leaves the machine when somebody commits and pushes it. UNSUPPORTED when the project is not a git repository. Audited as `env_untrack`, because it writes into somebody's repository and because it is done in answer to a credential having been committed, which is exactly the kind of act somebody has to be able to date afterwards. See src-tauri/src/leaks.rs."
+    },
     "server_config_get": {
       "replaces": "none — new in the desktop app",
       "kind": "query",
@@ -2663,6 +2757,17 @@
       "returns": "one element of spx_status.reports",
       "why": "Recording used to need a browser: SPX's control panel is the documented way in and its switch is a cookie only a person can set. The same trigger is a plain request header — php-spx's README profiles a page with `curl --cookie \"SPX_ENABLED=1; SPX_KEY=…\"` — so the app can send the request itself. That is what makes profiling reachable from a terminal, and from an assistant that cannot open a browser.",
       "notes": "IMPLEMENTORS: the HOST is the project's own domain from its manifest and MUST NOT come from the caller. The path MUST be refused unless it starts with a single `/`: a value opening with `//` is a protocol-relative URL and would send the request, with the profiler key on it, to somebody else's host. Redirects MUST NOT be followed — a framework answering `/` with `/login` would otherwise write two reports for one button. The workspace CA is added as a trusted root rather than turning certificate verification off, and the client MUST opt out of the system proxy for the reason mail.rs documents. SPX writes the report during the request's own shutdown and says nothing about it in the response, so the new report is found by diffing the directory — which means one recording of a project at a time, or two races each claim the other's. The HTTP status belongs in the failure message: a 404 is a path that reaches no PHP at all, and 'recorded nothing' on its own sends people looking at the profiler for it."
+    },
+    "request_replay": {
+      "new": true,
+      "kind": "operation",
+      "args": {
+        "name": "string (project)",
+        "key": "string (report key)"
+      },
+      "returns": "{ before: Report, after: Report, wallTimeUs: number, peakMemory: number }",
+      "why": "The commonest loop in performance work takes four steps today: change the code, open the site, find the page, come back and hunt for the new recording among twenty. explain.rs opens by saying no new measurement is needed and it is right about this too — the recording that names a request, the sender that can issue one with the profiler on, and the observation window a query log is joined against all exist. What was missing was the act.",
+      "notes": "Runs THE SAME request `spx_record_request` does — the two share one function rather than two implementations, because they would drift on exactly the details that make a replay comparable to the original: the profiler cookie, the redirect policy, and the observation window `request_explain` later joins statements against. Takes the same `spx:record:<project>` in-flight guard, so a replay and a manual recording cannot each claim the other's report. Returns BOTH reports so the difference is read where it came from, plus the deltas; there is deliberately no `faster` field, because one run against one run is not a benchmark — a cold opcache and whatever else the machine was doing are inside it — and a boolean would invite a conclusion the measurement cannot carry. UNSUPPORTED, with the reason, for anything but a GET: a recording names the request LINE and nothing else, so a POST re-sent without its body and its session is a different request and is usually answered with a redirect or a 419, and a result that looks like an answer and is not is worse than a refusal. Same for a CLI recording — replaying it would mean running the command again, which is a different act. NOT_FOUND for a key this project has no recording under. Deliberately NOT audited: it is the same act spx_record_request performs, that one is not audited either, and audit.rs states the bar — a trail that records routine traffic is one nobody reads. See src-tauri/src/explain.rs."
     },
     "spx_report": {
       "new": true,
@@ -3132,11 +3237,11 @@
       "args": {
         "name": "string",
         "branch": "string",
-        "options": "{ newBranch?: boolean, name?: string, database?: 'none' | 'create' | 'copy', instance?: string }?"
+        "options": "{ newBranch?: boolean, name?: string, database?: 'none' | 'create' | 'copy', instance?: string, minutes?: number }?"
       },
       "returns": "OperationId",
       "why": "N — the item nothing else in this space does. `git worktree add` gives a branch its own directory; this gives that directory its own subdomain, its own database and its own environment, so two branches of one application run side by side.",
-      "notes": "Plans first and refuses on the plan's own reason, so the command and the preview cannot disagree. Steps in order, each rolling back the ones before it: git worktree add (streamed as scaffold:progress / scaffold:done, the same events project_clone uses), then the manifest, then the database, then the record, then the generate. NOTHING IS WRITTEN INTO THE CHECKOUT THAT GIT TRACKS — the files in a worktree are the branch's. Identity goes into stackvo.local.json, the machine-local overlay that exists to be the file that is never committed, and which is added to the repository's .git/info/exclude (git's own per-clone ignore list, never .gitignore) when git says it is not ignored yet. A branch that carries no stackvo.json gets a full one derived from the parent's instead, with the parent's aliases and LAN sharing dropped so it cannot claim the same names. The environment — database credentials, APP_URL, STACKVO_WORKTREE_BRANCH — is app-owned, outside every checkout, and reaches the container through the compose overlay site.rs already renders. The database is a database on an instance that is already running, not an instance of its own: a branch is not a different engine. Emits project:creating / project:created, because a worktree IS a project and nothing downstream knows the word. Audited as worktree_create."
+      "notes": "Plans first and refuses on the plan's own reason, so the command and the preview cannot disagree. Steps in order, each rolling back the ones before it: git worktree add (streamed as scaffold:progress / scaffold:done, the same events project_clone uses), then the manifest, then the database, then the record, then the generate. NOTHING IS WRITTEN INTO THE CHECKOUT THAT GIT TRACKS — the files in a worktree are the branch's. Identity goes into stackvo.local.json, the machine-local overlay that exists to be the file that is never committed, and which is added to the repository's .git/info/exclude (git's own per-clone ignore list, never .gitignore) when git says it is not ignored yet. A branch that carries no stackvo.json gets a full one derived from the parent's instead, with the parent's aliases and LAN sharing dropped so it cannot claim the same names. The environment — database credentials, APP_URL, STACKVO_WORKTREE_BRANCH — is app-owned, outside every checkout, and reaches the container through the compose overlay site.rs already renders. The database is a database on an instance that is already running, not an instance of its own: a branch is not a different engine. Emits project:creating / project:created, because a worktree IS a project and nothing downstream knows the word. Audited as worktree_create. After the database is created and copied, the worktree is given a database login of its own — a MySQL/MariaDB account granted on that schema alone — and the password is written to `worktree-logins.json` beside the table, NOT onto the record: `Table` is serialised both to disk and across this boundary into a webview, so a credential on `Record` would ship with it. Failure to create that account is reported as progress and is NOT fatal: refusing the whole worktree because a server would not GRANT would take away a feature that works today, and the app instead says which login the branch has. PostgreSQL and MongoDB get no account of their own and are reported as sharing the instance's — Postgres needs object-level grants applied inside the database after the copy plus default privileges for what the application creates later, which is a second design, and half of it produces a branch that cannot read its own tables. `minutes` is what turns a worktree into a sandbox: an expiry, clamped to seven days, recomputed at creation rather than taken from the plan — a plan made minutes ago on a screen somebody was reading should not spend part of the time it was asked for. Nothing acts on the date by itself and nothing ever will on a timer: an app that deleted a directory on a clock would eventually delete one with a morning's uncommitted work in it. What the date does is let the list say the time has passed, so removing it stays a decision somebody makes in one click."
     },
     "worktree_env_set": {
       "new": true,
@@ -3155,7 +3260,7 @@
       "args": {},
       "returns": "WorktreeRow[]",
       "why": "Every worktree in the workspace, so the projects list can say `branch of shop` on a row instead of showing two unrelated siblings. Asking per project would be one command per row.",
-      "notes": "Each row carries what is true right now beside what was recorded: `exists` for the directory, `dirty` for uncommitted work (null when git could not answer — the same third state `projectLocalRead` reports for ignore rules), and `orphaned` when the registration outlived the checkout. Reads two files and asks git per row; no Docker call, so it answers with the engine down."
+      "notes": "Each row carries what is true right now beside what was recorded: `exists` for the directory, `dirty` for uncommitted work (null when git could not answer — the same third state `projectLocalRead` reports for ignore rules), and `orphaned` when the registration outlived the checkout. Reads two files and asks git per row; no Docker call, so it answers with the engine down. `isolated` says whether the branch reaches its database with a login of its own; it is DERIVED from whether a login is held for that name rather than stored on the record, so the file that holds the password is the file that decides the answer. `false` means the branch uses the instance's shared account and can therefore reach the parent's data, which is a true thing the screen has to be able to say. `expired` and `remainingMinutes` come from the record's `expiresAt`, judged against ONE clock read for the whole list — rows judged against their own `now` could report two of them on either side of the same second. `remainingMinutes` is `Some(0)` for a sandbox whose time has passed and absent for a worktree with no expiry: two different answers rather than one. The comparison is textual, which is correct only because the timestamps are fixed-width UTC — the same property audit.rs relies on."
     },
     "worktree_plan": {
       "new": true,
@@ -3163,11 +3268,11 @@
       "args": {
         "name": "string",
         "branch": "string",
-        "options": "{ newBranch?: boolean, name?: string, database?: 'none' | 'create' | 'copy', instance?: string }?"
+        "options": "{ newBranch?: boolean, name?: string, database?: 'none' | 'create' | 'copy', instance?: string, minutes?: number }?"
       },
       "returns": "WorktreePlan",
       "why": "A worktree creates a directory, a hostname, a container and a database at once, and the only moment any of those can be argued with is before they exist. The same plan-then-apply pair as hosts_plan/hosts_apply and db_move_plan/db_move_apply.",
-      "notes": "No side effects — safe to call on every keystroke in the branch field. A refused plan still carries the name, path, hostname and database it *would* have produced, because a dialog that blanks out when it says no makes the reason harder to act on. `refused` is one sentence naming the cause: git missing, the project not a repository or itself one, no `domain` to build under, a branch git will not accept, a branch already checked out elsewhere (git allows one working tree per branch), a directory or hostname already taken, or a database instance that is absent or stopped. `warnings` is for what proceeds anyway: a parent with a `*.` alias means two Traefik routes match the new name, MongoDB has no CREATE DATABASE, and a database of that name already existing means it will be used rather than created."
+      "notes": "No side effects — safe to call on every keystroke in the branch field. A refused plan still carries the name, path, hostname and database it *would* have produced, because a dialog that blanks out when it says no makes the reason harder to act on. `refused` is one sentence naming the cause: git missing, the project not a repository or itself one, no `domain` to build under, a branch git will not accept, a branch already checked out elsewhere (git allows one working tree per branch), a directory or hostname already taken, or a database instance that is absent or stopped. `warnings` is for what proceeds anyway: a parent with a `*.` alias means two Traefik routes match the new name, MongoDB has no CREATE DATABASE, and a database of that name already existing means it will be used rather than created. `expiresAt` is the moment a `minutes` option would produce, worked out in the preview so the screen shows the moment rather than the duration — \"in 120 minutes\" is arithmetic the reader has to do, and \"at 14:32\" is the answer they were doing it for."
     },
     "worktree_remove": {
       "new": true,
@@ -3178,7 +3283,7 @@
       },
       "returns": "OperationId",
       "why": "The way back. A worktree left behind is a directory that looks like a project, a branch git will not check out anywhere else, and a database nothing points at.",
-      "notes": "Four things can go and three of them are separate decisions the screen asks first: the checkout always, its uncommitted changes (`force`), its database (`dropDatabase`) and its branch (`deleteBranch`). Order is the reverse of creation with one exception — the containers go first, because Docker holds the tree open through its bind mount and git refuses to remove a worktree files are being written into. The database is dropped before the checkout: one that will not drop should leave the worktree there to try again from, rather than leaving a database nothing points at. `db::drop_database` refuses the instance's own database and the engines' system databases whatever the record says. Deleting the branch is best effort and never fatal — the worktree is already gone by then, and refusing to finish over an unmerged branch would leave the removal half done. project_delete reaching a worktree through the ordinary Delete button forgets the record and prunes git's registration, and deliberately leaves the branch and the database alone: `removeFiles` is that command's only licence to destroy anything. Audited as worktree_remove."
+      "notes": "Four things can go and three of them are separate decisions the screen asks first: the checkout always, its uncommitted changes (`force`), its database (`dropDatabase`) and its branch (`deleteBranch`). Order is the reverse of creation with one exception — the containers go first, because Docker holds the tree open through its bind mount and git refuses to remove a worktree files are being written into. The database is dropped before the checkout: one that will not drop should leave the worktree there to try again from, rather than leaving a database nothing points at. `db::drop_database` refuses the instance's own database and the engines' system databases whatever the record says. Deleting the branch is best effort and never fatal — the worktree is already gone by then, and refusing to finish over an unmerged branch would leave the removal half done. project_delete reaching a worktree through the ordinary Delete button forgets the record and prunes git's registration, and deliberately leaves the branch and the database alone: `removeFiles` is that command's only licence to destroy anything. Audited as worktree_remove. The worktree's own database account is dropped whatever was decided about the data, and its stored password is forgotten with it: keeping `dropDatabase` off means “leave my data alone”, not “leave behind an account that can reach it”. A failure there is logged and does not stop the removal — an account with nothing left to reach grants nothing."
     },
     "worktree_support": {
       "new": true,
@@ -3188,7 +3293,7 @@
       },
       "returns": "WorktreeSupport",
       "why": "N. Everything a project can say about worktrees before a dialog opens: whether git is here, whether the directory is a repository, which branches exist and which of them are already checked out somewhere, which database instances a branch could be given a database on, and the worktrees this project already has. One call rather than five, because the answer decides whether the button is even drawn.",
-      "notes": "`reason` is a sentence, not a boolean — 'not a git repository', 'itself a worktree', 'no domain in its manifest'. `linked` is git's own answer (a linked checkout has its own git dir and a shared common dir), which is a different question from `record`: `record` means this app made it and therefore knows what it gave it. Branches come back newest-commit-first, because the branch somebody wants a worktree for is almost always one they touched this week. Instances that are stopped are listed and marked rather than hidden: 'why is that greyed out' has an answer on the row, 'why is the list empty' does not."
+      "notes": "`reason` is a sentence, not a boolean — 'not a git repository', 'itself a worktree', 'no domain in its manifest'. `linked` is git's own answer (a linked checkout has its own git dir and a shared common dir), which is a different question from `record`: `record` means this app made it and therefore knows what it gave it. Branches come back newest-commit-first, because the branch somebody wants a worktree for is almost always one they touched this week. Instances that are stopped are listed and marked rather than hidden: 'why is that greyed out' has an answer on the row, 'why is the list empty' does not. `isolated` is the same fact `worktree_list` reports, for this project: whether its database login is its own. False for a project that is not a worktree at all. `grantArgs` is the registration that would give an assistant this branch and nothing else, rendered from a Grant rather than assembled on screen so what is copied is what the server enforces. It carries `--for` only while there is time left; for a sandbox whose expiry has passed it is EMPTY rather than an unlimited grant, which is what dropping a zero `--for` would silently produce."
     },
     "xdebug_set": {
       "new": true,
@@ -3679,6 +3784,11 @@
       "payload": "ProgressEvent",
       "why": "The first tunnel_start pulls the cloudflared image; the pull's own lines belong in the operation console like every other long-running docker invocation."
     },
+    "usage:over-budget": {
+      "new": true,
+      "payload": "{ project: string, date: string, cpuMinutes: number, gbHours: number, budgetCpuMinutes?: number, budgetGbHours?: number }",
+      "notes": "One project has passed a budget set for it in preferences. Emitted from the stats sampler, ONCE per project per day: the sampler runs every sixty seconds and a project that is over at two o'clock is still over at half past, so a notice per round would be four hundred by the evening — and the feature somebody switches off within the hour is the one that would have told them tomorrow. The key is `<date>/<project>`, so tomorrow's first breach is an event again without anything having to clear the set at midnight."
+    },
     "xdebug:changed": {
       "new": true,
       "payload": {
@@ -3715,7 +3825,7 @@
       "icon": "string",
       "available": "bool",
       "default": "bool",
-      "note": "One launchable application on this machine. `id` is the stable key stored in preferences and never the display name, which is localised and moves between versions. An entry that is not installed is returned with `available: false` rather than omitted, so a picker can grey it out — a list that drops them reads as lack of support. At most one entry per list carries `default: true`: the one that would be used when the preference is unset."
+      "note": "One launchable application on this machine. `id` is the stable key stored in preferences and never the display name, which is localised and moves between versions. An entry that is not installed is returned with `available: false` rather than omitted, so a picker can grey it out — a list that drops them reads as lack of support. At most one entry per list carries `default: true`: the one that would be used when the preference is unset. Every list ends with `id: 'custom'`, named 'Other…', always `available: true` and never `default: true`: it is the one entry whose availability cannot be checked, because what it points at is a command line in `preferences.json` that has not been typed yet — and an automatic fallback onto a command nobody chose would be worse than no fallback."
     },
     "Bundled": {
       "packages": "number — services the index lists",
@@ -3775,7 +3885,8 @@
       "required": "string[]",
       "missing": "string[]",
       "stale": "bool",
-      "note": "`covered` is read from the certificate's subjectAltName, not from the project list. `missing` is wildcard-aware: `*.stackvo.loc` covers `api.stackvo.loc` but not `shop.loc` and not `a.b.stackvo.loc`, because a wildcard matches exactly one label. `ca_trusted` is null when the platform gives no cheap way to ask, which is not the same as false. `stale` is true when anything is missing or the certificate has expired — it is what the UI badges."
+      "trust": "Array<{ id: 'system' | 'firefox', trusted?: bool, detail?: string }>",
+      "note": "`covered` is read from the certificate's subjectAltName, not from the project list. `missing` is wildcard-aware: `*.stackvo.loc` covers `api.stackvo.loc` but not `shop.loc` and not `a.b.stackvo.loc`, because a wildcard matches exactly one label. `ca_trusted` is null when the platform gives no cheap way to ask, which is not the same as false; it is the SYSTEM store, which is what every existing caller means by it. `trust` is the fuller answer, store by store, and it exists because of Firefox: Firefox does not use the operating system's store, it carries its own (NSS) per profile, and mkcert installs into that one only when `certutil` is present — it warns and carries on when it is not. So the ordinary state on a fresh laptop is a trusted system store, a working Safari and Chrome, and a Firefox that refuses every page, which one boolean reported as `true`. A store's `trusted` is null for \"this machine would not say\", which for Firefox means Firefox is not installed here — not a problem anybody has to fix. The three failing states are kept apart because their repairs differ: certutil missing (install nss and trust again), the CA absent from a readable store (trust again), and a store that could not be read at all. `stale` is true when anything is missing or the certificate has expired — it is what the UI badges."
     },
     "Checkout": {
       "remote": "string | null",
@@ -3944,7 +4055,7 @@
     "Detected": {
       "framework": "string?",
       "runtime": "'php'|'node'",
-      "server": "string",
+      "server": "string? — null unless something in the folder actually named a web server. A folder of PHP files says nothing about which server should run it, so there is nothing to detect; DDEV's `webserver_type` is the one input that does say. It was a bare string spelling 'nginx' at every site, which read as a finding and was a default in a module that cannot see SUPPORTED_SERVERS_DEFAULT — so `detected_spec` resolved the setting first and imported a DDEV project configured for Apache as whatever the setting named",
       "documentRoot": "string?",
       "phpVersion": "string?",
       "nodeVersion": "string?",
@@ -3952,7 +4063,7 @@
       "nodeStart": "string?",
       "confidence": "'certain'|'likely'|'guess'",
       "evidence": "string[]",
-      "note": "`evidence` names the files the answer was read from, and `confidence` says how much to trust it. `guess` means nothing recognisable was there and the fields are defaults the user is expected to correct — presenting that as an answer is the failure this distinction exists to avoid."
+      "note": "`evidence` names the files the answer was read from, and `confidence` says how much to trust it. `guess` means nothing recognisable was there and the fields are defaults the user is expected to correct — presenting that as an answer is the failure this distinction exists to avoid. `server` is null rather than defaulted for the same reason, one level down: what the folder declares wins and the workspace setting answers for a folder that declares nothing, which is the rule every other field here already followed."
     },
     "DevServerStatus": {
       "supported": "bool",
@@ -4087,9 +4198,10 @@
       "version": "string?",
       "apiVersion": "string?",
       "context": "string?",
-      "platform": "'docker-desktop'|'colima'|'orbstack'|'engine'|'unknown'",
+      "platform": "'docker-desktop'|'colima'|'orbstack'|'podman'|'engine'|'unknown'",
       "socketPath": "string?",
-      "error": "string?"
+      "error": "string?",
+      "note": "`platform` is derived from the socket path and is a label, never a branch: nothing in this application does anything different because of it. `podman` covers rootless ($XDG_RUNTIME_DIR/podman/podman.sock, searched first) and rootful (/run/podman/podman.sock) — Podman speaks the Docker API on a unix socket, so the only thing it ever needed was the path. `podman-docker` installs Podman's socket under Docker's name and therefore reads as `engine`; that is a limitation of a path-based label rather than a failure, and it works. `version` and `apiVersion` mean different things and only the second is Docker's: Podman answers `Version: 5.1.1` — its own — and `ApiVersion: 1.41`, the Docker level it emulates. Neither is compared against a minimum anywhere, which is what makes a non-Docker engine work at all."
     },
     "ExplainFinding": {
       "kind": "'nPlusOne' | 'databaseBound' | 'hotspot' | 'noDriverFrames' | 'queriesUnrecorded' | 'queriesOutsideWindow' | 'overlaps' | 'traceMissing' | 'truncated'",
@@ -4355,6 +4467,13 @@
       "error": "string?",
       "note": "`unread` is null rather than 0 on MailHog, which has no concept of a read message — a zero would render as \"all caught up\" on a server that cannot know. `available` is false when the checkout has neither catcher at all, which is different from having one that is switched off."
     },
+    "MachineCommands": {
+      "path": "string — where the file is, or would be. Shown so somebody can go and write one",
+      "exists": "bool",
+      "commands": "Record<string, { exec: string[], about?: string, interactive?: bool }> — keyed by id, in file order",
+      "problems": "Finding[] — code is always COMMAND",
+      "note": "The machine-wide half of the declared-command surface, at `<root>/commands.json`. Between the two declaring layers the PROJECT wins an id collision and the machine file is told: refusing a committed, shared file because of a personal one its author has never seen would be hostile, and overriding it silently is the button-that-lies failure the catalogue rule already refuses. An id already in the built-in catalogue is refused from either layer."
+    },
     "Manifest": {
       "name": "string",
       "domain": "string | null",
@@ -4514,6 +4633,15 @@
       "effectiveNote": "What PHP in the RUNNING container reports right now, from one `docker exec php -r ini_get`. Null when nothing is running. Read rather than assumed because assuming was wrong: measured on a real stack, `php -i` says `Loaded Configuration File => (none)` — the official images ship no php.ini at all, so conf.d is not one layer among several but the only one — and `max_execution_time` is 0 under FPM, not the 30 the manual lists. The form uses these as placeholders, so it never shows a default the container does not have; it is also where an override is confirmed to have landed after a restart.",
       "note": "`values` holds the four directives the form manages (memory_limit, upload_max_filesize, post_max_size, max_execution_time); `unmanaged` holds everything else the file contains, which is preserved verbatim on every write — the file is the user's and is safe to hand-edit and commit. `containerPath` is /usr/local/etc/php/conf.d/zz-stackvo.ini: every PHP image the generator builds on (php:X-fpm, php:X-apache, php:X-cli for Swoole, and FrankenPHP, itself built on the official image) parses conf.d after its own php.ini, and `zz` sorts after the docker-php-ext-*.ini files the build writes, so what is set here is what PHP ends up with. Mounted read-only. `warning` is a legal but near-certainly-unintended combination — post_max_size below upload_max_filesize silently caps uploads at the smaller number, which is the classic \"I raised the limit and it still fails\"."
     },
+    "PolicyImage": {
+      "repository": "string — the key a pin is written under",
+      "usedFor": "string — what this image is for, so the list reads as an inventory",
+      "shipped": "string — the reference this build carries",
+      "effective": "string — what will actually run, after the policy's pin and its registry prefix",
+      "moving": "bool — whether `effective` is still on a tag that can change under it",
+      "pinned": "bool — whether a policy pin produced `effective`",
+      "note": "One of the images this application runs and did NOT build: nine tunnel providers' runners, the landing page, the tunnel guard and the perf helper. Six ship on `latest`, which is exactly the tag `pkg::MOVING_TAGS` forbids a third-party package from using — so the rule was enforced against everybody except this application, and the day a broken `cloudflared:latest` is published every user's tunnels stop at once with no version to go back to. The tags are NOT pinned in the source, deliberately: choosing a pin means naming a version that exists, which is a release-time act against a registry rather than something a source file can assert. What changed is that there was nowhere to pin — these ten lived as literals in four modules, appeared in no interface, no .env and no policy file, and nothing could say which of them moved. `moving` is computed AFTER the pin, so a row an administrator has fixed stops being flagged; one that stayed flagged would be a screen that lies about a setting that worked."
+    },
     "PolicyMarket": {
       "constrained": "boolean — whether the policy says anything about the market at all",
       "registryUrl": "string | null — a mirror the organisation runs; read by the HTTPS source",
@@ -4535,19 +4663,24 @@
       "schemaVersion": "number",
       "locale": "'tr' | 'en' | null",
       "theme": "'light' | 'dark' | 'system'",
-      "editorCommand": "string | null",
-      "terminalApp": "string | null",
-      "browserCommand": "string | null",
+      "editorCommand": "string | null — an id from `appsAvailable().editors`, or 'custom'",
+      "editorCustom": "string | null — the command line to run when `editorCommand` is 'custom'. Split on quotes into argv and handed to the OS unexpanded; there is no shell, so $HOME, pipes and && are literal text. The path being opened is appended as the last argument",
+      "terminalApp": "string | null — an id from `appsAvailable().terminals`, or 'custom'",
+      "terminalCustom": "string | null — as `editorCustom`, with the command line the terminal should run appended as the last argument. The flag that takes it (`-e`, `--`, `/K`) belongs in this string, because it differs per emulator and guessing it wrong opens a terminal running the wrong thing",
+      "browserCommand": "string | null — an id from `appsAvailable().browsers`, or 'custom'. Empty means the system default",
+      "browserCustom": "string | null — as `editorCustom`, with the URL appended last",
+      "dbClientCustom": "string | null — as `editorCustom`, with the connection URI appended last. It has no `dbClient` companion because the client is chosen per service in the endpoint menu rather than stored: which clients are offered depends on the scheme that service speaks",
       "startMinimized": "bool",
       "closeBehaviour": "'ask' | 'quit' | 'tray'",
       "autostart": "bool",
       "notifyOnBuild": "bool",
       "backupSchedule": "string",
       "backupKeep": "number",
+      "tourSeen": "bool — whether the introduction has been shown. Absent means \"not yet\", which is what a fresh install is. It is a preference rather than a session flag because \"once\" has to survive a restart or it is not once, and Settings can set it back to false: a one-shot screen somebody skipped in their first minute is one they can never get back, which is the failure mode of every welcome flow with a single chance to land",
       "favourites": "string[]",
       "appearance": "Record<string, unknown>",
       "appearancePresets": "Record<string, unknown>[]",
-      "note": "The whole preferences document, as `default_prefs` writes it. Rust never interprets `appearance`, `appearancePresets` or `favourites` — they are stored and handed back, which is why they have no shape here: giving them one would be this contract claiming to know something the code does not check. `theme` is the legacy top-level key and is carried into `appearance` on read rather than reset, so a user who chose light before the move does not silently lose it. `prefs_set` takes a PATCH, not this: it merges, and a caller that sent the whole document would overwrite keys a newer version of the app added."
+      "note": "The whole preferences document, as `default_prefs` writes it. Rust never interprets `appearance`, `appearancePresets` or `favourites` — they are stored and handed back, which is why they have no shape here: giving them one would be this contract claiming to know something the code does not check. `theme` is the legacy top-level key and is carried into `appearance` on read rather than reset, so a user who chose light before the move does not silently lose it. `prefs_set` takes a PATCH, not this: it merges, and a caller that sent the whole document would overwrite keys a newer version of the app added. The four `*Custom` keys are the `Other…` row's half of the app pickers: detection cannot enumerate every editor, terminal and browser there is, and before them somebody running one that is not listed could select nothing at all."
     },
     "Preflight": {
       "os": "'macos'|'windows'|'linux'",
@@ -4737,15 +4870,15 @@
     "QuickCommand": {
       "id": "string",
       "display": "string",
-      "about": "string",
+      "about": "string — the English one-liner. The window shows `quickCommands.<id>` from its locale and falls back to this",
       "interactive": "bool",
       "because": "string (the marker file)",
-      "note": "`display` is the command as typed, so what runs and what is shown cannot drift. `interactive` decides where it goes — the user's terminal, or the operation console. `id` is the only thing quick_command_run accepts."
+      "note": "`display` is the command as typed, so what runs and what is shown cannot drift. `interactive` decides where it goes — the user's terminal, or the operation console. `id` is the only thing quick_command_run accepts — and it is also the translation key, which is why there is no second name here to keep level. `hint_translations.rs` fails if a row is untranslated in either locale, or if a locale carries one the catalogue no longer offers."
     },
     "RecipeCard": {
-      "name": "string",
-      "about": "string",
-      "edit": "string[]",
+      "name": "string — the key it is written under, and the locale key `providerRecipes.<name>` translates",
+      "about": "string — the English one-liner. The window shows the translation and falls back to this",
+      "edit": "{ key: string, english: string }[] — what has to be changed before the recipe will work. A pair rather than a sentence because the window is bilingual: `key` is looked up as `providerRecipeEdits.<key>`, `english` is what the CLI, the MCP surface and the log get. Keyed rather than positional because both database recipes need the same instruction, and positions are not names",
       "image": "string",
       "pull": "string[]",
       "push": "string[]",
@@ -4993,11 +5126,11 @@
     },
     "TimelineMoment": {
       "at": "number",
-      "source": "'dump' | 'query' | 'mail'",
+      "source": "'dump' | 'query' | 'mail' | 'request' | 'job'",
       "summary": "string",
       "request": "string | null",
       "shape": "string | null",
-      "note": "`request` is the request id a dump named, null for anything the bridge did not attribute. `shape` is set on query moments only and is the same normalisation QueryEntry.shape uses, so repeats line up across the two."
+      "note": "`request` is the request id a dump named, null for anything the bridge did not attribute. `shape` is set on query moments only and is the same normalisation QueryEntry.shape uses, so repeats line up across the two. `request` and `job` are the two moments that are STRETCHES rather than instants, and each is placed at its end — the moment its duration and its outcome became knowable; their summary carries both."
     },
     "TunnelCredentials": {
       "user": "string",

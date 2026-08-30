@@ -30,10 +30,18 @@ Six installer formats are built for every tagged release, two per platform:
 the first tag ships; until then it is the honest answer.
 
 Whichever way you get it, it needs **Docker** — Docker Desktop on macOS and
-Windows, Docker Engine on Linux, or an API-compatible runtime. Colima and
-OrbStack are recognised by name. The app will open, report and offer to start
-Docker when it is not running, which is the one thing the container-based web UI
-could never do.
+Windows, Docker Engine on Linux, or an API-compatible runtime. Colima, OrbStack
+and **Podman** are recognised by name; Podman's rootless socket
+(`$XDG_RUNTIME_DIR/podman/podman.sock`) is looked for before the system ones,
+because rootless is the case somebody runs Podman for. The app will open, report
+and offer to start Docker when it is not running, which is the one thing the
+container-based web UI could never do.
+
+The engine name is a label, never a branch: nothing here does anything different
+because of which of the four answered. That is also why a non-Docker engine
+works at all — no version string is compared against a minimum, and Podman
+reports its own version (`5.1.1`) beside the Docker API level it emulates
+(`1.41`).
 
 ### What Docker costs you
 
@@ -56,6 +64,26 @@ says.
 If that trade is wrong for you, it is wrong for you. It is not a gap anyone is
 going to close — it is the architecture.
 
+Two more things follow from it, and both are limits rather than gaps. They are
+written here because "is this missing or is this decided?" is a question worth
+answering before you install, not after.
+
+**There is no portable install, and there cannot be one.** Laragon, ForgeKit and
+Laraflare all ship a copy-the-folder-and-go install, and on Windows that is a
+real feature people choose on. It is not expressible here: the images and
+volumes live in Docker's own store, not in any directory this application owns.
+`STACKVO_ROOT` is half an answer — your workspace moves with you, the engine
+does not.
+
+**StackVo does not run inside a Codespace or Gitpod.** DDEV does, and lists it
+on its front page. This is a desktop application: it talks to a Docker socket on
+the machine it is running on and draws a window. What it does instead is
+**export** a devcontainer, which DDEV does not — so a project set up here can be
+opened in a cloud environment even though this application cannot follow it
+there. The loopback HTTP surface and the CLI make a headless use technically
+possible; neither is positioned as one, and calling it supported would be
+selling something nobody has tested end to end.
+
 ## Coming from something else
 
 StackVo imports from **seven** other local environments, which is the widest
@@ -76,10 +104,17 @@ document a user reads. They are listed here rather than buried:
 | | What it is |
 | --- | --- |
 | **Production image build** | `release.rs` and seven IPC commands: plan, build, save, load, recipe, push-plan, push. A local dev environment that also builds the image you ship. |
-| **A full environment per git branch** | `worktree.rs` and six commands. Each worktree gets its own hostname, **its own database** and its own environment variables — the thing cloud "preview environments" sell, locally and free. |
+| **A full environment per git branch** | `worktree.rs` and six commands. Each worktree gets its own hostname, **its own database** — with a login granted on that database alone, so the branch cannot reach the one it was branched from — and its own environment variables. The thing cloud "preview environments" sell, locally and free. |
+| **A sandbox to hand an assistant** | The same worktree, with an expiry and a registration that scopes the MCP server to it: the assistant gets one branch, its own copy of the database, and four writing tools instead of twelve. Its output is the branch; the environment is disposable. |
 | **Why was this request slow** | `request_explain` and `request_timeline` put the profiler, the query log and your `dump()` calls on one axis around a single request. |
 | **Devcontainer export** | A project can hand out a `.devcontainer` for people who want to work inside the container rather than beside it. |
-| **An audit trail** | `audit.rs` records the acts that cannot be undone, for whoever has to account for the machine. |
+| **A compliance report for the administrator's policy** | `policy_status` says what the file states; `compliance.rs` measures whether any of it holds here. Most findings are not somebody breaking a rule — the mirror applies as files are *generated*, the package allow-list as one is *installed*, `requireSignature` on the *next* refresh — so a policy that arrived after the machine was set up has work left. Four states, and `silent` (the policy has no opinion) is never counted as a pass. The verdict is called `attestable`, not `compliant`: this layer is not a security boundary and the app will not issue a certificate for one. |
+| **A scan for credentials nobody moved** | `leaks.rs` matches the *value*, not the key's name — `AKIA…`, `ghp_…`, a PEM private-key header — across `.env` and every file git is tracking. Each finding carries a fingerprint and a masked preview and never the value; the history is asked by path, never by putting a secret on a command line; and a tracked `.env` comes with the standard repair, plus the two halves it cannot do said out loud. |
+| **The other half of onboarding** | The repository declares what a project needs; `stackvo verify <project>` — and a button on its page — answers whether this machine has it, line by line, and what to do about each one that it does not. Everything here helps you set things up; this is the half that checks. |
+| **Send a recorded request again** | A recording of a page carries a button that re-issues that exact request with the profiler on and shows both numbers. The commonest loop in performance work — did my change help — as one click instead of four steps. |
+| **What Docker actually cost you** | `usage.rs` adds up the CPU and memory readings the sampler already takes — *"`shop` has held 4.2 GB·hours and used 38 minutes of CPU today"* — and tells you once on the day a project passes a budget you set. Every tool in this category has Docker's cost; this is the one that measures it. |
+| **An answer to "it works on my machine"** | The diagnostic bundle carries a flat, path-free, credential-free fingerprint of the machine, and Settings will hold a colleague's against yours and list only what the two disagree about. Every product here says the container solves this; the same compose file on two Docker versions is two different things. |
+| **An audit trail** | `audit.rs` records the acts that cannot be undone, for whoever has to account for the machine — and every writing call an assistant makes, refusals included, each carrying what would put it back. |
 | **MCP for AI assistants** | 38 tools, with writes behind an explicit flag. See [Driving it from an AI assistant](#driving-it-from-an-ai-assistant). |
 
 ## Why a desktop app
@@ -117,10 +152,19 @@ with streamed progress instead of a blocked request.
 watcher on `projects/*/stackvo.json`, an elevated hosts-file helper that shows a
 diff first, real terminals (container _and_ host), autostart and single-instance.
 
-**Phase 4 — generator port.** Complete. All five web servers, the Node runtime,
-`docker-compose.projects.yml` and both Traefik files are ported to Rust and
-verified byte-for-byte against the Bash generator. Windows path and named-pipe
-handling is written and unit-tested; see the caveat below.
+**Phase 4 — generator port.** Complete. All five web servers the Bash tree had,
+the Node runtime, `docker-compose.projects.yml` and both Traefik files are
+ported to Rust and verified byte-for-byte against it. A sixth arrived after the
+port: **RoadRunner**, which is Laravel Octane's other driver — Octane has
+exactly two and this shipped one, which for a project using Octane is a coin
+toss it can lose. Windows path and named-pipe handling is written and
+unit-tested; see the caveat below.
+
+The two Octane drivers are the only servers that *are* the HTTP server: both run
+on the `php-cli` image and Traefik is pointed at 8000 rather than 80. What
+separates them is the cost — Swoole is a PHP extension compiled into the
+interpreter, RoadRunner is a Go binary that talks to PHP over a pipe, so nothing
+about the PHP build changes for it.
 
 **Phase 5 — releases.** Signed auto-updates are wired: the app checks an
 endpoint, verifies the bundle signature against the key compiled into the build,
@@ -310,6 +354,43 @@ this needed no approval prompt: a container already runs the repository's code.
 A step that has to touch your machine is a hook, where it is approved against a
 digest first.
 
+**What a clone brings, and the half it used to miss.** `stackvo.json` is in the
+repository, so a teammate already has the project. What they do not have is the
+*stack* — which of the twenty services are on and at which versions — because
+that is in `.env`, the one file nobody commits, since it is also where every
+password is. So the clone succeeds, the manifest is perfect, and somebody still
+has to say out loud "turn on MySQL 8.4 and Redis".
+
+That sentence is a **preset**, and it now has a place to live:
+
+```
+<project>/stackvo.preset.json
+```
+
+Beside the manifest, in the repository. Open the project and its requirements
+card says one is there and what applying it would change — the same
+plan-then-apply review the Settings import uses, because a file that arrived
+with somebody else's clone must not rewrite your stack because you opened a
+page. A preset can never carry a secret: it holds enabled and version per
+service plus an allow-list of global settings, so there is nowhere in it to put
+one.
+
+**And the commands *you* run in every project.** One file at the root of your
+workspace, above all of them:
+
+```json
+{ "commands": { "tail": { "exec": ["tail", "-f", "storage/logs/laravel.log"] } } }
+```
+
+`commands.json` is the same schema, the same argv rule and the same container
+boundary — deliberately not a second shape and deliberately not a second threat
+model. It is the union of two decisions already taken: a file on disk may
+declare a command, and a declared command runs in the project's container. The
+point is that it needs nobody's repository: a command you run in all of them is
+exactly the one no single project should have to carry. If a project declares
+the same id, **the project wins** and the pane says which file each row came
+from; an id already in the built-in catalogue is refused, and the pane says so.
+
 **A screen, when one command at a time is not what you want.**
 
 ```bash
@@ -432,6 +513,46 @@ just to toggle Xdebug. Every tool is annotated `readOnlyHint` /
 `destructiveHint`, so a client can require confirmation for a tool it has never
 seen.
 
+**Or bounded, tool by tool and project by project.** The flag is not the only
+shape a grant takes. `--project=shop` bounds the server to one project, and the
+twelve writing tools become the four a project can bound — `xdebug_set`,
+`project_start`, `project_stop`, `project_restart` — while the eight no project
+bounds, `stack_down` among them, are not offered at all. A scope that still
+served `stack_down` would be reporting a limit it was not applying, which is
+worse than having no limit. It bounds the reads as well, and exactly this far:
+no tool that *names* a project answers for one outside the scope, so another
+project's manifest, request traces, profile and log files are not readable
+through it, and the project listings show what is in scope rather than naming
+what is not. It is not information isolation and is not described as one — the
+machine-wide instruments still answer, because they are about the machine
+rather than about a project: the doctor, the hosts table, the mail catcher, one
+database service's query log, one container's log by id. Bounding those would
+leave a scoped assistant unable to diagnose the project it *was* given, which
+is the whole reason the surface exists.
+
+`--for=30m` ends the writing half that long after the server starts, because an
+assistant's session outlives the task it was given. `--allow=project_restart`
+names the tools outright when the four are still more than the job needs. The
+Settings pane writes the same flags into the client's file, so what is
+registered reads as the sentence somebody actually meant — *this assistant may
+restart `shop`, for the next half hour* — and `stackvo mcp-install cursor
+--allow-writes --project=shop --for=30m` is that same registration from the
+command line. A flag this server does not recognise stops it from starting
+rather than quietly granting something else.
+
+**And it is written down.** Every writing call made through this server is
+recorded in the audit trail with what it was done to and how it ended — the
+refusals too, which is usually the line worth having: an assistant that tried
+to stop the whole stack and was told it may not is what you want to see when
+you decide what to grant next time. Most of those lines also carry *what would
+put the act back*, worked out **before** the call ran, so it can be reversed
+from Settings in one click: what a `stack_down` stopped exists only before it
+stopped it, and a compensation worked out later would be worked out against a
+machine that has already changed. Where an act cannot be put back — a restart
+went through the state an undo would return to, a generate overwrote output
+that was not kept — the line says so in its own words instead of offering a
+button that would not keep its promise.
+
 Restoring a snapshot is deliberately **not** a tool. Taking one is: it is the
 call to make before asking for a migration, it adds a file and changes nothing.
 Putting data back over live rows is a decision for the app's own confirmation,
@@ -457,7 +578,7 @@ guarding nothing. Generating the list outright was the obvious move and is the
 wrong one: dispatch cannot be generated, so a generated list advertises tools
 that fail when called.
 
-**Not exposed:** the rest of the mutating surface. 68 of the 310 commands take
+**Not exposed:** the rest of the mutating surface. 68 of the 311 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it

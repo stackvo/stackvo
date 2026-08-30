@@ -37,3 +37,25 @@ Konteynerde derli olan eklentilerin listesi. Eklenti eklemek imajı değiştirir
 
 - Alan adı çözülmüyorsa bu kart bir uyarı ve hosts kaydını ekleyecek bir buton gösterir.
 - Buradaki değerleri değiştirmek çoğu zaman yeniden derleme ister. Yeniden başlatmak yetmez.
+
+## Bu makine uyuyor mu?
+
+Depo, projenin neye ihtiyacı olduğunu beyan eder — servisleri, alan adı, manifesti — ve **Kurulumumu kontrol et**, bu makinede onların olup olmadığını satır satır cevaplar. Bu, işe başlamanın diğer yarısıdır: bu kategorideki her araç *kurmanıza* yardım eder, ve hiçbiri klonlamadan bir saat sonra gerçekten sorduğunuz soruyu cevaplamaz — *"kurdum; peki neden hâlâ çalışmıyor?"*
+
+Yeni hiçbir şey ölçülmez. Beş olgunun dördü proje listesinin zaten hesapladıklarıdır — manifest doğrulamadan geçiyor mu, imaj burada hiç derlendi mi, üretilmiş ağaç `stackvo.json`'dan eski mi, alan adı hosts dosyasında mı — beşincisi de servis tablosudur.
+
+Beyan edilmiş bir servis üç şekilde başarısız olabilir ve bunlar üç ayrı cümledir:
+
+| Gördüğünüz | Anlamı |
+| --- | --- |
+| Eksik | Servis katalogda var ama burada kurulu değil. Market'ten kurun. |
+| Farklı | Kurulu ama **kapalı** — ve sahip olduğunuz sürümler sağda yazar, çünkü "kur" yanlış talimat olurdu. |
+| Bilinmiyor | Bu yapı o adı hiç duymadı. Ya yazım hatası ya da yayımlanmış katalog bu uygulamadan yeni. |
+
+**Bilinmiyor, projeyi düşürmez.** Uygulamanın yapmaktan kaçındığı bir kontrol, bir şeyin bozuk olduğunun kanıtı değildir; sormadığı bir soru için "hazır değil" diyen bir doğrulayıcı, insanların görmezden gelmeyi öğrendiği doğrulayıcıdır.
+
+Geçenler dahil her satır gösterilir. Yalnızca bir şey bozukken beliren bir sonuç, "kontrol etti ve iyiyim" ile "kontrol etmedi"yi ayırt edilemez kılardı.
+
+Bir **sürümün** yanlış olduğunu henüz söyleyemez. Beyan `redis` diyor ve sürüm sabitlemiyorsa, kurulu herhangi bir Redis onu karşılar ve bulunan sürüm yargılanmak yerine satırın yanına yazılır — hangisinin olması gerektiğini söylemek bir kilit dosyası ister.
+
+Aynı cevap `stackvo verify <proje>` ile de alınır.

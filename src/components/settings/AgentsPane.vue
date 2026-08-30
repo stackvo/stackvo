@@ -15,11 +15,19 @@ import { useCopyTick } from '@/composables/useCopyTick';
  * refusal to touch a file with comments in it, and a registration somebody
  * wants to undo by hand) both end with the reader opening that exact path.
  *
- * The write switch is above the list rather than inside a row, and off. It is
- * the only decision here with a consequence: `--allow-writes` hands the
- * assistant `stack_down` and `project_stop`, not just the read tools people
- * come for. A per-row toggle would ask the same question six times and get a
- * less considered answer each time.
+ * The grant is above the list rather than inside a row, and off. It is the
+ * only decision here with a consequence: `--allow-writes` hands the assistant
+ * `stack_down` and `project_stop`, not just the read tools people come for. A
+ * per-row toggle would ask the same question six times and get a less
+ * considered answer each time.
+ *
+ * The two controls under the switch are what stop that from being the whole
+ * decision. Naming a project removes every writing tool a project cannot bound
+ * — twelve become four, and `stack_down` is not one of them — and bounds the
+ * reads to that project as well. A duration ends the writing half by itself.
+ * Both are rendered into the flags the entry carries, and the preview below
+ * shows exactly those flags, because the file is what somebody opens six
+ * months later to answer what this assistant was allowed to do.
  */
 const { t } = useI18n();
 const { copied, copy } = useCopyTick();
@@ -29,6 +37,31 @@ const error = ref(null);
 const busy = ref(null);
 const loading = ref(false);
 const allowWrites = ref(false);
+/** Empty is every project, which is what a grant with no `--project` means. */
+const scope = ref([]);
+/** `null` is no limit — the server's own default, and what omitting `--for`
+ *  means. Zero is treated the same way rather than as an expired grant. */
+const minutes = ref(null);
+
+/**
+ * The flags this grant renders to.
+ *
+ * A second implementation of `grant::Grant::to_args`, and the only one that
+ * had to be written twice: the preview has to show what will be written before
+ * anything is written, and the value that would be written lives in Rust. The
+ * pair is held by `agents_install`'s own round trip — what this sends produces
+ * these flags on the other side — and the order here is the order there.
+ */
+const grantArgs = computed(() => {
+  const args = [];
+  if (allowWrites.value) args.push('--allow-writes');
+  if (scope.value.length) args.push(`--project=${scope.value.join(',')}`);
+  if (allowWrites.value && minutes.value > 0) {
+    const m = Number(minutes.value);
+    args.push(m % 60 === 0 ? `--for=${m / 60}h` : `--for=${m}m`);
+  }
+  return args;
+});
 
 /**
  * The rules half.
@@ -64,7 +97,7 @@ const rows = computed(() =>
 function snippet(client) {
   const entry = { command: status.value.binary ?? '/path/to/stackvo-mcp' };
   if (client.id === 'vscode') entry.type = 'stdio';
-  if (allowWrites.value) entry.args = ['--allow-writes'];
+  if (grantArgs.value.length) entry.args = grantArgs.value;
   if (status.value.root) entry.env = { STACKVO_ROOT: status.value.root };
 
   const key = client.id === 'vscode' ? 'servers' : 'mcpServers';
@@ -150,7 +183,12 @@ async function install(client) {
   busy.value = client.id;
   error.value = null;
   try {
-    await api.agentsInstall(client.id, allowWrites.value);
+    await api.agentsInstall(
+      client.id,
+      allowWrites.value,
+      scope.value,
+      allowWrites.value ? minutes.value : null
+    );
     await load();
   } catch (e) {
     // Re-read first, then report — the same order SecretsPane settled on, for
@@ -180,7 +218,7 @@ async function remove(client) {
 
 onMounted(load);
 
-defineExpose({ snippet, state, rulesState });
+defineExpose({ snippet, state, rulesState, grantArgs });
 </script>
 
 <template>
@@ -241,6 +279,46 @@ defineExpose({ snippet, state, rulesState });
     />
     <div class="text-caption text-medium-emphasis mb-4">
       {{ t('settings.agents.allowWritesDetail') }}
+    </div>
+
+    <!-- The two limits. Both are offered whether or not the switch above is on:
+         the project scope bounds what an assistant may *read* as well, which is
+         a decision somebody can want without granting a single write. -->
+    <div class="d-flex flex-wrap ga-4 mb-2">
+      <v-select
+        v-model="scope"
+        :items="projects"
+        :label="t('settings.agents.scopeLabel')"
+        :placeholder="t('settings.agents.scopeEvery')"
+        persistent-placeholder
+        multiple
+        chips
+        closable-chips
+        clearable
+        density="compact"
+        variant="outlined"
+        hide-details
+        style="min-width: 16rem"
+      />
+      <v-select
+        v-model="minutes"
+        :items="[
+          { title: t('settings.agents.forever'), value: null },
+          { title: t('settings.agents.minutes', { count: 30 }), value: 30 },
+          { title: t('settings.agents.hours', { count: 2 }), value: 120 },
+          { title: t('settings.agents.hours', { count: 8 }), value: 480 },
+        ]"
+        :label="t('settings.agents.lastsLabel')"
+        :disabled="!allowWrites"
+        density="compact"
+        variant="outlined"
+        hide-details
+        style="min-width: 12rem"
+      />
+    </div>
+    <div class="text-caption text-medium-emphasis mb-4">
+      {{ scope.length ? t('settings.agents.scopedDetail') : t('settings.agents.unscopedDetail') }}
+      <code v-if="grantArgs.length" class="ml-1">{{ grantArgs.join(' ') }}</code>
     </div>
 
     <v-progress-linear v-if="loading" indeterminate class="mb-2" />

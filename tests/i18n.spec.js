@@ -162,7 +162,13 @@ describe('error codes', () => {
  * `$vuetify.*`, which Vuetify consumes itself, and every key reached through a
  * template literal (`t(`errors.${code}`)`) or held as a string in an array
  * (`{ label: 'nav.projects' }`). The real number was 48. Detection has to model
- * all three ways a key is reached, or it reports confident nonsense.
+ * every way a key is reached, or it reports confident nonsense.
+ *
+ * A fourth way arrived with `catalogue-text.js`, and it reported 47 live keys
+ * as dead on the first run: a *namespace* passed as an argument and joined to
+ * an id inside a shared helper. Neither of the two rules below can see that —
+ * one needs the backtick at the `t()` call, the other needs a dot inside the
+ * literal — so the helper is modelled instead.
  */
 describe('unused translations', () => {
   it('are not defined at all', () => {
@@ -185,11 +191,22 @@ describe('unused translations', () => {
       [...allSource.matchAll(/['"]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)['"]/g)].map((m) => m[1])
     );
 
+    // A namespace held as a plain string and joined to an id at run time:
+    // `catalogueText('quickCommands', spec.id, spec.about)` composes the key
+    // inside a shared helper, so the whole prefix is live wherever the helper
+    // is called with it.
+    //
+    // Matched on the helper by name rather than by loosening `indirect` to any
+    // quoted word, which would have made this gate pass on everything.
+    const composed = [...allSource.matchAll(/catalogueText\(\s*['"]([a-zA-Z0-9_]+)['"]/g)].map(
+      (m) => m[1]
+    );
+
     const dead = defined.filter((key) => {
       // Vuetify's own component strings; it looks them up internally.
       if (key.startsWith('$vuetify.')) return false;
       if (usedKeys.has(key) || indirect.has(key)) return false;
-      return !prefixes.some((prefix) => key.startsWith(prefix + '.'));
+      return ![...prefixes, ...composed].some((prefix) => key.startsWith(prefix + '.'));
     });
 
     expect(dead, 'translated but unreachable').toEqual([]);
