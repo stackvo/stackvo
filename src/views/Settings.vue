@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useIconRail } from '@/composables/useIconRail';
 import { useAppStore } from '@/stores/app';
@@ -29,6 +30,7 @@ import SecretsPane from '@/components/settings/SecretsPane.vue';
 import AgentsPane from '@/components/settings/AgentsPane.vue';
 import LocalApiPane from '@/components/settings/LocalApiPane.vue';
 import ToolingPane from '@/components/settings/ToolingPane.vue';
+import MachineCommandsPane from '@/components/settings/MachineCommandsPane.vue';
 import PageLayout from '@/components/PageLayout.vue';
 import SettingsSection from '@/components/SettingsSection.vue';
 import SettingsGroup from '@/components/SettingsGroup.vue';
@@ -81,6 +83,16 @@ const updateProgress = ref(null);
 /** Null until asked; false means this build has no key to verify against. */
 const updaterReady = ref(null);
 
+/**
+ * Which pane is open.
+ *
+ * `?tab=` is honoured so another screen can send somebody to the right one —
+ * the crash notice on the shell does, and landing on Appearance with a
+ * "diagnostics" errand is a link that technically worked. An unknown value
+ * falls back rather than showing an empty page: a stale link is a wrong tab,
+ * not a broken settings screen.
+ */
+const route = useRoute();
 const tab = ref('appearance');
 
 /**
@@ -232,6 +244,16 @@ const SECTIONS = [
     icon: 'mdi-toolbox-outline',
     label: 'settings.tooling.title',
     desc: 'settings.tooling.sectionDesc',
+  },
+  // Beside the host tools rather than in the stack group: a machine-wide
+  // command file is a fact about this installation, and it applies to every
+  // workspace project rather than configuring any one of them.
+  {
+    key: 'machineCommands',
+    group: 'app',
+    icon: 'mdi-console-line',
+    label: 'settings.machineCommands.title',
+    desc: 'settings.machineCommands.sectionDesc',
   },
   {
     key: 'doctor',
@@ -459,6 +481,11 @@ async function loadPrefs() {
 const { stale: certStale } = useCertificates();
 
 onMounted(async () => {
+  // Before anything is fetched, so the requested pane is the first one drawn
+  // rather than one that appears after a boot.
+  const wanted = String(route.query.tab ?? '');
+  if (wanted && SECTIONS.some((s) => s.key === wanted)) tab.value = wanted;
+
   loadEnv();
   loadDefaults();
   loadPrefs();
@@ -572,6 +599,10 @@ onMounted(async () => {
             <ToolingPane />
           </template>
 
+          <template v-if="tab === 'machineCommands'">
+            <MachineCommandsPane />
+          </template>
+
           <template v-if="tab === 'certificates'">
             <CertificatesPane />
           </template>
@@ -639,7 +670,12 @@ onMounted(async () => {
                 <div class="text-body-2 mb-1">
                   {{ t('settings.updateAvailable', { version: update.version }) }}
                 </div>
-                <pre v-if="update.notes" class="text-caption notes">{{ update.notes }}</pre>
+                <!-- `lang=""` — undetermined. This is the publisher's release
+                     note travelling in the updater manifest, not a string this
+                     application wrote, and nothing here knows what language it
+                     is in. Same rule as a container's output and a sidecar's
+                     description; see `language-of-parts.spec.js`. -->
+                <pre v-if="update.notes" class="text-caption notes" lang="">{{ update.notes }}</pre>
 
                 <v-progress-linear
                   v-if="updateProgress"

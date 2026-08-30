@@ -1,6 +1,6 @@
-# Dump'lar
+# Hata ayıklama sinyalleri
 
-Her projenin `dump()` ve `dd()` çıktıları tek listede. Bir projenin kendi dump'ları için o projenin Hata ayıklama sekmesine bakın.
+Yakalaması açık her projenin dump'ları, istekleri ve kuyruk işleri tek listede. Tek bir proje için o projenin Hata ayıklama sekmesine bakın.
 
 ## Bu sayfa ne için
 

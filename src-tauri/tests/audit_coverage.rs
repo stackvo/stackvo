@@ -58,6 +58,7 @@ const PROMISED: &[(&str, &str)] = &[
         "tooling_path_apply",
     ),
     ("installing a host tool", "tooling_install"),
+    ("taking a project's `.env` out of git", "env_untrack"),
 ];
 
 #[test]
@@ -93,6 +94,33 @@ fn the_module_comment_and_this_list_say_the_same_thing() {
              checking nothing"
         );
     }
+}
+
+/// The one promise whose call site is not in `commands.rs`.
+///
+/// The module comment widens its own bar for the MCP surface — every writing
+/// call an assistant makes, refusals included — and that paragraph is checked
+/// the way the bullets above are: against the code that has to keep it. The
+/// call lives in `mcp.rs` rather than in the command layer because that is
+/// where the act has an actor, so `every_promised_act_has_a_call_site` would
+/// never have looked at it.
+#[test]
+fn the_assistant_surface_records_what_it_serves() {
+    let audit = read("src/audit.rs");
+    let mcp = read("src/mcp.rs");
+
+    assert!(
+        audit.contains("writing call an assistant makes over MCP"),
+        "audit.rs no longer promises to record what an assistant does — either          the promise was withdrawn without updating this test, or it was          reworded and this test is now checking nothing"
+    );
+    assert!(
+        mcp.contains("audit::record_undoable("),
+        "audit.rs promises to record an assistant's writing calls and mcp.rs          records none of them"
+    );
+    assert!(
+        mcp.contains("crate::undo::before("),
+        "the compensation has to be built before the call runs — what a          stack_down stopped exists only beforehand"
+    );
 }
 
 /// The property that makes it an audit trail rather than a second log.

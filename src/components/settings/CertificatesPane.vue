@@ -92,6 +92,47 @@ onMounted(load);
         </span>
       </div>
 
+      <!-- Where the CA is trusted, store by store.
+           The chip above is the system store, which is what "trusted" meant
+           here for as long as there was one answer. Firefox does not use that
+           store — it carries its own, per profile, and mkcert fills it only
+           when certutil is on the machine. The ordinary state on a fresh
+           laptop was a green chip and a browser that refused every page. -->
+      <v-list
+        v-if="certs.trust?.length"
+        density="compact"
+        class="bg-transparent pa-0 mb-3"
+        data-test="trust-stores"
+      >
+        <v-list-item v-for="store in certs.trust" :key="store.id" class="px-0">
+          <template #prepend>
+            <v-icon
+              size="18"
+              class="mr-3"
+              :color="
+                store.trusted === true ? 'success' : store.trusted === false ? 'warning' : undefined
+              "
+            >
+              {{
+                store.trusted === true
+                  ? 'mdi-check-circle-outline'
+                  : store.trusted === false
+                    ? 'mdi-alert-circle-outline'
+                    : 'mdi-help-circle-outline'
+              }}
+            </v-icon>
+          </template>
+          <v-list-item-title class="text-body-2">
+            {{ t(`certs.store.${store.id}`) }}
+          </v-list-item-title>
+          <!-- The detail names a program or a path, so it is shown as it came
+               rather than translated into something vaguer. -->
+          <v-list-item-subtitle v-if="store.detail" class="text-caption">
+            {{ store.detail }}
+          </v-list-item-subtitle>
+        </v-list-item>
+      </v-list>
+
       <!-- mkcert is the whole mechanism; without it nothing here can
            be repaired, so it is said plainly rather than left for the
            reissue button to fail on. -->

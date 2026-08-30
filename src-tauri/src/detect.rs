@@ -119,7 +119,23 @@ pub enum Confidence {
 pub struct Detected {
     pub framework: Option<&'static str>,
     pub runtime: &'static str,
-    pub server: &'static str,
+    /// The web server this folder was found to want, when something said so.
+    ///
+    /// `None` at every one of the four places below, and that is the point: a
+    /// folder of PHP files says nothing about which server should run it, so
+    /// there is nothing to detect. It was `"nginx"` here, which read as a
+    /// finding and was a default — spelled in a module that cannot see the
+    /// workspace's `SUPPORTED_SERVERS_DEFAULT`.
+    ///
+    /// `imports.rs` is what makes it a real field: DDEV's `webserver_type` is
+    /// evidence, and `Some("apache")` is a thing this folder actually said.
+    /// With the literal here, `detected_spec` could not tell the two apart and
+    /// resolved the setting *first* — so a DDEV project configured for Apache
+    /// was imported as whatever the setting named, and the evidence it had
+    /// recorded was ignored. Every other field in that function reads the other
+    /// way round: what the folder declares wins, and the setting answers for a
+    /// folder that declares nothing.
+    pub server: Option<&'static str>,
     pub document_root: Option<String>,
     pub php_version: Option<String>,
     pub node_version: Option<String>,
@@ -247,7 +263,7 @@ pub fn infer(print: &Fingerprint) -> Detected {
                evidence: Vec<String>| Detected {
         framework,
         runtime: "php",
-        server: "nginx",
+        server: None,
         document_root: Some(doc.to_string()),
         php_version: php_version.clone(),
         node_version: None,
@@ -340,7 +356,7 @@ pub fn infer(print: &Fingerprint) -> Detected {
     let lang = |runtime: &'static str, confidence: Confidence, evidence: &str| Detected {
         framework: None,
         runtime,
-        server: "nginx", // ignored for lang runtimes; kept for the struct
+        server: None, // a lang runtime has no web server to choose
         document_root: None,
         php_version: None,
         node_version: None,
@@ -428,7 +444,7 @@ pub fn infer(print: &Fingerprint) -> Detected {
                 evidence: Vec<String>| Detected {
         framework,
         runtime: "node",
-        server: "nginx",
+        server: None,
         document_root: None,
         php_version: None,
         node_version: node_version.clone(),
@@ -501,7 +517,7 @@ pub fn infer(print: &Fingerprint) -> Detected {
     Detected {
         framework: None,
         runtime: "php",
-        server: "nginx",
+        server: None,
         document_root: Some("public".into()),
         php_version: None,
         node_version: None,

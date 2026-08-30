@@ -362,7 +362,7 @@ fn a_ddev_registry_finds_a_project_and_its_file_settles_the_rest() {
     // The declaration wins over the constraint, and over detection's default
     // server — and the commented example at the bottom of the file loses.
     assert_eq!(site.detected.php_version.as_deref(), Some("8.4"));
-    assert_eq!(site.detected.server, "apache");
+    assert_eq!(site.detected.server, Some("apache"));
     assert_eq!(site.detected.document_root.as_deref(), Some("public"));
     // Detection still owns what it reads from the code.
     assert_eq!(site.detected.framework, Some("laravel"));

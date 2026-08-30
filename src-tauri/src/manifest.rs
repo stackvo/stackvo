@@ -27,7 +27,14 @@ const GENERATOR_FALLBACK_EXTENSIONS: [&str; 7] = [
     "mbstring",
 ];
 
-const SERVERS: [&str; 5] = ["nginx", "apache", "caddy", "frankenphp", "swoole"];
+const SERVERS: [&str; 6] = [
+    "nginx",
+    "apache",
+    "caddy",
+    "frankenphp",
+    "swoole",
+    "roadrunner",
+];
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,6 +101,27 @@ pub const NODE_PACKAGE_MANAGERS: [&str; 3] = ["npm", "yarn", "pnpm"];
 /// language's own image, `COPY . .`, an optional install and build step, and a
 /// start command on a port Traefik proxies to. Node predates this list and
 /// keeps its own struct for compatibility; structurally it is the same idea.
+///
+/// ## Why eight and not ten
+///
+/// `ARCHITECTURE.md` calls this "PHP and Node projects" and the tree generates
+/// eight runtimes, which reads as a document that fell behind. It is not: the
+/// six here are the ones that **fit the shape above without an argument**, and
+/// the two most often asked for do not.
+///
+/// **Java and .NET are missing on purpose.** Neither is a `COPY . .` and a
+/// start command: a Java project is a build tool (Maven or Gradle) producing an
+/// artefact from a lifecycle this application does not model, and .NET is a
+/// publish step whose output layout depends on the SDK version and the target
+/// framework moniker. Adding them would not be a seventh and eighth row in this
+/// list — it would be a second generator shape, with its own file, its own
+/// failure modes and its own reason to disagree with the first. That is a
+/// product decision rather than a missing line, and until somebody takes it,
+/// this comment is what stands in for it.
+///
+/// The bar for a seventh row is the shape, not the popularity: a language whose
+/// projects install, build and start with three commands on one port belongs
+/// here and costs almost nothing. One that needs a build lifecycle does not.
 pub const LANG_RUNTIMES: [&str; 6] = ["python", "go", "ruby", "rust", "bun", "deno"];
 
 /// One non-PHP, non-node runtime block — `python: { … }`, `go: { … }`, ….
@@ -305,6 +333,23 @@ pub struct Manifest {
     /// cannot be saved into the file the team shares. See [`read_effective`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local: Vec<String>,
+}
+
+impl Manifest {
+    /// The web server this project runs.
+    ///
+    /// `server` is optional in the file, so this is the one place "the project
+    /// did not choose" gets an answer — and the answer is the workspace's
+    /// `SUPPORTED_SERVERS_DEFAULT`, not a literal. It was a literal in five
+    /// places, and the result was one setting with three answers: see
+    /// [`crate::config::DEFAULT_SERVER`].
+    ///
+    /// The default is passed in rather than read here, because a `Manifest` is
+    /// a parsed file and knows nothing about the workspace it came out of —
+    /// which is also what lets a test render one without a workspace at all.
+    pub fn server_or<'a>(&'a self, workspace_default: &'a str) -> &'a str {
+        self.server.as_deref().unwrap_or(workspace_default)
+    }
 }
 
 fn str_field(v: &serde_json::Value, key: &str) -> Option<String> {

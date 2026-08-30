@@ -8,7 +8,7 @@
 //!   cargo run --example diagnose
 //!   STACKVO_ROOT=/path/to/stackvo cargo run --example diagnose
 
-use stackvo_desktop_lib::{commands, engine, stats::Sampler, workspace};
+use stackvo_desktop_lib::{commands, engine, generator, stats::Sampler, workspace};
 
 fn bytes(value: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
@@ -338,7 +338,7 @@ async fn main() {
     // `generator_verify`. Nothing is written.
     heading("Generator port");
     {
-        let report = commands::verify_generator(&root);
+        let report = generator::verify_generator(&root);
         match report {
             Err(e) => println!("  \x1b[31m{e}\x1b[0m"),
             Ok(report) => {

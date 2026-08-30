@@ -14,6 +14,29 @@
 //! reason. `connect.rs` had been producing the correct URI and offering to copy
 //! it since it was written; what nobody had written was the twenty lines that
 //! hand that string to the application it was built for.
+//!
+//! ## The row that says "Other…"
+//!
+//! Detection is better than a free-text box, and the free-text box was removed
+//! without putting anything in its place. So the four lists below are closed
+//! sets, and somebody whose editor is Helix — or Neovim, or Emacs, or one of
+//! the eight JetBrains IDEs not listed — opens this pane and finds **nothing
+//! they can pick.** Not a worse choice: no choice.
+//!
+//! [`CUSTOM`] is the way out. It is a real entry in every list, always
+//! selectable, and it resolves to a command line the user typed and stored
+//! beside the choice itself (`editorCustom`, `terminalCustom`, `browserCustom`,
+//! `dbClientCustom` in `preferences.json`). Detection stays the default and
+//! stays first; the list simply stops being the whole world.
+//!
+//! Two properties it deliberately keeps. It never becomes the automatic
+//! fallback — [`mark_default`] runs *before* the row is appended, and
+//! `open_in_editor`'s walk of the installed editors skips it — because a
+//! fallback that starts a command nobody typed is worse than no fallback.
+//! And there is no shell: [`split_command`] splits on quotes and hands the
+//! words to `Command::new`, so `$HOME`, `&&`, a pipe and a redirect are all
+//! literal text. That is the same bargain `quickcmd` makes, and it is the
+//! reason this can be a setting at all.
 
 use crate::error::{Code, Error, Result};
 use serde::Serialize;
@@ -39,11 +62,104 @@ pub struct App {
 }
 
 /// The entry that wins when no preference is stored: the first installed one.
+///
+/// Called before the `Other…` row is appended, and that ordering is the rule
+/// rather than an accident: the automatic choice has to be something this
+/// machine is known to have, and a stored command line is not that.
 fn mark_default(mut apps: Vec<App>) -> Vec<App> {
     if let Some(first) = apps.iter_mut().find(|a| a.available) {
         first.default = true;
     }
     apps
+}
+
+/// The id every list ends with, and the one that means "read my command".
+pub const CUSTOM: &str = "custom";
+
+/// The `Other…` row, always selectable.
+///
+/// `available: true` unconditionally, and that is not a claim that anything is
+/// installed — it is the one entry whose availability this module cannot check,
+/// because what it points at has not been typed yet. Greying it out would put
+/// the escape hatch behind the wall it exists to get over.
+///
+/// English, like `db_clients`' "System default" beside it, and for the same
+/// reason: these two strings come out of the catalogue rather than out of the
+/// locale files, and splitting them would leave one translated and one not.
+fn custom_app() -> App {
+    App {
+        id: CUSTOM.to_string(),
+        name: "Other…".to_string(),
+        icon: "mdi-pencil-outline".to_string(),
+        available: true,
+        default: false,
+    }
+}
+
+/// A catalogue list as the pickers get it: the default marked, then `Other…`.
+///
+/// One function rather than the same two lines at the end of four, and the
+/// order in it is the rule: [`mark_default`] first, so the automatic choice is
+/// always something this machine was found to have. Appending before marking
+/// would let a machine with no terminal at all fall back to a command line
+/// nobody has typed — and that is a thing this app would then run.
+fn offer(apps: Vec<App>) -> Vec<App> {
+    let mut apps = mark_default(apps);
+    apps.push(custom_app());
+    apps
+}
+
+/// Split a command line somebody typed into argv, honouring quotes.
+///
+/// Quotes and nothing else. A backslash is **not** an escape, because the
+/// commonest thing anyone will type on Windows is an absolute path, and reading
+/// `C:\Program Files\Sublime Text\subl.exe` as three escape sequences would
+/// destroy the one case this feature exists for. Quoting is how a path with
+/// spaces is written on all three platforms, so quoting is what is understood.
+///
+/// There is no shell. The words go straight to `Command::new`/`arg`, so `$HOME`
+/// stays four characters and an ampersand stays an ampersand — this splits a
+/// command line, it does not interpret one.
+pub fn split_command(line: &str) -> Vec<String> {
+    let mut argv: Vec<String> = Vec::new();
+    let mut word = String::new();
+    // Set by an opening quote, so `-x ""` survives as an empty argument rather
+    // than disappearing into the whitespace rule below.
+    let mut quoted = false;
+    let mut open: Option<char> = None;
+
+    for ch in line.chars() {
+        match (open, ch) {
+            (Some(q), c) if c == q => open = None,
+            (Some(_), c) => word.push(c),
+            (None, c @ ('\'' | '"')) => {
+                open = Some(c);
+                quoted = true;
+            }
+            (None, c) if c.is_whitespace() => {
+                if quoted || !word.is_empty() {
+                    argv.push(std::mem::take(&mut word));
+                    quoted = false;
+                }
+            }
+            (None, c) => word.push(c),
+        }
+    }
+    if quoted || !word.is_empty() {
+        argv.push(word);
+    }
+    argv
+}
+
+/// What the user typed, if they typed anything that survives the split.
+///
+/// `None` for an unset or blank box, and the callers all treat that the way
+/// they treat a preference naming an application somebody uninstalled: fall
+/// back, do not fail. Choosing `Other…` and never filling the box in is exactly
+/// that kind of half-finished setting.
+fn resolve_custom(custom: Option<&str>) -> Option<Launch> {
+    let argv = split_command(custom?);
+    (!argv.is_empty()).then_some(Launch::Custom(argv))
 }
 
 /// Terminals worth offering, in the order a user is likely to prefer them.
@@ -152,8 +268,14 @@ const EDITORS: &[(&str, &str, &str, &str)] = &[
         "/Applications/PhpStorm.app",
     ),
     // Terminal editors have no bundle to fall back to.
-    ("nvim", "Neovim", "mdi-vim", ""),
-    ("vim", "Vim", "mdi-vim", ""),
+    //
+    // `mdi-console-line` and not `mdi-vim`, which is what these two carried and
+    // which **is not an icon** — Material Design Icons has never had one, so
+    // both rows have been drawing a blank square since they were written. Found
+    // by pointing `tools/mdi-icons.mjs` at this file, which until now it was
+    // not: the scan read `src/` only, and the catalogue lives here.
+    ("nvim", "Neovim", "mdi-console-line", ""),
+    ("vim", "Vim", "mdi-console-line", ""),
 ];
 
 /// Browsers, by the same rule as editors: a `PATH` launcher when there is one,
@@ -227,7 +349,7 @@ pub fn browsers() -> Vec<App> {
     // The system default heads the list and is always available, so it is also
     // the entry `mark_default` lands on — which is exactly right: an unset
     // browserCommand means `resolve_browser` returns None and the OS decides.
-    mark_default(
+    offer(
         BROWSERS
             .iter()
             .map(|(id, name, icon, bundle)| App {
@@ -252,8 +374,11 @@ pub fn browsers() -> Vec<App> {
 /// Falls back rather than failing, exactly as `resolve_terminal` does: a
 /// preference outlives the app it names, and refusing to open a link because
 /// someone uninstalled Brave would be unhelpful when Safari is right there.
-pub fn resolve_browser(preferred: Option<&str>) -> Option<Launch> {
+pub fn resolve_browser(preferred: Option<&str>, custom: Option<&str>) -> Option<Launch> {
     let id = preferred.filter(|p| !p.is_empty())?;
+    if id == CUSTOM {
+        return resolve_custom(custom);
+    }
     let entry = BROWSERS.iter().find(|(i, ..)| *i == id)?;
 
     if is_available(entry.0) {
@@ -272,11 +397,49 @@ pub enum Launch {
     Command(&'static str),
     /// macOS only: `open -a <bundle> <path>`.
     Bundle(&'static str),
+    /// A command line the user typed, already split by [`split_command`].
+    /// Its own words come first and the path, URL or URI is appended last.
+    Custom(Vec<String>),
+}
+
+impl Launch {
+    /// Start it on `argument` — the path, the URL, the connection URI.
+    ///
+    /// Here rather than at the three call sites that had grown the same match
+    /// arm each: adding a variant to the enum above should not be able to leave
+    /// one of them silently launching nothing, and before this it could.
+    pub fn spawn_with(&self, argument: &std::ffi::OsStr) -> bool {
+        match self {
+            Launch::Command(cmd) => std::process::Command::new(cmd)
+                .arg(argument)
+                .spawn()
+                .is_ok(),
+            // `open -a` is what Finder does; it needs no CLI helper installed.
+            Launch::Bundle(bundle) => std::process::Command::new("open")
+                .args(["-a", bundle])
+                .arg(argument)
+                .spawn()
+                .is_ok(),
+            Launch::Custom(argv) => {
+                let Some((program, flags)) = argv.split_first() else {
+                    return false;
+                };
+                std::process::Command::new(program)
+                    .args(flags)
+                    .arg(argument)
+                    .spawn()
+                    .is_ok()
+            }
+        }
+    }
 }
 
 /// Resolve `id` to a way of starting it, preferring the `PATH` launcher because
 /// it is the one that accepts editor flags and behaves the same everywhere.
-pub fn resolve_editor(id: &str) -> Option<Launch> {
+pub fn resolve_editor(id: &str, custom: Option<&str>) -> Option<Launch> {
+    if id == CUSTOM {
+        return resolve_custom(custom);
+    }
     let entry = EDITORS.iter().find(|(i, ..)| *i == id)?;
     if is_available(entry.0) {
         return Some(Launch::Command(entry.0));
@@ -311,7 +474,7 @@ pub fn is_available(probe: &str) -> bool {
 
 pub fn terminals() -> Vec<App> {
     // First installed one, the same choice `resolve_terminal` makes.
-    mark_default(
+    offer(
         TERMINALS
             .iter()
             .map(|(id, name, icon, probe)| App {
@@ -328,7 +491,7 @@ pub fn terminals() -> Vec<App> {
 pub fn editors() -> Vec<App> {
     // First installed one, the same order `open_editor` walks when no editor
     // is configured.
-    mark_default(
+    offer(
         EDITORS
             .iter()
             .map(|(id, name, icon, bundle)| App {
@@ -345,18 +508,39 @@ pub fn editors() -> Vec<App> {
     )
 }
 
+/// Which terminal to open, and how much `spawn_terminal` knows about it.
+///
+/// A separate type from [`Launch`] because a terminal is not launched on a
+/// path: it is handed a *command line*, and every emulator takes one its own
+/// way. `Known` carries the id so `spawn_terminal` can reach for the right
+/// dialect; `Custom` carries words nothing here has a dialect for.
+pub enum Terminal {
+    /// One of `TERMINALS`, by id.
+    Known(&'static str),
+    /// What the user typed, split by [`split_command`].
+    Custom(Vec<String>),
+}
+
 /// The chosen terminal, or the first one that is actually installed.
 ///
 /// Falling back rather than failing: a preference can outlive the app it names
 /// — someone uninstalls iTerm2 — and refusing to open a terminal because of a
 /// stale setting would be unhelpful when another one is right there.
-pub fn resolve_terminal(
-    preferred: Option<&str>,
-) -> Result<&'static (&'static str, &'static str, &'static str, &'static str)> {
+///
+/// `Other…` with an empty box falls back by that same rule. It is the same
+/// class of half-finished setting, and the alternative is an error message
+/// about a preference, raised at the moment somebody asked for a terminal.
+pub fn resolve_terminal(preferred: Option<&str>, custom: Option<&str>) -> Result<Terminal> {
+    if preferred == Some(CUSTOM) {
+        if let Some(Launch::Custom(argv)) = resolve_custom(custom) {
+            return Ok(Terminal::Custom(argv));
+        }
+    }
+
     if let Some(id) = preferred {
         if let Some(entry) = TERMINALS.iter().find(|(i, ..)| *i == id) {
             if is_available(entry.3) {
-                return Ok(entry);
+                return Ok(Terminal::Known(entry.0));
             }
         }
     }
@@ -364,6 +548,7 @@ pub fn resolve_terminal(
     TERMINALS
         .iter()
         .find(|(.., probe)| is_available(probe))
+        .map(|entry| Terminal::Known(entry.0))
         .ok_or_else(|| {
             Error::new(Code::NotFound, "No terminal application was found.")
                 .with_hint(crate::hints::INSTALL_A_TERMINAL)
@@ -524,7 +709,7 @@ pub fn db_clients(scheme: &str) -> Vec<App> {
         });
     }
 
-    mark_default(apps)
+    offer(apps)
 }
 
 /// How to hand a URI to `id`, or `None` when nothing there can take it.
@@ -532,7 +717,10 @@ pub fn db_clients(scheme: &str) -> Vec<App> {
 /// The empty id is the system handler and resolves to `None` on purpose — the
 /// caller's fallback is already "let the OS decide", which is the same thing,
 /// and giving it a `Launch` would mean two code paths for one behaviour.
-pub fn resolve_db_client(id: &str) -> Option<Launch> {
+pub fn resolve_db_client(id: &str, custom: Option<&str>) -> Option<Launch> {
+    if id == CUSTOM {
+        return resolve_custom(custom);
+    }
     let entry = DB_CLIENTS.iter().find(|(i, ..)| *i == id)?;
     std::path::Path::new(entry.2)
         .exists()
@@ -599,7 +787,7 @@ mod tests {
             "an installed bundle must count as available"
         );
         assert!(
-            resolve_editor("code").is_some(),
+            resolve_editor("code", None).is_some(),
             "and must resolve to something launchable"
         );
     }
@@ -608,8 +796,13 @@ mod tests {
     fn detection_reports_every_candidate_not_only_the_installed_ones() {
         // The UI greys out what is missing rather than hiding it; a list that
         // silently omits entries reads as "this app does not support iTerm".
-        assert_eq!(terminals().len(), TERMINALS.len());
-        assert_eq!(editors().len(), EDITORS.len());
+        //
+        // Plus one: the `Other…` row is appended to every list and belongs to
+        // no table. Written as `+ 1` rather than as a number, so that dropping
+        // the row still fails here — a bare count would have been satisfied by
+        // any table that had grown by one at the same time.
+        assert_eq!(terminals().len(), TERMINALS.len() + 1);
+        assert_eq!(editors().len(), EDITORS.len() + 1);
     }
 
     /// The picker showed nothing selected on a fresh install, while the app
@@ -636,8 +829,8 @@ mod tests {
     #[test]
     fn the_default_terminal_is_the_one_resolution_picks() {
         let flagged = terminals().into_iter().find(|a| a.default);
-        match (flagged, resolve_terminal(None)) {
-            (Some(app), Ok(entry)) => assert_eq!(app.id, entry.0),
+        match (flagged, resolve_terminal(None, None)) {
+            (Some(app), Ok(Terminal::Known(id))) => assert_eq!(app.id, id),
             (None, Err(e)) => assert_eq!(e.code, Code::NotFound),
             _ => panic!("the flagged default and the resolved terminal disagree"),
         }
@@ -649,7 +842,7 @@ mod tests {
     fn the_default_browser_is_the_system_default() {
         let flagged = browsers().into_iter().find(|a| a.default).unwrap();
         assert_eq!(flagged.id, "", "the system default entry has the empty id");
-        assert!(resolve_browser(Some(&flagged.id)).is_none());
+        assert!(resolve_browser(Some(&flagged.id), None).is_none());
     }
 
     /// The bug the design exists to avoid, held as an assertion rather than a
@@ -739,11 +932,14 @@ mod tests {
     fn an_offered_client_is_one_that_can_be_launched() {
         for scheme in ["mysql", "postgresql", "mongodb", "redis"] {
             for app in db_clients(scheme).into_iter().filter(|a| a.available) {
-                if app.id.is_empty() {
-                    continue; // the system handler has no bundle
+                if app.id.is_empty() || app.id == CUSTOM {
+                    // The system handler has no bundle, and the custom row's
+                    // command lives in `preferences.json` — neither is a claim
+                    // about a bundle on this disk, which is what is read below.
+                    continue;
                 }
                 assert!(
-                    resolve_db_client(&app.id).is_some(),
+                    resolve_db_client(&app.id, None).is_some(),
                     "{} is offered for {scheme} but resolves to nothing",
                     app.id
                 );
@@ -751,13 +947,170 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------- "Other…"
+
+    /// The row exists in every list, or the escape hatch is missing from
+    /// wherever it was forgotten — and a missing one looks like nothing at all.
+    #[test]
+    fn every_list_ends_with_a_row_somebody_can_type_into() {
+        for (label, list) in [
+            ("terminals", terminals()),
+            ("editors", editors()),
+            ("browsers", browsers()),
+            ("db clients", db_clients("mysql")),
+        ] {
+            let last = list.last().unwrap_or_else(|| panic!("{label} is empty"));
+            assert_eq!(last.id, CUSTOM, "{label} does not end with the custom row");
+            assert!(last.available, "{label}'s custom row cannot be selected");
+        }
+    }
+
+    /// `mark_default` runs before the row is appended, and this is that rule
+    /// stated as a test: the automatic choice has to be an application this
+    /// machine was found to have, never a command line nobody has typed yet.
+    ///
+    /// Assembled here rather than read off `terminals()`, and the first version
+    /// of this *was* read off `terminals()` — where it could not fail, because
+    /// this machine has a terminal, so the flag lands on that one long before
+    /// the custom row is reached. The case worth defending is the empty one:
+    /// a machine with nothing installed, where reversing the two lines would
+    /// make `Other…` the fallback and this app would start whatever was in
+    /// that box without anybody having chosen it.
+    #[test]
+    fn the_custom_row_is_never_the_automatic_choice() {
+        let nothing_installed = |name: &str| App {
+            id: name.to_string(),
+            name: name.to_string(),
+            icon: "mdi-console".to_string(),
+            available: false,
+            default: false,
+        };
+
+        for list in [
+            offer(Vec::new()),
+            offer(vec![nothing_installed("a")]),
+            offer(vec![nothing_installed("a"), nothing_installed("b")]),
+        ] {
+            assert!(
+                !list.iter().any(|a| a.default),
+                "a list with nothing installed flagged a default anyway"
+            );
+        }
+
+        // And the ordinary case, against the real catalogues.
+        for (label, list) in [
+            ("terminals", terminals()),
+            ("editors", editors()),
+            ("browsers", browsers()),
+            ("db clients", db_clients("mysql")),
+        ] {
+            for app in list.iter().filter(|a| a.default) {
+                assert_ne!(app.id, CUSTOM, "{label} fell back to the custom row");
+            }
+        }
+    }
+
+    /// Quotes group, whitespace splits, and a backslash is a backslash — which
+    /// is the whole point on Windows, where the commonest custom command is a
+    /// quoted absolute path.
+    #[test]
+    fn a_typed_command_line_splits_on_quotes_and_not_on_backslashes() {
+        assert_eq!(split_command("code"), vec!["code"]);
+        assert_eq!(
+            split_command("  alacritty  -e   sh -c "),
+            vec!["alacritty", "-e", "sh", "-c"]
+        );
+        assert_eq!(
+            split_command(r#""C:\Program Files\Sublime Text\subl.exe" --new"#),
+            vec![r"C:\Program Files\Sublime Text\subl.exe", "--new"]
+        );
+        assert_eq!(
+            split_command("hx 'my notes' \"and these\""),
+            vec!["hx", "my notes", "and these"]
+        );
+        // An opened quote makes a word even when it closes empty.
+        assert_eq!(split_command(r#"cmd -x """#), vec!["cmd", "-x", ""]);
+        assert!(split_command("   ").is_empty());
+        assert!(split_command("").is_empty());
+    }
+
+    /// No shell, and this is what that means in practice: the metacharacters
+    /// stay in the argument they were typed in rather than becoming syntax.
+    #[test]
+    fn a_typed_command_line_is_split_not_interpreted() {
+        assert_eq!(
+            split_command("emacs $HOME && rm -rf / | tee out"),
+            vec!["emacs", "$HOME", "&&", "rm", "-rf", "/", "|", "tee", "out"]
+        );
+    }
+
+    /// The three pickers that store a preference, and the one that does not.
+    #[test]
+    fn choosing_other_resolves_to_the_command_that_was_typed() {
+        for launch in [
+            resolve_editor(CUSTOM, Some("hx --vsplit")),
+            resolve_browser(Some(CUSTOM), Some("hx --vsplit")),
+            resolve_db_client(CUSTOM, Some("hx --vsplit")),
+        ] {
+            match launch {
+                Some(Launch::Custom(argv)) => assert_eq!(argv, vec!["hx", "--vsplit"]),
+                _ => panic!("a typed command did not come back as one"),
+            }
+        }
+    }
+
+    /// Chosen and never filled in. Treated as the stale setting it is — the
+    /// same answer an uninstalled application gets, which is what the callers
+    /// already know how to fall back from.
+    #[test]
+    fn choosing_other_and_typing_nothing_resolves_to_nothing() {
+        for empty in [None, Some(""), Some("   ")] {
+            assert!(resolve_editor(CUSTOM, empty).is_none());
+            assert!(resolve_browser(Some(CUSTOM), empty).is_none());
+            assert!(resolve_db_client(CUSTOM, empty).is_none());
+        }
+    }
+
+    /// The terminal has its own type because it is handed a command line rather
+    /// than a path, and both halves of that have to work.
+    #[test]
+    fn a_custom_terminal_resolves_to_words_and_an_empty_one_falls_back() {
+        match resolve_terminal(Some(CUSTOM), Some("wezterm start --")) {
+            Ok(Terminal::Custom(argv)) => assert_eq!(argv, vec!["wezterm", "start", "--"]),
+            _ => panic!("a typed terminal did not come back as one"),
+        }
+
+        // Nothing typed: fall back exactly as an uninstalled preference does,
+        // rather than refusing to open a terminal because of a setting.
+        match resolve_terminal(Some(CUSTOM), None) {
+            Ok(Terminal::Custom(_)) => panic!("an empty box was treated as a command"),
+            Ok(Terminal::Known(id)) => assert!(TERMINALS.iter().any(|(i, ..)| *i == id)),
+            Err(e) => assert_eq!(e.code, Code::NotFound),
+        }
+    }
+
+    /// Passing `None` for the command must not turn an ordinary id into the
+    /// custom path, and passing a command must not hijack an ordinary id —
+    /// `editor.rs` asks for VS Code by name and relies on both.
+    #[test]
+    fn a_named_application_ignores_the_custom_command() {
+        assert!(!matches!(
+            resolve_editor("code", Some("hx")),
+            Some(Launch::Custom(_))
+        ));
+        assert!(resolve_editor("no-such-editor", Some("hx")).is_none());
+    }
+
     #[test]
     fn an_unknown_or_uninstalled_preference_falls_back() {
         // Resolution must not depend on what happens to be installed here, so
         // only the shape is asserted: either something was found, or the error
         // says none was.
-        match resolve_terminal(Some("definitely-not-a-terminal")) {
-            Ok(entry) => assert!(is_available(entry.3)),
+        match resolve_terminal(Some("definitely-not-a-terminal"), None) {
+            Ok(Terminal::Known(id)) => assert!(TERMINALS
+                .iter()
+                .any(|(i, .., probe)| *i == id && is_available(probe))),
+            Ok(Terminal::Custom(_)) => panic!("no custom command was supplied"),
             Err(e) => assert_eq!(e.code, Code::NotFound),
         }
     }

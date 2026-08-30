@@ -149,7 +149,18 @@ describe('the stack preset', () => {
     wrapper.unmount();
   });
 
-  it('writes the preset to the path the save dialog returned', async () => {
+  /**
+   * The suggested **filename is the convention**, and the preset's own name
+   * goes inside the file — two different things that used to be one.
+   *
+   * It suggested `<name>.stackvo-preset.json`, and nothing looked for that: the
+   * project page reads `stackvo.preset.json` beside the manifest, which is
+   * where a preset has to be for a clone to bring it. An export writing a file
+   * no reader looks for is the feature quietly not working, so the dialog
+   * offers the name that is read. Where to put it is still the person's answer
+   * — the point is that dropping it in a project directory is now enough.
+   */
+  it('writes the preset under the conventional name, with its own name inside', async () => {
     dialog.save = ({ defaultPath }) => Promise.resolve(`/tmp/${defaultPath}`);
     replies.presetSave = () => Promise.resolve();
 
@@ -160,7 +171,7 @@ describe('the stack preset', () => {
 
     expect(calls.find(([n]) => n === 'presetSave')).toEqual([
       'presetSave',
-      '/tmp/team.stackvo-preset.json',
+      '/tmp/stackvo.preset.json',
       'team',
     ]);
 

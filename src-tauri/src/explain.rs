@@ -463,6 +463,82 @@ pub struct Explanation {
 /// filtered out by key rather than by the caller having to remember to remove
 /// it.
 #[allow(clippy::too_many_arguments)]
+// ------------------------------------------------------------------- replay
+
+/// Two recordings of one request, before and after.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Replay {
+    pub before: crate::spx::Report,
+    pub after: crate::spx::Report,
+    /// `after - before`, in SPX's own microseconds. Negative is faster.
+    ///
+    /// A number and not a verdict. One run against one run is not a benchmark —
+    /// a cold opcache, a cold query cache and whatever else the machine was
+    /// doing are all inside it — and a field called `faster` would invite a
+    /// conclusion the measurement cannot carry. The two reports are returned
+    /// whole so the difference can be read where it came from.
+    pub wall_time_us: i64,
+    pub peak_memory: i64,
+}
+
+/// The path a recording could be replayed at, or why it cannot be.
+///
+/// ## What a recording actually holds
+///
+/// `spx::Report` is the only artefact in this system that names one request,
+/// and what it names is the *line*: `GET /checkout`. Not its headers, not its
+/// body, not the session it ran under — nothing records those, and that is the
+/// whole boundary of what a replay can honestly be here.
+///
+/// So a GET is replayable and everything else is refused **by name**. A POST
+/// re-sent without its body and its session is not the request that was
+/// recorded; against any framework with CSRF it answers 419 and against one
+/// without it, it does something the person did not ask for. Producing a
+/// result that looks like an answer and is not is worse than saying no.
+pub fn replayable(report: &crate::spx::Report) -> std::result::Result<String, String> {
+    if report.cli {
+        return Err(format!(
+            "this recording is a command run{}, not a request — replaying it would mean              running the command again, which is a different act from re-requesting a page",
+            report
+                .command
+                .as_deref()
+                .map(|c| format!(" ({c})"))
+                .unwrap_or_default()
+        ));
+    }
+
+    let Some(line) = report
+        .request
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+    else {
+        return Err("this recording does not name a request, so there is nothing to send".into());
+    };
+
+    // `GET /checkout?step=2`. Anything else is left alone rather than guessed
+    // at: a line this cannot read is one nobody should be re-sending.
+    let (method, path) = match line.split_once(' ') {
+        Some((method, path)) => (method.trim(), path.trim()),
+        None => ("", line),
+    };
+
+    if !method.eq_ignore_ascii_case("GET") {
+        return Err(format!(
+            "this recording is `{line}`. Only the request line was recorded — not its body,              its headers or its session — and a {} replayed without them is a different              request, which is usually answered with a redirect or a 419 rather than the page",
+            if method.is_empty() { "request" } else { method }
+        ));
+    }
+    if !path.starts_with('/') {
+        return Err(format!(
+            "this recording names `{line}`, which is not a path this app will send"
+        ));
+    }
+
+    Ok(path.to_string())
+}
+
 pub fn explain(
     report: &Report,
     analysis: Option<&Analysis>,
@@ -679,6 +755,52 @@ mod tests {
             call_count: 0,
             bytes: 0,
         }
+    }
+
+    // ---- what may be replayed ------------------------------------------
+
+    #[test]
+    fn a_recorded_get_is_replayable_at_the_path_it_names() {
+        let mut r = report("k", 0, 100);
+        r.request = Some("GET /checkout?step=2".into());
+        assert_eq!(replayable(&r).unwrap(), "/checkout?step=2");
+
+        // The query string is part of the request and travels with it — a
+        // replay that dropped it would be a different page.
+        r.request = Some("GET /".into());
+        assert_eq!(replayable(&r).unwrap(), "/");
+    }
+
+    /// The boundary of the whole feature, and the reason it is a refusal
+    /// rather than an attempt: a recording names the request *line* and
+    /// nothing else.
+    #[test]
+    fn anything_but_a_get_is_refused_with_the_reason() {
+        let mut r = report("k", 0, 100);
+
+        r.request = Some("POST /checkout".into());
+        let why = replayable(&r).unwrap_err();
+        assert!(why.contains("POST /checkout"), "{why}");
+        assert!(
+            why.contains("session") && why.contains("419"),
+            "the refusal has to say what would actually happen: {why}"
+        );
+
+        r.cli = true;
+        r.command = Some("artisan queue:work".into());
+        let why = replayable(&r).unwrap_err();
+        assert!(why.contains("artisan queue:work"), "{why}");
+
+        r.cli = false;
+        r.command = None;
+        r.request = None;
+        assert!(replayable(&r).is_err(), "there is nothing to send");
+
+        r.request = Some("GET http://elsewhere.example/".into());
+        assert!(
+            replayable(&r).is_err(),
+            "a recording naming somewhere else is not this app's to re-send"
+        );
     }
 
     fn entry(at: f64, sql: &str) -> Entry {
@@ -999,6 +1121,8 @@ mod tests {
             line: Some(21),
             request: Some("GET /a".to_string()),
             sapi: Some("fpm-fcgi".to_string()),
+            duration: None,
+            outcome: None,
             value: serde_json::Value::Null,
         };
 

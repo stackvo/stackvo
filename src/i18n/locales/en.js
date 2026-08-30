@@ -290,6 +290,25 @@ export default {
     instance: 'On which engine',
     stopped: 'stopped',
     noDatabase: 'None',
+    ttl: 'Wanted for',
+    ttlNone: 'Until I remove it',
+    ttlHours: '{count} hours',
+    ttlDays: '{count} day | {count} days',
+    ttlExplain:
+      'Leave it open for a branch of your own. Choosing a duration makes it a sandbox — something built for one task, by somebody who is not going to remember it exists. Nothing is deleted on a timer: the list says when the time has passed, and removing it stays a decision.',
+    expiresAt: 'Wanted until',
+    expired: 'Time passed',
+    leftMinutes: '{count} min left',
+    leftHours: '{count} h left',
+    leftDays: '{count} day left | {count} days left',
+    forAgent: 'Give an assistant this branch',
+    forAgentExplain:
+      'Register the MCP server with these flags and the assistant can work on this branch and nothing else: the twelve writing tools become the four a project can bound, and no tool that names a project answers for another one. Settings → AI assistants writes the same flags.',
+    login: 'Database login',
+    ownLogin: 'Its own — it cannot reach another database on that instance',
+    sharedLogin: 'Shared with the instance',
+    sharedLoginExplain:
+      'This branch reaches its database with the instance’s own login, so it can also reach every other database on it, including the project it was branched from. A login of its own is arranged on MySQL and MariaDB; PostgreSQL needs privileges granted on the objects after the copy, which is not built yet, and MongoDB publishes no database name to scope to.',
     seededFrom: 'Copied from',
     copiedFrom: 'copied from {source}',
     willBeCalled: 'Will be called',
@@ -822,6 +841,7 @@ export default {
       'docker-desktop': 'Docker Desktop',
       colima: 'Colima',
       orbstack: 'OrbStack',
+      podman: 'Podman',
       engine: 'Docker Engine',
       unknown: 'Unknown',
     },
@@ -1232,7 +1252,10 @@ export default {
 
   dumps: {
     source: { web: 'Web', cli: 'CLI', queue: 'Queue' },
+    signal: { dump: 'Dumps', request: 'Requests', job: 'Jobs' },
     regex: 'Regular expression',
+    filterRows: 'Filter rows',
+    filterSignal: 'Signal',
     filterSource: 'Filter by source',
     copy: 'Copy what is shown',
     copyValue: 'Copy the value',
@@ -1360,6 +1383,10 @@ export default {
     recordPathHint: 'A path on this site. The address comes from the project.',
     record: 'Record this request',
     recording: 'Waiting for the page…',
+    replay: 'Send this request again',
+    replayedWhat: 'Sent {what} again and recorded it.',
+    replayCaveat:
+      'One run against one run is not a benchmark — a cold opcache, a cold query cache and whatever else this machine was doing are all inside the difference. Only a GET can be replayed: a recording names the request line and nothing else.',
     recordedOne: 'Recorded {what} — {took}.',
     recordCommand: 'Or a command',
     recordCommandGo: 'Record it',
@@ -1557,6 +1584,10 @@ export default {
       'SSL_ENABLE is off in .env, so the stack is served over HTTP and no certificate is used.',
     current: 'Up to date',
     stale: 'Needs reissuing',
+    store: {
+      system: 'This machine’s trust store — Safari, Chrome, curl',
+      firefox: 'Firefox’s own store',
+    },
     caTrusted: 'CA trusted',
     caUntrusted: 'CA not trusted',
     caUnknown: 'CA trust unknown',
@@ -1847,6 +1878,9 @@ export default {
     preferences: 'Preferences',
     stackSub: 'Compose level: regenerates and recreates containers.',
     runtimes: {
+      offered: 'Which versions are offered',
+      offeredHint:
+        'The lists the pickers above draw from. This application ships one and it goes out of date between releases, so a version it has never heard of can be added here rather than waited for. A version the registry does not have fails when the image is built.',
       desc: 'The version a new project starts on, per runtime. Which versions exist is the app’s own catalog, not a setting.',
     },
     php: {
@@ -1901,6 +1935,64 @@ export default {
       tokenPlaceholder: '<token>',
       example: 'Try it',
       served: '{count} tools served',
+    },
+    showTour: 'Introduction',
+    showTourHint:
+      'The six things the app does that are hardest to find. Shown once, on the next launch.',
+    showTourAction: 'Show again',
+    compliance: {
+      title: 'Is the policy actually holding?',
+      desc: 'What an administrator pushed, held against what this machine currently is.',
+      accountedFor: 'Nothing unaccounted for',
+      notAccountedFor: 'Something to look at',
+      summary:
+        '{holding} holding, {bypassed} bypassed, {unmeasured} unmeasured, {silent} with no opinion. A clause the policy says nothing about is never a pass.',
+      notACertificate:
+        'This is a report, not a certificate. The policy layer is not a security boundary — the file, and the variable that redirects it, are usually within reach of whoever holds the machine — so this says what was measured here and nothing about what somebody could change.',
+      state: {
+        holding: 'Holding',
+        bypassed: 'Bypassed',
+        silent: 'No opinion',
+        unmeasured: 'Unmeasured',
+      },
+      clause: {
+        settings: 'Managed settings',
+        settings_managed: 'A setting the policy pushes',
+        settings_locked: 'A setting the policy locks',
+        registry_mirror: 'Images come from the mirror',
+        images_pin: 'The image this repository runs is pinned',
+        market_allowedPackages: 'Only allowed packages are installed',
+        market_allowedRegistries: 'Package images come from an allowed registry',
+        market_allowedSources: 'The catalogue came from an allowed source',
+        market_requireSignature: 'The cached catalogue was signature-checked',
+        market_allowOverrides: 'No workspace file stands in front of a published one',
+        market_autoUpdate: 'Packages are replaced only when asked',
+        hooks: 'Lifecycle hooks',
+        hooks_enabled: 'Hooks do not run',
+        hooks_allowHost: 'Hooks do not run on this machine',
+        providers: 'Data providers',
+        providers_enabled: 'Providers do not run',
+        providers_allowPush: 'Providers may not send data out',
+      },
+    },
+    images: {
+      title: 'Images this app pulls',
+      desc: 'The containers StackVo runs that it did not build — tunnels, the landing page, the tunnel guard and the performance helper.',
+      moving:
+        '{count} of these are on a tag that can change under you. If the publisher ships a broken one, it arrives on your machine without you doing anything.',
+      movingTag: 'Moving tag',
+      pinned: 'Pinned',
+      hint: 'A policy file can pin any of these with an `imagePins` block, keyed by repository — a fixed tag or a digest. The same file’s registry prefix decides where they come from.',
+    },
+    machineCommands: {
+      title: 'Machine-wide commands',
+      sectionDesc: 'Commands you can run in every project here',
+      desc: 'One file adds commands to every project in this workspace, without editing anybody’s repository.',
+      absent:
+        'There is no commands.json yet. Create one at the path above with a `commands` block — the same shape a project’s stackvo.json uses.',
+      empty: 'The file is there and declares no commands.',
+      interactive: 'Interactive',
+      hint: 'Each command is an argv list run inside the project’s container — never a shell string, and never on this machine. A step that has to run here is a hook, which is approved against a digest first. A project’s own command wins if it uses the same id, and an id already built in is refused.',
     },
     tooling: {
       title: 'Tooling',
@@ -1971,6 +2063,16 @@ export default {
       allowWrites: 'Let the assistant change things',
       allowWritesDetail:
         'Off, the assistant can only read. On, it also gets stack_up, stack_down, project_start, project_stop, project_restart, service_start, service_stop, service_restart, generate, xdebug_set, certificates_reissue and snapshot_take — which includes stopping the whole stack and stopping a shared service every project depends on. This applies to the next assistant you add.',
+      scopeLabel: 'Only these projects',
+      scopeEvery: 'Every project',
+      lastsLabel: 'Writing lasts',
+      forever: 'Until removed',
+      minutes: '{count} minutes',
+      hours: '{count} hours',
+      unscopedDetail:
+        'Naming a project bounds the assistant to it — the twelve writing tools become the four a project can bound, and stack_down is not one of them. No tool that names a project then answers for another one.',
+      scopedDetail:
+        'Bounded to the projects named above. The writing tools no project can bound — stack_down, stack_up, generate, certificates_reissue, the three service ones and snapshot_take — are not offered at all, and no tool that names a project answers for one outside the list. The machine-wide answers still work: the doctor, the hosts table, the mail catcher.',
       state: {
         registered: 'Registered',
         stale: 'Registered, but pointing at another copy',
@@ -2091,6 +2193,16 @@ export default {
     saveBundleHint:
       'One archive with the log, the startup checks, the doctor report and any crash reports — everything a bug report needs, instead of the log alone.',
     saveBundleDone: 'Saved ({bytes}). It is plain text inside; have a look before sending it.',
+    compareBundle: 'Compare with another machine',
+    compareBundleHint:
+      'Open a bundle a colleague sent — the whole zip, or the environment.json out of it — and see what is different about this machine right now. Versions, the engine, the services and what each project declares; no paths and no credentials, which is also why it is safe to send in the first place.',
+    compareSame:
+      'Nothing differs. {count} facts, and both machines state the same value for every one of them — so whatever is different is somewhere this cannot see.',
+    compareResult: '{count} difference(s). {same} facts agree.',
+    compareFact: 'Fact',
+    compareHere: 'This machine',
+    compareThere: 'Theirs',
+    compareAbsent: '— not stated',
     verifyNow: 'Verify the generator now',
     checkForUpdates: 'Check for updates',
     updates: 'Updates',
@@ -2113,6 +2225,14 @@ export default {
     browserAppHint: 'Used by every “visit” button — project and service domains open here.',
     appsHint: 'Applications that are not installed cannot be selected.',
     appDefault: 'Default',
+    appCustomTerminal: 'Terminal command',
+    appCustomEditor: 'Editor command',
+    appCustomBrowser: 'Browser command',
+    appCustomDbClient: 'Database client command',
+    appCustomHint:
+      'The launcher and any flags it needs. What is being opened is appended as the last argument, so put the flag your app expects here — for example “alacritty -e sh -c”. Quote a path that contains spaces. This is not a shell: $HOME, pipes and && are literal text.',
+    appCustomDbHint:
+      'Used by the “Other…” entry in the open-in-client menu on a service. The connection URI is appended as the last argument.',
     startMinimized: 'Start minimized to tray',
     autostart: 'Start at login',
     save: 'Save {count} change(s)',
@@ -2167,6 +2287,10 @@ export default {
     description:
       'The half of an environment definition that travels with the repository: a colleague clones, opens this, and turns on what is missing.',
     none: 'This project declares no services, and nothing in its .env suggested any.',
+    preset: {
+      pending: 'This project ships a stack preset — applying it would change {count} setting(s).',
+      apply: 'Apply preset',
+    },
     declaredBy: 'Declared in stackvo.json',
     suggestedBy: 'Suggested by this project’s own .env',
     suggestedCaveat:
@@ -2341,7 +2465,7 @@ export default {
       'This project\u2019s own container runs supervisord, with php-fpm and the web server under it. Nothing to add \u2014 the container is already known.',
     needsRunning: 'Start the project first.',
     noSupervisord:
-      'This project runs its server without supervisord (apache, frankenphp, swoole, or a runtime that is not PHP). There is nothing to show.',
+      'This project runs its server without supervisord (apache, frankenphp, swoole, roadrunner, or a runtime that is not PHP). There is nothing to show.',
     noSocket:
       'supervisord is running and will not talk: this image was built before StackVo put a socket in the generated config. Rebuild the project.',
     stopped: 'The container is not running.',
@@ -2673,6 +2797,101 @@ export default {
       '{host} is written into the generated files, and this machine is no longer on that network. Regenerate — until then that name resolves to whichever machine took the address.',
   },
 
+  leaks: {
+    explain:
+      'The other direction: this list moves a credential out of .env once you know there is one. This finds the ones nobody moved — by the shape of the value, not only the name of the key, because a variable called anything at all can hold an AWS key. A finding never carries the value.',
+    run: 'Scan for credentials',
+    project: 'Also scan a repository',
+    machineOnly: 'This machine’s .env only',
+    untrack: 'Take .env out of git',
+    untrackedDone:
+      'Untracked, ignored, and .env.example written with {example} key(s) and no values.',
+    needsCommit: 'The removal is staged. Commit and push it, or nothing has left this machine.',
+    rotate:
+      'It was committed at some point, so every value that was in it is still in the history. Rotate them — deleting the file in a later commit does not remove it.',
+    envInHistory:
+      '.env is not tracked now, but it was committed at some point. Everything that was in it is still in the history — rotate it.',
+    committed: 'already committed',
+    none: 'Nothing found. {scanned} tracked file(s) read, and no credential shape in .env.',
+    envTracked:
+      '.env is tracked by git. Every value in it is in the history, whatever it looks like — untrack it, rotate what was in it, and add it to .gitignore.',
+    skipped:
+      '{scanned} file(s) read, {skipped} skipped — too large, not text, or past the limit this scan reads.',
+    source: {
+      env: 'in .env on this machine',
+      tracked: 'in a file git is tracking',
+    },
+    rule: {
+      awsAccessKey: 'Looks like an AWS access key id',
+      privateKey: 'Looks like a private key',
+      githubToken: 'Looks like a GitHub token',
+      slackToken: 'Looks like a Slack token',
+      stripeLiveKey: 'Looks like a Stripe live secret key',
+      googleApiKey: 'Looks like a Google API key',
+      sendgridKey: 'Looks like a SendGrid key',
+      openaiKey: 'Looks like an OpenAI key',
+      unstoredSecret: 'Named as a credential and still in the file — move it to the keystore',
+    },
+  },
+  verify: {
+    title: 'Does this machine match?',
+    explain:
+      'The repository declares what the project needs — its services, its domain, its manifest. This answers whether this machine has it, line by line. Nothing is measured that is not already known; it is the other half of onboarding, and the half nobody builds.',
+    run: 'Check my setup',
+    ready: 'Everything this project declares is here.',
+    notReady: 'Something this project declares is missing or switched off — the lines below.',
+    check: {
+      manifest: 'stackvo.json in {subject}',
+      service: 'The {subject} service',
+      serviceOff: 'The {subject} service',
+      unknownService: 'The {subject} service',
+      built: 'The image for {subject}',
+      generated: 'The generated config for {subject}',
+      domain: '{subject} in the hosts file',
+    },
+    fix: {
+      manifest: 'It does not validate. The problems are listed above.',
+      service: 'Declared, and not installed on this machine. Install it from the Market.',
+      serviceOff:
+        'Installed and switched off. Turn it on in Services — the versions you have are shown on the right.',
+      unknownService:
+        'This build has never heard of that service, so it cannot say whether you have it. Either the name is a typo or the catalogue is newer than this app.',
+      built: 'Never built here. Build the project once.',
+      generated: 'Older than stackvo.json. Regenerate.',
+      domain: 'Not in the hosts file, so it does not resolve. Fix it from the alert above.',
+    },
+  },
+  usage: {
+    title: 'What it cost today',
+    sub: 'CPU used and memory held since midnight UTC, per container.',
+    cpu: 'CPU',
+    memory: 'Memory held',
+    budget: 'Budget',
+    what: 'Container',
+    min: 'min',
+    gbh: 'GB·h',
+    over: 'Over budget',
+    nothingYet:
+      'Nothing has been measured today yet. The first reading of a container starts its clock; the second one is what gives it a total.',
+    unreadable: 'The usage record could not be read.',
+    sharedNote:
+      'A shared service gets its own row and is never divided between the projects that use it — any split would be invented. Only a project can carry a budget; set one in its Settings.',
+    setBudget: 'Set a budget for {name}',
+    budgetFor: 'Budget for {name}',
+    budgetExplain:
+      'A budget belongs to this machine, not to the repository: the same project on a colleague’s laptop has different room to spare. Leave a field empty for no limit. You are told once on the day a budget is passed.',
+    budgetCpu: 'CPU minutes a day',
+    budgetMemory: 'Gigabyte-hours a day',
+    noBudget: 'No limit',
+    saveBudget: 'Save',
+    overNotice: '{name} has passed its budget',
+    overDetail: '{cpu} CPU minutes and {gb} GB·h today.',
+    kind: {
+      project: 'project',
+      service: 'service',
+      stack: 'stack',
+    },
+  },
   audit: {
     title: 'Audit trail',
     sectionDesc: 'What was done to this machine that cannot be taken back.',
@@ -2682,6 +2901,12 @@ export default {
     truncated: 'Showing the most recent {shown} of {total} entries.',
     unreadable:
       '{count} line(s) in the trail could not be read and were skipped. The rest is intact.',
+    undo: 'Put it back',
+    undone: 'Put back',
+    noUndo: 'Cannot be put back — {because}.',
+    undoSteps: 'Runs {count} call(s): {steps}.',
+    assistant:
+      'Asked for by an assistant through the MCP server. Acts done in this window are not listed here — the person who pressed the button saw it happen.',
   },
   doctor: {
     title: 'Doctor',
@@ -2924,6 +3149,141 @@ export default {
   // and the same test pins the two equal. Deliberate: it turns an edit to the
   // English into a change that has to pass through the translations, instead of
   // one that silently leaves Turkish describing the old behaviour.
+  /**
+   * The one-liner under each quick command, from `quickcmd.rs`'s catalogue.
+   *
+   * Keyed by the `Spec.id` the catalogue already carries, which is why there is
+   * no second name here to get wrong. The English stays in Rust and is what the
+   * CLI, the MCP surface and the log record; this is what the window shows, and
+   * `hint_translations.rs` fails if the two sets ever stop matching.
+   *
+   * `hints.rs` says why it is this text and not another: it is the sentence
+   * that tells someone what a command will do, under a command they are about
+   * to run in their own container.
+   */
+  quickCommands: {
+    tinker: 'A REPL with the application booted.',
+    migrate: 'Run pending migrations.',
+    'migrate-status': 'Which migrations have run.',
+    'optimize-clear': 'Clear every cached config, route and view.',
+    'route-list': 'Every registered route.',
+    'queue-restart': 'Tell the queue workers to pick up new code.',
+    'storage-link': 'Create the public/storage symlink.',
+    'composer-install': 'Install PHP dependencies from the lock file.',
+    'composer-dump': 'Rebuild the autoloader after adding a class.',
+    'npm-install': 'Install JavaScript dependencies.',
+    'npm-build': 'Build front-end assets.',
+    'wp-shell': 'A REPL with WordPress loaded.',
+    'wp-plugin-list': 'Installed plugins and their status.',
+    'symfony-cache-clear': 'Rebuild the compiled container and cached config.',
+    'symfony-router': 'Every registered route.',
+    'symfony-migrate': 'Run pending Doctrine migrations.',
+    'symfony-migrate-status': 'Which Doctrine migrations have run.',
+    'django-migrate': 'Apply pending migrations.',
+    'django-migrate-status': 'Which migrations have run.',
+    'django-collectstatic': 'Gather static files into the served directory.',
+    'django-shell': 'A REPL with the application booted.',
+    'rails-migrate': 'Run pending migrations.',
+    'rails-migrate-status': 'Which migrations have run.',
+    'rails-routes': 'Every registered route.',
+    'rails-console': 'A REPL with the application booted.',
+    'bundle-install': 'Install Ruby dependencies from the lock file.',
+  },
+
+  /**
+   * What each identity provider will accept as a callback URL, from `oauth.rs`.
+   *
+   * The sentence a person reads immediately before deciding which URL to paste
+   * into someone else's admin console — and getting it wrong there is a round
+   * trip through a website this app does not control.
+   */
+  oauthNotes: {
+    github: 'Accepts any URL for an OAuth app, including a private hostname.',
+    gitlab: 'Accepts any URL; http is allowed only for localhost.',
+    entra: 'Accepts any https URL. http is allowed only for localhost.',
+    auth0: 'Accepts any URL in the allowed-callbacks list, wildcards included.',
+    google: 'Refuses hostnames that are not in the public suffix list; only localhost is exempt.',
+    facebook: 'Requires a public https URL and verifies the domain.',
+    apple: 'Requires a registered, publicly resolvable domain; localhost is not accepted.',
+  },
+
+  /** Why each required tool is required, from `tooling.rs`. */
+  toolingWhy: {
+    docker: 'Every project runs in it. Nothing else here works without it.',
+    compose: 'The generated stack is compose files; this is what runs them.',
+    git: 'Worktrees, branch names on the project pages, and cloning a repository into a new project.',
+    mkcert:
+      'Trusted HTTPS for .loc domains. Without it the stack still runs and every browser warns.',
+  },
+
+  /** What each of this repository's own binaries is for, from `tooling.rs`. */
+  toolingOwn: {
+    stackvo: 'The stack from a terminal.',
+    'stackvo-mcp': 'The MCP server assistants talk to.',
+  },
+
+  /** One line per shipped provider recipe, from `provider.rs`. */
+  providerRecipes: {
+    'mysql-remote': 'A MySQL or MariaDB server this machine can reach directly',
+    'postgres-remote': 'A PostgreSQL server this machine can reach directly',
+    upsun: 'An Upsun (Platform.sh) environment, through its own CLI',
+  },
+
+  /**
+   * What has to be changed before a shipped recipe will work, from `provider.rs`.
+   *
+   * Keyed rather than positional, and shared where the instruction is the same:
+   * both database recipes need the connection details changed, so both point at
+   * `connection`. The list a person reads is per recipe; the sentences are not.
+   */
+  providerRecipeEdits: {
+    connection: 'the host, port, user and database name in both commands',
+    mysqlPassword:
+      'MYSQL_PWD, which the client reads from the environment so the password is never an argument',
+    postgresPassword: 'PGPASSWORD, which libpq reads from the environment',
+    upsunProject: 'the project id and the environment name',
+    upsunToken: 'UPSUN_CLI_TOKEN, an API token from the Upsun console',
+  },
+
+  crash: {
+    notice:
+      'StackVo closed unexpectedly. {count} report(s) were saved on this machine — nothing was sent anywhere.',
+    open: 'Show me',
+  },
+
+  tour: {
+    step: 'Step {n} of {of}',
+    skip: 'Skip',
+    back: 'Back',
+    next: 'Next',
+    show: 'Show me',
+    done: 'Done',
+    import: {
+      title: 'Bring a project you already have',
+      body: 'StackVo imports from seven other local environments — XAMPP, Laragon, MAMP, Valet, Sail, Herd and DDEV. It finds them on this machine, shows what it found, and copies by default. It never writes a byte into the installation it is reading from.',
+    },
+    branch: {
+      title: 'A full environment per git branch',
+      body: 'A worktree gets its own hostname, its own database and its own environment variables — the thing cloud “preview environments” sell, on your machine and free. Open a project and look for Worktrees.',
+    },
+    explain: {
+      title: 'Why that request was slow',
+      body: 'Queries, jobs and the request itself land on one timeline, with a real stack flame graph beside them. Nothing else in this category correlates the three, and it costs nothing to look.',
+    },
+    release: {
+      title: 'Build the image you ship',
+      body: 'The same tool that runs your local environment builds and pushes the production image. A local-binary tool cannot follow you there — its environment is your machine.',
+    },
+    devcontainer: {
+      title: 'Export a devcontainer',
+      body: 'A project set up here can be opened in VS Code or a cloud environment as a devcontainer, generated from the same manifest. StackVo itself is a desktop app and does not follow it there.',
+    },
+    audit: {
+      title: 'What was changed, and when',
+      body: 'Every privileged or irreversible act is recorded: host-file writes, certificate trust, project deletion, .env keys changed, database restores — and every writing call an assistant makes through the MCP server, including the ones that were refused. Keys and names only, never values, and never deleted by the app. An assistant’s act carries what would put it back, worked out before it ran, so it can be reversed from here in one click.',
+    },
+  },
+
   errorHints: {
     startDocker: 'Start Docker Desktop and try again.',
     startDockerOrSetHost: 'Start Docker Desktop, or set DOCKER_HOST if the engine is elsewhere.',
@@ -3077,6 +3437,12 @@ export default {
       'The file is resolved by `docker compose config`, so it has to be valid Compose — including any variables it interpolates.',
     useGenerateRun: 'Use generate_run; `verify` mode still reports drift against what is on disk.',
     mcpNeedsAllowWrites: 'Restart it with --allow-writes to enable the writing tools.',
+    mcpOutsideGrant:
+      "This server was started with a named list of writing tools, and this is not one of them. Widen it in the client's configuration, or use a tool it was granted.",
+    mcpGrantExpired:
+      'The writing tools were granted for a fixed time and it has passed. Reads still work; restart the server to grant them again.',
+    mcpProjectOutOfScope:
+      "This server was scoped to particular projects. Ask about one of those, or widen the scope in the client's configuration.",
     portRangeExhausted:
       'Free a port near the one this service wants, or give the instance an explicit port in its settings.',
     packagePathsStayInside: 'A package may only name files under its own directory.',

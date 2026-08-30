@@ -561,6 +561,24 @@ pub fn set_projects(path: impl AsRef<Path>) -> Result<Workspace> {
     Ok(describe(root, Source::Stored))
 }
 
+/// The project directory of a name, and its effective manifest.
+///
+/// Two lines that every caller wanting both was writing for itself. It lived in
+/// `commands.rs` and took nothing from Tauri, so a domain module wanting the
+/// pair had to reach up a band to get it — which is the arrow `ARCHITECTURE.md`
+/// draws pointing the other way.
+pub fn project_with_manifest(
+    root: &std::path::Path,
+    name: &str,
+) -> Result<(std::path::PathBuf, crate::manifest::Manifest)> {
+    let dir = project_dir(root, name)?;
+    if !dir.is_dir() {
+        return Err(Error::not_found(format!("project {name}")));
+    }
+    let manifest = crate::manifest::read(&dir.join(crate::manifest::FILE), name)?;
+    Ok((dir, manifest))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

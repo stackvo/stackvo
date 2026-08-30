@@ -40,18 +40,41 @@ const STATS = {
   blockWrite: 600,
 };
 
+/**
+ * Two slices with no colours on them, which is what the composable returns now.
+ *
+ * They used to arrive painted `#1976D2` and `#2A313C` — a copy of the default
+ * accent and a copy of one theme's `surface-variant` — so the pane is where the
+ * theme is read and the tests below are about what it reads.
+ */
 const PIE = [
-  { key: 'a', title: 'A', value: 1, color: '#1976D2' },
-  { key: 'b', title: 'B', value: 2, color: '#2A313C' },
+  { key: 'a', title: 'A', value: 1 },
+  { key: 'b', title: 'B', value: 2 },
 ];
 
-function render(props = {}) {
+/** A theme with nothing in common with the old literals. */
+const THEME_COLOURS = {
+  primary: '#7B1FA2',
+  success: '#FF6D00',
+  'surface-variant': '#EEDDCC',
+};
+
+const themed = createVuetify({
+  components,
+  directives,
+  theme: {
+    defaultTheme: 'probe',
+    themes: { probe: { dark: false, colors: THEME_COLOURS } },
+  },
+});
+
+function render(props = {}, plugin = vuetify) {
   const host = document.createElement('div');
   document.body.appendChild(host);
 
   return mount(
     { components: { IndicatorPane }, template: '<v-app><IndicatorPane v-bind="$attrs" /></v-app>' },
-    { props, attrs: props, attachTo: host, global: { plugins: [vuetify, i18n] } }
+    { props, attrs: props, attachTo: host, global: { plugins: [plugin, i18n] } }
   );
 }
 
@@ -106,6 +129,52 @@ describe('the indicator pane', () => {
     expect(html, 'an unmeasured hour is not marked').toContain('empty');
     expect(html, 'an idle hour was drawn as unmeasured').toContain('l0');
     expect(html, 'a busy hour was not drawn hot').toContain('l4');
+
+    wrapper.unmount();
+  });
+
+  /**
+   * The charts follow the accent, which for a year they did not.
+   *
+   * Four colours were written into this pane and its composable as hex, and all
+   * four were copies of a theme value. Move the accent to purple and the
+   * application turned purple with three blue pie charts in it; switch to the
+   * light theme and the second slice of each was dark charcoal on a white card.
+   *
+   * Mounted under a theme sharing nothing with the old literals, so a
+   * reintroduced `#1976D2` cannot pass by resembling the answer.
+   */
+  it('paints the pies out of the theme, not out of a copy of it', () => {
+    const wrapper = render(
+      { running: true, stats: STATS, memoryPie: PIE, networkPie: PIE, diskPie: PIE },
+      themed
+    );
+
+    const pies = wrapper.findAllComponents({ name: 'VPie' });
+    expect(pies.length, 'the three pies did not render').toBe(3);
+
+    for (const pie of pies) {
+      const [measured, rest] = pie.props('items');
+      expect(measured.color, 'the measured slice is not the accent').toBe(THEME_COLOURS.primary);
+      expect(rest.color, 'the remainder is not the theme’s ground').toBe(
+        THEME_COLOURS['surface-variant']
+      );
+    }
+
+    wrapper.unmount();
+  });
+
+  /**
+   * `success` and not a second literal green, and this is the half that matters
+   * most: `success` is one of the three colours the colour-blind status palette
+   * rewrites, so a hardcoded green ignored that choice on a chart made of
+   * nothing but colour.
+   */
+  it('takes the sparkline gradient from the theme too', () => {
+    const wrapper = render({ running: true, stats: STATS, cpuSeries: [1, 2, 3] }, themed);
+
+    const spark = wrapper.findComponent({ name: 'VSparkline' });
+    expect(spark.props('gradient')).toEqual([THEME_COLOURS.primary, THEME_COLOURS.success]);
 
     wrapper.unmount();
   });

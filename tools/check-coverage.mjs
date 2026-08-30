@@ -91,15 +91,29 @@ function frontendTotals(path) {
   return Object.fromEntries(Object.entries(total).map(([k, v]) => [k, v.pct]));
 }
 
+/**
+ * How far the report may run above the recorded measurement before the pair in
+ * `coverage-floors.mjs` is stale.
+ *
+ * Two points. The floors are set as *the measurement minus what a module in
+ * flight costs*, so a measurement that is two points behind reality has already
+ * turned the intended gap into double what it says it is — which is exactly how
+ * a four-point gap silently became eight while nobody re-measured.
+ */
+const STALE_ABOVE = 2;
+
 /** One row per floor, so the passing ones are visible too. */
 function check(label, actual, floor, reference) {
   const rows = [];
   let failed = 0;
+  let stale = 0;
 
   for (const [metric, min] of Object.entries(floor)) {
     const pct = actual[metric];
     if (typeof pct !== 'number' || Number.isNaN(pct)) {
-      rows.push(`  ${label} ${metric}: no number in the report — expected one for a floor of ${min}%`);
+      rows.push(
+        `  ${label} ${metric}: no number in the report — expected one for a floor of ${min}%`
+      );
       failed += 1;
       continue;
     }
@@ -112,40 +126,58 @@ function check(label, actual, floor, reference) {
     rows.push(
       `  ${ok ? 'ok  ' : 'FAIL'} ${label} ${metric.padEnd(10)} ${pct.toFixed(2).padStart(6)}%  floor ${String(min).padStart(3)}%${drift}`
     );
+
+    // Said out loud rather than enforced. Coverage running ahead of the
+    // recorded number is a GOOD thing, and failing a build for it would teach
+    // people to stop improving coverage — but leaving it unsaid is how the
+    // recorded pair goes stale, and a floor under a stale measurement is a
+    // guess with a decimal point.
+    if (typeof was === 'number' && pct - was > STALE_ABOVE) {
+      stale += 1;
+      rows.push(
+        `       ↳ ${(pct - was).toFixed(2)} points above the recorded ${was.toFixed(2)}% — ` +
+          `re-measure and re-set the pair in tools/coverage-floors.mjs`
+      );
+    }
   }
 
-  return { rows, failed };
+  return { rows, failed, stale };
 }
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const lines = [];
   let failed = 0;
+  let stale = 0;
 
   if (opts.rust) {
-    const { rows, failed: n } = check(
-      'rust    ',
-      rustTotals(opts.rustReport),
-      floors.rust,
-      measured.rust
-    );
-    lines.push(...rows);
-    failed += n;
+    const result = check('rust    ', rustTotals(opts.rustReport), floors.rust, measured.rust);
+    lines.push(...result.rows);
+    failed += result.failed;
+    stale += result.stale;
   }
 
   if (opts.frontend) {
-    const { rows, failed: n } = check(
+    const result = check(
       'frontend',
       frontendTotals(opts.frontendReport),
       floors.frontend,
       measured.frontend
     );
-    lines.push(...rows);
-    failed += n;
+    lines.push(...result.rows);
+    failed += result.failed;
+    stale += result.stale;
   }
 
   console.log('Coverage floors');
   console.log(lines.join('\n'));
+
+  if (stale > 0 && failed === 0) {
+    console.log(
+      `\nThe recorded measurement is behind the tree. That is a gain, not a fault — but the\n` +
+        `floors are set relative to it, so the gap they claim is not the gap they hold.`
+    );
+  }
 
   if (failed > 0) {
     console.error(

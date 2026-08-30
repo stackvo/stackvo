@@ -341,6 +341,15 @@ hints! {
         "Use generate_run; `verify` mode still reports drift against what is on disk.";
     MCP_NEEDS_ALLOW_WRITES = "mcpNeedsAllowWrites",
         "Restart it with --allow-writes to enable the writing tools.";
+    MCP_OUTSIDE_GRANT = "mcpOutsideGrant",
+        "This server was started with a named list of writing tools, and this is not one of \
+         them. Widen it in the client's configuration, or use a tool it was granted.";
+    MCP_GRANT_EXPIRED = "mcpGrantExpired",
+        "The writing tools were granted for a fixed time and it has passed. Reads still work; \
+         restart the server to grant them again.";
+    MCP_PROJECT_OUT_OF_SCOPE = "mcpProjectOutOfScope",
+        "This server was scoped to particular projects. Ask about one of those, or widen the \
+         scope in the client's configuration.";
     PORT_RANGE_EXHAUSTED = "portRangeExhausted",
         "Free a port near the one this service wants, or give the instance an explicit \
          port in its settings.";

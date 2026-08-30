@@ -1049,6 +1049,152 @@ async fn charset_of(settings: &Settings, database: &str) -> Option<(String, Stri
     (ok(&charset) && ok(&collate)).then_some((charset, collate))
 }
 
+// ------------------------------------------------------- a login of its own
+
+/// The longest a MySQL account name may be.
+///
+/// 32 characters, and it is the shortest limit of the three engines — Postgres
+/// allows 63, which is also the database-name limit here. So the name is cut to
+/// MySQL's and the same rule is used everywhere: one derivation, not one per
+/// engine.
+pub const USER_NAME_LIMIT: usize = 32;
+
+/// A login that reaches exactly one database.
+#[derive(Debug, Clone)]
+pub struct Scoped {
+    pub user: String,
+    /// Generated, never derived, and returned once — the caller stores it.
+    pub password: String,
+}
+
+/// The account name for one database's own login.
+///
+/// A database name is already `[a-z][a-z0-9_]*` and unique on its instance, so
+/// it is the obvious account name and needs no quoting. The only thing in the
+/// way is the length limit, and truncation alone would let two long names
+/// collide into one account — which would hand a second worktree the *first*
+/// one's login, quietly, and undo the whole point of this. So a truncated name
+/// carries seven hex characters of the full name's digest.
+pub fn scoped_user_name(database: &str) -> String {
+    if database.len() <= USER_NAME_LIMIT {
+        return database.to_string();
+    }
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(database.as_bytes());
+    let suffix: String = digest.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    format!(
+        "{}_{}",
+        &database[..USER_NAME_LIMIT - 1 - suffix.len()],
+        suffix
+    )
+}
+
+/// A password nobody types.
+///
+/// Hex, from the OS, for two reasons that both matter here: it goes into a SQL
+/// string literal and into a `DATABASE_URL`, and hex is the one alphabet that
+/// needs no escaping in either. `websurface::fresh_token` makes the same choice
+/// for the same reason.
+fn fresh_password() -> Option<String> {
+    let mut bytes = [0u8; 24];
+    getrandom::fill(&mut bytes).ok()?;
+    Some(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Give one database a login that can reach only it.
+///
+/// ## Why this exists
+///
+/// A worktree gets its own database on the instance that is already running,
+/// and until now it also got the *instance's* login — the same account the
+/// parent project uses. So "this branch has its own database" was true and
+/// "this branch cannot reach the parent's data" was not: one `USE shop;` away.
+/// That mattered little while a worktree was a person's second branch. It is
+/// the whole claim once the thing working in there is an assistant.
+///
+/// ## MySQL and MariaDB only, and the refusal is not laziness
+///
+/// On MySQL a grant on `` `db`.* `` is the whole answer: the account cannot
+/// read another schema, and `SHOW DATABASES` does not even list one it has no
+/// grant on. It also covers tables that do not exist yet, which matters because
+/// the data arrives *after* the account does.
+///
+/// PostgreSQL's model is not that shape. `GRANT ALL ON DATABASE` grants
+/// connect, create and temp — not one row. The tables in a copied database are
+/// owned by the superuser that restored them, so the grants have to be applied
+/// to the objects afterwards, inside that database, plus default privileges for
+/// the ones the application creates later. That is a second design, and getting
+/// it half right produces a branch whose application cannot read its own
+/// tables. Until it is built this returns `None`, the worktree keeps the shared
+/// login it has always had, and the app **says so** rather than implying an
+/// isolation it did not arrange.
+///
+/// Mongo is refused for the reason [`copy_database`] refuses it: there is no
+/// database name published for it, so there is nothing here to scope to.
+pub async fn create_scoped_user(
+    root: &Path,
+    instance_id: &str,
+    database: &str,
+) -> Result<Option<Scoped>> {
+    checked_database(database)?;
+    let settings = settings_for_instance(root, instance_id)?;
+
+    if !matches!(settings.kind, Kind::Mysql | Kind::Mariadb) {
+        return Ok(None);
+    }
+
+    let user = scoped_user_name(database);
+    let Some(password) = fresh_password() else {
+        // No randomness is not a reason to fall back to a guessable password:
+        // the caller keeps the shared login, which is what it had before.
+        return Ok(None);
+    };
+
+    // Dropped first rather than created `IF NOT EXISTS`: an account left behind
+    // by a failed run holds a password nobody has any more, and `IF NOT EXISTS`
+    // would keep it — leaving credentials that are recorded here and refused by
+    // the server.
+    run_sql_with(&settings, &format!("DROP USER IF EXISTS '{user}'@'%'")).await?;
+    run_sql_with(
+        &settings,
+        &format!("CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'"),
+    )
+    .await?;
+    run_sql_with(
+        &settings,
+        &format!("GRANT ALL PRIVILEGES ON `{database}`.* TO '{user}'@'%'"),
+    )
+    .await?;
+
+    Ok(Some(Scoped { user, password }))
+}
+
+/// Take that login away again. `false` when there was none.
+///
+/// Best effort by contract: a worktree being torn down must not be left in
+/// place because an account could not be dropped, and an account with no
+/// database left to reach grants nothing.
+pub async fn drop_scoped_user(root: &Path, instance_id: &str, user: &str) -> Result<bool> {
+    let settings = settings_for_instance(root, instance_id)?;
+    if !matches!(settings.kind, Kind::Mysql | Kind::Mariadb) {
+        return Ok(false);
+    }
+    // The same charset a database name has, because that is where it came
+    // from — checked again here because this string goes into a statement.
+    if user.is_empty()
+        || !user
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("\"{user}\" is not an account name this app created"),
+        ));
+    }
+    run_sql_with(&settings, &format!("DROP USER IF EXISTS '{user}'@'%'")).await?;
+    Ok(true)
+}
+
 /// Drop a database, or report that there was none.
 ///
 /// Refuses the instance's *configured* database as well as the reserved names.
@@ -1311,6 +1457,61 @@ where
         .map_err(|e| Error::io("waiting for docker exec", e))?;
 
     Ok(status.success())
+}
+
+#[cfg(test)]
+mod scoped_login_tests {
+    use super::{scoped_user_name, USER_NAME_LIMIT};
+
+    #[test]
+    fn a_short_database_name_is_its_own_account_name() {
+        assert_eq!(scoped_user_name("shop_feature_x"), "shop_feature_x");
+        let exact = "a".repeat(USER_NAME_LIMIT);
+        assert_eq!(scoped_user_name(&exact), exact);
+    }
+
+    /// The reason a digest is in there at all.
+    ///
+    /// Two branch databases of the same project share a long prefix by
+    /// construction — `shop_feature_the_new_checkout_page` and
+    /// `shop_feature_the_new_checkout_flow` differ in the last four characters
+    /// — so truncation alone would give the second worktree the **first one's
+    /// account**, silently, which is the exact isolation this exists to
+    /// provide.
+    #[test]
+    fn two_long_names_that_share_a_prefix_get_two_accounts() {
+        let a = scoped_user_name("shop_feature_the_new_checkout_page");
+        let b = scoped_user_name("shop_feature_the_new_checkout_flow");
+
+        assert_ne!(a, b, "two databases were given one account");
+        assert!(a.len() <= USER_NAME_LIMIT, "{a} is {} long", a.len());
+        assert!(b.len() <= USER_NAME_LIMIT, "{b} is {} long", b.len());
+    }
+
+    /// It goes into a SQL statement, so it may hold nothing that could end one.
+    #[test]
+    fn an_account_name_holds_only_what_a_database_name_may_hold() {
+        for name in [
+            "shop",
+            "shop_feature_x",
+            &"shop_a_very_long_branch_database_name_indeed".repeat(2),
+        ] {
+            let user = scoped_user_name(name);
+            assert!(
+                user.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                "{user} carries something a statement would read"
+            );
+        }
+    }
+
+    /// Same name in, same account out — a re-render must not invent a second
+    /// account for a database that already has one.
+    #[test]
+    fn the_derivation_is_stable() {
+        let long = "shop_feature_the_new_checkout_page_with_a_long_name";
+        assert_eq!(scoped_user_name(long), scoped_user_name(long));
+    }
 }
 
 #[cfg(test)]

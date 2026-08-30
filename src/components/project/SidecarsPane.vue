@@ -74,7 +74,13 @@ watch(() => props.name, load);
         <code class="image">{{ sidecar.image }}</code>
       </div>
 
-      <div v-if="sidecar.about" class="text-caption text-medium-emphasis mb-1">
+      <!-- `lang=""` — undetermined, not `en`. This sentence is not the app's:
+           it is whatever the project wrote under `sidecars.<id>.about` in its
+           own `stackvo.json`, so nothing here knows what language it is in.
+           Claiming English would be a guess stated as a fact, which for a
+           screen reader is worse than saying nothing is known. Same rule as
+           `LogView` and `DumpValue`; see `language-of-parts.spec.js`. -->
+      <div v-if="sidecar.about" class="text-caption text-medium-emphasis mb-1" lang="">
         {{ sidecar.about }}
       </div>
 

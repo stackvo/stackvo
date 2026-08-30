@@ -10,11 +10,11 @@
  * tests that move a percentage.
  *
  * That argument had an expiry date, and it has passed. The numbers have been
- * looked at across several rounds of work (61.60 → 63.12 → 63.34 → 64.34 on the
- * Rust side; 30.70 → 89.65 on the front end), so a floor set today is set from
- * evidence rather than from taste. Without one, the measurement answers "how
- * much is covered" and never "did that just get worse", which is the only
- * question a build can usefully ask.
+ * looked at across several rounds of work (61.60 → 63.12 → 63.34 → 64.34 →
+ * 68.05 on the Rust side; 30.70 → 89.65 → 92.20 on the front end), so a floor
+ * set today is set from evidence rather than from taste. Without one, the
+ * measurement answers "how much is covered" and never "did that just get
+ * worse", which is the only question a build can usefully ask.
  *
  * ## What a floor is for here
  *
@@ -36,18 +36,44 @@
  *
  * Raising a floor after a real gain is a deliberate act. Lowering one is a
  * decision with a reason, and the reason belongs in the commit message.
+ *
+ * ## How far below, in numbers rather than in feel
+ *
+ * The floors were first set about four points under the measurement, and by
+ * the time the numbers were looked at again the gap had grown to **eight** —
+ * a regression of seven points would have passed in silence, which is not a
+ * regression alarm, it is a decoration. So the distance is now arithmetic
+ * rather than a habit, and each floor is the measurement minus what the two
+ * facts above actually cost:
+ *
+ *  * **Platform**, Rust only: about one point, which is where this
+ *    repository's history has put macOS and Ubuntu. The front end is measured
+ *    by the same jsdom everywhere and pays nothing.
+ *  * **A module in flight**: its uncovered lines over the tree's total. The
+ *    Rust core is 59.5k counted lines, so a 1,200-line module written before
+ *    its tests costs two points. The front end is 32.8k, so a 650-line pane
+ *    costs two. Branches swing wider than lines on a new component full of
+ *    conditionals, so that one is given three.
+ *
+ * Which makes the blind spot three points on the Rust side and two on the
+ * front end, in place of eight and seven. Re-measure before moving one of
+ * these; the whole argument rests on the pair below being the same age.
  */
 
 /**
- * Measured 2026-08-07 on macOS, at the commit that introduced this file.
+ * Measured 2026-08-29 on macOS — `npm run test:rs:coverage` and
+ * `npm run test:js:coverage`, on a clean tree.
  *
  * Kept next to the floors so the distance between them is visible: a floor
  * three points under a number that was last measured a year ago is not a floor,
- * it is a guess with a decimal point.
+ * it is a guess with a decimal point. Which is how the last pair drifted — the
+ * numbers here stood at the 2026-08-07 measurement while the tree went on
+ * gaining four points, and the floors kept guarding a tree that no longer
+ * existed.
  */
 export const measured = {
-  rust: { lines: 64.05, functions: 59.23, regions: 64.69 },
-  frontend: { lines: 89.65, statements: 89.65, branches: 76.91, functions: 53.34 },
+  rust: { lines: 68.05, functions: 64.98, regions: 68.46 },
+  frontend: { lines: 92.2, statements: 92.2, branches: 80.99, functions: 60.7 },
 };
 
 export const floors = {
@@ -57,8 +83,12 @@ export const floors = {
    * Lines rather than regions or functions: regions count each arm of every
    * `match` and swing with refactors that change nothing about what is tested,
    * and functions counts a one-line accessor the same as `run_operation`.
+   *
+   * 68.05 measured, less one point of platform and two for a module in
+   * flight. Leaves about two points of margin under what Ubuntu is expected
+   * to report, which is the number CI actually compares.
    */
-  rust: { lines: 60 },
+  rust: { lines: 65 },
 
   /**
    * v8's numbers for `src/**`, as reported by `vitest run --coverage`.
@@ -66,15 +96,16 @@ export const floors = {
    * **`functions` is not floored, and that is not an oversight.** v8 counts
    * every arrow function as a function, and a Vue SFC compiles its template
    * into a render function full of them — inline handlers, slot props, `v-for`
-   * bodies. The measured 53% does not mean half the front end's behaviour is
-   * unexercised; it means half the closures a compiler emitted were never
-   * called, and several of those cannot be called from jsdom at all. A floor on
-   * a number nobody can act on teaches people to ignore a failing gate.
+   * bodies. The measured 61% does not mean two fifths of the front end's
+   * behaviour is unexercised; it means two fifths of the closures a compiler
+   * emitted were never called, and several of those cannot be called from
+   * jsdom at all. A floor on a number nobody can act on teaches people to
+   * ignore a failing gate.
    *
    * `statements` and `lines` are the same figure under v8's instrumentation.
    * Both are listed so a future switch of provider does not silently drop one.
    */
-  frontend: { lines: 85, statements: 85, branches: 72 },
+  frontend: { lines: 90, statements: 90, branches: 78 },
 };
 
 export default floors;

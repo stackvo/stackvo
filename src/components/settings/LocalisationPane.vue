@@ -266,7 +266,7 @@ onMounted(loadPacks);
 
   <SettingsGroup
     help="settings-localisation-direction"
-    icon="mdi-format-textdirection-r-to-l"
+    icon="mdi-format-pilcrow-arrow-left"
     :title="t('settings.direction')"
     :description="t('settings.directionDesc')"
   >

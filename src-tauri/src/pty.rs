@@ -271,7 +271,11 @@ pub fn close_all(registry: &Registry) {
 /// container configuration. The first desktop version worked, but only on
 /// macOS and only in Terminal.app — on Windows and Linux the button was there
 /// and the command answered `Unsupported`.
-pub fn open_external(target: &PtyTarget, preferred: Option<&str>) -> Result<()> {
+pub fn open_external(
+    target: &PtyTarget,
+    preferred: Option<&str>,
+    custom: Option<&str>,
+) -> Result<()> {
     validate(target)?;
 
     let command = match target {
@@ -286,8 +290,8 @@ pub fn open_external(target: &PtyTarget, preferred: Option<&str>) -> Result<()> 
         },
     };
 
-    let (id, ..) = crate::apps::resolve_terminal(preferred)?;
-    spawn_terminal(id, &command)
+    let terminal = crate::apps::resolve_terminal(preferred, custom)?;
+    spawn_terminal(&terminal, &command)
 }
 
 /// Open the user's terminal running a command this app assembled.
@@ -302,9 +306,13 @@ pub fn open_external(target: &PtyTarget, preferred: Option<&str>) -> Result<()> 
 ///
 /// The command is built by the caller from compiled-in words and paths this app
 /// owns; nothing the frontend typed reaches it.
-pub fn open_external_shell(command: &str, preferred: Option<&str>) -> Result<()> {
-    let (id, ..) = crate::apps::resolve_terminal(preferred)?;
-    spawn_terminal(id, command)
+pub fn open_external_shell(
+    command: &str,
+    preferred: Option<&str>,
+    custom: Option<&str>,
+) -> Result<()> {
+    let terminal = crate::apps::resolve_terminal(preferred, custom)?;
+    spawn_terminal(&terminal, command)
 }
 
 /// Open the user's terminal running one of the catalog's commands.
@@ -321,12 +329,54 @@ pub fn open_external_command(
     container: &str,
     command: &crate::quickcmd::Resolved,
     preferred: Option<&str>,
+    custom: Option<&str>,
 ) -> Result<()> {
     let argv = crate::quickcmd::exec_argv(container, command);
     let command = format!("docker {}", argv.join(" "));
 
-    let (id, ..) = crate::apps::resolve_terminal(preferred)?;
-    spawn_terminal(id, &command)
+    let terminal = crate::apps::resolve_terminal(preferred, custom)?;
+    spawn_terminal(&terminal, &command)
+}
+
+/// The argv a custom terminal is started with.
+///
+/// One rule on all three platforms: **the user's own words first, the command
+/// appended as a single trailing argument.** Nothing here guesses a flag,
+/// because the flag is the part that differs — `-e` for Alacritty and kitty,
+/// `--` for GNOME Terminal, `start --` for WezTerm, `/K` for cmd — and a guess
+/// that is wrong opens a terminal running the wrong thing, which is worse than
+/// one that opens running nothing.
+///
+/// So the flag goes in the box beside the launcher, and the three that people
+/// will actually type come out as:
+///
+/// ```text
+///   alacritty -e sh -c   →  alacritty -e sh -c "<command>"
+///   wezterm start --     →  wezterm start -- "<command>"
+///   wt.exe cmd.exe /K    →  wt.exe cmd.exe /K "<command>"
+/// ```
+///
+/// Trailing, not interpolated, and one argument: the command text is data to
+/// the emulator rather than something it re-parses — the same property the
+/// three built-in arms keep, and the reason none of this needs a shell.
+fn custom_argv(argv: &[String], command: &str) -> Vec<String> {
+    let mut words = argv.to_vec();
+    words.push(command.to_string());
+    words
+}
+
+/// Start a terminal nothing here has a dialect for.
+fn spawn_custom(argv: &[String], command: &str) -> Result<()> {
+    let words = custom_argv(argv, command);
+    let (program, rest) = words.split_first().ok_or_else(|| {
+        Error::new(Code::NotFound, "No terminal application was found.")
+            .with_hint(crate::hints::INSTALL_A_TERMINAL)
+    })?;
+    std::process::Command::new(program)
+        .args(rest)
+        .spawn()
+        .map_err(|e| Error::io("opening the terminal", e))?;
+    Ok(())
 }
 
 /// Launch `id` running `command`.
@@ -335,7 +385,12 @@ pub fn open_external_command(
 /// the way the others do — this is the whole reason the first version only
 /// supported one.
 #[cfg(target_os = "macos")]
-fn spawn_terminal(id: &str, command: &str) -> Result<()> {
+fn spawn_terminal(terminal: &crate::apps::Terminal, command: &str) -> Result<()> {
+    let id = match terminal {
+        crate::apps::Terminal::Known(id) => *id,
+        crate::apps::Terminal::Custom(argv) => return spawn_custom(argv, command),
+    };
+
     // AppleScript string literal: backslashes first, then quotes, or the
     // escaping of the first would be re-escaped by the second.
     let escaped = command.replace('\\', r"\\").replace('"', r#"\""#);
@@ -377,7 +432,12 @@ fn spawn_terminal(id: &str, command: &str) -> Result<()> {
 }
 
 #[cfg(target_os = "windows")]
-fn spawn_terminal(id: &str, command: &str) -> Result<()> {
+fn spawn_terminal(terminal: &crate::apps::Terminal, command: &str) -> Result<()> {
+    let id = match terminal {
+        crate::apps::Terminal::Known(id) => *id,
+        crate::apps::Terminal::Custom(argv) => return spawn_custom(argv, command),
+    };
+
     // No shell here either: every argument is passed as its own element, so the
     // command text is data to the terminal rather than something cmd re-parses.
     let mut cmd = match id {
@@ -409,7 +469,12 @@ fn spawn_terminal(id: &str, command: &str) -> Result<()> {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn spawn_terminal(id: &str, command: &str) -> Result<()> {
+fn spawn_terminal(terminal: &crate::apps::Terminal, command: &str) -> Result<()> {
+    let id = match terminal {
+        crate::apps::Terminal::Known(id) => *id,
+        crate::apps::Terminal::Custom(argv) => return spawn_custom(argv, command),
+    };
+
     // `-e` is not universal: GNOME Terminal wants `--`, Konsole wants `-e` with
     // the rest as separate arguments, and the sh -c wrapper is what keeps the
     // window open long enough to matter.
@@ -446,6 +511,40 @@ fn spawn_terminal(id: &str, command: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The one rule a custom terminal follows, on all three platforms: the
+    /// user's words, then the command, as one trailing argument.
+    ///
+    /// One argument and not several, because that is what keeps the command
+    /// *data*. `alacritty -e sh -c` takes the script as a single word, and a
+    /// version of this that split it would hand `sh` a program of `cd` and an
+    /// argument of `/tmp`, which is a different thing that happens to look
+    /// similar until a path contains a space.
+    #[test]
+    fn a_custom_terminal_gets_the_command_as_one_trailing_argument() {
+        let argv = [
+            "alacritty".to_string(),
+            "-e".into(),
+            "sh".into(),
+            "-c".into(),
+        ];
+        assert_eq!(
+            custom_argv(&argv, "docker exec -it stackvo-x bash"),
+            vec![
+                "alacritty",
+                "-e",
+                "sh",
+                "-c",
+                "docker exec -it stackvo-x bash"
+            ]
+        );
+
+        // Nothing but a launcher is a launcher plus the command, not an error.
+        assert_eq!(
+            custom_argv(&["wezterm".to_string()], "cd /tmp"),
+            vec!["wezterm", "cd /tmp"]
+        );
+    }
 
     #[test]
     fn rejects_a_shell_carrying_shell_metacharacters() {

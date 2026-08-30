@@ -30,7 +30,11 @@ use std::path::{Path, PathBuf};
 
 /// Used when `.env` has no `DEFAULT_TLD_SUFFIX`. Matches the value the Bash
 /// helper hardcodes, so a checkout without the key behaves as it always has.
-pub const FALLBACK_SUFFIX: &str = "stackvo.loc";
+///
+/// An alias rather than a second literal — [`crate::config::DEFAULT_TLD_SUFFIX`]
+/// is the one place the string is written, and this name is kept because it is
+/// what the certificate code and its tests call it.
+pub const FALLBACK_SUFFIX: &str = crate::config::DEFAULT_TLD_SUFFIX;
 
 pub fn cert_dir(root: &Path) -> PathBuf {
     root.join("generated").join("certs")
@@ -293,6 +297,134 @@ pub fn listing_contains(listing: &str, common_name: &str) -> bool {
     listing.to_ascii_lowercase().contains(&needle)
 }
 
+// ------------------------------------------------------- where it is trusted
+
+/// One place a browser looks for roots, and whether ours is in it.
+///
+/// ## Why one boolean was not enough
+///
+/// The competitor's published plan for 2026 says they are *"exploring using
+/// real certificates instead of the mkcert CA"*, and it is worth being precise
+/// about what problem that is aimed at. It is not that a local CA is
+/// technically inferior — a locally-issued certificate is as valid as a public
+/// one to anything that trusts the root. It is that **the root is not trusted
+/// everywhere**, and the app could not say where.
+///
+/// Firefox is the case that produces the support ticket. It does not use the
+/// operating system's trust store; it carries its own, NSS, per profile.
+/// mkcert installs into it — *if* `certutil` is on the machine — and prints a
+/// warning and carries on when it is not. So the ordinary state on a fresh
+/// laptop is: trusted by the system, trusted by Safari and Chrome, and refused
+/// by Firefox, with one `caTrusted: true` on the screen and nothing to act on.
+///
+/// The answer is not a different certificate authority. It is saying which
+/// store, and what to do about the one that is missing.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustStore {
+    /// Stable key; the UI holds the label and the repair — the arrangement
+    /// [`crate::preflight`] states, for the same reason.
+    pub id: &'static str,
+    /// `None` is "this machine would not say", and it is a third answer rather
+    /// than a false: for Firefox it means Firefox is not installed here, which
+    /// is not a problem anybody needs to fix.
+    pub trusted: Option<bool>,
+    /// Why, when the answer is not simply yes. Not translated: it names a
+    /// program or a path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// Every directory Firefox keeps a profile in, on this platform.
+///
+/// The profile is what holds the NSS databases, and there is usually more than
+/// one — a default and whatever else somebody made. Returned rather than
+/// reduced to a count because the check below needs a real path to ask
+/// `certutil` about.
+pub fn firefox_profiles(home: &Path) -> Vec<std::path::PathBuf> {
+    let roots = if cfg!(target_os = "macos") {
+        vec![home.join("Library/Application Support/Firefox/Profiles")]
+    } else if cfg!(target_os = "windows") {
+        vec![home.join("AppData/Roaming/Mozilla/Firefox/Profiles")]
+    } else {
+        // Both, because a Snap or Flatpak Firefox keeps its profiles inside its
+        // own sandbox and a machine can have one of each.
+        vec![
+            home.join(".mozilla/firefox"),
+            home.join("snap/firefox/common/.mozilla/firefox"),
+        ]
+    };
+
+    let mut out = Vec::new();
+    for root in roots {
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // A profile is a directory with an NSS database in it. `cert9.db`
+            // is the current format and `cert8.db` the one before it; a
+            // directory with neither is not a profile — Firefox keeps
+            // `Crash Reports` and other folders alongside them.
+            if path.join("cert9.db").is_file() || path.join("cert8.db").is_file() {
+                out.push(path);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// What to report about Firefox, given what was found.
+///
+/// Pure, and separated from the probing for the reason every decision in this
+/// file is: the three states are the whole of the feature, and they are worth
+/// holding down with a test rather than reasoning about inside two `cfg`
+/// blocks and a subprocess.
+pub fn firefox_verdict(
+    profiles: usize,
+    certutil: bool,
+    listing: Option<&str>,
+    common_name: &str,
+) -> TrustStore {
+    if profiles == 0 {
+        return TrustStore {
+            id: "firefox",
+            trusted: None,
+            detail: Some("no Firefox profile on this machine".to_string()),
+        };
+    }
+    if !certutil {
+        // mkcert says this itself and then carries on, which is why the state
+        // exists at all: the install *looked* like it worked.
+        return TrustStore {
+            id: "firefox",
+            trusted: Some(false),
+            detail: Some(
+                "certutil is not installed, so mkcert could not add the CA to Firefox's own                  store — install nss and run the trust step again"
+                    .to_string(),
+            ),
+        };
+    }
+    match listing {
+        Some(listing) if listing_contains(listing, common_name) => TrustStore {
+            id: "firefox",
+            trusted: Some(true),
+            detail: None,
+        },
+        Some(_) => TrustStore {
+            id: "firefox",
+            trusted: Some(false),
+            detail: Some("the CA is not in Firefox's store — run the trust step again".to_string()),
+        },
+        None => TrustStore {
+            id: "firefox",
+            trusted: None,
+            detail: Some("Firefox's certificate store could not be read".to_string()),
+        },
+    }
+}
+
 // ------------------------------------------------------------------- I/O
 
 /// Where mkcert is, if it is anywhere.
@@ -519,6 +651,51 @@ pub async fn ca_trusted_for(cert: &Path) -> Option<bool> {
     system_accepts(cert).await
 }
 
+/// Ask Firefox's own store, on whatever platform this is.
+///
+/// One profile is enough to answer: mkcert installs into every profile it
+/// finds in one pass, so a CA present in one and absent from another is a
+/// state nothing here creates. Asking them all would be three subprocesses to
+/// re-answer a question the first one settled.
+pub async fn firefox_trust(ca_pem: Option<&[u8]>) -> TrustStore {
+    let Some(home) = dirs::home_dir() else {
+        return TrustStore {
+            id: "firefox",
+            trusted: None,
+            detail: Some("no home directory to look in".to_string()),
+        };
+    };
+
+    let profiles = firefox_profiles(&home);
+    let Some(profile) = profiles.first() else {
+        return firefox_verdict(0, false, None, "");
+    };
+
+    let name = ca_pem.and_then(ca_common_name).unwrap_or_default();
+
+    // Three outcomes, and they are three different sentences. Failing to
+    // *spawn* is `certutil` not being on the machine, which is the state mkcert
+    // warns about and carries on from. Spawning and failing is a profile the
+    // tool could not read, which is a different problem with a different
+    // repair — collapsing the two into "not there" would send somebody to
+    // install a package they already have.
+    match tokio::process::Command::new("certutil")
+        .args(["-L", "-d"])
+        .arg(format!("sql:{}", profile.display()))
+        .output()
+        .await
+    {
+        Err(_) => firefox_verdict(profiles.len(), false, None, &name),
+        Ok(out) if out.status.success() => firefox_verdict(
+            profiles.len(),
+            true,
+            Some(&String::from_utf8_lossy(&out.stdout)),
+            &name,
+        ),
+        Ok(_) => firefox_verdict(profiles.len(), true, None, &name),
+    }
+}
+
 /// Is our CA trusted? `None` when the platform would not say.
 #[cfg(not(target_os = "macos"))]
 pub async fn ca_trusted(ca_pem: Option<&[u8]>) -> Option<bool> {
@@ -537,11 +714,8 @@ pub async fn ca_trusted(ca_pem: Option<&[u8]>) -> Option<bool> {
 /// The domain suffix every service sits under.
 pub fn suffix(root: &Path) -> String {
     crate::config::Env::load(root)
-        .ok()
-        .and_then(|env| env.get("DEFAULT_TLD_SUFFIX").map(str::to_string))
-        .map(|s| s.trim().to_ascii_lowercase())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| FALLBACK_SUFFIX.to_string())
+        .map(|env| env.tld_suffix())
+        .unwrap_or_else(|_| FALLBACK_SUFFIX.to_string())
 }
 
 /// Every project's domain, read straight off disk.
@@ -626,6 +800,15 @@ pub struct CertStatus {
     /// Set when the certificate exists but could not be read, so "covers
     /// nothing" is never mistaken for "covers nothing yet".
     pub error: Option<String>,
+    /// Where the CA is trusted, store by store.
+    ///
+    /// `ca_trusted` above stays, and is the **system** store — the answer every
+    /// existing caller already means by it. This is the fuller one, and the
+    /// reason it exists is Firefox: it carries its own store, mkcert installs
+    /// into it only when `certutil` is present, and a machine where that is
+    /// missing shows a trusted system store and a browser that refuses every
+    /// page. See [`TrustStore`].
+    pub trust: Vec<TrustStore>,
 }
 
 pub async fn status(root: &Path) -> CertStatus {
@@ -662,6 +845,18 @@ pub async fn status(root: &Path) -> CertStatus {
     #[cfg(not(target_os = "macos"))]
     let ca_trusted = ca_trusted(ca_pem.as_deref()).await;
 
+    // The system store keeps the answer it always gave, and Firefox is asked
+    // separately because it does not use that store — which is the whole point
+    // of the list.
+    let trust = vec![
+        TrustStore {
+            id: "system",
+            trusted: ca_trusted,
+            detail: None,
+        },
+        firefox_trust(ca_pem.as_deref()).await,
+    ];
+
     CertStatus {
         ssl_enabled: env_ssl,
         mkcert_available: mkcert.available,
@@ -682,6 +877,7 @@ pub async fn status(root: &Path) -> CertStatus {
         required,
         rejected,
         error,
+        trust,
     }
 }
 
@@ -997,6 +1193,95 @@ fn unreadable_ca_hint(reason: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- where the CA is trusted ---------------------------------------
+
+    fn profile_root(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "stackvo-firefox-{name}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    /// A profile is a directory with an NSS database in it — Firefox keeps
+    /// other folders beside them, and counting those would report a browser
+    /// that is not installed as one that is.
+    #[test]
+    fn only_a_directory_with_a_certificate_database_is_a_profile() {
+        let home = profile_root("profiles");
+        let root = if cfg!(target_os = "macos") {
+            home.join("Library/Application Support/Firefox/Profiles")
+        } else if cfg!(target_os = "windows") {
+            home.join("AppData/Roaming/Mozilla/Firefox/Profiles")
+        } else {
+            home.join(".mozilla/firefox")
+        };
+
+        std::fs::create_dir_all(root.join("abc.default")).unwrap();
+        std::fs::write(root.join("abc.default/cert9.db"), b"").unwrap();
+        // The old format still counts: a profile that has not been opened by a
+        // recent Firefox is still a profile.
+        std::fs::create_dir_all(root.join("old.profile")).unwrap();
+        std::fs::write(root.join("old.profile/cert8.db"), b"").unwrap();
+        // Not a profile.
+        std::fs::create_dir_all(root.join("Crash Reports")).unwrap();
+
+        let found = firefox_profiles(&home);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found
+            .iter()
+            .all(|p| p.join("cert9.db").is_file() || p.join("cert8.db").is_file()));
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// The state that produces the support ticket, and the two either side of
+    /// it.
+    #[test]
+    fn firefox_has_three_answers_and_only_one_of_them_is_a_problem() {
+        // No Firefox is not a failure. Nobody has anything to fix.
+        let none = firefox_verdict(0, false, None, "mkcert dev");
+        assert_eq!(none.trusted, None);
+        assert!(none
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("no Firefox profile"));
+
+        // Firefox is here, `certutil` is not, so mkcert warned and carried on
+        // — the install looked like it worked and the browser refuses every
+        // page. This is the whole reason the list exists.
+        let no_tool = firefox_verdict(1, false, None, "mkcert dev");
+        assert_eq!(no_tool.trusted, Some(false));
+        let detail = no_tool.detail.unwrap();
+        assert!(detail.contains("certutil"), "{detail}");
+        assert!(
+            detail.contains("nss"),
+            "the repair has to be named: {detail}"
+        );
+
+        // Present.
+        let listed = firefox_verdict(
+            1,
+            true,
+            Some("mkcert dev                    CT,C,C\n"),
+            "mkcert dev",
+        );
+        assert_eq!(listed.trusted, Some(true));
+        assert!(listed.detail.is_none());
+
+        // Readable and not there.
+        let absent = firefox_verdict(1, true, Some("Some Other CA   CT,C,C\n"), "mkcert dev");
+        assert_eq!(absent.trusted, Some(false));
+
+        // Unreadable is not the same as absent: one sends somebody to the
+        // trust step, the other to a broken profile.
+        let unreadable = firefox_verdict(1, true, None, "mkcert dev");
+        assert_eq!(unreadable.trusted, None);
+    }
 
     /// The LAN name is a subject like any other, and the one it is worst to
     /// miss.

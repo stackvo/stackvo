@@ -7,6 +7,834 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Which clause of the policy is actually holding.** `policy_status` answered
+  what an administrator's file *says*. Nothing answered whether any of it was in
+  force on the machine reading it, which is the question the person who deployed
+  the file has — and the two come apart for one reason that is not misconduct.
+
+  **A policy arrives on a machine that was already set up.** The registry mirror
+  rewrites image references as files are *generated*, so a project nobody
+  regenerated since Tuesday still pulls from Docker Hub — on a network where
+  Docker Hub is not reachable that is not a compliance detail, it is why the
+  stack will not start. `allowedPackages` is checked as something is *installed*,
+  so a service installed last month stays installed when the list that would have
+  refused it lands today. `requireSignature` decides what the **next** refresh
+  accepts and says nothing about the index already in the cache.
+  `allowOverrides: false` stops a new override being made and does nothing about
+  the files already on disk, which keep being read in front of the published
+  package. Every one of those has a repair — regenerate, uninstall, refresh,
+  delete — and until now nothing told anybody which, or where.
+
+  **Four states, and the third is what makes it honest.** `holding`, `bypassed`,
+  `silent`, `unmeasured`. Every list in the `market` block means *no opinion*
+  when empty, never "none", so a report that folded silence into a green tick
+  would score a machine with **no policy at all** as fully compliant — the most
+  misleading thing a compliance report can do. `unmeasured` covers a fact the app
+  cannot see *and* a clause with nothing to apply to (an `imagePins` entry naming
+  a repository this build never runs is a line that does nothing, the same
+  failure `policy.rs` already names for a locked key it does not also set), and
+  neither is evidence of compliance.
+
+  **`attestable`, not `compliant`.** `verify.rs` has the same shape and makes the
+  opposite call — its `unknown` does not hold `ready` back, because a check it
+  declined to make is not evidence a project is broken. That is right for *can I
+  work?*. This asks *can somebody sign their name to this?*, where an unasked
+  question is exactly what must not be swallowed, so anything `bypassed` **or**
+  `unmeasured` holds the verdict back. The name is deliberate: the layer being
+  reported on is not a security boundary — `policy.rs` says so in its first
+  paragraph — and a certificate is not this app's to issue.
+
+  Nothing new is measured and the engine is never asked: the `.env` as written
+  (`Env::parse`, not `load` — load applies the policy last, so asking the loaded
+  environment whether the policy took effect is a question whose answer is `true`
+  by construction), the generated tree, the package directory, the remembered
+  catalogue source, the override files, the project manifests. A compliance
+  report you cannot run with Docker stopped is one you cannot run when you most
+  need it. The mirror clause is answered by the mirror itself — if
+  `policy::rewrite` over a file's own bytes would change them, it never reached
+  that file — rather than by a second scanner that would be a second opinion
+  about build stages and already-qualified registries.
+
+- **The direction nothing went.** `secrets.rs` moves a password out of `.env`
+  and into the OS keystore — the step somebody takes **after** they know there
+  is a problem. The other one, *"there is an AWS key in your `.env` that is not
+  in the keystore"*, and harder, *"that key is in a file git is tracking"*, did
+  not exist, so nobody found out until the repository was already public.
+
+  It matches the **value**, not only the key's name, and that is the whole
+  design. `Env::is_secret` matches names by suffix, which is right for masking
+  and not enough here — `preset.rs` had already written the reason down: *"a key
+  added upstream tomorrow called `SERVICE_FOO_APIKEY` would sail straight
+  through"*. So every rule is a shape its issuer publishes, and the name rule is
+  kept as a second, independent net. Two nets that fail differently catch more
+  than one net that is twice as clever.
+
+  **There is deliberately no entropy heuristic**, and that is the decision that
+  keeps the feature usable. A "long random-looking string" rule fires on
+  minified JavaScript, on a hash in a lockfile and on a base64 image; a scanner
+  people learn to ignore is worse than no scanner, because a miss costs one
+  finding and a false positive costs the whole thing. A PEM header only counts
+  for the block types that are actually private keys, so the certificates this
+  repository ships are not findings.
+
+  Two more decisions. **Nothing is put on a command line**: the obvious way to
+  ask git whether a value was ever committed is `git log -S<value>`, which makes
+  the secret an argument and therefore visible in `ps` to every process on the
+  machine — so tracked files are read and matched in-process, and the only thing
+  reaching git's argument list is `ls-files`. And **a finding never carries the
+  value**: a report that quotes the secret is a second copy of it, on a screen
+  people photograph and paste.
+
+  `.env` being tracked outranks every other finding and is reported on its own
+  terms — it means every value in that file is in the history whatever its
+  shape, and no rule has to match for that to be true. The scan is bounded at
+  2,000 files and half a megabyte each, and says how many it skipped: one that
+  passed over four hundred files and said nothing would read as a clean
+  repository.
+
+  **Three refusals turned into answers.** A feature that says what it cannot do
+  has not done the part it can:
+
+  * *The value is never carried* — still true, and a finding now carries what
+    every scanner in this field carries instead: a **fingerprint** (twelve hex
+    characters of the value's sha256) and a **masked preview** (`AKIA…MPLE`,
+    and only for values of at least sixteen characters — below that it is
+    masked whole, because four characters at each end of a short password is
+    the password). It identifies without revealing: two rows with one
+    fingerprint are one secret in two places, which is the difference between
+    rotating one key and rotating two. The fingerprint is taken from the
+    matched run rather than the line, so the same key written `AWS_KEY=…` in
+    one file and `key: "…"` in another is one secret and not two.
+  * *Nothing goes on a command line* — still true, and the history question is
+    now asked **by path**: `git log --all -- <path>`. A path is not a secret,
+    and the answer is stronger than a value search — a file committed and later
+    deleted is still in the history with everything that was in it, which
+    `-S<value>` would miss the moment somebody rotated half of it. "Tracked
+    now" and "committed at some point" are reported separately, because the
+    second is the one people get wrong: untracking a file today does not take
+    it out of the history.
+  * *`.env` being tracked outranks everything* — and is now a **repair** rather
+    than only a finding. `git rm --cached` (not `git rm`, which would delete
+    the configuration the stack is running on), `git check-ignore` asked rather
+    than `.gitignore` parsed, and `.env.example` written when there is none —
+    the same keys, no values, comments and grouping kept, because an example
+    file is documentation. An existing one is never overwritten.
+
+  And the two halves the repair does **not** do are printed where it happened:
+  the removal is staged rather than committed, so nothing has left the machine
+  until somebody pushes it; and history is not rewritten, so if the file was
+  ever committed, every value in it is still there and has to be rotated. A fix
+  somebody thinks they made is worse than no fix.
+
+- **"Trusted" was one word, and there is more than one store.** The category's
+  leader has published that it is *exploring real certificates instead of the
+  mkcert CA*, and it is worth being precise about what problem that is aimed
+  at. It is not that a local authority is technically inferior — a
+  locally-issued certificate is as valid as a public one to anything that
+  trusts the root. It is that **the root is not trusted everywhere, and this
+  app could not say where.**
+
+  Firefox is the case that costs somebody an afternoon. It does not use the
+  operating system's trust store; it carries its own, per profile. mkcert
+  installs into it *if* `certutil` is on the machine, and prints a warning and
+  carries on when it is not. So the ordinary state on a fresh laptop was:
+  trusted by the system, working in Safari and Chrome, refused by Firefox — and
+  one green `caTrusted: true` on the screen with nothing to act on.
+
+  The certificate card now names each store and, where the answer is no, what
+  to do about it. Three failing states are kept apart because their repairs
+  differ: `certutil` missing (install nss, trust again), the CA absent from a
+  store that read fine (trust again), and a store that could not be read at
+  all. A store that answers neither yes nor no means that browser is not
+  installed here, which is not a problem anybody has to fix and is not coloured
+  like one.
+
+  **ACME is not being built, and that is a decision with the measurement behind
+  it.** A public authority validates control of a name in *public DNS*, and
+  `shop.loc` is not in public DNS and never will be. HTTP-01 needs port 80 on
+  this machine reachable from the internet; a laptop behind a router is not.
+  DNS-01 avoids that and needs a real domain plus a provider API token, which
+  is a real setup and not one a local development environment can assume. What
+  a public certificate would actually buy is *other devices* trusting it
+  without installing the CA — and for that the app already has nine tunnel
+  providers, each terminating TLS with a certificate every device trusts. The
+  help document says all of this where somebody would look for it.
+
+- **The half of onboarding nobody builds.** Every tool in this category does
+  the setting-up half — DDEV has its config and hooks, this app has presets.
+  None of them does the **checking** half, which is the question somebody
+  actually has an hour after cloning: not "how do I set this up" but *"I did
+  set it up; why does it still not work?"* The repository already declares what
+  it needs; what was missing was the sentence back. `stackvo verify <project>`,
+  and a button on the project's page, answer it line by line.
+
+  Nothing new is measured, which is why it is a pure function rather than a
+  probe: four of the five facts are ones `projects_list` already computes —
+  whether the manifest validated, whether the image was ever built here,
+  whether the generated tree is older than `stackvo.json`, whether the domain
+  is in the hosts file — and the fifth is the instance table. A second
+  derivation of any of them could disagree with the first.
+
+  **A declared service fails in three ways and they are three sentences.** In
+  the catalogue and not installed: install it. Installed and switched off: turn
+  it on — and the versions that *are* there are named, because "install it"
+  would be the wrong instruction. A name this build has never heard of: that is
+  a typo or a catalogue newer than the app, and it is reported as **unknown**
+  rather than missing. Unknown deliberately does not fail the project: a check
+  the app declined to make is not evidence that something is wrong, and a
+  verifier that says "not ready" for a question it did not ask is one people
+  learn to override.
+
+  Every line is returned, not only the failing ones. A verifier that answered
+  with nothing when everything matched would leave somebody unable to tell "it
+  checked and I am fine" from "it did not check". And a version the declaration
+  does not pin is reported with the version found beside it rather than judged
+  — saying which one *should* be there needs a lock file, which is its own
+  item, so this does not pretend to have checked it.
+
+- **The verb the instruments were already waiting for.** `explain.rs` opens by
+  saying that no new measurement is needed, and it was right about more than
+  its own view: the recording that names a request, the sender that can issue
+  one with the profiler on, and the observation window a query log is joined
+  against all existed. What was missing was the act. A recording of a GET now
+  carries a **send it again** button, which re-issues that exact request and
+  answers with **both** reports and the difference.
+
+  The loop it closes is the commonest one in performance work and it took four
+  steps: change the code, open the site, find the page, come back and hunt for
+  the new recording among twenty.
+
+  Two decisions are worth stating. It runs *the same* request
+  `spx_record_request` does — one function, not two implementations, because
+  they would drift on exactly the details that make the replay comparable to
+  the original: the profiler cookie, the redirect policy, the observation
+  window. And there is deliberately **no verdict**: no `faster` field, no green
+  tick. One run against one run is not a benchmark — a cold opcache and
+  whatever else the machine was doing are inside the difference — and a boolean
+  would invite a conclusion the measurement cannot carry.
+
+  **Only a GET, and the refusal says why rather than hiding the button.** A
+  recording names the request *line* and nothing else: not its headers, not its
+  body, not the session it ran under, because nothing records those. A POST
+  re-sent without them is a different request, and against any framework with
+  CSRF it answers 419 rather than the page. A result that looks like an answer
+  and is not is worse than a refusal — so the boundary of what a replay can
+  honestly be here is stated on screen instead of being discovered.
+
+- **What Docker cost you today, measured rather than argued about.** This
+  README has a table saying what Docker costs and does not pretend otherwise —
+  and until now that was an admission with no number behind it. Every rival
+  built on containers carries the same cost and none of them measures it, which
+  leaves "why is my laptop hot" to Activity Monitor and its nine processes
+  called `com.docker.backend`. Being the one product that can say *"`shop` has
+  held 4.2 GB·hours and used 38 minutes of CPU today"* is a better place to
+  stand than denying it.
+
+  **No new measurement.** `sample_container_stats` has read CPU and memory once
+  a minute since the port, for the sparkline, and threw the readings away after
+  two hours because a sparkline was all they were for. The same readings are
+  now added up instead of discarded.
+
+  **The interval is the part that is easy to get wrong.** A total is a rate
+  times an interval, and the interval is the thing nobody has: the sampler runs
+  on a sixty-second timer, so sixty is the tempting constant and it is wrong on
+  every machine that has ever been shut. A laptop closed on Friday and opened
+  on Monday would be billed for the weekend at its Friday rate. So the gap is
+  measured per container, and a gap longer than five minutes contributes
+  **nothing** — the reading still counts and the clock still moves forward,
+  only the time is refused. The worst case is a total a few minutes short
+  rather than one with a weekend in it, which is the same trade `stats_store`
+  made for the same reason.
+
+  **Shared services are never divided between projects.** `shop` and `blog`
+  both use the same MySQL and any split of its memory between them would be
+  invented; a number somebody could act on has to be one they can check. It
+  gets its own row and says what it is, and for the same reason only a project
+  can carry a budget. The stack's own containers are listed too — a total that
+  quietly left out the router would understate what Docker costs here.
+
+  A budget lives in preferences and not in `stackvo.json`, because it is a
+  **machine's** decision: the same repository on a colleague's laptop has
+  different room to spare, and a threshold committed to git would be one of
+  them arguing with the other in a pull request. Passing one is announced
+  **once per project per day** — the sampler runs every minute and a project
+  that is over at two o'clock is still over at half past, so a notice per round
+  would be four hundred by the evening, and the feature somebody switches off
+  within the hour is the one that would have told them tomorrow. A budget of
+  zero is no budget, because a cleared field arrives as a zero and an alert
+  that fires the moment somebody clears the box is one they will never leave
+  on.
+
+- **"It works on my machine", answered by measurement.** It is the oldest
+  complaint in this category and every product in it says the container solves
+  the problem — which it does not: the same compose file on two Docker versions
+  is two different things. This app was already the only one that packages the
+  state of a machine. What it could not do was put two of them side by side.
+
+  It could not because the bundle is written for a **person**: `about.txt` is
+  prose and `doctor.json` is shaped for reading, so diffing them produces noise
+  — a socket path, a pid, a byte count that moved — and a comparison whose
+  output is mostly noise is one nobody reads twice. So the bundle now carries
+  `environment.json` as well: one line per fact, a key somebody can say out
+  loud, and a value that is the same string on two machines when the two
+  machines agree. Versions, the engine, every service instance and version and
+  whether it is on, and what each project declares — its runtime, its version,
+  its server, whether Xdebug is on.
+
+  Two things are deliberately **not** in it. No paths: a home directory differs
+  on every machine and would report two identical setups as different in five
+  places. No credentials and no `.env` values, which is the same reason the
+  bundle it sits in is safe to attach at all — and a test asserts both rather
+  than trusting the list.
+
+  Settings takes a bundle a colleague sent and lists only what the two machines
+  disagree about, counting the rest: a report that prints two hundred identical
+  lines buries the four that matter. A fact only one side states is a
+  difference with a missing half, because *"you have redis-7-2 and they do
+  not"* is a different sentence from *"you are on 7.2 and they are on 7.0"* and
+  an intersection would have dropped the more useful one. Their file is read
+  first — a file that cannot be read is the answer, and there is no reason to
+  walk this machine to find that out — and it is compared against what this
+  machine is **now** rather than a stored copy of itself, because the question
+  is always what is different now. A whole zip or the `environment.json`
+  somebody pasted out of one, tried in that order rather than guessed by
+  extension, so renaming a correct file does not make it unreadable. A bundle
+  older than the file says so by name instead of comparing nothing.
+
+- **A worktree with an expiry, and the registration that scopes an assistant to
+  it.** The three pieces were all in the tree and nothing joined them: a branch
+  could have its own directory, hostname, database and environment; the MCP
+  server could be bounded to one project for a fixed time; and neither knew
+  about the other. Creating a worktree now takes a duration, and a branch that
+  has one is a *sandbox* — something built for one task by somebody who is not
+  going to remember it exists.
+
+  The card for such a branch prints the flags that give an assistant that
+  branch and nothing else, rendered from the same `Grant` the server enforces
+  rather than assembled on screen. Under that scope the twelve writing tools
+  are the four a project can bound, and stopping the whole stack is not one of
+  them. Once the expiry has passed the registration is **empty** rather than a
+  grant with no duration on it — dropping a spent `--for` would silently hand
+  out an unlimited one.
+
+  **Nothing is deleted on a timer, and nothing ever will be.** An app that
+  removed a directory by the clock would eventually remove one with a morning's
+  uncommitted work in it, and no expiry policy is worth that. What the date does
+  is let the list say the time has passed, so removing it stays one click and a
+  decision. The output survives either way: a sandbox's product is the
+  **branch**, and the database is scaffolding.
+
+  Two details worth stating. The expiry is recomputed at creation rather than
+  taken from the plan — a plan made minutes ago on a screen somebody was reading
+  should not spend part of the time it was asked for. And "has it passed" is a
+  string comparison, which is correct only because these timestamps are
+  fixed-width UTC; the one place that needed real arithmetic — how many minutes
+  are *left*, which becomes the grant's `--for` — got `days_from_civil` beside
+  the `civil_from_days` this app already had, and the pair is tested against
+  each other rather than against a table somebody typed.
+
+- **"Its own database" and "cannot reach the parent's" were two promises and
+  only the first one was kept.** A worktree gets a database on the instance
+  that is already running — and it also got the *instance's* login, the same
+  account the parent project uses. So the parent's data was one `USE shop;`
+  away from the branch. That was a small thing while a worktree was somebody's
+  second branch. It is the whole claim once the thing working in there is an
+  assistant that was told to fix a failing test and decided a migration would
+  do it.
+
+  A worktree now gets a database account granted on its own schema and nothing
+  else. On MySQL and MariaDB that is the complete answer: the account cannot
+  read another schema, `SHOW DATABASES` does not list one it has no grant on,
+  and the grant covers tables the application creates later — which matters,
+  because the data arrives after the account does.
+
+  **PostgreSQL and MongoDB are refused rather than approximated.** Postgres's
+  model is not that shape: `GRANT ALL ON DATABASE` grants connect, create and
+  temp, not one row, and the tables in a copied database are owned by the
+  superuser that restored them — so the grants have to be applied to the
+  objects inside that database afterwards, plus default privileges for what
+  comes later. Half of that produces a branch whose application cannot read its
+  own tables. Mongo publishes no database name to scope to, which is the same
+  reason `copy_database` refuses it. On both, the branch keeps the shared login
+  and **the app says so**: `worktree_list` reports `isolated`, the pane prints
+  the sentence, and the help document names the two engines. An isolation that
+  is claimed and not arranged is worse than one that was never offered — it is
+  the one somebody stops checking.
+
+  The password lives in `worktree-logins.json`, `0600`, and **not** on the
+  worktree record. `Table` is serialised by one derive to two places — the file
+  and, through `worktree_list`, a webview — so a credential on `Record` would
+  ship to the browser with it, and the only defence would be remembering to
+  strip it at every call site. A field that must never reach the webview does
+  not live in a struct that goes there.
+
+  Three smaller decisions. The account name is the database name, truncated to
+  MySQL's 32 characters **with seven hex characters of the full name's digest**
+  — two branch databases of one project share a long prefix by construction, so
+  truncation alone would have handed the second worktree the first one's login,
+  silently. A server that will not create the account does not fail the
+  worktree: that would take a working feature away from anybody whose database
+  user cannot `GRANT`, and the honest alternative is to say which login the
+  branch got. And the account is dropped on removal **whatever was decided
+  about the data** — keeping `dropDatabase` off means "leave my data alone",
+  not "leave behind an account that can reach it".
+
+- **The trail was written from eighteen places and the assistant surface was
+  not one of them.** `audit.rs` exists for "whoever has to account for the
+  machine", and *"`stackvo_stack_down` was called at 14:32"* was a sentence
+  this app could not produce — about the only caller that is not a person. Now
+  every writing call over MCP is recorded, refusals included, and a refusal is
+  usually the line worth having: an assistant that tried to stop the stack and
+  was told it may not is exactly what somebody reviewing a grant is looking for.
+
+  That widens a bar the module set deliberately — `project_start` is excluded
+  there because pressing the button again undoes it. The exclusion was never
+  about the act; it was about the actor. Starting a container from the window
+  is done by the person reading the trail, who watched it happen. The same act
+  asked for by an assistant is the one nobody saw. The recording therefore
+  lives where the act *has* an actor — the function the server binary runs —
+  and not in the dispatch that the loopback surface and an undo also go through.
+
+  **And they can be put back.** Each recorded act carries a compensation
+  computed **before** the tool ran: what `stack_down` stopped exists only
+  before it stopped it, so a plan worked out when somebody presses Undo would
+  be worked out against a machine that has since changed. Stopping the whole
+  stack is undone by starting what was running — services first, then projects,
+  because a project that comes up without its database comes up broken.
+
+  **Most acts have no compensation, and saying which is the feature.** A
+  restart has already gone through the state an undo would return to; generate
+  overwrote output that was not kept, so the repair is the input; a reissued
+  certificate replaced one that was not kept either; a snapshot added a file
+  and changed nothing. Each line carries its own sentence, and the pane shows
+  that sentence rather than a button that would not keep its promise.
+  `stack_up` is refused for a subtler reason: which containers it actually
+  started is not knowable before the call, and stopping everything that was
+  down would name containers it never touched.
+
+  Two properties of the file did the rest of the work. It is append-only, so an
+  undone act is **not edited** to say so — the undo names the line it reversed
+  and the reader joins the two, which keeps both halves of the record: that it
+  happened, and that somebody put it back. And an undo is a sequence rather
+  than a transaction: if the fourth of six calls fails, the first three stay
+  done and the trail says where it stopped.
+
+- **`--allow-writes` was one switch over twelve tools, and one of them stops
+  everything.** The README warned about it in a paragraph — *"read that list
+  before passing the flag"* — which is what a warning is for when the code
+  cannot express the limit. A person asked what they actually want to allow says
+  a sentence with three parts in it: *this assistant may restart `shop`, for the
+  next half hour.* The flag could express none of them.
+
+  There are three limits now, and each is there because the other two do not
+  cover it. `--allow=project_restart,project_start` names the tools instead of
+  counting them. `--project=shop` bounds the server to a project. `--for=30m`
+  ends the writing half that long after the server starts, because an
+  assistant's session outlives the task it was given. The Settings pane writes
+  the same flags, `stackvo mcp-install` takes them too, and the preview under
+  the controls is exactly what lands in the client's configuration file — that
+  line is the record of what an assistant was allowed to do.
+
+  **A scope removes what it cannot bound.** `--project=shop` cannot make
+  `stackvo_stack_down` safe: the tool takes no project and stops every container
+  there is. So a project scope does not narrow such a tool, it removes it —
+  twelve writing tools become the four a project bounds (`xdebug_set`,
+  `project_start`, `project_stop`, `project_restart`), and the eight that no
+  project bounds are not offered at all. A surface that accepted `--project` and
+  still served `stack_down` would be reporting a limit it was not applying,
+  which is worse than having no limit: the person who set it stops watching.
+
+  **Reads are bounded too**, and that was a decision rather than an oversight.
+  The tempting rule is "the scope bounds writes; reading is harmless", and it is
+  wrong here — `stackvo_explain_request` returns another project's request
+  traces and queries, and `stackvo_log_read` returns its log files. Somebody who
+  said "this assistant works on `shop`" did not say "and may read what the other
+  eleven projects did". The project listings report what is in scope rather than
+  naming what is not, since a list of what may not be touched is an invitation
+  to try. `stackvo_logs` and `stackvo_container_stats` stay open: their argument
+  is a container, as often a service as a project, and refusing `redis-7-2` for
+  not being `shop` would be a limit nobody could act on.
+
+  **And it is not information isolation**, which matters more than the feature
+  because describing it as one would be the dangerous half. Every machine-wide
+  instrument still answers — the doctor, the hosts table, the mail catcher, a
+  database service's query log, a container's log by id — and some of those
+  carry another project's name or content. Bounding them would leave a scoped
+  assistant unable to diagnose the project it *was* given, which is what the
+  surface is for. What the scope buys is that no per-project instrument answers
+  for a project it was not given, and that twelve writing tools become four.
+
+  Two smaller decisions. The grant filters the advertised **list**, not only the
+  call — a tool advertised and then refused is one an assistant retries, reports
+  as broken and works around. And a flag this server does not recognise **stops
+  it from starting**: a mistyped `--project=shpo` would otherwise be a server
+  that quietly grants nothing while its configuration file says otherwise.
+
+- **This app forbade moving image tags and then used six of them.** `pkg.rs`
+  refuses to install a package whose version is `latest`, `stable`, `edge`,
+  `main` or `master`, and says why: *"an image that changes under a fixed
+  manifest has no digest the manifest can pin"*. Six of the ten images StackVo
+  runs and did not build are on `latest` — the tunnel providers, the SSH client.
+  The rule applied to everybody except this application, and the day one of
+  those publishers ships a broken build it arrives on every machine at once,
+  with no version to go back to.
+
+  The tags are **not** pinned in the source, and that is deliberate: choosing a
+  pin means naming a version that exists, and a source file cannot verify that a
+  tag or digest is real. Writing one in would replace a known-moving reference
+  with an invented fixed one, which is worse. Picking the pins is a release-time
+  act against a registry.
+
+  What is fixed is that **there was nowhere to pin.** The ten lived as literals
+  in four modules, appeared in no interface, no `.env` and no policy file, and
+  nothing could say which of them moved. They are one table now, every one is
+  overridable through a policy `imagePins` block keyed by repository, and
+  Diagnostics shows what this machine will actually pull with the moving ones
+  marked.
+
+  Three decisions in it are worth stating. **The pin is applied before the
+  registry mirror** — the other order prefixes the reference first, so the pin
+  would then be looked up under a repository with the organisation's host in
+  front of it and would stop applying on exactly the managed machines that set
+  one. **A pin naming a different repository is refused and reported**:
+  `"nginx": "alpine:3"` is a typo, and silently running something else is worse
+  than the moving tag it was meant to fix. And **"moving" is computed after the
+  pin**, so a row an administrator has fixed stops being flagged — one that
+  stayed flagged would be a screen that lies about a setting that worked.
+
+- **The app tells you it crashed.** It could crash, write a perfectly good
+  report, and never mention it — so "I would like to report this" never started,
+  not because reporting is hard but because nobody knew there was anything to
+  report. There is a line on the next launch now, once, with a button that opens
+  the diagnostic bundle.
+
+  Nothing leaves the machine, and that is not an omission: `PRIVACY.md` promises
+  no telemetry, no crash reporting service and no server behind the app, and
+  says anything future would be opt-in, off by default, and described there
+  before it ships. The reports already travelled in a diagnostic bundle; what
+  was missing was knowing one existed to send.
+
+  Reports are compared by name rather than by count — ten are kept, so a pruned
+  one would make a count go down and a newer crash then go unmentioned — and the
+  "seen" marker is written when somebody dismisses or follows the line, not when
+  it is read. Marking on read dismisses a notice nobody looked at, which is the
+  same as not having one.
+
+- **An introduction, once, after everything that is an obstacle.** There were
+  four full-window screens and every one of them was a gate: something missing
+  or unassembled, and the app unusable until it was dealt with. None of them
+  introduced anything, and being stopped four times on the way in is not an
+  introduction — on a surface of 26 panes and 317 commands, discovery is harder
+  here than in a menu-bar app, not easier.
+
+  Six cards, and the selection is the point: the things **nobody would find on
+  their own**. Importing from seven other tools, a full environment per git
+  branch, explaining a slow request, building the production image, exporting a
+  devcontainer, and the audit record. All six are written and tested, and four
+  of them appear in no user-facing document at all. A tour of the dashboard
+  would introduce the part that introduces itself.
+
+  It arrives after the stack is up, can be left at any point, and leaving it is
+  not a failure state. `tourSeen` is a preference rather than a session flag,
+  because "once" has to survive a restart or it is not once — and Settings can
+  show it again, because a one-shot screen somebody skipped in their first
+  minute is one they can never get back.
+
+- **RoadRunner, which is Laravel Octane's other driver.** Octane has exactly two
+  — Swoole and RoadRunner — and this application shipped one. For a project
+  using Octane that is not a missing feature, it is a coin toss it can lose:
+  half of them chose the half that was not here.
+
+  The shape is Swoole's: the `php-cli` image, its own HTTP server on 8000, no
+  FPM, no directory listing, and Traefik pointed at 8000 rather than 80. The
+  difference is the cost. Swoole is a PHP extension that has to be compiled into
+  the interpreter — a PECL module and two dev libraries — while RoadRunner is a
+  Go binary that speaks to PHP over a pipe, so nothing about the PHP build
+  changes for it. The binary is resolved by Octane's own installer script rather
+  than pinned to a release asset, because the image is built on whatever the
+  developer's machine is.
+
+  The fallback matters more here than it does for Swoole. Without `artisan`
+  there is no Octane, and RoadRunner without Octane wants a `.rr.yaml` and a
+  PSR-7 worker this application cannot write for somebody — so a non-Laravel
+  project gets PHP's own development server on the same port: a working site
+  rather than a container that exits. Swoole can fall back to a twelve-line
+  script because the extension *is* an HTTP server.
+
+  It generates no configuration file of its own, and not because it needs none:
+  Octane publishes a `.rr.yaml` that belongs to the project, and writing a second
+  would be this application arguing with the framework's own file.
+
+- **Podman is recognised, rootless first.** It already spoke the Docker API on a
+  unix socket, so everything this application does already worked — the only
+  thing missing was the path. `$XDG_RUNTIME_DIR/podman/podman.sock` is searched
+  before the system sockets, because rootless is the case somebody runs Podman
+  for and the one Lerd sells its whole product on; `/run/podman/podman.sock`
+  covers a rootful daemon.
+
+  `XDG_RUNTIME_DIR` is read rather than assumed. `/run/user/<uid>` is what it is
+  on nearly every Linux, and "nearly" is the failure: the variable is what
+  defines the directory, so a session that puts it elsewhere would get a path
+  that does not exist while the socket sat somewhere nothing looked.
+
+  The engine name is a label and never a branch — nothing here does anything
+  different because of which of the four answered — and that is also what makes
+  a non-Docker engine work at all: no version string is compared against a
+  minimum anywhere. Podman answers `Version: 5.1.1`, which is Podman's own, and
+  `ApiVersion: 1.41`, the Docker level it emulates; a check for "Docker >= 20"
+  would have refused an engine that speaks the API perfectly well on the
+  strength of a version string from another product. A fixture of Podman's real
+  `/version` answer holds that.
+
+  One limitation is written down rather than closed: `podman-docker` installs
+  Podman's socket under Docker's name, so it reads as Docker Engine. It works,
+  and reporting it correctly would mean asking the daemon what it is — an answer
+  that would change nothing this application then does.
+
+- **A preset now has a place to live, so a clone brings the stack as well as the
+  project.** `preset.rs` had solved the right problem — a teammate clones and
+  gets `stackvo.json`, but not which of the twenty services are on and at which
+  versions, because that is in `.env`, the one file nobody commits, since it is
+  also where every password is. What was missing was that the file had nowhere
+  to *be*: the export wrote one, the import read one, and between them somebody
+  had to say out loud where they had put it. That sentence is what the feature
+  exists to remove.
+
+  It is `<project>/stackvo.preset.json` now, beside the manifest, in the
+  repository. The requirements card sees one and says what applying it would
+  change; the button goes through `preset_apply`, the same plan-then-apply
+  command the Settings import uses, because a file that arrived with somebody
+  else's clone must not rewrite your stack because you opened a page. The line
+  disappears once your stack matches — a permanent banner is one nobody reads by
+  the third visit, and the moment it matters is the first open after a clone.
+
+  A divergence turned up on the way: the export suggested
+  `<name>.stackvo-preset.json` while nothing looked for that name. Two spellings
+  of one idea, only one of them read — an export writing a file no reader looks
+  for is the feature quietly not working. One name now, held level from both
+  sides.
+
+- **A file at the root of your workspace adds commands to every project in it.**
+  Four rivals sell "add your own command" on the front page — DDEV drops a file
+  in `.ddev/commands/`, Lando has a `tooling:` block, dde and Laragon each have
+  their own — and this application had exactly one way to do it: edit a
+  repository somebody else owns. A command you run in all of them is exactly the
+  one no single project should have to carry.
+
+  `commands.json` is the same schema as a project's `commands` block, the same
+  argv rule and the same container boundary, read by the **same parser** —
+  deliberately not a second shape and deliberately not a second threat model. It
+  is the union of two decisions already taken: a file on disk may declare a
+  command, and a declared command runs in the project's container and nowhere
+  else. There is no `host` form here either; a step that has to run on this
+  machine is a hook, approved against a digest first.
+
+  Between the two declaring layers **the project wins, and the machine file is
+  told.** Refusing a committed, shared file because of a personal one its author
+  has never seen would be hostile; overriding it silently is the
+  button-that-lies failure the catalogue rule already refuses. So every row
+  carries the file it came from, and the pane names it.
+
+  The pane is read-only, on purpose: the file is the interface, the way it is in
+  every product named above, and a form would be a second way to write the same
+  JSON that disagreed with your editor the first time you used one. What it owes
+  instead is the other half — where the file goes, what it found, and what it
+  refused — because a file-shaped interface with no feedback is one you edit
+  twice and give up on. `stackvo commands` and `stackvo run` pick it up without
+  a change: both already went through the one resolver.
+
+- **The four application pickers have a row that says "Other…", and it is a
+  command line you type.** `apps.rs` detects terminals, editors, browsers and
+  database clients, which is a real improvement on the free-text box it
+  replaced — that box asked you to know a launcher's name. But the box was
+  removed without anything going in its place, so the lists were closed sets,
+  and somebody running Helix, Emacs or one of the eight unlisted JetBrains IDEs
+  opened the preferences pane and found nothing they could select. Not a worse
+  choice: no choice.
+
+  (Two of the three examples the roadmap gave were wrong, and checking came
+  first: Neovim and Vim have been in the editor list since it was written.)
+
+  The row is in every list, always selectable, and its command lives beside the
+  choice in `preferences.json` — `editorCustom`, `terminalCustom`,
+  `browserCustom`, `dbClientCustom`. Two keys and not one: `editorCommand` says
+  *which*, `editorCustom` says *what to run*, and a single string would make
+  "go back to VS Code" mean losing the command you typed.
+
+  Two properties it keeps deliberately. **It is never the automatic fallback** —
+  the row is appended after the default is marked, and the walk of installed
+  editors skips it — because falling back to a command nobody chose is worse
+  than not falling back. **And there is no shell**: the line is split on quotes
+  and handed to the OS unexpanded, so `$HOME`, `&&`, a pipe and a redirect are
+  literal text. A backslash is not an escape either, because the commonest thing
+  anyone will type on Windows is a quoted absolute path.
+
+  The terminal gets its own type, because a terminal is handed a *command line*
+  rather than a path and every emulator takes one its own way. One rule: your
+  words first, the command appended as a single trailing argument. The flag goes
+  in the box with the launcher rather than being guessed — `-e`, `--`,
+  `start --` and `/K` are four different answers, and a wrong guess opens a
+  terminal running the wrong thing.
+
+- **The version lists every picker draws from are a setting now, not a
+  release.** Six `.env` keys — `SUPPORTED_LANGUAGES_{PHP,PYTHON,GO,RUBY,RUST,NODEJS}_VERSIONS`
+  — decide what the runtime and PHP pickers offer, and nothing in the interface
+  could edit one. They ship compiled in and go out of date the moment the world
+  ships a release: Go stopped at 1.23, Ruby at 3.3, Node at 23, Rust at 1.84.
+  Selecting a version this application had never heard of meant editing `.env`
+  by hand, or waiting for a release of the application. For a number in a list.
+
+  The runtimes group now carries a disclosure with one chip editor per list, in
+  the shape `PHP_DEFAULT_TOOLS` already uses. A version the registry does not
+  have fails when the image is built, with the engine's own message — the same
+  bargain that control already makes.
+
+  **The roadmap's own diagnosis needed correcting first.** It read "seven of the
+  36 settings keys never appear in `src/`" as "nothing reads them", and that is
+  half a fact: `build_catalog` composes the key with
+  `format!("SUPPORTED_LANGUAGES_{key}_VERSIONS")`, so a key-by-key search finds
+  nothing while the chain — `.env` to catalog to picker — works perfectly. The
+  lists were not dead. They were load-bearing and unreachable.
+
+  A test holds the two lists level, because the bug is one edit away from
+  returning: a seventh runtime added to `config::SETTINGS` is read by
+  `build_catalog` and offered by the picker immediately, and would be editable
+  by nobody, since the pane iterates a list written by hand in JavaScript.
+
+- **Twelve hundred lines of domain logic left the command layer for the
+  modules whose subject they are.** `ARCHITECTURE.md` had already weighed
+  splitting `commands.rs` and declined: the file's size is uncomfortable rather
+  than harmful, and moving three hundred thin functions into a directory
+  touches every command at once. Measuring it again — it had grown from 12.7k
+  to 16.1k since that was written — confirmed the decline and found something
+  else.
+
+  The file's longest items are not commands. Five private helpers of a hundred
+  to three hundred lines each take a path in and return a plain value, with no
+  Tauri type between them, which makes them domain logic living one band above
+  its subject — and the cost is the band rule's own promise, that everything
+  below the command layer "can be called from a test, from the `diagnose`
+  example, or from the MCP surface". Three of the five had callers in `mcp.rs`,
+  `cli.rs` and `examples/diagnose.rs` reaching *up* into `commands` to get at
+  them, which is the dependency arrow drawn pointing the other way.
+
+  So the whole generated tree (render, verify, write) is now `generator`'s, the
+  migration preview is `handover`'s, the worktree plan is `worktree`'s, and "a
+  project's directory and its manifest" is `workspace`'s. `commands.rs` is
+  14,850 lines from 16,070, all 308 commands are still in it, and not one moved
+  line takes Tauri state — the gate that holds that rule reads the same and now
+  holds in both directions.
+
+  Each move arrived with the tests it had and left with more, because the code
+  is reachable now. Three of those tests could not have been written a commit
+  earlier: that a migrated workspace is not planned a second time, that a
+  refused worktree plan still carries the name and hostname it would have had,
+  and the two that were reaching across a band boundary for `scope_includes`
+  and `service_source`. The first was written twice — its first version passed
+  with the refusal deleted, because an empty package tree makes the planner
+  produce nothing either way, so it was thrown away and rewritten where a real
+  catalogue exists.
+
+- **The build ships the icon rules this application can reach, and two of the
+  ones it named did not exist.** Material Design Icons declares 7,447 glyph
+  rules — 408 KB of stylesheet — and this application names 313 of them. The
+  eager set was 1547 KB against a 1700 ceiling and every asset together was
+  3001.5 against 3000, which is to say the bundle budget was not tight, it was
+  breached. It is now 1246 and 2701, and the eager ceiling has come *down* from
+  1700 to 1400: 36% of slack over a measurement is where a budget stops being
+  an alarm.
+
+  The trim is the one `totalKb`'s own comment named as the thing it exists to
+  catch — "a dependency arriving by accident: a full icon font" — and it needed
+  no new dependency, because the stylesheet is text. The font itself is still
+  whole at 394 KB; subsetting a woff2 wants a font toolchain, so it is written
+  down as the next piece rather than done badly.
+
+  **And reading the icon set against this tree found two names that are not
+  icons.** `mdi-discord` has been gone for two major versions — the set dropped
+  its brand marks — and `mdi-format-textdirection-r-to-l` was renamed, so the
+  Discord row of the community links and the heading of the Localisation
+  panel's direction group had both been rendering a blank square. A missing
+  glyph is the quietest failure a screen can have: nothing warns, and the gap
+  reads as a spacing decision.
+
+  Which icons count as used is now one list with three readers — the plugin
+  that strips, the bundle gate that holds the built stylesheet against it after
+  the build, and a test that holds it against the icon set. Vuetify renders 26
+  icons this repository never writes down (the checkbox marks, the sort arrows,
+  the pagination chevrons); a list built from `src/` alone ships an application
+  whose checkboxes are empty, which is what its first version did.
+
+- **A nightly asks the one question CI cannot: does a project actually come
+  up.** `tests/docker_smoke.rs` lays out a throwaway workspace, writes a
+  manifest, renders it through the application's own `write_generated`, runs
+  `docker compose up --build`, and asks for the page twice — from inside the
+  container, which proves nginx, php-fpm, the bind mount and `document_root`,
+  and through Traefik over HTTPS, which proves the label the generator wrote
+  became a router. It prints `PHP_SAPI`, so a container serving the file as
+  static text fails instead of passing with the source on screen.
+
+  **It refuses to run beside a live stack rather than skipping.** The generated
+  compose project is called `stackvo` on every machine, its containers are
+  `stackvo-*` and its network is `stackvo-net`, so a second stack is not a
+  second stack — `--remove-orphans` against a developer's own installation
+  removes the containers it did not put there. That refusal is why this could
+  not be run on the machine it was written on, and it is why it is a check
+  rather than a note.
+
+  The half that needs no engine — the workspace renders a service, at the right
+  domain, with a Dockerfile in the build context, and every file
+  `compose_file_list` would hand compose exists — runs in the ordinary suite,
+  so a rename fails at the commit rather than at three in the morning. Two
+  gates in `workflow_parity.rs` keep the nightly from drifting: its Linux
+  packages must be a superset of CI's, and the sentence its job greps for must
+  be the sentence the test prints — otherwise green and never-ran look the
+  same, which is the failure the `driver` job already carries a comment about.
+
+- **The debug bridge writes three kinds of signal, not one, and a queued job's
+  `dump()` finally reaches it at all.** `Event::kind` was written before there
+  was a second value for it, so that a second signal would need no second file
+  and no second reader. Two arrived and it did not: a `request` — one row per
+  execution, with the HTTP status and how long it took — and a `job`.
+
+  The request row is raised from `register_shutdown_function`, not from any
+  framework's "request handled" event, and that is the point rather than a
+  fallback: PHP itself guarantees the hook, it runs for a fatal and for an
+  `exit()` as well as for a clean return, and it needs nothing loaded. So the
+  row appears for Laravel, for Symfony, for WordPress and for a hand-written
+  `index.php` alike. It is registered at prepend time, which puts it first on
+  the shutdown stack — measured to matter, because an `exit()` inside a
+  shutdown function skips every handler behind it.
+
+  **The obvious way to add jobs does not exist, and that was measured rather
+  than assumed.** Four listeners on Laravel's own queue events cannot be
+  attached from an `auto_prepend_file`: the container does not exist yet, and
+  watching the autoloader for the queue's classes fails because **Composer
+  registers its own loader with `$prepend = true`** and lands in front of
+  anything the prepend file registered. Against a real Laravel 12 checkout,
+  `spl_autoload_functions()` comes back `[Composer…, <the bridge>]` in that
+  order. So jobs are read the way queries are read — out of the producer's own
+  record. The new `queuelog` parses `queue:work`'s own two-column output and
+  folds it into the same events file, on the **engine's** clock rather than the
+  timestamp the worker printed in whatever timezone its image was built with.
+
+  **And the worker never carried the bridge.** It reaches the web container
+  through a compose overlay, and a queue sidecar is started with `docker run`,
+  which was giving it one bind mount. A `dump()` inside a queued job was
+  therefore written by nothing and read by nobody — while the module's own
+  header and `debug_bridge_set`'s contract note both said it worked. Measured
+  by running the same job against a container with the mounts and one without;
+  `worker::run_args` now passes all three, the ini as a *file* mount so it does
+  not shadow every other ini in `conf.d`.
+
+  Two smaller things the running found. `spl_autoload_register`'s `$do_throw`
+  makes PHP 8 print a notice when it is `false` — which a prepend file would
+  put into everybody's response. And the first job run after switching capture
+  on was swallowed: with no cursor the seed took "the worker's newest line" as
+  history to skip, and that line was the job. A worker that has printed nothing
+  now seeds at zero, and the seed happens at the switch rather than a poll
+  later.
+
 - **Every platform's bundler is given an icon in the format it demands (§3 #22).**
   Both Windows rows of the first rehearsal — x86_64 and ARM64 — died on
   `Couldn't find a .ico icon`, after the application had finished compiling.
@@ -270,6 +1098,20 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The coverage floors were four points under the measurement and are now
+  three; the measurement was four points stale and is now current.** The
+  recorded pair had stood at 2026-08-07 while the tree gained four points, so
+  the Rust floor of 60 sat eight points under a real 68.05 — a seven-point
+  regression would have passed in silence. Rust is now 65, and the front end's
+  85/72 are 90/78 against a measured 92.20/80.99.
+
+  The distance is arithmetic rather than habit: the measurement, less one point
+  of platform (where this repository's history puts macOS against Ubuntu) and
+  two for a module written before its tests, which is its uncovered lines over
+  the tree's 59.5k. And the gate now says when the recorded measurement has
+  fallen behind the tree — a gain, so it is said rather than failed on, but an
+  unsaid one is exactly how the pair went stale.
+
 - **The accessibility statement moved to the root, and the transcript moved out
   of the source tree.** `docs/` in this repository is not a documentation dump:
   `tauri.conf.json` bundles `docs/help` into the application as a resource, so
@@ -292,6 +1134,163 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   checked: `accessibility-claims.spec.js` still reads it and holds it against
   the routes and the axe suite, and `native_window_claims.rs` still fails if §4
   stops saying the native audit is owed.
+
+### Fixed
+
+- **The contract said which files read each setting, and 39 of its 45 paths
+  named files that do not exist.** All thirty-nine were under `core/` — the Bash
+  and Node implementation the Rust rewrite replaced. Six pointed at the live
+  tree. A contract field naming a deleted directory is worse than no field: it
+  reads as evidence, and somebody deciding whether a setting is safe to change
+  reads it.
+
+  The tool that maintains the field pointed at `core/` too, so it exited 2 on
+  every run and told nobody — the thing written to stop this measurement rotting
+  died in exactly the way it was written to prevent. It reads this repository
+  now, and `tests/env-consumers.spec.js` fails when the lists go stale: the
+  paths must exist, the lists must match a fresh scan, and the `active`/`dead`
+  labels must match what that scan finds.
+
+  Two rules in it are worth stating. **Declaration is not consumption** — every
+  key is written in `config.rs`'s settings tables, so counting that file would
+  report all 72 as active and `dead` would become unreachable. And **comments
+  are stripped**, which is load-bearing rather than tidy: this repository writes
+  down that a key is dead in a sentence naming the key, and an unstripped scan
+  read `DOCKER_REMOVE_ORPHANS` and `HOST_PORT_ADMINER` as live off the sentence
+  saying they were not.
+
+  Two more claims in the schema's own header were fossils of the same removal:
+  it named `.env.example` as its source — there is no such file — and claimed
+  159 keys against the 72 it describes. Both are corrected, and the count is
+  checked rather than asserted.
+
+- **A `.env` line with nothing after it gave every project a domain ending in a
+  bare dot.** `DEFAULT_TLD_SUFFIX` had two derivations that disagreed:
+  `certs::suffix` trimmed it, lower-cased it and treated an empty value as
+  absent, while ten call sites did a bare `unwrap_or("stackvo.loc")`. `Env::parse`
+  lets a file's empty value win over the embedded default, so
+  `DEFAULT_TLD_SUFFIX=` produced `shop.` everywhere while the certificate was
+  still issued for `stackvo.loc`. A suffix written `Shop.LOC` split the same way.
+
+  Three values had this shape — the suffix, the Docker network, and the default
+  web server — so each is now one named constant and one derivation:
+  `config::DEFAULT_TLD_SUFFIX`, `DEFAULT_NETWORK`, `DEFAULT_SERVER`, with
+  `Env::tld_suffix`, `Env::docker_network` and `Env::default_server` beside them.
+  The network is deliberately not case-folded: Docker network names are
+  case-sensitive, so lowering one would name a network that is not there.
+
+- **One setting, three answers: `SUPPORTED_SERVERS_DEFAULT` moved the wizard and
+  nothing else.** It was read in exactly one place in production — the value the
+  new-project wizard shows preselected — while five render sites said
+  `unwrap_or("nginx")`. So with `=caddy`, a project opened from the wizard ran
+  Caddy, an adopted project ran nginx, and a manifest with its `server` line
+  deleted ran nginx. The setting reaches the render path now, and
+  `Manifest::server_or` is the one place a project that did not choose gets an
+  answer.
+
+- **A DDEV project configured for Apache was imported as something else.**
+  `Detected.server` was the string `"nginx"` at all four places detection set
+  it, which read as a finding and was a default. `imports.rs` overwrites it with
+  real evidence — DDEV's `webserver_type` — but because the literal made the two
+  indistinguishable, `detected_spec` resolved the workspace setting *first* and
+  the evidence it had recorded was ignored. It is an `Option` now, and the order
+  is the one every other field in that function already used: what the folder
+  declares wins, and the setting answers for a folder that declares nothing.
+
+- **Forty-seven English sentences were printed into a Turkish window.** Five
+  Rust catalogues carry prose to the screen — what each quick command does, what
+  each identity provider accepts as a callback URL, why each required tool is
+  required, what this repository's own two binaries are for, and what has to be
+  changed before a shipped provider recipe will run — and every one of them was
+  an English literal rendered raw. A Turkish user got a translated interface
+  with English inside it.
+
+  `hints.rs` had already written down why this class is the worst one to leave
+  alone: *"It is the sentence that tells someone what to do."* "Run pending
+  migrations." sits under `php artisan migrate`, above a button that runs it in
+  somebody's container.
+
+  Keyed by the id each catalogue already carries — `Spec.id`, `Provider.id`,
+  `Tool.id`, `Recipe.name` — so there is no second name to typo and no mapping
+  to keep level. The English stays in Rust and is still what the CLI prints,
+  what an MCP client reads and what the log records; the window shows the
+  translation and falls back to the English. `hint_translations.rs` holds the
+  two sides equal: a row nobody translated fails, a translation nothing offers
+  any more fails, and English that has drifted from Rust fails.
+
+  A recipe's edit list is the one exception and carries its own key, because it
+  has no ids and **a position is not a name**: both database recipes need the
+  same instruction, so keying by position would have meant two translations of
+  one sentence. It is `{ key, english }` now, which is the shape `hints.rs`
+  settled on.
+
+  The roadmap counted 39 across three catalogues. Measured, those three carry 37
+  — `oauth.rs` has 7 notes, not 9 — and two catalogues it had not looked at
+  carry eleven more.
+
+  One passage went the other way. A sidecar's description comes out of the
+  project's own `stackvo.json`, so nothing here knows what language it is in; it
+  is marked `lang=""` — undetermined — beside the container output and captured
+  dumps that already were.
+
+- **The charts ignored the theme, and one of them ignored a colour-blindness
+  setting.** Four colours were written into the Indicator pane and its stats
+  composable as hex, and every one was a copy of a theme value: `#1976D2` for
+  `primary` three times over, `#2A313C` for one theme's `surface-variant`,
+  `#4CAF50` for `success`. Move the accent to purple and the application turned
+  purple with three blue pie charts and a blue sparkline in it; switch to the
+  light theme and the second slice of every pie was dark charcoal on a white
+  card — a colour with no relationship to anything on screen.
+
+  The sparkline is the one that mattered most. `success` is one of the three
+  colours the status palette rewrites for red-green deficiency, so a hardcoded
+  green ignored that choice on a chart made of nothing but colour.
+
+  The pie colours left the composable rather than being replaced there — not
+  because a composable must not know colours, but because the colour that
+  belongs there is the *current theme's*, and the theme is only readable from
+  inside a component. The pane paints them now, by position: every pie here is
+  measured-against-remainder, so the first slice is `primary` and the rest is
+  `surface-variant`, which is the ground in every theme this app ships.
+
+- **The CPU activity grid was five fixed greens, and two of them were near-black
+  squares on the light theme.** `.heat-cell.l0` through `.l4` were tied to
+  nothing — not the theme, not the accent, not the status palette — so somebody
+  who had chosen Okabe-Ito for colour blindness had it everywhere in the
+  application except on the one card that is nothing but a field of colour.
+
+  It is the theme's `success` now, with intensity carried by opacity rather than
+  by five hand-picked shades. That is what makes it work in both themes: the
+  cell sits over the card, so the ramp runs from the card's own surface up to
+  the full colour, whatever that surface is. Five hues cannot do that — they are
+  picked against one background.
+
+- **A frame around the terminal, in a colour nothing agreed on.** `#12121a` was
+  written twice in one file: once as xterm's background in JavaScript, once as
+  the host element's in CSS, eight pixels of padding apart. Only the first was
+  conditional, so with "keep consoles dark" switched off xterm fell back to its
+  own default and the CSS frame stayed `#12121a` — the drift the two literals
+  invited was already there. One constant now, read by both halves, and the
+  frame is transparent when the setting is off.
+
+- **Every icon in the terminal, editor and browser pickers was a blank square,
+  and one of them had been blank since it was written.** The icon subsetter
+  added last release strips the rules nothing names, and it read `src/` only —
+  but `apps.rs` is a catalogue, and eighteen of its icons are named nowhere
+  else: `mdi-apple`, `mdi-firefox`, `mdi-powershell` and fifteen more appear in
+  no `.vue` file at all. All eighteen were being stripped. The scan reads
+  `src-tauri/src` now, which costs 2.4 KB of the eager set, measured.
+
+  Its first run then found a nineteenth of a different kind. `mdi-vim`, the icon
+  on the Neovim and Vim rows, **is not an icon** — Material Design Icons has
+  never had one — so those two rows have been drawing an empty square since the
+  day they were added. It could not have been caught before, because the file it
+  was written in was not being read.
+
+  Rust is scanned narrowly, and that is measured too: in `.rs` an icon name is
+  always a string literal, while the prose around it is thick with names that
+  are not icons. The first wide run collected `mdi-vim` written down as the bug
+  it was, and `mdi-icons.mjs` naming the file doing the scanning.
 
 ### Added
 
