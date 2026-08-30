@@ -9,6 +9,7 @@ import HelpButton from '@/components/HelpButton.vue';
 import PageLayout from '@/components/PageLayout.vue';
 import HostsDialog from '@/components/HostsDialog.vue';
 import LandingCard from '@/components/LandingCard.vue';
+import UsageToday from '@/components/UsageToday.vue';
 import { api, asList } from '@/lib/ipc';
 import { bytes, bytesPerSecond, percent } from '@/lib/format';
 
@@ -561,6 +562,14 @@ onMounted(() => {
               </v-list>
             </div>
           </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- What it cost. The rows above are all "now"; this is the only one
+           that answers the question people actually ask about Docker. -->
+      <v-row class="dash-row">
+        <v-col cols="12">
+          <UsageToday />
         </v-col>
       </v-row>
 

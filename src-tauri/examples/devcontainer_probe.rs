@@ -88,7 +88,13 @@ fn main() -> ExitCode {
 
     let mut failures = 0usize;
     for (name, m) in &projects {
-        let plan = match devcontainer::plan(m, &table, &tree, &opts) {
+        let plan = match devcontainer::plan(
+            m,
+            &table,
+            &tree,
+            &opts,
+            stackvo_desktop_lib::config::DEFAULT_SERVER,
+        ) {
             Ok(plan) => plan,
             Err(e) => {
                 failures += 1;

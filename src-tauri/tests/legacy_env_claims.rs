@@ -78,7 +78,7 @@ const ACCESSORS: [&str; 7] = [
 /// Ordered by what deletion day does to them: `config.rs` loses the constant
 /// and the accessors, `handover.rs` loses its reason to exist, and the other
 /// three lose a branch each.
-const READERS: [(&str, &str); 5] = [
+const READERS: [(&str, &str); 6] = [
     (
         "config.rs",
         "defines the constant and the accessors; the deletion starts here",
@@ -89,9 +89,17 @@ const READERS: [(&str, &str); 5] = [
     ),
     (
         "commands.rs",
-        "the pre-migration branches: `list_services` falls back to `.env` when \
-         there is no instance table, and the traefik routes are rendered from \
-         the same fallback",
+        "the pre-migration branch: `list_services` falls back to `.env` when \
+         there is no instance table",
+    ),
+    (
+        "generator.rs",
+        "the traefik routes are rendered from the same pre-migration fallback. \
+         It reached this list by moving rather than by being written: the whole \
+         generated tree left `commands.rs` for the module whose subject it is, \
+         and the `.env` read came with it. Which is the argument for a list \
+         that fails in both directions — a reader can arrive without anybody \
+         adding a line of code",
     ),
     (
         "preset.rs",

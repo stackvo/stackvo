@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
@@ -42,6 +42,52 @@ const httpsUrl = computed(() => (props.project?.domain ? `https://${props.projec
 const containerPath = computed(() =>
   (props.project?.runtime ?? 'php') === 'php' ? '/var/www/html' : '/app'
 );
+
+/**
+ * Does this machine match what the repository declares?
+ *
+ * Asked rather than shown by default, and that is the point of the button:
+ * everything else on this card is what the project *is*, and this is a question
+ * about the machine underneath it. Somebody an hour into a clone is the one who
+ * presses it.
+ *
+ * Every line comes back, not only the failing ones — a verifier that answered
+ * with nothing when everything matched would leave the reader unable to tell
+ * "it checked and I am fine" from "it did not check".
+ */
+const verification = ref(null);
+const verifying = ref(false);
+const verifyError = ref(null);
+
+async function verify() {
+  verifying.value = true;
+  verifyError.value = null;
+  try {
+    verification.value = await api.projectVerify(props.project.name);
+  } catch (e) {
+    verification.value = null;
+    verifyError.value = e;
+  } finally {
+    verifying.value = false;
+  }
+}
+
+// A result about one project must not stay on screen for the next one.
+watch(
+  () => props.project?.name,
+  () => {
+    verification.value = null;
+    verifyError.value = null;
+  }
+);
+
+const CHECK_STATE = { ok: 'success', missing: 'error', different: 'warning', unknown: 'info' };
+const CHECK_ICON = {
+  ok: 'mdi-check-circle-outline',
+  missing: 'mdi-close-circle-outline',
+  different: 'mdi-alert-circle-outline',
+  unknown: 'mdi-help-circle-outline',
+};
 </script>
 
 <template>
@@ -236,6 +282,71 @@ const containerPath = computed(() =>
           <strong>{{ i.code }}</strong> {{ i.path }} — {{ i.message }}
         </div>
       </v-alert>
+    </template>
+
+    <!-- The other half of onboarding: the repository says what it needs, and
+         this answers whether this machine has it. Asked, not polled — it is a
+         question about the machine, and nobody wants it re-answered on every
+         render of a card about the project. -->
+    <div class="section-head mt-8 mb-3">
+      <v-icon size="18" class="mr-2">mdi-clipboard-check-outline</v-icon>
+      {{ t('verify.title') }}
+    </div>
+    <p class="text-caption text-medium-emphasis mb-2">{{ t('verify.explain') }}</p>
+    <v-btn
+      size="small"
+      variant="tonal"
+      prepend-icon="mdi-clipboard-check-outline"
+      :loading="verifying"
+      :disabled="!project"
+      @click="verify"
+    >
+      {{ t('verify.run') }}
+    </v-btn>
+
+    <v-alert
+      v-if="verifyError"
+      type="error"
+      variant="tonal"
+      density="compact"
+      class="mt-3 text-caption"
+    >
+      {{ verifyError.message }}
+    </v-alert>
+
+    <template v-if="verification">
+      <v-alert
+        :type="verification.ready ? 'success' : 'warning'"
+        variant="tonal"
+        density="compact"
+        class="mt-3 text-caption"
+      >
+        {{ verification.ready ? t('verify.ready') : t('verify.notReady') }}
+      </v-alert>
+
+      <v-list density="compact" class="bg-transparent pa-0 mt-1">
+        <v-list-item
+          v-for="(check, i) in verification.checks"
+          :key="`${check.id}-${check.subject}-${i}`"
+          class="px-0"
+          data-test="verify-check"
+        >
+          <template #prepend>
+            <v-icon :color="CHECK_STATE[check.state]" size="18" class="mr-3">
+              {{ CHECK_ICON[check.state] }}
+            </v-icon>
+          </template>
+          <v-list-item-title class="text-body-2">
+            {{ t(`verify.check.${check.id}`, { subject: check.subject }) }}
+          </v-list-item-title>
+          <v-list-item-subtitle v-if="check.state !== 'ok'" class="text-caption">
+            {{ t(`verify.fix.${check.id}`) }}
+          </v-list-item-subtitle>
+          <template v-if="check.detail" #append>
+            <span class="text-caption text-medium-emphasis">{{ check.detail }}</span>
+          </template>
+        </v-list-item>
+      </v-list>
     </template>
 
     <!-- Every value read above is a field in stackvo.json, so the way to change

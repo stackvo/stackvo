@@ -208,6 +208,87 @@ fn the_local_container_installs_every_linux_package_the_release_installs() {
     );
 }
 
+/// The nightly runs the suite in at least the environment CI proves green.
+///
+/// One link further along the chain this file already argues for CI and the
+/// release. The nightly compiles the same crate on the same distribution, and
+/// its failure mode is the worse one: a header CI installs and it does not is
+/// found by nobody, at three in the morning, in a job whose whole purpose is
+/// that nobody is watching.
+#[test]
+fn the_nightly_installs_every_linux_package_ci_installs() {
+    let ci = apt_packages(&suite_job(&read(".github/workflows/ci.yml")));
+    let nightly = apt_packages(&suite_job(&read(".github/workflows/nightly.yml")));
+
+    assert!(
+        ci.len() > 3,
+        "the scan found {} packages in ci.yml's test job, so it stopped reading \
+         `apt-get install` lines rather than that CI stopped needing them",
+        ci.len()
+    );
+
+    let missing: Vec<&String> = ci.difference(&nightly).collect();
+    assert!(
+        missing.is_empty(),
+        "ci.yml installs {missing:?} and nightly.yml does not.\n\n\
+         The nightly builds the same crate on the same runner image, so a \
+         missing header is a red nightly with a compiler error in it — for a \
+         job that exists to report on Docker, and whose reader is a person \
+         glancing at a badge."
+    );
+}
+
+/// A green nightly means the smoke test RAN.
+///
+/// The test skips and passes without its switch, so the job looks for the
+/// sentence it prints when it does that. Which makes the sentence a contract
+/// between a Rust file and a YAML file, and nothing about either would notice
+/// it being reworded — the job would go on being green while checking for a
+/// line that can no longer appear.
+///
+/// This is the same failure the `driver` job was burned by and says so in its
+/// own comment: "green" and "never ran" must not look the same.
+#[test]
+fn the_nightly_can_tell_a_skipped_smoke_from_a_finished_one() {
+    let test = read("src-tauri/tests/docker_smoke.rs");
+    let nightly = read(".github/workflows/nightly.yml");
+
+    // The sentence, read out of the test rather than written here a third time.
+    let skipped = test
+        .split_once("const SKIPPED: &str = \"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(literal, _)| literal.to_string())
+        .expect("docker_smoke.rs no longer declares SKIPPED — see this test");
+
+    assert!(
+        nightly.contains(&skipped),
+        "nightly.yml does not look for {skipped:?}, which is what the smoke test \
+         prints when it does nothing. Without that line the job is green whether \
+         the test ran or not."
+    );
+
+    // And the switch that decides which of the two happens.
+    let switch = test
+        .split_once("const ENABLE: &str = \"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(literal, _)| literal.to_string())
+        .expect("docker_smoke.rs no longer declares ENABLE — see this test");
+    assert!(
+        nightly.contains(&switch),
+        "nightly.yml never sets {switch}, so the smoke test it runs skips."
+    );
+
+    // How many results the job insists on. A third test added to that file and
+    // not counted here is a nightly that fails on a number, which is a bad way
+    // to find out — so it fails here instead, where the person who added it is.
+    let tests = test.matches("#[test]").count() + test.matches("#[tokio::test]").count();
+    assert!(
+        nightly.contains(&format!("test result: ok\\. {tests} passed")),
+        "nightly.yml expects a different number of results than the {tests} \
+         tests docker_smoke.rs declares."
+    );
+}
+
 /// The bundling half is answerable without a runner.
 ///
 /// A round was spent using a release run as a test environment, and the

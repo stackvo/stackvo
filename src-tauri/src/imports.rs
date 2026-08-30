@@ -1146,11 +1146,11 @@ fn ddev_site(dir: &Path, global_tld: &str, projects: Option<&Path>) -> Option<Si
         // over from it — leaving detection's answer is better than picking one.
         match ddev_scalar(&config, "webserver_type").as_deref() {
             Some("apache-fpm") => {
-                detected.server = "apache";
+                detected.server = Some("apache");
                 evidence.push("webserver_type");
             }
             Some("nginx-fpm") => {
-                detected.server = "nginx";
+                detected.server = Some("nginx");
                 evidence.push("webserver_type");
             }
             _ => {}
@@ -1897,7 +1897,7 @@ nodejs_version: auto
         assert_eq!(site.domain.as_deref(), Some("myshop.ddev.site"));
         // `^8.1` is what the framework NEEDS; `8.3` is what the project RUNS.
         assert_eq!(site.detected.php_version.as_deref(), Some("8.3"));
-        assert_eq!(site.detected.server, "apache");
+        assert_eq!(site.detected.server, Some("apache"));
         assert_eq!(site.detected.document_root.as_deref(), Some("public"));
         // Detection still owns what it reads from the code.
         assert_eq!(site.detected.framework, Some("laravel"));

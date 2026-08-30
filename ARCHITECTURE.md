@@ -20,8 +20,8 @@ Three parts, in the order a request travels:
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | [`src/`](src/)                         | 38k lines               |
-| Back end — Rust, 112 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
-| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 314 commands, 71 events |
+| Back end — Rust, 120 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
+| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 325 commands, 72 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -68,25 +68,25 @@ an accident of how it was first written:
 
 ### 3.1 Layers
 
-`src-tauri/src/` is flat — 112 modules, no subdirectories — but it is not
+`src-tauri/src/` is flat — 120 modules, no subdirectories — but it is not
 unstructured. There are four bands, and the dependency arrows only ever point
 downward:
 
 ```
-  entry              1.8k   lib.rs, main.rs, menu, tray — plugins, state, the
+  entry              2.0k   lib.rs, main.rs, menu, tray — plugins, state, the
       │                     handler list, the window
       ▼
-  commands.rs       12.8k   the IPC surface: 305 #[tauri::command] functions
+  commands.rs       14.9k   the IPC surface: 319 #[tauri::command] functions
       │                     argument validation, orchestration, nothing else
       ▼
-  domain            53.3k   112 modules: generator, manifest, certs, hosts,
+  domain            89.7k   97 modules: generator, manifest, certs, hosts,
       │                     mail, xdebug, profile, preset, migrate, worktree, …
       │                     one subject each; no Tauri types
       ▼
-  platform           5.6k   engine (Docker), runner, elevate, pty, watcher,
+  platform           6.6k   engine (Docker), runner, elevate, pty, watcher,
       │                     applog, atomic, paths, appdir, git
       ▼
-  primitives         2.2k   error, events, progress, hints, inflight, logging,
+  primitives         2.3k   error, events, progress, hints, inflight, logging,
                             crash, contracts
 ```
 
@@ -96,11 +96,27 @@ that is the rule the band structure exists to enforce: everything below it can
 be called from a test, from the `diagnose` example, or from the MCP surface,
 with no running application.
 
-The 12.7k-line `commands.rs` is the known cost of that rule. It is a directory of
-thin functions rather than a module with a subject, and splitting it by subject
-is the obvious next move; it has not been done because the file's size is
-uncomfortable rather than harmful, and the split would touch every command at
-once.
+The 14.9k-line `commands.rs` is the known cost of that rule. It is a directory of
+thin functions rather than a module with a subject — 391 of them, averaging
+twenty-seven lines — and splitting the *file* by subject has not been done,
+because moving three hundred thin functions into a directory touches every
+command at once to gain a shorter file.
+
+What was done instead came out of measuring the file rather than its size. Its
+longest items were not commands at all: five private helpers of a hundred to
+three hundred lines each, taking a path in and a plain value out, with no Tauri
+type between them. That is **domain logic living one band above its subject**,
+and the cost was the rule's own promise — a function up here cannot be called
+from a test, from the `diagnose` example, or from the MCP surface, and three of
+those five had callers in `mcp.rs`, `cli.rs` and `examples/diagnose.rs` that
+were reaching *up* into the command layer to get at them.
+
+Twelve hundred lines went down to where their subject is: the whole generated
+tree (render, verify, write) to `generator`, the migration preview to
+`handover`, the worktree plan to `worktree`, and "a project's directory and its
+manifest" to `workspace`. Each arrived with the tests it had and left with more,
+because the moved code is reachable now. The band rule reads the same and holds
+in both directions.
 
 ### 3.2 The modules, by subject
 
@@ -108,16 +124,20 @@ once.
 | -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rendering      | `generator`, `template`, `skeleton`, `scaffold`                                    | Everything under `generated/`, the per-project Dockerfile, and the files a new project starts with                                                                                                   |
 | The manifest   | `manifest`, `detect`, `migrate`                                                    | `stackvo.json`: its schema, guessing one for an adopted folder, and moving old ones forward                                                                                                          |
-| Docker         | `engine`, `runner`, `inflight`                                                     | Talking to the daemon (bollard), running `docker compose` as a streamed operation, and refusing two at once on one subject                                                                           |
+| Docker         | `engine`, `runner`, `inflight`, `images`                                           | Talking to the daemon (bollard), running `docker compose` as a streamed operation, refusing two at once on one subject, and the one table of images this app runs but did not build                   |
 | Networking     | `certs`, `hosts`, `elevate`, `tunnel`, `tunnelid`                                  | TLS via mkcert, `/etc/hosts`, the one privileged call, the nine-provider tunnel table, and the guard that puts a password and a kept address in front of one (B-7)                                    |
 | Services       | `db`, `worker`, `quickcmd`, `repl`, `release`, `stats`                             | The optional stack, the per-project sidecars, the command catalogue, the snippet workbench, and the production image                                                                                 |
-| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`, `explain`                     | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — their output, and the join that puts a recording, the query log and the axis around one request (B-1) |
+| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`, `queuelog`, `explain`         | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — their output, what the queue worker reported it did, and the join that puts a recording, the query log and the axis around one request (B-1) |
 | Node           | `devserver`                                                                        | The dev-server sidecar and the `allowedHosts` snippet                                                                                                                                                |
 | Mail           | `mail`                                                                             | The catcher, its search, and the HTML/link checks                                                                                                                                                    |
 | Branches       | `git`, `worktree`                                                                  | Cloning with the user's own git, and giving a branch its own directory, hostname, database and environment                                                                                           |
-| Diagnosis      | `doctor`, `preflight`, `diagnostics`, `applog`, `crash`                            | What is wrong, what can be fixed automatically, and what to send when it cannot                                                                                                                      |
+| Diagnosis      | `doctor`, `preflight`, `diagnostics`, `applog`, `crash`, `verify`                            | What is wrong, what can be fixed automatically, and what to send when it cannot                                                                                                                      |
+| The cost       | `usage`, `stats`, `stats_store`, `idle`                                            | What each container has used, kept across restarts, and what to switch off when nothing is using it                                                                                                   |
+| Credentials    | `secrets`, `leaks`                                                                 | Where a password lives, and where one is that nobody moved                                                                                                                                           |
+| The fleet      | `policy`, `compliance`                                                             | What an administrator decided for a machine this app does not own, and whether any of it is actually holding here                                                                                     |
+| The record     | `audit`, `undo`                                                                    | What was done that somebody has to account for, and — for the acts an assistant asked for — what would put each one back, worked out before it ran                                                    |
 | The app itself | `workspace`, `preset`, `config`, `locale`, `watcher`, `tray`, `menu`, `mcp`, `cli` | Where things live, sharing that setup, and the three surfaces other than the window: the tray, the MCP server and `stackvo`                                                                          |
-| Assistants     | `agents`, `rules`, `agentctx`, `ide`                                               | Registering the MCP server with the clients on this machine, writing the rules that say when to use it, the context file an agent inside a container reads, and the debug configuration an IDE needs |
+| Assistants     | `agents`, `rules`, `agentctx`, `ide`, `grant`                                      | Registering the MCP server with the clients on this machine, writing the rules that say when to use it, the context file an agent inside a container reads, the debug configuration an IDE needs, and what one assistant is allowed to do — which tools, which project, for how long |
 
 ### 3.3 State
 
@@ -196,7 +216,7 @@ rejections".
 
 ## 5. The contract
 
-[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 314 commands, 71
+[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 325 commands, 72
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
@@ -308,7 +328,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (112 modules, 314 commands) come from
+covers `README.md`; the counts above (120 modules, 325 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 

@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use stackvo_desktop_lib::{
-    commands, config::Env, handover, instances, pkg, ports, render, secrets, workspace,
+    config::Env, generator, handover, instances, pkg, ports, render, secrets, workspace,
 };
 
 fn fixture() -> PathBuf {
@@ -442,7 +442,7 @@ mod the_refusal {
 
         // `GenFile` has no `Debug`, so the Ok side cannot be unwrapped into a
         // panic message — matched instead, which says the same thing.
-        let err = match commands::render_generated(&root) {
+        let err = match generator::render_generated(&root) {
             Err(e) => e,
             Ok(_) => panic!("a workspace with no table must not render a stack"),
         };
@@ -480,7 +480,7 @@ mod the_refusal {
         assert!(plan.blockers.is_empty(), "{:?}", plan.blockers);
         handover::apply(&root, &plan).unwrap();
 
-        let (files, _) = commands::render_generated(&root).expect("the new path");
+        let (files, _) = generator::render_generated(&root).expect("the new path");
         let dynamic = files
             .iter()
             .find(|f| f.label == "docker-compose.dynamic.yml")
@@ -534,7 +534,7 @@ mod the_refusal {
         // should have been refused, or a directory somebody deleted.
         std::fs::remove_dir_all(market.join("databases/mysql")).unwrap();
 
-        let err = match commands::render_generated(&root) {
+        let err = match generator::render_generated(&root) {
             Ok(_) => panic!("a table naming a missing package rendered anyway"),
             Err(e) => e,
         };
@@ -618,4 +618,49 @@ fn a_workspace_with_no_table_still_lists_the_env_catalogue() {
         "the compiled catalogue should still be the source"
     );
     assert!(rows.iter().any(|s| s.id == "mysql"));
+}
+
+/// The preview refuses to plan a workspace that has already been handed over.
+///
+/// `.env` keeps its service keys after a migration — marked, never deleted, as
+/// a record of what the workspace used to run. So a preview that planned
+/// anyway produced blockers about versions the workspace stopped using the
+/// moment the table was written, and the panel upstream shows on
+/// `blockers.length > 0`: a migrated machine was told it "still keeps its
+/// services in .env" while the Services page was reading the table and the
+/// containers were running from it.
+///
+/// **This is a test the catalogue has to be real for.** An empty package tree
+/// makes `is_pending` answer false and `plan` produce nothing, so the same
+/// assertions pass with the refusal deleted — which is what a first version of
+/// this test did, in `handover.rs`'s own unit module, where no catalogue
+/// exists. It is here because `workspace()` builds one.
+#[test]
+fn a_migrated_workspace_is_not_planned_a_second_time() {
+    let root = workspace("preview-migrated");
+    std::fs::write(
+        root.join(".env"),
+        "SERVICE_MYSQL_ENABLE=true\nSERVICE_MYSQL_VERSION=8.0\n",
+    )
+    .unwrap();
+
+    // What the same workspace says before the table exists: something to do.
+    let before = handover::preview(&root).expect("a preview of an unmigrated workspace");
+    assert!(before.pending, "the fixture has a service on and no table");
+    assert!(
+        !before.instances.is_empty(),
+        "there is nothing for the refusal below to be the absence of"
+    );
+
+    std::fs::create_dir_all(root.join("services")).unwrap();
+    std::fs::write(instances::path(&root), "{\"instances\":[]}").unwrap();
+
+    let after = handover::preview(&root).expect("a preview of a migrated workspace");
+    assert!(after.migrated);
+    assert!(!after.pending);
+    // The three lists the panel reads. Any one of them non-empty puts a
+    // migration prompt back in front of somebody who has already migrated.
+    assert!(after.blockers.is_empty(), "{:?}", after.blockers);
+    assert!(after.notes.is_empty(), "{:?}", after.notes);
+    assert!(after.instances.is_empty());
 }

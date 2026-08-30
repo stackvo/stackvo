@@ -1,5 +1,7 @@
 <script setup>
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useTheme } from 'vuetify';
 import { bytes, percent } from '@/lib/format';
 import { heatLevel } from '@/composables/useContainerStats';
 import PaneHeader from '@/components/PaneHeader.vue';
@@ -25,6 +27,47 @@ defineProps({
 });
 
 const { t } = useI18n();
+
+/**
+ * The charts, in the theme's colours rather than in a copy of them.
+ *
+ * Four colours were written into this pane and the stats composable as hex —
+ * `#1976D2` twice over and `#2A313C` — and both are copies: the first of
+ * `DEFAULT_APPEARANCE.primary`, the second of the graphite theme's
+ * `surface-variant`. A user who moves the accent to purple got a purple
+ * application with three blue pie charts and a blue sparkline in it, and on the
+ * light theme the second slice of every pie was dark charcoal on a white card.
+ *
+ * `useTheme()` is reactive, so this follows the accent, the light/dark switch
+ * and the neutral pack as they change, with no watcher and no reload.
+ */
+const theme = useTheme();
+const colours = computed(() => theme.current.value.colors);
+
+/**
+ * A pie's slices, painted.
+ *
+ * By position and not by key: every pie here is *measured against remainder* —
+ * used/free, down/up, read/write — so the first slice is the quantity and the
+ * rest is the ground it is read against. `surface-variant` is that ground in
+ * every theme this app ships, which is why the old hex only ever looked right
+ * on one of them.
+ */
+const painted = (items) =>
+  items.map((item, index) => ({
+    ...item,
+    color: index === 0 ? colours.value.primary : colours.value['surface-variant'],
+  }));
+
+/**
+ * The CPU sparkline's gradient: accent through to the colour that means "up".
+ *
+ * `success` and not a second copy of `#4CAF50` for the same reason as above —
+ * and it matters more here, because `success` is one of the three colours the
+ * status palette rewrites for red-green deficiency. A hardcoded green ignored
+ * that choice on the one chart where the choice was made.
+ */
+const sparkGradient = computed(() => [colours.value.primary, colours.value.success]);
 </script>
 
 <template>
@@ -46,7 +89,7 @@ const { t } = useI18n();
         </div>
         <v-sparkline
           :model-value="cpuSeries.length > 1 ? cpuSeries : [0, 0]"
-          :gradient="['#1976D2', '#4CAF50']"
+          :gradient="sparkGradient"
           line-width="3"
           smooth="8"
           height="46"
@@ -133,19 +176,19 @@ const { t } = useI18n();
           {
             key: 'mem',
             title: t('stats.memory'),
-            items: memoryPie,
+            items: painted(memoryPie),
             foot: `${percent(stats.memoryPercent, 0)} ${t('projectDetail.usedShort')}`,
           },
           {
             key: 'net',
             title: t('stats.network'),
-            items: networkPie,
+            items: painted(networkPie),
             foot: `↓${bytes(stats.netRx)} / ↑${bytes(stats.netTx)}`,
           },
           {
             key: 'disk',
             title: t('dashboard.diskIo'),
-            items: diskPie,
+            items: painted(diskPie),
             foot: `R${bytes(stats.blockRead)} / W${bytes(stats.blockWrite)}`,
           },
         ]"

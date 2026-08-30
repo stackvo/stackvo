@@ -1,7 +1,8 @@
 <script setup>
-import { nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAppearanceStore } from '@/stores/appearance';
+import { CONSOLE_BACKGROUND } from '@/lib/appearance';
 import { useTerminal } from '@/composables/useTerminal';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
@@ -42,6 +43,18 @@ const props = defineProps({
 const { t } = useI18n();
 const appearance = useAppearanceStore();
 
+/**
+ * The console surface, or nothing — one value, read by both halves.
+ *
+ * `null` when `darkConsoles` is off, because that is what is handed to xterm
+ * there: its own default theme. The host frame then falls back to `transparent`
+ * and the card underneath shows through, which is the only answer that cannot
+ * disagree with a canvas this pane does not paint.
+ */
+const consoleBackground = computed(() =>
+  appearance.value.darkConsoles ? CONSOLE_BACKGROUND : null
+);
+
 const host = ref(null);
 const term = shallowRef(null);
 const fit = shallowRef(null);
@@ -68,7 +81,7 @@ async function start() {
     // Consoles keep their own dark theme when the setting says so, the same
     // rule `OperationConsole` follows — a terminal on a white sheet is a
     // different product.
-    theme: appearance.value.darkConsoles ? { background: '#12121a' } : undefined,
+    theme: consoleBackground.value ? { background: consoleBackground.value } : undefined,
     // A shell that scrolls away its own output is worse than one that keeps
     // too much; this is bounded but generous.
     scrollback: 5000,
@@ -177,6 +190,7 @@ onBeforeUnmount(() => {
         v-show="term"
         ref="host"
         class="terminal-host"
+        :style="{ '--console-bg': consoleBackground }"
         role="application"
         tabindex="0"
         :aria-label="t('terminal.title')"
@@ -186,11 +200,20 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* The host's background and xterm's are the same colour by construction now.
+   They were the same colour by coincidence — `#12121a` written twice, once here
+   and once in the `Terminal` options above — and the padding means both are
+   visible at once: the host is the 8px frame around the canvas. Two literals
+   that must agree, eight pixels wide, is a frame waiting to appear.
+
+   Bound rather than fixed, because the JS half is conditional: with
+   `darkConsoles` off, xterm keeps its own default and the frame has to stop
+   claiming otherwise. */
 .terminal-host {
   height: 340px;
   border-radius: var(--app-radius, 8px);
   overflow: hidden;
-  background: #12121a;
+  background: var(--console-bg, transparent);
   padding: 8px;
 }
 </style>

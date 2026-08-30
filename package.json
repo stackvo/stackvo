@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Native desktop app for StackVo — Docker-based local development environment manager",
+  "description": "Native desktop app for StackVo \u2014 Docker-based local development environment manager",
   "license": "MIT",
   "author": "Fahrettin Aksoy",
   "repository": {
@@ -30,6 +30,8 @@
     "test": "npm run sidecars:stubs && npm run test:js && cargo test --manifest-path src-tauri/Cargo.toml",
     "diagnose": "cargo run --manifest-path src-tauri/Cargo.toml --example diagnose",
     "contracts:check": "node tools/validate-contracts.mjs --allow-no-manifests",
+    "env:usage": "node tools/measure-env-usage.mjs",
+    "env:usage:fix": "node tools/measure-env-usage.mjs --fix && prettier --write contracts/env.schema.json",
     "legacy:rehearse": "node tools/legacy-deletion-rehearsal.mjs",
     "test:js": "vitest run",
     "test:js:watch": "vitest",

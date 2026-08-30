@@ -27,7 +27,11 @@ const DIRS = ['src/components/project', 'src/components/settings', 'src/views'];
  * panels that do carry help are listed, and the day the doctor's cards get
  * theirs, its file joins this list.
  */
-const EXTRA = ['src/components/NewProjectDrawer.vue', 'src/components/LandingCard.vue'];
+const EXTRA = [
+  'src/components/NewProjectDrawer.vue',
+  'src/components/LandingCard.vue',
+  'src/components/UsageToday.vue',
+];
 
 /**
  * Every card-shaped tag, with whatever `help` it was given.

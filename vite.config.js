@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vuetify from 'vite-plugin-vuetify';
+import { aliases as vuetifyIcons } from 'vuetify/iconsets/mdi';
+import { SOURCE_ROOTS, glyphRule, iconsUsed } from './tools/mdi-icons.mjs';
 import { fileURLToPath, URL } from 'node:url';
 
 // Tauri drives the dev server, so the port is fixed and HMR must be reachable
@@ -53,9 +55,75 @@ function mdiWoff2Only() {
   };
 }
 
+/**
+ * Ship the icon rules this application uses, not the seven thousand it does not.
+ *
+ * The same argument as `mdiWoff2Only` one step further along. That one dropped
+ * three font formats no engine here needs; this one drops the class rules for
+ * icons no screen here names. Material Design Icons declares 7,447 of them —
+ * 408 KB of `.mdi-x::before { content: "\Fxxxx" }` — and this application names
+ * 313. The stylesheet was the single largest thing in the bundle and almost all
+ * of it described glyphs nothing could reach.
+ *
+ * **Only the glyph rules.** They are recognised by their exact shape — a
+ * `::before` with a body that is nothing but `content` — which is what separates
+ * them from the modifiers that share the prefix: `.mdi-rotate-45`, `.mdi-flip-h`
+ * and `.mdi-spin` are written with a single colon and set a transform, so they
+ * do not match and are never dropped. Nor is `@font-face`, nor `.mdi:before`,
+ * nor the keyframes.
+ *
+ * **The font itself is untouched**, and that is a stated limit rather than an
+ * oversight: subsetting a woff2 needs a font toolchain, and the 394 KB it would
+ * save is the next piece of this work. The stylesheet needed no dependency at
+ * all.
+ *
+ * Which icons count as used is `tools/mdi-icons.mjs`, not a scan written here:
+ * the built stylesheet is held against the same list after the build, and the
+ * list is held against the icon set by a test. Three readers, one answer.
+ */
+function mdiUsedIconsOnly() {
+  return {
+    name: 'mdi-used-icons-only',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.includes('materialdesignicons.css')) return null;
+
+      // Both trees: `src-tauri/src` carries the terminal, editor and browser
+      // catalogues, and eighteen of their icons are named nowhere else.
+      const used = iconsUsed(
+        SOURCE_ROOTS.map((dir) => fileURLToPath(new URL(`./${dir}`, import.meta.url))),
+        vuetifyIcons
+      );
+      let seen = 0;
+      let kept = 0;
+
+      const trimmed = code.replace(glyphRule(), (rule, name) => {
+        seen += 1;
+        if (!used.has(`mdi-${name}`)) return '';
+        kept += 1;
+        return rule;
+      });
+
+      // The stylesheet changed shape upstream, or the scan stopped finding
+      // anything. Both are silent failures otherwise — the first ships the
+      // whole file again while this comment claims it does not, the second
+      // ships an application with no icons at all.
+      if (seen < 5000) {
+        this.error(`mdi-used-icons-only: expected thousands of glyph rules, matched ${seen}`);
+      }
+      if (kept < 100) {
+        this.error(`mdi-used-icons-only: only ${kept} icons survived — the scan found nothing`);
+      }
+
+      return { code: trimmed, map: null };
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     mdiWoff2Only(),
+    mdiUsedIconsOnly(),
     vue(),
     /**
      * No `styles.configFile`.

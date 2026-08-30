@@ -44,6 +44,24 @@
 //! the threshold would have quietened a coincidence by letting a real
 //! five-character secret through.
 //!
+//! ## Where the file goes
+//!
+//! It had no conventional place, and that was the whole of what was missing.
+//! The export wrote a file, the import read one, and between them somebody had
+//! to say out loud where they had put it — which is the sentence this feature
+//! exists to remove. DDEV has no such question: the file is `.ddev/config.yaml`
+//! and `ddev start` reads it.
+//!
+//! [`CONVENTIONAL_FILE`] is that place: `<project>/stackvo.preset.json`, beside
+//! the manifest, in the repository, so a clone brings it. Nothing applies it
+//! automatically — [`plan`] then [`apply_file`] is still the shape, for the
+//! reason stated below — but the project page can now *see* one and say so,
+//! which turns "email your colleague the file" into "clone the repository".
+//!
+//! It sits beside `stackvo.json` rather than inside a `.stackvo/` directory
+//! because there is no second file to keep it company: one directory for one
+//! file is a convention with nothing to hold.
+//!
 //! ## Import is reviewed, then applied
 //!
 //! The same shape as `hosts_plan`/`hosts_apply` and `cert_plan`/`cert_apply`:
@@ -62,6 +80,20 @@ use crate::error::{Code, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
+
+/// Where a project's preset lives, so a clone brings it and nobody has to say
+/// where they put it. Beside `stackvo.json`, in the repository.
+pub const CONVENTIONAL_FILE: &str = "stackvo.preset.json";
+
+/// The project's preset, if it ships one.
+///
+/// `is_file` rather than `exists`: a directory of that name is not a preset,
+/// and `load` would report the read failure as a parse problem — a worse
+/// message for a stranger situation.
+pub fn at_project(dir: &Path) -> Option<std::path::PathBuf> {
+    let path = dir.join(CONVENTIONAL_FILE);
+    path.is_file().then_some(path)
+}
 
 /// Marks the file as ours, so a JSON that is merely valid is not treated as a
 /// preset. Checked on load: pointing the importer at a `package.json` should
@@ -455,6 +487,45 @@ pub fn apply_file(root: &Path, path: &Path) -> Result<Plan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The convention, and the thing that was actually missing: a preset had no
+    /// place to be, so the flow began with a colleague saying where they had
+    /// put the file.
+    #[test]
+    fn a_preset_is_found_beside_the_manifest_and_nowhere_else() {
+        let dir = std::env::temp_dir().join(format!("stackvo-preset-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("tempdir");
+
+        assert!(at_project(&dir).is_none(), "an absent file was found");
+
+        // A file with the right name somewhere else is not this project's.
+        std::fs::write(dir.join("stackvo-preset.json"), "{}").expect("write");
+        std::fs::write(dir.join("preset.json"), "{}").expect("write");
+        assert!(
+            at_project(&dir).is_none(),
+            "a near-miss spelling was accepted; the convention is one name"
+        );
+
+        std::fs::write(dir.join(CONVENTIONAL_FILE), "{}").expect("write");
+        assert_eq!(at_project(&dir), Some(dir.join(CONVENTIONAL_FILE)));
+
+        // A directory of that name is not a preset. `load` would report the
+        // read failure as a parse problem, which is a worse message for a
+        // stranger situation.
+        let other = dir.join("as-a-directory");
+        std::fs::create_dir_all(other.join(CONVENTIONAL_FILE)).expect("dir");
+        assert!(at_project(&other).is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The name is a contract with the front end, which suggests it in the save
+    /// dialog. `preset-convention.spec.js` holds the other side.
+    #[test]
+    fn the_conventional_name_is_the_one_the_export_offers() {
+        assert_eq!(CONVENTIONAL_FILE, "stackvo.preset.json");
+    }
 
     const CATALOG: [&str; 3] = ["mysql", "redis", "elasticsearch"];
 

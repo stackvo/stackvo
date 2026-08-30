@@ -46,6 +46,30 @@ pub enum Source {
     Query,
     /// A message the catcher took, which the application believed it sent.
     Mail,
+    /// One execution, start to finish — through the same bridge as a dump.
+    ///
+    /// The one moment on the axis that is a *stretch* rather than an instant,
+    /// and it is placed at its end because that is when its duration and its
+    /// status became knowable. A request drawn at its start would have to be
+    /// drawn without either.
+    Request,
+    /// One queued job, at the moment the queue finished with it.
+    Job,
+}
+
+/// Which source a bridge event belongs to.
+///
+/// A kind this build does not know is read as a dump rather than dropped, and
+/// that is the same argument [`crate::debugbridge::Event::value`] makes: a
+/// worker that has been running since before an update goes on writing the
+/// shape it booted with, and a newer bridge may write a kind an older reader
+/// has no case for. Shown in the wrong group beats not shown.
+fn source_of(event: &crate::debugbridge::Event) -> Source {
+    match event.kind.as_str() {
+        "request" => Source::Request,
+        "job" => Source::Job,
+        _ => Source::Dump,
+    }
 }
 
 /// One thing that happened, whatever produced it.
@@ -107,10 +131,15 @@ pub fn collect(
     let mut moments: Vec<Moment> = Vec::new();
 
     for event in dumps {
+        let source = source_of(event);
         moments.push(Moment {
             at: event.at,
-            source: Source::Dump,
-            summary: summarise_dump(event),
+            source,
+            summary: match source {
+                Source::Request => summarise_request(event),
+                Source::Job => summarise_job(event),
+                _ => summarise_dump(event),
+            },
             request: event.request.clone(),
             shape: None,
         });
@@ -213,6 +242,56 @@ fn summarise_mail(message: &crate::mail::MailMessage) -> String {
     }
 }
 
+/// How long something took, in the unit that keeps it readable.
+///
+/// Milliseconds up to ten seconds and seconds above it. A queue job that ran
+/// for four minutes is `240 s`, not `240000 ms` — a number nobody reads
+/// without counting the digits, on the one row where the duration is the whole
+/// point.
+fn duration(ms: f64) -> String {
+    if ms >= 10_000.0 {
+        format!("{:.1} s", ms / 1000.0)
+    } else {
+        format!("{ms:.1} ms")
+    }
+}
+
+/// One line for a request: what was asked, how it ended, how long it took.
+///
+/// The request itself is deliberately repeated into the summary rather than
+/// left to `Moment::request`. On this axis that field is a *grouping* — every
+/// dump raised during the same page load carries it too — so a request row
+/// whose summary was only `200 · 12 ms` would be the one row that did not say
+/// what it was about.
+fn summarise_request(event: &crate::debugbridge::Event) -> String {
+    let what = event
+        .request
+        .clone()
+        .or_else(|| event.sapi.clone())
+        .unwrap_or_else(|| "request".to_string());
+
+    let mut out = what;
+    if let Some(outcome) = &event.outcome {
+        out.push_str(&format!(" → {outcome}"));
+    }
+    if let Some(ms) = event.duration {
+        out.push_str(&format!(" · {}", duration(ms)));
+    }
+    out
+}
+
+/// One line for a job: which job, how it ended, how long it ran.
+fn summarise_job(event: &crate::debugbridge::Event) -> String {
+    let mut out = event.label.clone().unwrap_or_else(|| "job".to_string());
+    if let Some(outcome) = &event.outcome {
+        out.push_str(&format!(" — {outcome}"));
+    }
+    if let Some(ms) = event.duration {
+        out.push_str(&format!(" · {}", duration(ms)));
+    }
+    out
+}
+
 /// One line for a dump: what it was called and where it was written.
 fn summarise_dump(event: &crate::debugbridge::Event) -> String {
     let label = event.label.as_deref().unwrap_or("dump");
@@ -238,6 +317,8 @@ mod tests {
             line: Some(42),
             request: request.map(str::to_string),
             sapi: Some("fpm-fcgi".into()),
+            duration: None,
+            outcome: None,
             value: serde_json::Value::Null,
         }
     }
@@ -389,6 +470,90 @@ mod tests {
         let line = build(&[], &[], &[mail(Some(1.0), "x")], true);
         assert_eq!(line.moments[0].request, None);
         assert!(line.requests.is_empty());
+    }
+
+    fn event(at: f64, kind: &str) -> Event {
+        Event {
+            at,
+            kind: kind.into(),
+            label: None,
+            file: None,
+            line: None,
+            request: None,
+            sapi: None,
+            duration: None,
+            outcome: None,
+            value: serde_json::Value::Null,
+        }
+    }
+
+    /// The kind the bridge writes decides the axis source. Before this there
+    /// was one value for the field and everything from the bridge was a dump.
+    #[test]
+    fn the_bridge_now_lands_on_three_different_rows() {
+        let mut request = event(101.0, "request");
+        request.request = Some("GET /checkout".into());
+        request.outcome = Some("200".into());
+        request.duration = Some(23.4);
+
+        let mut job = event(102.0, "job");
+        job.label = Some("App\\Jobs\\SendReceipt".into());
+        job.outcome = Some("ok".into());
+        job.duration = Some(120.0);
+
+        let line = build(
+            &[dump(100.0, Some("GET /checkout")), request, job],
+            &[],
+            &[],
+            true,
+        );
+
+        let sources: Vec<Source> = line.moments.iter().map(|m| m.source).collect();
+        assert_eq!(sources, vec![Source::Dump, Source::Request, Source::Job]);
+        assert_eq!(line.moments[1].summary, "GET /checkout → 200 · 23.4 ms");
+        assert_eq!(
+            line.moments[2].summary,
+            "App\\Jobs\\SendReceipt — ok · 120.0 ms"
+        );
+    }
+
+    /// A row written by a newer bridge than this build knows must still be
+    /// shown. Shown in the wrong group beats not shown — a worker keeps the
+    /// bridge it booted with for as long as it lives.
+    #[test]
+    fn a_kind_this_build_does_not_know_is_still_a_moment() {
+        let line = build(&[event(100.0, "cache")], &[], &[], true);
+        assert_eq!(line.moments.len(), 1);
+        assert_eq!(line.moments[0].source, Source::Dump);
+    }
+
+    /// A request names itself in its summary as well as in `request`. That
+    /// field is a *grouping* — every dump from the same page load carries it —
+    /// so a summary of `200 · 12 ms` would be the one row that did not say
+    /// what it was about.
+    #[test]
+    fn a_request_says_what_was_asked_even_though_the_grouping_repeats_it() {
+        let mut request = event(100.0, "request");
+        request.request = Some("POST /pay".into());
+        let line = build(&[request], &[], &[], true);
+        assert_eq!(line.moments[0].summary, "POST /pay");
+        assert_eq!(line.requests, vec!["POST /pay"]);
+    }
+
+    /// Minutes are not read as milliseconds. A job that ran for four minutes
+    /// is the row where the duration is the whole point, and `240000.0 ms` is
+    /// a number nobody reads without counting the digits.
+    #[test]
+    fn a_long_duration_changes_unit_rather_than_growing_digits() {
+        let mut job = event(100.0, "job");
+        job.label = Some("Import".into());
+        job.duration = Some(240_000.0);
+        let line = build(&[job], &[], &[], true);
+        assert!(
+            line.moments[0].summary.ends_with("240.0 s"),
+            "{}",
+            line.moments[0].summary
+        );
     }
 
     #[test]

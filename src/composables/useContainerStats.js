@@ -27,12 +27,28 @@ export function useContainerStats(t) {
 
   let timer = null;
 
+  /**
+   * The two slices, without their colours.
+   *
+   * The colours used to be here, spelled `#1976D2` and `#2A313C`, which are a
+   * copy of `DEFAULT_APPEARANCE.primary` and a copy of the graphite theme's
+   * `surface-variant`. Copies drift: change the accent to purple and the whole
+   * application turns purple while three pie charts stay blue, and on the light
+   * theme the second slice is dark charcoal on a white card — a colour with no
+   * relationship to the theme at all.
+   *
+   * So this returns geometry and the pane paints it. Not because a composable
+   * must not know colours, but because the colour that belongs here is *the
+   * current theme's*, and the theme is only readable from inside a component.
+   * The first slice is `primary`, the second `surface-variant`; see
+   * `IndicatorPane`, which is the one place that mapping is written.
+   */
   const memoryPie = computed(() => {
     if (!stats.value) return [];
     const free = Math.max(0, stats.value.memoryLimit - stats.value.memoryUsed);
     return [
-      { key: 'used', title: t('dashboard.used'), value: stats.value.memoryUsed, color: '#1976D2' },
-      { key: 'free', title: t('dashboard.available'), value: free, color: '#2A313C' },
+      { key: 'used', title: t('dashboard.used'), value: stats.value.memoryUsed },
+      { key: 'free', title: t('dashboard.available'), value: free },
     ];
   });
 
@@ -42,26 +58,16 @@ export function useContainerStats(t) {
   const networkPie = computed(() => {
     if (!stats.value) return [];
     return [
-      { key: 'rx', title: t('stats.download'), value: stats.value.netRx || 1, color: '#1976D2' },
-      { key: 'tx', title: t('stats.upload'), value: stats.value.netTx || 1, color: '#2A313C' },
+      { key: 'rx', title: t('stats.download'), value: stats.value.netRx || 1 },
+      { key: 'tx', title: t('stats.upload'), value: stats.value.netTx || 1 },
     ];
   });
 
   const diskPie = computed(() => {
     if (!stats.value) return [];
     return [
-      {
-        key: 'read',
-        title: t('dashboard.read'),
-        value: stats.value.blockRead || 1,
-        color: '#1976D2',
-      },
-      {
-        key: 'write',
-        title: t('dashboard.write'),
-        value: stats.value.blockWrite || 1,
-        color: '#2A313C',
-      },
+      { key: 'read', title: t('dashboard.read'), value: stats.value.blockRead || 1 },
+      { key: 'write', title: t('dashboard.write'), value: stats.value.blockWrite || 1 },
     ];
   });
 

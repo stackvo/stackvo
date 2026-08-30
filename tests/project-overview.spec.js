@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
@@ -20,12 +20,29 @@ import * as directives from 'vuetify/directives';
 
 globalThis.visualViewport = undefined;
 
+const replies = {};
+
 vi.mock('@/lib/ipc', () => ({
   StackvoError: class extends Error {},
   call: vi.fn(),
   asList: (value) => (Array.isArray(value) ? value : []),
-  api: new Proxy({}, { get: () => () => Promise.resolve(null) }),
+  api: new Proxy(
+    {},
+    {
+      get:
+        (_t, name) =>
+        (...args) => {
+          const reply = replies[name];
+          if (typeof reply === 'function') return Promise.resolve(reply(...args));
+          return Promise.resolve(reply ?? null);
+        },
+    }
+  ),
 }));
+
+beforeEach(() => {
+  for (const key of Object.keys(replies)) delete replies[key];
+});
 
 const { i18n } = await import('@/i18n');
 const OverviewPane = (await import('@/components/project/OverviewPane.vue')).default;
@@ -73,5 +90,73 @@ describe('the container path a project page offers', () => {
   // to default the same way or it disagrees with the file on disk.
   it('falls back to the web root when the runtime is not loaded yet', () => {
     expect(mountPane(undefined).text()).toContain('/var/www/html');
+  });
+});
+
+/**
+ * The other half of onboarding.
+ *
+ * The comparison is settled in Rust, where `verify.rs` is a pure function with
+ * the cases that have teeth in them. What only exists here are the two
+ * decisions the screen makes: every line is drawn and not only the failing
+ * ones, and a line that failed says what to do about it — an id with no
+ * sentence beside it is a check nobody can act on.
+ */
+describe('checking the machine against the declaration', () => {
+  const press = async (wrapper) => {
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Check my setup')
+      .trigger('click');
+    await flushPromises();
+  };
+
+  it('draws every line, not only the ones that failed', async () => {
+    replies.projectVerify = {
+      project: 'shop',
+      ready: false,
+      checks: [
+        { id: 'manifest', subject: 'shop', state: 'ok' },
+        { id: 'service', subject: 'mysql', state: 'missing' },
+        { id: 'serviceOff', subject: 'redis', state: 'different', detail: '7.2' },
+      ],
+    };
+
+    const wrapper = mountPane('php');
+    await press(wrapper);
+
+    expect(wrapper.findAll('[data-test="verify-check"]')).toHaveLength(3);
+    // The failing line says what to do; the passing one does not need to.
+    expect(wrapper.text()).toContain('Install it from the Market');
+    expect(wrapper.text()).toContain('Turn it on in Services');
+    // The versions that ARE there travel with the row, because "install redis"
+    // would be the wrong instruction.
+    expect(wrapper.text()).toContain('7.2');
+    expect(wrapper.text()).toContain('missing or switched off');
+  });
+
+  it('says everything matched rather than showing an empty result', async () => {
+    replies.projectVerify = {
+      project: 'shop',
+      ready: true,
+      checks: [{ id: 'manifest', subject: 'shop', state: 'ok' }],
+    };
+
+    const wrapper = mountPane('php');
+    await press(wrapper);
+
+    expect(wrapper.text()).toContain('Everything this project declares is here');
+  });
+
+  it('reports why it could not check instead of showing nothing', async () => {
+    replies.projectVerify = () => {
+      throw Object.assign(new Error('no workspace'), { message: 'no workspace' });
+    };
+
+    const wrapper = mountPane('php');
+    await press(wrapper);
+
+    expect(wrapper.text()).toContain('no workspace');
+    expect(wrapper.findAll('[data-test="verify-check"]')).toHaveLength(0);
   });
 });

@@ -139,12 +139,16 @@ fn the_ordinary_write_path_looks_at_the_line_that_is_there() {
 /// The refusal that stops a locked keychain from becoming a default password.
 #[test]
 fn the_generator_refuses_rather_than_rendering_a_hole() {
-    let commands = production("src/commands.rs", "use crate::");
+    // `generator.rs` and not `commands.rs`: the whole generated tree moved down
+    // a band, because none of it ever took a Tauri type. The panic below is
+    // what said so — a gate that names the file it reads has to be told when
+    // the file changes, and this one was.
+    let generator = production("src/generator.rs", "use crate::");
 
-    let Some(render) = commands.find("pub fn render_generated") else {
+    let Some(render) = generator.find("pub fn render_generated") else {
         panic!("render_generated moved; this gate is pointing at nothing");
     };
-    let body = &commands[render..];
+    let body = &generator[render..];
 
     let check = body
         .find("unresolved_secrets()")

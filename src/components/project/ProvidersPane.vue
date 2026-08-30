@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import { providerRecipeAbout, providerRecipeEdit } from '@/lib/catalogue-text';
 
 /**
  * Where this project's data really lives.
@@ -222,7 +223,7 @@ watch(() => props.name, load);
           </v-chip>
         </div>
 
-        <p class="text-caption text-medium-emphasis mb-1">{{ recipe.about }}</p>
+        <p class="text-caption text-medium-emphasis mb-1">{{ providerRecipeAbout(recipe) }}</p>
 
         <pre class="command"
           >{{ recipe.image }}
@@ -230,7 +231,7 @@ watch(() => props.name, load);
 
         <!-- Never empty: every shipped recipe carries a placeholder. -->
         <ul class="text-caption text-medium-emphasis mb-2 ms-4">
-          <li v-for="(what, i) in recipe.edit" :key="i">{{ what }}</li>
+          <li v-for="what in recipe.edit" :key="what.key">{{ providerRecipeEdit(what) }}</li>
         </ul>
 
         <v-btn

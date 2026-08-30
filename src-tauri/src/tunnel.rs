@@ -44,7 +44,8 @@
 //! TLS handshake against a hostname that exists in no DNS. The container's
 //! internal port is plain HTTP and derived the same way the generator derives
 //! the Traefik `loadbalancer.server.port` label — node projects on their
-//! manifest port, Swoole on its own 8000, every other PHP server on 80.
+//! manifest port, the two Octane drivers on their own 8000, every other PHP
+//! server on 80.
 //!
 //! Three providers can also present the project's local domain as the `Host`
 //! header, so name-based vhosts and framework URL checks behave as they do
@@ -527,7 +528,8 @@ pub fn internal_port(manifest: &crate::manifest::Manifest) -> u16 {
         return manifest.node.as_ref().map(|n| n.port).unwrap_or(3000);
     }
     match manifest.server.as_deref() {
-        Some("swoole") => 8000,
+        // Both Octane drivers serve on 8000 themselves.
+        Some("swoole") | Some("roadrunner") => 8000,
         _ => 80,
     }
 }

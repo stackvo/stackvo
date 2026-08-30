@@ -367,9 +367,13 @@ fn indented(key: &str, body: &str) -> String {
 /// thing StackVo runs and the wrong thing to open a terminal in — the source
 /// would be a stale copy of the one on screen, and the container would exit
 /// whenever the application did. So they get the toolchain and nothing else.
-fn dockerfile(manifest: &Manifest, opts: &crate::generator::ToolchainOptions) -> Result<String> {
+fn dockerfile(
+    manifest: &Manifest,
+    opts: &crate::generator::ToolchainOptions,
+    default_server: &str,
+) -> Result<String> {
     if manifest.runtime == "php" {
-        return crate::generator::render_from_manifest(manifest, opts, false)
+        return crate::generator::render_from_manifest(manifest, opts, false, default_server)
             .map_err(|e| Error::new(Code::InvalidManifest, e));
     }
 
@@ -486,10 +490,12 @@ const SLEEP: &str = concat!(
 fn app_port(manifest: &Manifest) -> u16 {
     match manifest.runtime.as_str() {
         "php" => {
-            if manifest.server.as_deref() == Some("swoole") {
-                8000
-            } else {
-                80
+            // Swoole and RoadRunner are Octane's two drivers and each is its
+            // own HTTP server on 8000; every other PHP server sits behind one
+            // on 80.
+            match manifest.server.as_deref() {
+                Some("swoole") | Some("roadrunner") => 8000,
+                _ => 80,
             }
         }
         "node" => manifest.node.as_ref().map(|n| n.port).unwrap_or(3000),
@@ -550,6 +556,7 @@ pub fn plan(
     table: &Table,
     catalogue: &dyn Catalogue,
     opts: &crate::generator::ToolchainOptions,
+    default_server: &str,
 ) -> Result<Plan> {
     let mut out = Plan {
         project: manifest.name.clone(),
@@ -558,12 +565,13 @@ pub fn plan(
 
     out.files.push(File {
         path: "Dockerfile".into(),
-        contents: dockerfile(manifest, opts)?,
+        contents: dockerfile(manifest, opts, default_server)?,
     });
 
     // The files that Dockerfile copies. It names them without a directory, so
     // they sit beside it and the build context is `.devcontainer/` itself.
-    for (name, contents) in crate::generator::render_project_config_files(manifest) {
+    for (name, contents) in crate::generator::render_project_config_files(manifest, default_server)
+    {
         out.files.push(File {
             path: name.to_string(),
             contents,
@@ -969,7 +977,14 @@ labels:
 
     fn planned(dir: &Path, manifest: &Manifest) -> Plan {
         let tree = pkg::Tree::open(dir).unwrap();
-        plan(manifest, &table(), &tree, &opts()).unwrap()
+        plan(
+            manifest,
+            &table(),
+            &tree,
+            &opts(),
+            crate::config::DEFAULT_SERVER,
+        )
+        .unwrap()
     }
 
     /// The one that makes the placeholder work, and the one somebody could
@@ -1188,7 +1203,13 @@ labels:
         let plan = planned(&dir, &manifest);
         assert_eq!(
             file(&plan, "Dockerfile"),
-            crate::generator::render_from_manifest(&manifest, &opts(), false).unwrap()
+            crate::generator::render_from_manifest(
+                &manifest,
+                &opts(),
+                false,
+                crate::config::DEFAULT_SERVER
+            )
+            .unwrap()
         );
         // And the files that Dockerfile copies travel beside it.
         assert!(file(&plan, "Dockerfile").contains("COPY nginx.conf"));

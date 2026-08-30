@@ -61,6 +61,26 @@
 //! empty, or copied from the workspace's own so the branch starts with the data
 //! that was there. See [`crate::db::create_database`] and
 //! [`crate::db::copy_database`].
+//!
+//! ## And a login of its own, which is a second promise
+//!
+//! "Its own database" and "cannot reach the parent's" are not the same
+//! sentence, and for a long time only the first was true here: the branch was
+//! handed the *instance's* login, so the parent's data was one `USE shop;`
+//! away. That was a small thing while a worktree was somebody's second branch.
+//! It is the whole claim once the thing working in there is an assistant that
+//! was told to fix a failing test and decided a migration would do it.
+//!
+//! So the worktree is also given a database account granted on that schema
+//! alone — see [`crate::db::create_scoped_user`], which explains why that is
+//! arranged on MySQL and MariaDB and refused rather than approximated on the
+//! other two. The password lives in [`logins_path`] and not on [`Record`],
+//! because `Record` is serialised across the IPC boundary as well as to disk.
+//!
+//! Where no account could be arranged the branch keeps the shared login and the
+//! app **says so** — `worktree_list` reports `isolated` and the pane prints the
+//! sentence. An isolation that is claimed and not arranged is worse than one
+//! that was never offered: it is the one somebody stops checking.
 
 use crate::error::{Code, Error, Result};
 use serde::{Deserialize, Serialize};
@@ -85,6 +105,89 @@ const SLUG_LIMIT: usize = 40;
 /// `<root>/worktrees.json`.
 pub fn path(root: &Path) -> PathBuf {
     root.join("worktrees.json")
+}
+
+/// `<root>/worktree-logins.json` — the passwords, and nothing else.
+///
+/// ## Why a second file rather than a field on the record
+///
+/// [`Table`] crosses the IPC boundary: `worktree_list` hands its records to a
+/// webview. A password on `Record` would be serialised by the same derive that
+/// writes the file and shipped to the browser with it, and remembering to strip
+/// it at every call site is exactly the arrangement this repository keeps
+/// replacing with one that cannot be got wrong. A field that must never reach
+/// the webview does not live in a struct that goes there.
+///
+/// The file is written `0600` where the platform has such a thing, for the same
+/// reason `elevate::staging_dir` is: this is the only file in the workspace
+/// whose whole content is credentials.
+pub fn logins_path(root: &Path) -> PathBuf {
+    root.join("worktree-logins.json")
+}
+
+/// The login one worktree's container is given, when it has one of its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Login {
+    /// The instance the account lives on, so a teardown knows where to drop it.
+    pub instance: String,
+    pub user: String,
+    pub password: String,
+}
+
+/// Every worktree login this machine holds, by worktree name.
+pub fn logins(root: &Path) -> BTreeMap<String, Login> {
+    std::fs::read_to_string(logins_path(root))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+pub fn login_of(root: &Path, name: &str) -> Option<Login> {
+    logins(root).get(name).cloned()
+}
+
+fn save_logins(root: &Path, table: &BTreeMap<String, Login>) -> Result<()> {
+    let file = logins_path(root);
+    let mut text = serde_json::to_string_pretty(table)
+        .map_err(|e| Error::new(Code::IoError, format!("serialising worktree logins: {e}")))?;
+    text.push('\n');
+    crate::atomic::write(&file, &text)?;
+    restrict(&file);
+    Ok(())
+}
+
+/// `0600`, where the platform has such a thing.
+///
+/// Best effort and deliberately not fatal: a file this app just wrote that it
+/// then cannot chmod is a permissions oddity on that machine, and refusing to
+/// create the worktree over it would trade a working feature for a hardening
+/// step. Windows has no mode bits and the file inherits the user's profile
+/// permissions, which is the same answer the OS gives for every other file
+/// here.
+fn restrict(file: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = file;
+}
+
+/// Remember one worktree's login.
+pub fn remember_login(root: &Path, name: &str, login: Login) -> Result<()> {
+    let mut table = logins(root);
+    table.insert(name.to_string(), login);
+    save_logins(root, &table)
+}
+
+/// Forget it, and hand it back so the caller can drop the account it names.
+pub fn forget_login(root: &Path, name: &str) -> Option<Login> {
+    let mut table = logins(root);
+    let gone = table.remove(name)?;
+    let _ = save_logins(root, &table);
+    Some(gone)
 }
 
 /// The database one worktree was given.
@@ -130,6 +233,20 @@ pub struct Record {
     pub env: BTreeMap<String, String>,
     /// RFC 3339.
     pub created_at: String,
+    /// When this worktree stops being wanted. RFC 3339, UTC.
+    ///
+    /// The field that turns a worktree into a **sandbox**: a branch environment
+    /// made for one task, by somebody who is not going to remember it exists.
+    /// A person's worktree is theirs until they say otherwise and carries
+    /// `None`, which is why this is an option rather than a date far away.
+    ///
+    /// Nothing acts on it by itself. An app that deleted a directory on a timer
+    /// would eventually delete one with a morning's uncommitted work in it, and
+    /// no expiry policy is worth that. What the date does is make "this is
+    /// finished with" a fact the screen can state and a person can act on in
+    /// one click — see [`expired`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
 }
 
 /// The whole file.
@@ -222,6 +339,82 @@ impl Table {
         let at = self.worktrees.iter().position(|w| w.name == name)?;
         Some(self.worktrees.remove(at))
     }
+}
+
+// ------------------------------------------------------------------- expiry
+
+/// The longest a sandbox may be asked to last.
+///
+/// Seven days. Not a technical limit — it is the point past which "temporary"
+/// has stopped being the word for it, and a worktree meant to live longer is a
+/// worktree, which is what the same screen makes when the field is left empty.
+pub const MAX_TTL_MINUTES: u32 = 7 * 24 * 60;
+
+/// `now + minutes`, as the same fixed-width UTC string every other timestamp
+/// in this app is written in.
+///
+/// Fixed width and UTC is the whole reason nothing here parses a date:
+/// `"2026-08-30T09:00:00Z" < "2026-08-30T09:30:00Z"` is true as *text*, so the
+/// comparison in [`expired_at`] is a string comparison and there is no date
+/// library, no timezone and no second implementation of anybody's calendar.
+/// `audit.rs` states the same property for the same reason.
+pub fn expiry_in(minutes: u32) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    crate::audit::rfc3339_of(now + i64::from(minutes.min(MAX_TTL_MINUTES)) * 60)
+}
+
+/// Has this worktree's time passed, as of `now`?
+///
+/// `None` is never expired, and that is the ordinary case: a worktree somebody
+/// made for themselves has no date on it.
+pub fn expired_at(record: &Record, now: &str) -> bool {
+    record
+        .expires_at
+        .as_deref()
+        .is_some_and(|expires| expires <= now)
+}
+
+pub fn expired(record: &Record) -> bool {
+    expired_at(record, &crate::audit::now_rfc3339())
+}
+
+/// How many whole minutes are left, rounded **down**.
+///
+/// Down, because this number is handed to a grant as `--for`, and rounding a
+/// remaining forty seconds up to a minute would be the app granting time the
+/// sandbox no longer has. `None` for a worktree with no expiry and `Some(0)`
+/// for one whose time has passed — two different answers that a single
+/// `Option` would blur into one.
+pub fn remaining_minutes_at(record: &Record, now: &str) -> Option<u32> {
+    let expires = crate::audit::seconds_of_rfc3339(record.expires_at.as_deref()?)?;
+    let now = crate::audit::seconds_of_rfc3339(now)?;
+    Some(u32::try_from((expires - now).max(0) / 60).unwrap_or(u32::MAX))
+}
+
+pub fn remaining_minutes(record: &Record) -> Option<u32> {
+    remaining_minutes_at(record, &crate::audit::now_rfc3339())
+}
+
+/// The flags that would grant an assistant this sandbox and nothing else.
+///
+/// Built here rather than typed on screen so the sentence a person copies is
+/// the one [`crate::grant`] enforces — the same reason `agents.rs` renders the
+/// registration from a `Grant` instead of assembling the strings itself.
+///
+/// The two clocks are deliberately the same number and mean different things,
+/// which is worth saying once: the sandbox's expiry is when the *environment*
+/// is finished with, and `--for` is how long the writing tools last **from each
+/// start of the server**. An assistant restarted an hour later gets its writes
+/// back and still cannot touch anything but this branch.
+pub fn grant_for(record: &Record, minutes: Option<u32>) -> crate::grant::Grant {
+    let mut grant = crate::grant::Grant::everything().scoped_to(vec![record.name.clone()]);
+    if let Some(minutes) = minutes.filter(|m| *m > 0) {
+        grant = grant.lasting(std::time::Duration::from_secs(u64::from(minutes) * 60));
+    }
+    grant
 }
 
 /// Is this project a worktree of another one?
@@ -436,6 +629,20 @@ pub fn env_for(root: &Path, record: &Record) -> BTreeMap<String, String> {
 
     if let Some(database) = &record.database {
         if let Ok(connection) = crate::db::connection(root, &database.instance) {
+            // The worktree's own account when it has one, and the instance's
+            // shared account otherwise. The substitution happens here, in the
+            // one function that renders these variables, so a branch either has
+            // its own login everywhere or nowhere — there is no third state in
+            // which one file says one thing and another says the other.
+            let connection = match login_of(root, &record.name) {
+                Some(login) if login.instance == database.instance => crate::db::Connection {
+                    user: login.user,
+                    password: Some(login.password),
+                    ..connection
+                },
+                _ => connection,
+            };
+
             env.insert("DB_CONNECTION".into(), driver_name(connection.kind).into());
             env.insert("DB_HOST".into(), connection.host.clone());
             env.insert("DB_PORT".into(), connection.port.to_string());
@@ -915,9 +1122,470 @@ pub fn exclude_local_file(worktree_dir: &Path) -> bool {
     std::fs::write(&exclude, text).is_ok()
 }
 
+// -------------------------------------------------- what a worktree would be
+
+// The plan half of this module's own plan-then-apply pair, which used to live
+// in `commands.rs` while `create` and `remove` lived here. Nothing in it takes
+// an `AppHandle` or a `State` — a path, a name and a request in, a plain plan
+// out — so the band rule in `ARCHITECTURE.md` put it on the wrong side of the
+// line, and every refusal this module makes was written where no test of this
+// module could reach it.
+
+/// What a worktree would be given.
+///
+/// A plan-then-apply pair, the same shape as `hosts_plan`/`hosts_apply` and
+/// `db_move_plan`/`db_move_apply`, and for the sharper version of their reason:
+/// this creates a directory, a hostname, a container and a database, and the
+/// only moment those can be argued with is before they exist. Every refusal is
+/// a sentence rather than a boolean, because "cannot" with no reason is the
+/// message people file bugs about.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreePlan {
+    pub parent: String,
+    pub branch: String,
+    /// Whether the branch would be created rather than checked out.
+    pub new_branch: bool,
+    pub name: String,
+    pub path: String,
+    pub domain: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<PlannedDatabase>,
+    /// When it would expire, when a duration was asked for. Shown before
+    /// anything is created, like every other derived value on that screen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refused: Option<String>,
+    pub possible: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedDatabase {
+    pub instance: String,
+    pub service: String,
+    pub name: String,
+    /// Whether it would be copied from [`Self::source`] rather than created
+    /// empty.
+    pub seed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+/// Every hostname the workspace already answers on.
+///
+/// Read off the manifests rather than off the running containers: a project
+/// that is stopped still owns its name, and a worktree given a hostname a
+/// stopped project holds would take it over the moment both were started —
+/// which Traefik reports as nothing at all.
+fn claimed_domains(root: &std::path::Path) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let Some(projects) = crate::workspace::projects_root(root) else {
+        return out;
+    };
+    let Ok(entries) = std::fs::read_dir(&projects) else {
+        return out;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !path.join(crate::manifest::FILE).is_file() {
+            continue;
+        }
+        let Ok(m) = crate::manifest::read(&path.join(crate::manifest::FILE), name) else {
+            continue;
+        };
+        out.extend(m.domain.iter().map(|d| d.to_ascii_lowercase()));
+        out.extend(m.aliases.iter().map(|a| a.to_ascii_lowercase()));
+    }
+    out
+}
+
+/// How a worktree was asked for, once the arguments have been read.
+pub struct WorktreeRequest {
+    branch: String,
+    new_branch: bool,
+    name: Option<String>,
+    /// `none`, `create` or `copy`.
+    database: String,
+    instance: Option<String>,
+    /// How long this environment is wanted for, in minutes. `None` is "until
+    /// somebody says otherwise", which is what a person's own branch is.
+    minutes: Option<u32>,
+}
+
+impl WorktreeRequest {
+    /// Read the options object, defaulting every field.
+    ///
+    /// One loose `serde_json::Value` rather than six named arguments: the
+    /// contract calls it `options` and the shape is a form's, so a field added
+    /// next year is a default here rather than a signature change that every
+    /// caller has to be edited for.
+    pub fn read(branch: String, options: Option<serde_json::Value>) -> Self {
+        let options = options.unwrap_or(serde_json::Value::Null);
+        let string = |key: &str| {
+            options
+                .get(key)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string)
+        };
+
+        Self {
+            branch: branch.trim().to_string(),
+            new_branch: options
+                .get("newBranch")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            name: string("name"),
+            database: string("database").unwrap_or_else(|| "none".to_string()),
+            instance: string("instance"),
+            // Zero is "no expiry" rather than "expired on arrival": a number
+            // field that has been cleared arrives as 0, and an environment that
+            // is over before it is built is one nobody could debug.
+            minutes: options
+                .get("minutes")
+                .and_then(|v| v.as_u64())
+                .and_then(|m| u32::try_from(m).ok())
+                .filter(|m| *m > 0)
+                .map(|m| m.min(MAX_TTL_MINUTES)),
+        }
+    }
+
+    /// How long it was asked for, once clamped.
+    pub fn minutes(&self) -> Option<u32> {
+        self.minutes
+    }
+}
+
+/// Work out what creating this worktree would do, and refuse it here if it
+/// cannot be done.
+pub async fn plan_worktree(
+    root: &std::path::Path,
+    parent: &str,
+    request: &WorktreeRequest,
+) -> Result<WorktreePlan> {
+    let (dir, manifest) = crate::workspace::project_with_manifest(root, parent)?;
+
+    let mut warnings: Vec<String> = Vec::new();
+    let refuse = |plan: WorktreePlan, why: String| WorktreePlan {
+        refused: Some(why),
+        possible: false,
+        ..plan
+    };
+
+    // Everything derivable before any refusal, so a refused plan still shows
+    // what it *would* have been — a dialog that blanks out when it says no
+    // makes the reason harder to act on, not easier.
+    let slug = slug(&request.branch);
+    let name = match (&request.name, &slug) {
+        (Some(given), _) => crate::workspace::canonical_name(given),
+        (None, Some(slug)) => project_name(parent, slug),
+        (None, None) => String::new(),
+    };
+    let label = domain_label(parent, &name);
+    let parent_domain = manifest.domain.clone().unwrap_or_default();
+    let domain = domain(&parent_domain, &label);
+
+    let mut plan = WorktreePlan {
+        parent: parent.to_string(),
+        branch: request.branch.clone(),
+        new_branch: request.new_branch,
+        name: name.clone(),
+        path: crate::workspace::projects_root(root)
+            .map(|p| p.join(&name).display().to_string())
+            .unwrap_or_default(),
+        domain: domain.clone(),
+        database: None,
+        // Worked out here, in the preview, so the screen shows the moment
+        // rather than the duration: "in 120 minutes" is arithmetic somebody has
+        // to do, and "at 14:32" is the answer they were doing it for.
+        expires_at: request.minutes.map(expiry_in),
+        warnings: Vec::new(),
+        refused: None,
+        possible: false,
+    };
+
+    // ---- the ground it stands on -----------------------------------------
+    if !crate::git::available() {
+        return Ok(refuse(plan, "git is not installed on this machine.".into()));
+    }
+    if !is_repository(&dir) {
+        return Ok(refuse(plan, format!("{parent} is not a git repository.")));
+    }
+    if is_linked_worktree(&dir) {
+        return Ok(refuse(
+            plan,
+            format!(
+                "{parent} is itself a worktree; create the next one from the project it came from."
+            ),
+        ));
+    }
+    if manifest.domain.is_none() {
+        return Ok(refuse(
+            plan,
+            format!("{parent} has no `domain` in its manifest to build a hostname under."),
+        ));
+    }
+
+    // ---- the branch -------------------------------------------------------
+    if request.branch.is_empty() {
+        return Ok(refuse(plan, "No branch was named.".into()));
+    }
+    if !is_valid_branch_name(&dir, &request.branch) {
+        return Ok(refuse(
+            plan,
+            format!(
+                "git will not accept \"{}\" as a branch name.",
+                request.branch
+            ),
+        ));
+    }
+
+    let checkouts = checkouts(&dir);
+    let branch_exists = branches(&dir).contains(&request.branch);
+    if request.new_branch && branch_exists {
+        return Ok(refuse(
+            plan,
+            format!("a branch called \"{}\" already exists.", request.branch),
+        ));
+    }
+    if !request.new_branch && !branch_exists {
+        return Ok(refuse(
+            plan,
+            format!(
+                "there is no branch called \"{}\"; tick \"create the branch\" to make one.",
+                request.branch
+            ),
+        ));
+    }
+    if checkouts
+        .iter()
+        .any(|c| c.branch.as_deref() == Some(request.branch.as_str()))
+    {
+        return Ok(refuse(
+            plan,
+            format!(
+                "\"{}\" is already checked out in another worktree; git allows a branch in one working tree at a time.",
+                request.branch
+            ),
+        ));
+    }
+
+    // ---- the name and the hostname ---------------------------------------
+    if name.is_empty() {
+        return Ok(refuse(
+            plan,
+            format!(
+                "\"{}\" has no letters or digits to build a name from; give the worktree a name of its own.",
+                request.branch
+            ),
+        ));
+    }
+    if !crate::workspace::is_safe_name(&name) {
+        return Ok(refuse(
+            plan,
+            format!("\"{name}\" is not a name a project directory can have."),
+        ));
+    }
+    // Through the same gate every other creation path uses, so a name that
+    // escapes the project tree is refused here rather than at `create_dir_all`.
+    let path = crate::workspace::project_dir(root, &name)?;
+    plan.path = path.display().to_string();
+    if path.exists() {
+        return Ok(refuse(plan, format!("projects/{name} already exists.")));
+    }
+    if !crate::hosts::is_valid_domain(&domain) {
+        return Ok(refuse(
+            plan,
+            format!("\"{domain}\" is not a hostname; the branch produces a label a resolver would refuse."),
+        ));
+    }
+    if claimed_domains(root).contains(&domain.to_ascii_lowercase()) {
+        return Ok(refuse(
+            plan,
+            format!("another project already answers on {domain}."),
+        ));
+    }
+
+    // Matched by the parent's own wildcard, which is not a conflict Traefik
+    // reports: it has two routers for one name and answers with whichever it
+    // ranks higher. Said out loud rather than refused — a wildcard alias is a
+    // deliberate arrangement and this hostname is still the more specific rule.
+    if manifest
+        .aliases
+        .iter()
+        .any(|alias| alias.strip_prefix("*.") == Some(parent_domain.as_str()))
+    {
+        warnings.push(format!(
+            "{parent} also answers on *.{parent_domain}, so {domain} matches two routes; the exact one wins, but the wildcard will not stop answering."
+        ));
+    }
+
+    // ---- the database -----------------------------------------------------
+    match request.database.as_str() {
+        "none" => {}
+        mode @ ("create" | "copy") => {
+            let instances = crate::db::instances(root).await.unwrap_or_default();
+            let chosen = match &request.instance {
+                Some(id) => instances.iter().find(|i| &i.id == id),
+                // The first database instance in the table, which is the order
+                // `instances.json` keeps and therefore the order the Market
+                // installed them in.
+                None => instances.first(),
+            };
+
+            let Some(instance) = chosen else {
+                return Ok(refuse(
+                    plan,
+                    match &request.instance {
+                        Some(id) => format!("there is no database instance called \"{id}\"."),
+                        None => "no database instance is installed to create one on.".into(),
+                    },
+                ));
+            };
+            if !instance.running {
+                return Ok(refuse(
+                    plan,
+                    format!(
+                        "{} is not running; a database cannot be created on a stopped engine.",
+                        instance.id
+                    ),
+                ));
+            }
+
+            let connection = crate::db::connection(root, &instance.id)?;
+            let stem = connection.database.clone().unwrap_or_else(|| parent.into());
+            let database = database_name(&stem, &label);
+
+            if !crate::db::is_valid_database_name(&database) {
+                return Ok(refuse(
+                    plan,
+                    format!("\"{database}\" is not a database name this app will create."),
+                ));
+            }
+
+            let seed = mode == "copy";
+            if seed {
+                if instance.kind == crate::db::Kind::Mongo {
+                    return Ok(refuse(
+                        plan,
+                        "MongoDB publishes no database name for this workspace, so there is nothing to copy from.".into(),
+                    ));
+                }
+                if connection.database.is_none() {
+                    return Ok(refuse(
+                        plan,
+                        format!("{} has no database configured to copy from.", instance.id),
+                    ));
+                }
+            }
+            if instance.kind == crate::db::Kind::Mongo {
+                warnings.push(format!(
+                    "MongoDB has no CREATE DATABASE; {database} begins existing the first time the branch writes to it."
+                ));
+            }
+
+            // Asked of the engine rather than assumed: a name left behind by a
+            // worktree somebody removed by hand is the case this catches, and
+            // creating "on top of" it would hand the branch somebody else's
+            // data without saying so.
+            if crate::db::databases(root, &instance.id)
+                .await
+                .unwrap_or_default()
+                .iter()
+                .any(|existing| existing == &database)
+            {
+                warnings.push(format!(
+                    "{database} already exists on {}; it will be used as it is rather than created.",
+                    instance.id
+                ));
+            }
+
+            plan.database = Some(PlannedDatabase {
+                instance: instance.id.clone(),
+                service: instance.service.clone(),
+                name: database,
+                seed,
+                source: seed.then(|| connection.database.clone()).flatten(),
+            });
+        }
+        other => {
+            return Ok(refuse(
+                plan,
+                format!("\"{other}\" is not a way to give a worktree a database."),
+            ));
+        }
+    }
+
+    plan.warnings = warnings;
+    plan.possible = true;
+    Ok(plan)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A refused plan still says what it would have been.
+    ///
+    /// The comment above the derivation makes the decision out loud — "a dialog
+    /// that blanks out when it says no makes the reason harder to act on, not
+    /// easier" — and until this commit nothing held it: `plan_worktree` was
+    /// private to `commands.rs`, one band above this module, so the refusal
+    /// path had no test anywhere.
+    ///
+    /// A project directory that is not a git repository is the cheapest way in:
+    /// no git command runs, and the refusal is reached with every derived field
+    /// already filled.
+    #[test]
+    fn a_refused_plan_still_carries_the_name_and_domain_it_would_have_had() {
+        let root = std::env::temp_dir().join(format!(
+            "stackvo-worktree-plan-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let project = root.join("projects").join("shop");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join(crate::manifest::FILE),
+            r#"{"name":"shop","domain":"shop.loc","runtime":"php"}"#,
+        )
+        .unwrap();
+        crate::workspace::point_at_projects(&root, &root.join("projects")).unwrap();
+
+        let request = WorktreeRequest::read("feature/Login Page".into(), None);
+        let plan = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(plan_worktree(&root, "shop", &request))
+            .expect("a refusal is an answer, not an error");
+
+        assert!(!plan.possible);
+        assert!(plan.refused.is_some(), "no reason was given");
+
+        // The half the decision is about: everything derivable was derived
+        // before the refusal, so the dialog still shows the name, the hostname
+        // and the path the worktree would have had.
+        assert_eq!(plan.name, "shop-feature-login-page");
+        assert_eq!(plan.domain, "feature-login-page.shop.loc");
+        assert!(
+            plan.path.ends_with("shop-feature-login-page"),
+            "{}",
+            plan.path
+        );
+        assert_eq!(plan.branch, "feature/Login Page");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn a_branch_name_becomes_one_dns_label() {
@@ -1138,6 +1806,7 @@ mod tests {
             database: None,
             env: BTreeMap::from([("APP_ENV".to_string(), "branch".to_string())]),
             created_at: "2026-01-01T00:00:00Z".into(),
+            expires_at: None,
         };
 
         let env = env_for(Path::new("/nonexistent-root"), &record);
@@ -1167,6 +1836,7 @@ mod tests {
             database: None,
             env: BTreeMap::from([("APP_URL".to_string(), "http://localhost:8000".to_string())]),
             created_at: "2026-01-01T00:00:00Z".into(),
+            expires_at: None,
         };
 
         let env = env_for(Path::new("/nonexistent-root"), &record);
@@ -1193,12 +1863,260 @@ mod tests {
                 ("not a key".to_string(), "three".to_string()),
             ]),
             created_at: "2026-01-01T00:00:00Z".into(),
+            expires_at: None,
         };
 
         let env = env_for(Path::new("/nonexistent-root"), &record);
         assert!(env.contains_key("GOOD"));
         assert!(!env.contains_key("BAD"), "{env:?}");
         assert!(!env.contains_key("not a key"), "{env:?}");
+    }
+
+    fn login_root(what: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "stackvo-worktree-login-{what}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn a_login_is_remembered_and_handed_back_when_it_is_forgotten() {
+        let root = login_root("roundtrip");
+
+        assert!(
+            login_of(&root, "shop-x").is_none(),
+            "none is the empty state"
+        );
+
+        remember_login(
+            &root,
+            "shop-x",
+            Login {
+                instance: "mysql-8-4".into(),
+                user: "shop_x".into(),
+                password: "deadbeef".into(),
+            },
+        )
+        .unwrap();
+        remember_login(
+            &root,
+            "shop-y",
+            Login {
+                instance: "mysql-8-4".into(),
+                user: "shop_y".into(),
+                password: "feedface".into(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(login_of(&root, "shop-x").unwrap().user, "shop_x");
+
+        // Handed back, because the caller's next act is to drop the account it
+        // names — a forget that returned nothing would leave the account behind
+        // with no way to learn its name.
+        let gone = forget_login(&root, "shop-x").expect("the login is returned");
+        assert_eq!(gone.user, "shop_x");
+        assert_eq!(gone.instance, "mysql-8-4");
+        assert!(login_of(&root, "shop-x").is_none());
+        // And only that one.
+        assert_eq!(login_of(&root, "shop-y").unwrap().password, "feedface");
+        assert!(
+            forget_login(&root, "shop-x").is_none(),
+            "twice is not an error"
+        );
+    }
+
+    /// The reason the passwords are in a second file at all.
+    ///
+    /// `Table` is serialised twice by the same derive — once to disk and once
+    /// across the IPC boundary into a webview. A password on `Record` would
+    /// make the second one a leak, and the only defence would be remembering to
+    /// strip it at every call site.
+    #[test]
+    fn the_record_a_webview_receives_carries_no_password() {
+        let root = login_root("separation");
+
+        let mut table = Table::default();
+        table
+            .insert(Record {
+                name: "shop-x".into(),
+                parent: "shop".into(),
+                branch: "x".into(),
+                domain: "x.shop.loc".into(),
+                path: "/code/shop-x".into(),
+                database: Some(Database {
+                    instance: "mysql-8-4".into(),
+                    name: "shop_x".into(),
+                    seeded_from: None,
+                }),
+                env: BTreeMap::new(),
+                created_at: "2026-01-01T00:00:00Z".into(),
+                expires_at: None,
+            })
+            .unwrap();
+
+        remember_login(
+            &root,
+            "shop-x",
+            Login {
+                instance: "mysql-8-4".into(),
+                user: "shop_x".into(),
+                password: "s3cr3t".into(),
+            },
+        )
+        .unwrap();
+
+        let shipped = serde_json::to_string(&table).unwrap();
+        assert!(
+            !shipped.contains("s3cr3t") && !shipped.contains("password"),
+            "the worktree table carries a credential: {shipped}"
+        );
+        assert_ne!(
+            logins_path(&root),
+            path(&root),
+            "the credentials must not share the file that crosses the boundary"
+        );
+        // And it really is on disk, in the other file.
+        let stored = std::fs::read_to_string(logins_path(&root)).unwrap();
+        assert!(stored.contains("s3cr3t"));
+    }
+
+    /// The file whose whole content is credentials is not world-readable.
+    #[cfg(unix)]
+    #[test]
+    fn the_login_file_is_readable_only_by_its_owner() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = login_root("mode");
+        remember_login(
+            &root,
+            "shop-x",
+            Login {
+                instance: "mysql-8-4".into(),
+                user: "shop_x".into(),
+                password: "s3cr3t".into(),
+            },
+        )
+        .unwrap();
+
+        let mode = std::fs::metadata(logins_path(&root))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "the credentials file is {mode:o}");
+    }
+
+    fn dated(expires_at: Option<&str>) -> Record {
+        Record {
+            name: "shop-feature-x".into(),
+            parent: "shop".into(),
+            branch: "feature/x".into(),
+            domain: "feature-x.shop.loc".into(),
+            path: "/code/shop-feature-x".into(),
+            database: None,
+            env: BTreeMap::new(),
+            created_at: "2026-08-30T09:00:00Z".into(),
+            expires_at: expires_at.map(str::to_string),
+        }
+    }
+
+    /// A person's own branch has no date on it, and never expires.
+    #[test]
+    fn a_worktree_with_no_expiry_is_never_finished_with() {
+        let record = dated(None);
+        assert!(!expired_at(&record, "2099-01-01T00:00:00Z"));
+        assert_eq!(remaining_minutes_at(&record, "2026-08-30T09:00:00Z"), None);
+    }
+
+    /// The comparison is textual, which is only correct because the format is
+    /// fixed-width UTC — so this is the test that would catch somebody
+    /// "improving" the timestamp into a local one.
+    #[test]
+    fn an_expiry_passes_at_the_moment_it_names() {
+        let record = dated(Some("2026-08-30T11:00:00Z"));
+
+        assert!(!expired_at(&record, "2026-08-30T10:59:59Z"));
+        assert!(expired_at(&record, "2026-08-30T11:00:00Z"), "on the second");
+        assert!(expired_at(&record, "2026-08-30T11:00:01Z"));
+        // Across a month and a year boundary, where a text comparison would
+        // break if the fields were not zero-padded.
+        assert!(expired_at(
+            &dated(Some("2026-09-01T00:00:00Z")),
+            "2026-09-01T00:00:00Z"
+        ));
+        assert!(!expired_at(
+            &dated(Some("2027-01-01T00:00:00Z")),
+            "2026-12-31T23:59:59Z"
+        ));
+    }
+
+    #[test]
+    fn what_is_left_is_rounded_down_and_never_negative() {
+        let record = dated(Some("2026-08-30T11:00:00Z"));
+
+        assert_eq!(
+            remaining_minutes_at(&record, "2026-08-30T10:00:00Z"),
+            Some(60)
+        );
+        // Fifty-nine seconds is not a minute of granted time.
+        assert_eq!(
+            remaining_minutes_at(&record, "2026-08-30T10:59:01Z"),
+            Some(0)
+        );
+        // Past is zero, not a wrapped enormous number — this value becomes a
+        // grant's `--for`.
+        assert_eq!(
+            remaining_minutes_at(&record, "2026-08-30T12:00:00Z"),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn a_ttl_is_clamped_rather_than_taken_at_its_word() {
+        let asked = WorktreeRequest::read(
+            "feature/x".into(),
+            Some(serde_json::json!({ "minutes": 60 * 24 * 365 })),
+        );
+        assert_eq!(asked.minutes(), Some(MAX_TTL_MINUTES));
+
+        // Cleared fields arrive as zero, and zero is "no expiry" rather than
+        // "already over".
+        let none = WorktreeRequest::read(
+            "feature/x".into(),
+            Some(serde_json::json!({ "minutes": 0 })),
+        );
+        assert_eq!(none.minutes(), None);
+    }
+
+    /// The sentence K-1 asks for, as flags: *this assistant may work on this
+    /// sandbox, for this long.*
+    #[test]
+    fn the_registration_for_a_sandbox_names_it_and_nothing_else() {
+        let record = dated(Some("2026-08-30T11:00:00Z"));
+
+        assert_eq!(
+            grant_for(&record, Some(30)).to_args(),
+            vec![
+                "--allow-writes".to_string(),
+                "--project=shop-feature-x".to_string(),
+                "--for=30m".to_string(),
+            ]
+        );
+
+        // And the scope is what makes it safe: under it the twelve writing
+        // tools are the four a project bounds, so this registration cannot
+        // stop the stack.
+        let grant = grant_for(&record, Some(30));
+        let stack_down = crate::mcp::TOOLS
+            .iter()
+            .find(|t| t.name == "stackvo_stack_down")
+            .expect("the tool exists");
+        assert!(!grant.opens(stack_down));
     }
 
     #[test]
@@ -1212,6 +2130,7 @@ mod tests {
             database: None,
             env: BTreeMap::new(),
             created_at: "2026-01-01T00:00:00Z".into(),
+            expires_at: None,
         };
 
         let mut table = Table::default();

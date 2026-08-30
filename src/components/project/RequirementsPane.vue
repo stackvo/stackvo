@@ -26,7 +26,7 @@ const emit = defineEmits(['apply']);
 
 const { t } = useI18n();
 
-const state = ref({ declared: [], suggested: [], plan: null });
+const state = ref({ declared: [], suggested: [], plan: null, preset: null });
 const picked = ref([]);
 const error = ref(null);
 const loading = ref(false);
@@ -35,7 +35,45 @@ const written = ref(false);
 
 const missing = computed(() => state.value.declared.filter((s) => s.known && !s.enabled));
 const unknown = computed(() => state.value.declared.filter((s) => !s.known));
-const empty = computed(() => !state.value.declared.length && !state.value.suggested.length);
+const empty = computed(
+  () => !state.value.declared.length && !state.value.suggested.length && !state.value.preset
+);
+
+/**
+ * The preset this project ships, when applying it would still change something.
+ *
+ * Hidden once the stack already matches, which is the state a project sits in
+ * after somebody applied it: a permanent banner saying "there is a preset"
+ * would be a line nobody reads by the third visit, and the moment it matters
+ * is the first open after a clone.
+ */
+const presetPending = computed(() => {
+  const offer = state.value.preset;
+  return offer?.plan?.changes?.length ? offer : null;
+});
+
+/**
+ * Applying it goes through `preset_apply`, the same command the Settings import
+ * uses — re-planned inside `apply`, so a `.env` that moved between opening the
+ * page and the click is not overwritten with a stale diff.
+ */
+async function applyPreset() {
+  const offer = presetPending.value;
+  if (!offer) return;
+
+  busy.value = true;
+  error.value = null;
+  try {
+    await api.presetApply(offer.path);
+    emit('apply', startable.value);
+    await load();
+  } catch (e) {
+    await load();
+    error.value = e;
+  } finally {
+    busy.value = false;
+  }
+}
 
 /** The profiles to start after applying: what was declared and exists. */
 const startable = computed(() => state.value.declared.filter((s) => s.known).map((s) => s.id));
@@ -55,6 +93,7 @@ async function load() {
       declared: asList(answer?.declared),
       suggested: asList(answer?.suggested),
       plan: answer?.plan ?? null,
+      preset: answer?.preset ?? null,
     };
     picked.value = state.value.suggested.map((s) => s.service);
   } catch (e) {
@@ -117,6 +156,35 @@ defineExpose({ load });
     <div v-if="empty && !loading" class="text-body-2 text-medium-emphasis">
       {{ t('requirements.none') }}
     </div>
+
+    <!-- The half a manifest cannot carry: `services` says which, a preset says
+         which VERSIONS and the shareable settings beside them. It sits at
+         `stackvo.preset.json` beside the manifest, so a clone brings it — which
+         is the whole of what was missing, because before this the flow began
+         with a colleague saying where they had put the file. -->
+    <v-alert
+      v-if="presetPending"
+      type="info"
+      variant="tonal"
+      density="compact"
+      class="mb-4"
+      :icon="'mdi-package-variant-closed'"
+    >
+      <div class="text-body-2">
+        {{ t('requirements.preset.pending', { count: presetPending.plan.changes.length }) }}
+        <span v-if="presetPending.name" lang="" class="font-weight-medium">
+          — {{ presetPending.name }}
+        </span>
+      </div>
+      <div v-if="presetPending.description" lang="" class="text-caption mt-1">
+        {{ presetPending.description }}
+      </div>
+      <template #append>
+        <v-btn size="small" variant="tonal" :loading="busy" @click="applyPreset">
+          {{ t('requirements.preset.apply') }}
+        </v-btn>
+      </template>
+    </v-alert>
 
     <!-- ---- declared ---------------------------------------------------- -->
     <template v-if="state.declared.length">

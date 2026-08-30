@@ -66,8 +66,8 @@ const OS: &str = if cfg!(target_os = "macos") {
 /// The network name the generator writes into every compose file.
 fn network_name(root: Option<&Path>) -> String {
     root.and_then(|r| crate::config::Env::load(r).ok())
-        .and_then(|env| env.get("DOCKER_DEFAULT_NETWORK").map(str::to_string))
-        .unwrap_or_else(|| "stackvo-net".to_string())
+        .map(|env| env.docker_network())
+        .unwrap_or_else(|| crate::config::DEFAULT_NETWORK.to_string())
 }
 
 /// First line of `<program> <args…>`, or None when it cannot be run at all.

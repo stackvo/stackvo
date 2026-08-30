@@ -24,6 +24,19 @@ CI runs `cargo clippy -- -D warnings` and `cargo fmt --check` on Linux, macOS
 and Windows. The Rust toolchain is pinned in `src-tauri/rust-toolchain.toml` —
 bump it in a commit rather than letting it drift.
 
+One test is not in any of the above and will not run by accident:
+
+```bash
+STACKVO_DOCKER_SMOKE=1 cargo test --test docker_smoke   # from src-tauri/
+```
+
+It lays out a throwaway workspace, builds a PHP image and brings a project up
+under Docker — minutes rather than milliseconds, which is why it runs nightly
+rather than on a push. **It refuses to run while you have a stack of your own
+up**, and that is not caution: the generated compose project is called
+`stackvo` on every machine, so it would adopt yours and remove the containers it
+did not put there. Take your stack down first, or read the nightly.
+
 ## The parts that are not obvious
 
 **`contracts/` is the agreement, not documentation.** It describes the shared

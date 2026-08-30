@@ -9,6 +9,8 @@ StackVo MCP sunucusunu bu makinedeki asistanlara tanıtır.
 | Kur | Seçtiğiniz istemcinin yapılandırma dosyasına `stackvo` girdisini yazar. |
 | Kaldır | Yalnızca o girdiyi siler. |
 | Yazma izni ver | Asistana yalnız okuma değil, yığını değiştirme yetkisi de tanır. |
+| Yalnız bu projeler | Kaydı, adını verdiğiniz projelere sınırlar. |
+| Yazma süresi | Yazma yarısını, sunucunun her başlayışından bu süre sonra bitirir. |
 
 ## Ne değişir
 
@@ -19,6 +21,10 @@ Bu sunucuya sahip bir asistan, "shop.loc neden açılmıyor?" sorusunu ön kontr
 - Yazma dosya olarak yapılır: uygulama dosyayı okur, tek anahtarı ekler ve geri yazar. Diğer sunucularınız ve tanımadığı anahtarlar korunur.
 - Yazmadan önce dosyanın yanına `.stackvo-backup` uzantılı bir yedek bırakılır.
 - Yazma izni vermek asistana yığını durdurma ve değiştirme yetkisi verir. Vermezseniz asistan yalnızca okur.
+- **Anahtarı güvenle açılabilir yapan ayar, bir proje adı vermektir.** Hiçbir proje adı verilmemişse yazma izni on iki yazma aracını birden devreder ve içlerinde `stack_down` vardır — yani bu makinedeki her konteynerin durması tek bir çağrı uzaktadır. Bir proje adlandırdığınızda on iki, bir projenin sınırlayabildiği dörde iner: `xdebug_set`, `project_start`, `project_stop`, `project_restart`. Diğer sekizi hiç sunulmaz, çünkü hiçbir proje sınırı "her şeyi durdur"u söylediğinden daha azı hâline getiremez.
+- Sınır okumayı da kapsar, ve tam şu kadar: bir projeyi adlandıran hiçbir araç, sınırın dışındaki bir proje için cevap vermez — yani başka bir projenin manifesti, istek izleri, profili ve kayıt dosyaları kapalıdır, ve gördüğü proje listelerinde yalnız sınırının içindekiler bulunur. Bu bir **bilgi yalıtımı değildir**: makine geneli cevaplar çalışmayı sürdürür, çünkü onlar tek bir projeye değil makineye dairdir — doctor, hosts tablosu, posta yakalayıcı, bir veritabanı servisinin sorgu kaydı, kimliğiyle bir konteynerin kaydı. Bunları da sınırlamak, asistanı verdiğiniz projeyi teşhis edemez hâle getirirdi.
+- **Yazma süresi** yazma araçlarını kendiliğinden bitirir. Okumalar çalışmayı sürdürür; o andan sonra araç listesini yeniden soran bir istemciye doğrusu söylenir, sormayan ise çağırdığında adıyla reddedilir. Yeniden vermek için sunucuyu yeniden başlatın — asistanı kapatıp açmak bunu yapar.
+- Kontrollerin altında görünen bayraklar, dosyaya yazılacak olanın tam olarak kendisidir. O satır, bu asistana neye izin verildiğinin kaydıdır — ve altı ay sonra biri sorduğunda okuyacağınız şey odur.
 
 ## Yapay zekâ kuralları
 

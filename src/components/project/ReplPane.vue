@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { api, asList } from '@/lib/ipc';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import { quickCommandAbout } from '@/lib/catalogue-text';
 
 /**
  * A snippet, the application it runs inside, and what came back.
@@ -165,7 +166,7 @@ watch(() => props.name, load);
         >
           {{ current.booted ? t('repl.booted') : t('repl.bare') }}
         </v-chip>
-        <span class="text-caption text-medium-emphasis">{{ current?.about }}</span>
+        <span class="text-caption text-medium-emphasis">{{ quickCommandAbout(current) }}</span>
       </div>
 
       <v-textarea

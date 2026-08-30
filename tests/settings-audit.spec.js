@@ -110,6 +110,69 @@ describe('the audit pane', () => {
     expect(text).toMatch(/could not be read/);
   });
 
+  it('offers to put back only the acts that recorded how', async () => {
+    const undone = entry('stackvo_project_stop', 'shop');
+    undone.at = '2026-08-10T09:00:01Z';
+    undone.undo = { kind: 'steps', steps: [{ tool: 'stackvo_project_start', arguments: {} }] };
+
+    const restart = entry('stackvo_project_restart', 'blog');
+    restart.at = '2026-08-10T09:00:02Z';
+    restart.undo = { kind: 'none', because: 'a restart has already stopped and started it' };
+
+    replies.auditTrail = { entries: [undone, restart], total: 2, unreadable: 0 };
+    const wrapper = await mountPane();
+
+    // One button, on the one line that carries a plan.
+    const buttons = wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .filter((b) => b.text() === 'Put it back');
+    expect(buttons).toHaveLength(1);
+
+    // And the row that cannot says so, in the words the plan recorded — a row
+    // with neither would read as an app that had not thought about it.
+    expect(wrapper.text()).toContain('a restart has already stopped and started it');
+    // The plan is shown before it is run, as the calls it would make.
+    expect(wrapper.text()).toContain('project_start');
+  });
+
+  it('does not offer an act that was already put back, and says it was', async () => {
+    const line = entry('stackvo_stack_down', 'the stack');
+    line.undone = true;
+    line.undo = { kind: 'steps', steps: [{ tool: 'stackvo_project_start', arguments: {} }] };
+
+    replies.auditTrail = { entries: [line], total: 1, unreadable: 0 };
+    const wrapper = await mountPane();
+
+    expect(wrapper.text()).toContain('Put back');
+    expect(
+      wrapper.findAllComponents({ name: 'VBtn' }).filter((b) => b.text() === 'Put it back')
+    ).toHaveLength(0);
+  });
+
+  it('re-reads the trail after an undo fails, and still shows the error', async () => {
+    const line = entry('stackvo_project_stop', 'shop');
+    line.undo = { kind: 'steps', steps: [{ tool: 'stackvo_project_start', arguments: {} }] };
+
+    let reads = 0;
+    replies.auditTrail = () => {
+      reads += 1;
+      return Promise.resolve({ entries: [line], total: 1, unreadable: 0 });
+    };
+    replies.auditUndo = () => Promise.reject({ code: 'CONFLICT', message: 'already put back' });
+
+    const wrapper = await mountPane();
+    await wrapper
+      .findAllComponents({ name: 'VBtn' })
+      .find((b) => b.text() === 'Put it back')
+      .trigger('click');
+    await flushPromises();
+
+    // The machine may have changed even though the call failed, so the screen
+    // is re-read before the message is shown.
+    expect(reads).toBe(2);
+    expect(wrapper.findComponent({ name: 'ErrorAlert' }).exists()).toBe(true);
+  });
+
   // A trail that fails to load must not render as an empty one: "nothing has
   // happened" and "I could not look" are different answers.
   it('reports a failure rather than presenting it as an empty trail', async () => {

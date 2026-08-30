@@ -224,6 +224,15 @@ pub async fn status_all() -> crate::error::Result<Vec<WorkerStatus>> {
 /// the worker sees exactly what the site sees. `--restart unless-stopped` is
 /// the whole self-heal story; `stop` (which removes) is the only way it stays
 /// down.
+///
+/// `debug` is the debug bridge's three mounts, or `None` where they could not
+/// be written. They are here because "same PHP, same extensions, same bind
+/// mount" was one mount short of true: the bridge reaches the web container
+/// through a compose overlay, and a sidecar is not a compose service, so a
+/// `dump()` inside a queued job was written by nothing and read by nobody.
+/// The ini is a *file* mount into `conf.d` — mounting the directory would
+/// shadow every other ini the image carries, including the one the profiler
+/// writes.
 pub fn run_args(
     project: &str,
     kind: Kind,
@@ -231,6 +240,7 @@ pub fn run_args(
     host_root: &str,
     network: &str,
     domain: &str,
+    debug: Option<&crate::debugbridge::Entry>,
 ) -> Vec<String> {
     let mount = format!(
         "{}/projects/{project}:/var/www/html",
@@ -255,6 +265,26 @@ pub fn run_args(
     .into_iter()
     .map(String::from)
     .collect();
+
+    if let Some(debug) = debug {
+        // In front of the image, like every other flag: `docker run` reads the
+        // image as the end of its own arguments and everything after it as the
+        // container's command line.
+        let image = args.pop().expect("the image was pushed above");
+        for mount in [
+            format!("{}:{}:ro", debug.conf_host, crate::debugbridge::CONF_DIR),
+            format!("{}:{}", debug.events_host, crate::debugbridge::EVENTS_DIR),
+            format!(
+                "{}:{}:ro",
+                debug.ini_host,
+                crate::debugbridge::INI_CONTAINER_PATH
+            ),
+        ] {
+            args.push("-v".to_string());
+            args.push(mount);
+        }
+        args.push(image);
+    }
 
     if kind.routed() {
         // The image is the last thing docker reads before the container's own
@@ -390,6 +420,7 @@ mod tests {
             "/Users/x/stackvo",
             "stackvo-net",
             "shop.loc",
+            None,
         );
         let line = args.join(" ");
 
@@ -455,6 +486,7 @@ mod tests {
                 "/Users/x/stackvo",
                 "stackvo-net",
                 "shop.loc",
+                None,
             );
             assert!(
                 !args.iter().any(|a| a == "-l"),
@@ -463,6 +495,82 @@ mod tests {
             );
         }
         assert!(Kind::Reverb.routed());
+    }
+
+    /// "Same PHP, same extensions, same bind mount" was one mount short of
+    /// true. The debug bridge reaches the web container through a compose
+    /// overlay, and a sidecar is not a compose service — so a `dump()` inside
+    /// a queued job was written by nothing and read by nobody, which is the
+    /// one place it is hardest to catch by any other means.
+    #[test]
+    fn a_worker_carries_the_debug_bridge_the_web_container_gets() {
+        let debug = crate::debugbridge::Entry {
+            service: "myapp".into(),
+            conf_host: "/w/generated/debug/myapp/conf".into(),
+            events_host: "/w/generated/debug/myapp/events".into(),
+            ini_host: "/w/generated/debug/myapp/conf/stackvo-debug.ini".into(),
+        };
+        let args = run_args(
+            "myapp",
+            Kind::Queue,
+            "stackvo-myapp:latest",
+            "/Users/x/stackvo",
+            "stackvo-net",
+            "myapp.loc",
+            Some(&debug),
+        );
+        let line = args.join(" ");
+
+        assert!(line.contains(&format!(
+            "/w/generated/debug/myapp/conf:{}:ro",
+            crate::debugbridge::CONF_DIR
+        )));
+        // Writable, or the bridge has nowhere to write and the pane stays
+        // empty with everything else looking correct.
+        assert!(line.contains(&format!(
+            "/w/generated/debug/myapp/events:{}",
+            crate::debugbridge::EVENTS_DIR
+        )));
+        assert!(!line.contains(&format!("{}:ro", crate::debugbridge::EVENTS_DIR)));
+        // A FILE mount into conf.d. Mounting the directory would shadow every
+        // other ini the image carries, the profiler's included.
+        assert!(line.contains(&format!(
+            "stackvo-debug.ini:{}:ro",
+            crate::debugbridge::INI_CONTAINER_PATH
+        )));
+
+        // Every mount is an argument to `docker run`, not to the worker: past
+        // the image, everything is the container's own command line.
+        let image_at = args
+            .iter()
+            .position(|a| a == "stackvo-myapp:latest")
+            .expect("no image");
+        assert!(
+            args.iter().rposition(|a| a == "-v").unwrap() < image_at,
+            "{args:?}"
+        );
+        assert!(line.ends_with("php artisan queue:work --sleep=3 --tries=3 --max-time=3600"));
+    }
+
+    /// A bridge that could not be written must not take the worker with it.
+    /// The honest degradation is a worker with no bridge, never a queue that
+    /// will not start.
+    #[test]
+    fn a_worker_starts_without_a_bridge_when_there_is_none() {
+        let args = run_args(
+            "myapp",
+            Kind::Queue,
+            "stackvo-myapp:latest",
+            "/Users/x/stackvo",
+            "stackvo-net",
+            "myapp.loc",
+            None,
+        );
+        assert_eq!(
+            args.iter().filter(|a| *a == "-v").count(),
+            1,
+            "the project mount is the only one left: {args:?}"
+        );
     }
 
     #[test]
@@ -474,6 +582,7 @@ mod tests {
             "/Users/x/stackvo",
             "stackvo-net",
             "myapp.loc",
+            None,
         );
         let line = args.join(" ");
         assert!(line.contains("--name stackvo-worker-myapp-queue"));
@@ -489,6 +598,7 @@ mod tests {
             "/Users/x/stackvo",
             "stackvo-net",
             "myapp.loc",
+            None,
         );
         assert!(horizon.join(" ").ends_with("php artisan horizon"));
     }

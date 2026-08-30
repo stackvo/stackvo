@@ -42,7 +42,12 @@ const RECIPES = [
   {
     name: 'mysql-remote',
     about: 'A MySQL or MariaDB server this machine can reach directly',
-    edit: ['the host, port, user and database name in both commands'],
+    // `{ key, english }` per entry, which is what `provider.rs` sends now: the
+    // window is bilingual, so the key is looked up as `providerRecipeEdits.<key>`
+    // and the English is the fallback the CLI and the log keep getting.
+    edit: [
+      { key: 'connection', english: 'the host, port, user and database name in both commands' },
+    ],
     image: 'mysql:8.4',
     pull: ['mysqldump', '--host=db.example.com', '--result-file=/stackvo/dump.sql', 'the_database'],
     push: ['mysql', '--execute=source /stackvo/dump.sql', 'the_database'],
@@ -51,7 +56,7 @@ const RECIPES = [
   {
     name: 'upsun',
     about: 'An Upsun environment, through its own CLI',
-    edit: ['the project id and the environment name'],
+    edit: [{ key: 'upsunProject', english: 'the project id and the environment name' }],
     image: 'ghcr.io/upsun/cli:latest',
     pull: ['db:dump', '--directory=/stackvo', '--file=dump.sql'],
     push: [],

@@ -469,6 +469,15 @@ export const api = {
    * crosses, and a path naming another host is refused there.
    */
   spxRecordRequest: (name, path) => call('spx_record_request', { name, path }),
+  /**
+   * Send a recorded request again and hand back both recordings.
+   *
+   * Only a GET can be replayed: a recording names the request line and nothing
+   * else, so a POST without its body and its session would be a different
+   * request. That comes back as an error with the reason in it rather than as
+   * a disabled button, because the reason is the useful part.
+   */
+  requestReplay: (name, key) => call('request_replay', { name, key }),
   /** Profile one quick command. Resolves with an operation id, like a build. */
   spxRecordCommand: (name, id) => call('spx_record_command', { name, id }),
   /** Where one recording spent its time. */
@@ -569,6 +578,9 @@ export const api = {
   // thing that crosses — the argv is built on the Rust side from a fixed
   // catalog, so the webview cannot name a program to execute.
   quickCommands: (name) => call('quick_commands', { name }),
+  machineCommands: () => call('machine_commands'),
+  crashReports: () => call('crash_reports'),
+  crashReportsSeen: () => call('crash_reports_seen'),
   /** Resolves to an operation id, or null for an interactive command that
    *  opened the user's own terminal. */
   quickCommandRun: (name, id) => call('quick_command_run', { name, id }),
@@ -903,11 +915,44 @@ export const api = {
    * not become a way past it.
    */
   auditTrail: (limit) => call('audit_trail', { limit }),
+  /**
+   * Put one recorded act back.
+   *
+   * `at` identifies the line, and the plan it runs was written onto that line
+   * before the act happened — so this is not "work out how to reverse it now",
+   * which would be worked out against a machine that has since changed.
+   */
+  auditUndo: (at) => call('audit_undo', { at }),
   focusPlan: (project) => call('focus_plan', { project }),
   focusApply: (project) => call('focus_apply', { project }),
   policyStatus: () => call('policy_status'),
+  /**
+   * Which clause of that policy is actually holding here.
+   *
+   * `policyStatus` reports what the file says; this reports what the machine
+   * is. Read once when the pane opens: every fact behind it is on disk and
+   * none of it moves without somebody regenerating, installing or refreshing.
+   */
+  policyCompliance: () => call('policy_compliance'),
   /** Where each credential lives, and whether this machine has a keystore. */
   secretsStatus: () => call('secrets_status'),
+  /**
+   * Credentials sitting where they should not be.
+   *
+   * `name` scopes the tracked-file half to one project's repository; without
+   * it only `.env` is read. A finding never carries the value — a report that
+   * quotes the secret is a second copy of it.
+   */
+  leaksScan: (name) => call('leaks_scan', { name }),
+  /**
+   * Take a project's `.env` out of git, the standard way.
+   *
+   * Untracks it, ignores it, and writes `.env.example` if there is none. What
+   * comes back names the two halves it does **not** do: the file is still in
+   * the history if it was ever committed, so what was in it has to be rotated,
+   * and the removal is staged rather than committed.
+   */
+  envUntrack: (name) => call('env_untrack', { name }),
   /** Move one credential out of `.env` and into the OS keystore. */
   secretMove: (key) => call('secret_move', { key }),
   /** Put it back in `.env` and forget the keystore entry. */
@@ -920,8 +965,14 @@ export const api = {
    * `allowWrites` is not optional on purpose. It is the argument that decides
    * whether that assistant can stop the stack, and a default here would be a
    * security decision made in a wrapper.
+   *
+   * The two after it narrow the same decision and are optional, because their
+   * absence is a meaning rather than an oversight: no projects is every
+   * project, and no minutes is no limit. `projects` bounds the reads as well
+   * as the writes, and removes every writing tool a project cannot bound.
    */
-  agentsInstall: (client, allowWrites) => call('agents_install', { client, allowWrites }),
+  agentsInstall: (client, allowWrites, projects, minutes) =>
+    call('agents_install', { client, allowWrites, projects, minutes }),
   /** Take the entry back out of that assistant's configuration. */
   agentsRemove: (client) => call('agents_remove', { client }),
   /**
@@ -957,6 +1008,31 @@ export const api = {
   logsInfo: () => call('logs_info'),
   /** Writes the diagnostic archive to a path the user chose in the save dialog. */
   diagnosticsBundle: (path) => call('diagnostics_bundle', { path }),
+  /**
+   * Hold another machine's bundle against this one.
+   *
+   * `path` is a file the user picked — the whole zip, or the
+   * `environment.json` somebody pasted out of it. What comes back is only what
+   * differs, with agreement counted rather than listed.
+   */
+  diagnosticsCompare: (path) => call('diagnostics_compare', { path }),
+  /**
+   * What each container cost on one day, and which projects are over budget.
+   *
+   * `date` is optional and means today. A day outside the thirty the record
+   * keeps comes back empty rather than as an error — a record with a horizon
+   * says so by having nothing there.
+   */
+  usageReport: (date) => call('usage_report', { date }),
+  /**
+   * Whether this machine matches what the repository declares the project
+   * needs, line by line.
+   *
+   * Every line comes back, not only the failing ones: a verifier that answered
+   * with nothing when everything matched would leave somebody unable to tell
+   * "it checked and I am fine" from "it did not check".
+   */
+  projectVerify: (name) => call('project_verify', { name }),
   localeGet: () => call('locale_get'),
 
   /**

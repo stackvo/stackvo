@@ -97,6 +97,241 @@ pub fn about() -> String {
     )
 }
 
+// --------------------------------------------------------- the environment
+//
+// The half of a bundle that can be *compared*.
+
+/// The name the comparable half is filed under, in a bundle and on its own.
+pub const ENVIRONMENT_FILE: &str = "environment.json";
+
+/// What this machine is, as facts one can be held against another.
+///
+/// ## Why this exists next to a bundle that already has everything
+///
+/// "It works on my machine" is the oldest complaint in this category and no
+/// product in it answers the question — they all say the container solves it,
+/// which it does not: the same compose file on two Docker versions is two
+/// different things. This app was already the only one that packages the state
+/// of a machine. What it could not do is put two of them side by side.
+///
+/// It could not because the bundle is written for a **person**: `about.txt` is
+/// prose, and `doctor.json` and `preflight.json` are shaped for reading. Diffing
+/// those produces noise — a socket path, a pid, a byte count that moved — and a
+/// comparison whose output is mostly noise is one nobody reads twice. So the
+/// comparable half is derived separately and deliberately flat: one line per
+/// fact, a key somebody can say out loud, and a value that is the same string
+/// on two machines when the two machines agree.
+///
+/// ## What is in it, and what is kept out
+///
+/// Versions, the engine, the services and what each project declares. **No
+/// paths**, because a home directory differs on every machine and would report
+/// two identical setups as different in five places. **No credentials and no
+/// `.env` values**: this file is meant to be handed to a colleague, and the
+/// whole premise of the bundle it sits in is that it is safe to attach.
+///
+/// No new measurement, either. Every value here is read from something this
+/// module already collects or from a file already on disk.
+pub async fn facts(root: Option<&Path>) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut put = |key: &str, value: String| {
+        out.insert(key.to_string(), value);
+    };
+
+    put("app.version", env!("CARGO_PKG_VERSION").to_string());
+    put("app.os", std::env::consts::OS.to_string());
+    put("app.arch", std::env::consts::ARCH.to_string());
+
+    let engine = crate::engine::status().await;
+    put("engine.platform", format!("{:?}", engine.platform));
+    put(
+        "engine.version",
+        engine
+            .version
+            .clone()
+            .unwrap_or_else(|| "unreachable".into()),
+    );
+    if let Some(api) = &engine.api_version {
+        put("engine.apiVersion", api.clone());
+    }
+
+    // The state only, never the detail. A requirement's detail carries the
+    // socket it found and the port a process holds, which differ between two
+    // machines that are working identically.
+    for requirement in crate::preflight::run().await.requirements {
+        put(
+            &format!("preflight.{}", requirement.id),
+            format!("{:?}", requirement.state).to_lowercase(),
+        );
+    }
+
+    let Some(root) = root else {
+        return out;
+    };
+
+    if let Ok(env) = crate::config::Env::load(root) {
+        put("workspace.tldSuffix", env.tld_suffix());
+        put("workspace.network", env.docker_network());
+        put("workspace.defaultServer", env.default_server());
+    }
+
+    if let Ok(table) = crate::instances::Table::load(root) {
+        for instance in &table.instances {
+            put(
+                &format!("service.{}", instance.id),
+                format!(
+                    "{} {}",
+                    instance.version,
+                    if instance.enabled { "on" } else { "off" }
+                ),
+            );
+        }
+    }
+
+    // What each project *declares*, which is the half that travels in git and
+    // the half two people can actually disagree about while both believing they
+    // are running the same thing.
+    if let Some(projects) = crate::workspace::projects_root(root) {
+        for entry in std::fs::read_dir(&projects).into_iter().flatten().flatten() {
+            let dir = entry.path();
+            let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let Ok(manifest) = crate::manifest::read(&dir.join(crate::manifest::FILE), name) else {
+                continue;
+            };
+            // The runtime and its version, which is the pair two people most
+            // often differ on while both believing they run "the project".
+            let version = match (&manifest.php, &manifest.node) {
+                (Some(php), _) => php.version.clone(),
+                (None, Some(node)) => node.version.clone(),
+                _ => "default".to_string(),
+            };
+            put(
+                &format!("project.{name}"),
+                format!(
+                    "{} {version} on {}",
+                    manifest.runtime,
+                    manifest.server.as_deref().unwrap_or("default"),
+                ),
+            );
+            // Xdebug being on is a difference worth naming by itself: it is the
+            // usual answer to "why is it slow on yours and not on mine".
+            if let Some(php) = &manifest.php {
+                put(
+                    &format!("project.{name}.xdebug"),
+                    if php.xdebug { "on" } else { "off" }.to_string(),
+                );
+            }
+        }
+    }
+
+    out
+}
+
+/// One fact two machines do not agree about.
+///
+/// Both sides are carried, and either may be absent — "you have redis-7-2 and
+/// they do not" is a different sentence from "you are on 7.2 and they are on
+/// 7.0", and a comparison that flattened them into "differs" would throw away
+/// the half that says what to do.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Difference {
+    pub key: String,
+    pub here: Option<String>,
+    pub there: Option<String>,
+}
+
+/// The answer to "why does it work on yours".
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Comparison {
+    /// Only what differs, in key order. Agreement is counted, not listed: a
+    /// report that prints two hundred identical lines buries the four that
+    /// matter, which is how a diff stops being read.
+    pub differences: Vec<Difference>,
+    /// How many facts both sides state and agree on.
+    pub same: usize,
+    /// The app version the other bundle came from, when it says.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub their_version: Option<String>,
+}
+
+/// Hold two fingerprints against each other.
+pub fn compare(
+    here: &std::collections::BTreeMap<String, String>,
+    there: &std::collections::BTreeMap<String, String>,
+) -> Comparison {
+    let mut differences = Vec::new();
+    let mut same = 0;
+
+    // Both key sets, in one order. A key only one side has is a difference —
+    // the most interesting kind, and the one an intersection would drop.
+    let keys: std::collections::BTreeSet<&String> = here.keys().chain(there.keys()).collect();
+
+    for key in keys {
+        let (mine, theirs) = (here.get(key), there.get(key));
+        if mine == theirs {
+            same += 1;
+            continue;
+        }
+        differences.push(Difference {
+            key: key.clone(),
+            here: mine.cloned(),
+            there: theirs.cloned(),
+        });
+    }
+
+    Comparison {
+        differences,
+        same,
+        their_version: there.get("app.version").cloned(),
+    }
+}
+
+/// Read the comparable half out of what somebody sent.
+///
+/// A whole bundle or the one file out of it, because both are things people
+/// actually send: the zip is what the app produces, and the extracted JSON is
+/// what somebody pastes into a chat window. Guessing by extension would refuse
+/// a correct file for having been renamed, so the zip is *tried* and anything
+/// that is not one is read as JSON.
+pub fn facts_from_file(path: &Path) -> Result<std::collections::BTreeMap<String, String>> {
+    let file = std::fs::File::open(path)
+        .map_err(|e| Error::io(format!("reading {}", path.display()), e))?;
+
+    let text = match zip::ZipArchive::new(std::io::BufReader::new(file)) {
+        Ok(mut archive) => {
+            use std::io::Read;
+            let mut entry = archive.by_name(ENVIRONMENT_FILE).map_err(|_| {
+                Error::new(
+                    crate::error::Code::NotFound,
+                    format!(
+                        "that bundle has no {ENVIRONMENT_FILE} — it was made by a version of                          StackVo that did not collect one yet, and there is nothing in it to                          compare"
+                    ),
+                )
+            })?;
+            let mut text = String::new();
+            entry
+                .read_to_string(&mut text)
+                .map_err(|e| Error::io(format!("reading {ENVIRONMENT_FILE}"), e))?;
+            text
+        }
+        Err(_) => std::fs::read_to_string(path)
+            .map_err(|e| Error::io(format!("reading {}", path.display()), e))?,
+    };
+
+    serde_json::from_str(&text).map_err(|e| {
+        Error::new(
+            crate::error::Code::InvalidInput,
+            format!(
+                "that file is neither a StackVo diagnostic bundle nor an {ENVIRONMENT_FILE}: {e}"
+            ),
+        )
+    })
+}
+
 /// The header that tells whoever opens the archive what they are looking at.
 fn readme(entries: &[Entry]) -> String {
     let mut out = String::from(
@@ -107,6 +342,7 @@ fn readme(entries: &[Entry]) -> String {
          preflight.json every startup requirement and whether it is met\n\
          doctor.json    ports, hosts entries, generated-config drift, disk use\n\
          engine.json    the Docker engine as this app sees it\n\
+         environment.json  the comparable facts: versions, services, projects\n\
          logs/          the rotating application log, newest last\n\
          crashes/       panic reports, if this app has ever died on this machine\n\
          \n\
@@ -180,6 +416,10 @@ pub async fn parts(root: Option<&Path>) -> Vec<(String, String)> {
         "engine.json".into(),
         section(&crate::engine::status().await),
     ));
+    // The one file in here written to be read by a program rather than a
+    // person: flat, path-free and credential-free, so two of them can be held
+    // against each other. See [`facts`].
+    parts.push((ENVIRONMENT_FILE.into(), section(&facts(root).await)));
 
     if let Some(dir) = crate::logging::dir() {
         let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
@@ -331,6 +571,191 @@ mod tests {
         assert!(text.contains("done"));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn map(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    /// What a comparison is for: the four lines that matter, not the two
+    /// hundred that agree.
+    #[test]
+    fn only_what_differs_is_listed_and_the_rest_is_counted() {
+        let here = map(&[
+            ("app.version", "0.1.0"),
+            ("engine.version", "27.1.1"),
+            ("service.redis-7-2", "7.2 on"),
+            ("project.shop", "php 8.4 on nginx"),
+        ]);
+        let there = map(&[
+            ("app.version", "0.1.0"),
+            ("engine.version", "25.0.3"),
+            ("service.redis-7-2", "7.2 off"),
+            ("project.shop", "php 8.4 on nginx"),
+        ]);
+
+        let out = compare(&here, &there);
+
+        assert_eq!(out.same, 2, "agreement is counted, not listed");
+        assert_eq!(
+            out.differences,
+            vec![
+                Difference {
+                    key: "engine.version".into(),
+                    here: Some("27.1.1".into()),
+                    there: Some("25.0.3".into()),
+                },
+                Difference {
+                    key: "service.redis-7-2".into(),
+                    here: Some("7.2 on".into()),
+                    there: Some("7.2 off".into()),
+                },
+            ],
+            "in key order, both sides carried"
+        );
+        assert_eq!(out.their_version.as_deref(), Some("0.1.0"));
+    }
+
+    /// The most interesting difference is the one an intersection would drop.
+    #[test]
+    fn a_fact_only_one_side_states_is_a_difference_with_a_missing_half() {
+        let out = compare(
+            &map(&[("service.redis-7-2", "7.2 on")]),
+            &map(&[("service.mysql-8-4", "8.4 on")]),
+        );
+
+        assert_eq!(out.same, 0);
+        assert_eq!(
+            out.differences,
+            vec![
+                Difference {
+                    key: "service.mysql-8-4".into(),
+                    here: None,
+                    there: Some("8.4 on".into()),
+                },
+                Difference {
+                    key: "service.redis-7-2".into(),
+                    here: Some("7.2 on".into()),
+                    there: None,
+                },
+            ],
+            "\"you have it and they do not\" is a different sentence from \"you disagree\""
+        );
+    }
+
+    #[test]
+    fn two_identical_machines_have_nothing_to_say() {
+        let both = map(&[("app.version", "0.1.0"), ("engine.version", "27.1.1")]);
+        let out = compare(&both, &both);
+
+        assert!(out.differences.is_empty());
+        assert_eq!(out.same, 2);
+    }
+
+    /// Both of the things people actually send, read by the same function.
+    #[test]
+    fn the_other_side_can_arrive_as_a_bundle_or_as_the_one_file_out_of_it() {
+        let dir = std::env::temp_dir().join(format!(
+            "stackvo-diagnostics-compare-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let body = r#"{"app.version":"0.1.0","engine.version":"25.0.3"}"#;
+
+        // The extracted file, pasted out of a chat window — and named
+        // something else, because guessing by extension would refuse a correct
+        // file for having been renamed.
+        let bare = dir.join("theirs.txt");
+        std::fs::write(&bare, body).unwrap();
+        assert_eq!(
+            facts_from_file(&bare).unwrap().get("engine.version"),
+            Some(&"25.0.3".to_string())
+        );
+
+        // The whole bundle.
+        let zipped = dir.join("theirs.zip");
+        {
+            let file = std::fs::File::create(&zipped).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            writer.start_file("about.txt", options).unwrap();
+            writer
+                .write_all(
+                    b"prose nobody can diff
+",
+                )
+                .unwrap();
+            writer.start_file(ENVIRONMENT_FILE, options).unwrap();
+            writer.write_all(body.as_bytes()).unwrap();
+            writer.finish().unwrap();
+        }
+        assert_eq!(
+            facts_from_file(&zipped).unwrap().get("app.version"),
+            Some(&"0.1.0".to_string())
+        );
+
+        // A bundle from a build that predates this: named, not shrugged at.
+        let older = dir.join("older.zip");
+        {
+            let file = std::fs::File::create(&older).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            writer.start_file("about.txt", options).unwrap();
+            writer
+                .write_all(
+                    b"prose nobody can diff
+",
+                )
+                .unwrap();
+            writer.finish().unwrap();
+        }
+        let refused = facts_from_file(&older).unwrap_err();
+        assert!(
+            refused.message.contains(ENVIRONMENT_FILE),
+            "the reason has to name the missing file: {}",
+            refused.message
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The bundle carries the comparable half, or a comparison has nothing to
+    /// read.
+    #[tokio::test]
+    async fn the_bundle_carries_the_file_a_comparison_reads() {
+        let names: Vec<String> = parts(None)
+            .await
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert!(
+            names.iter().any(|n| n == ENVIRONMENT_FILE),
+            "the bundle no longer carries {ENVIRONMENT_FILE}: {names:?}"
+        );
+    }
+
+    /// No paths and no credentials, because this file is meant to be handed to
+    /// somebody. A home directory would also report two identical setups as
+    /// different in five places.
+    #[tokio::test]
+    async fn the_comparable_half_carries_no_path_and_no_secret() {
+        let facts = facts(None).await;
+        let body = serde_json::to_string(&facts).unwrap();
+
+        for forbidden in ["/Users/", "/home/", "C:\\", "password", "secret", "token"] {
+            assert!(
+                !body.to_lowercase().contains(&forbidden.to_lowercase()),
+                "{forbidden:?} reached the comparable half: {body}"
+            );
+        }
+        // And it is not empty, or the assertion above proves nothing.
+        assert!(facts.contains_key("app.version"), "{body}");
     }
 
     #[test]

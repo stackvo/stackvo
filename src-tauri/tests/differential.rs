@@ -103,7 +103,13 @@ fn rust_generator_reproduces_the_bash_dockerfiles_byte_for_byte() {
         let theirs = std::fs::read_to_string(&theirs_path).expect("read Dockerfile");
         // compat mode: reproduce the Bash silent-skip behaviour, which is what
         // the existing files were generated with.
-        let ours = generator::render_from_manifest(&m, &opts, false).expect("render");
+        let ours = generator::render_from_manifest(
+            &m,
+            &opts,
+            false,
+            stackvo_desktop_lib::config::DEFAULT_SERVER,
+        )
+        .expect("render");
 
         checked += 1;
         if let Some(diff) = first_difference(&ours, &theirs) {
