@@ -44,8 +44,7 @@ PHP on your machine.
 
 </div>
 
-> **Screenshot:** `docs/images/01-dashboard.png` — the dashboard
-> <!-- <img src="docs/images/01-dashboard.png" alt="StackVo dashboard" width="100%"> -->
+<img src="docs/screenshots/dashboard.png" alt="The StackVo dashboard: health, images, CPU, memory and storage" width="100%">
 
 ---
 
@@ -222,8 +221,7 @@ Progress is not a guessed bar: the build **streams Docker's own output**, so you
 read the same lines you would in a terminal. When it finishes, click the domain
 on the project row — the browser opens, with no certificate warning.
 
-> **Screenshot:** `docs/images/02-new-project.png` — the new-project wizard
-> <!-- <img src="docs/images/02-new-project.png" alt="New project" width="100%"> -->
+<img src="docs/screenshots/project-new.png" alt="The new-project drawer: name, domain, runtime and PHP configuration" width="100%">
 
 ### 5) Everyday use — where things are
 
@@ -256,32 +254,22 @@ button that fixes them.
 
 ## Screenshots
 
-> Images are added later. The filenames and what each one should show are listed
-> here already — drop the files into `docs/images/` and uncomment the block below.
+<table>
+  <tr><td width="25%" valign="top"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Dashboard"></a><br><sub><b>Dashboard</b><br>Health, cost, machine</sub></td><td width="25%" valign="top"><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="Projects"></a><br><sub><b>Projects</b><br>Every project and its state</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-detail.png"><img src="docs/screenshots/project-detail.png" alt="Project detail"></a><br><sub><b>Project detail</b><br>What one project is doing</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-new.png"><img src="docs/screenshots/project-new.png" alt="New project"></a><br><sub><b>New project</b><br>Name, runtime, PHP</sub></td></tr>
+  <tr><td width="25%" valign="top"><a href="docs/screenshots/market.png"><img src="docs/screenshots/market.png" alt="Catalogue"></a><br><sub><b>Catalogue</b><br>Packages and versions</sub></td><td width="25%" valign="top"><a href="docs/screenshots/market-service-detail.png"><img src="docs/screenshots/market-service-detail.png" alt="Service detail"></a><br><sub><b>Service detail</b><br>How to reach a service</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-detail-debugging.png"><img src="docs/screenshots/project-detail-debugging.png" alt="Debugging"></a><br><sub><b>Debugging</b><br>Xdebug, profiler, dumps</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-detail-terminal.png"><img src="docs/screenshots/project-detail-terminal.png" alt="Terminal"></a><br><sub><b>Terminal</b><br>A shell in the container</sub></td></tr>
+  <tr><td width="25%" valign="top"><a href="docs/screenshots/mail.png"><img src="docs/screenshots/mail.png" alt="Mail"></a><br><sub><b>Mail</b><br>What the projects sent</sub></td><td width="25%" valign="top"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="Logs"></a><br><sub><b>Logs</b><br>Application and server</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Appearance"></a><br><sub><b>Appearance</b><br>Theme, radius, density</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings-doctor.png"><img src="docs/screenshots/settings-doctor.png" alt="Doctor"></a><br><sub><b>Doctor</b><br>What is wrong, by name</sub></td></tr>
+</table>
 
-| # | File | Screen |
-|---|------|--------|
-| 1 | `docs/images/01-dashboard.png` | **Dashboard** — CPU, memory, disk, network, running projects |
-| 2 | `docs/images/02-new-project.png` | **New-project wizard** |
-| 3 | `docs/images/03-project-detail.png` | **Project page** — overview, services, logs |
-| 4 | `docs/images/04-services.png` | **Service catalogue** — versions and instances |
-| 5 | `docs/images/05-why-slow.png` | **"Why was this slow?"** — profile + queries + dumps |
-| 6 | `docs/images/06-mail.png` | **Mail inbox** |
-| 7 | `docs/images/07-terminal.png` | **Container terminal** |
-| 8 | `docs/images/08-settings.png` | **Settings** — domain, certificates, PHP, diagnostics |
-| 9 | `docs/images/09-worktree.png` | **Per-branch environment** (worktree) |
-| 10 | `docs/images/10-cli-tui.png` | **`stackvo tui`** — the terminal UI |
+**[Every screen, in one page →](docs/screenshots/README.md)** — thirty-seven pictures: each
+page, the project detail page's ten sections, the settings page's seventeen panes,
+and the four sheets that have no address of their own.
 
-<!--
-<p align="center">
-  <img src="docs/images/01-dashboard.png" width="49%">
-  <img src="docs/images/03-project-detail.png" width="49%">
-</p>
-<p align="center">
-  <img src="docs/images/05-why-slow.png" width="49%">
-  <img src="docs/images/06-mail.png" width="49%">
-</p>
--->
+They are taken by `npm run screenshots` rather than by hand, at 1600x1000@2x, against
+the same boundary the Playwright suite stages — so a UI change reshoots all of them
+and none of them is somebody's window at whatever size it happened to be. Two screens
+on the original list are still missing and cannot come from this tool: the per-branch
+worktree environment, and `stackvo tui`, which is a terminal program rather than a
+window in this app.
 
 ---
 
@@ -402,7 +390,7 @@ The same pane has a **Replay** button: it re-issues the recorded request with th
 profiler on and puts both numbers side by side — the commonest loop in
 performance work ("did my change help?") as one click instead of four steps.
 
-> **Screenshot:** `docs/images/05-why-slow.png`
+<img src="docs/screenshots/project-detail-debugging.png" alt="The debugging section: Xdebug, the profiler and the dump catcher" width="100%">
 
 ### Reading the mail your app sent
 

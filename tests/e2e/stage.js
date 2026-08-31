@@ -73,7 +73,11 @@ export const DEFAULT_STAGE = {
     version: '29.7.2',
     apiVersion: '1.48',
     context: 'desktop-linux',
-    platform: 'dockerDesktop',
+    // Kebab-case, because `Platform` is `#[serde(rename_all = "kebab-case")]`
+    // and the locale's key is `engine.platform.docker-desktop`. The camelCase
+    // spelling here rendered the raw key on the doctor pane — caught by a
+    // screenshot, which is what a picture of a real page is for.
+    platform: 'docker-desktop',
     socketPath: '/var/run/docker.sock',
     error: null,
   },
@@ -85,7 +89,13 @@ export const DEFAULT_STAGE = {
   // Exactly the kind of thing this suite is for, found on its own first run.
   preflight: { os: 'macos', requirements: [], ready: true },
 
-  prefs_get: { appearance: 'system' },
+  // `tourSeen`, because `App.vue` renders `WelcomeTour` **instead of**
+  // `<router-view>` while it is unset — so every page assertion in this suite
+  // was made against step 1 of 6 of the welcome tour, and every one of them
+  // failed on an element that was never rendered. The tour is a screen of its
+  // own and deserves its own test; it is not the boundary state the pages are
+  // asserted in.
+  prefs_get: { appearance: 'system', tourSeen: true },
   prefs_set: null,
   system_accent: null,
   env_get: {},
@@ -99,8 +109,17 @@ export const DEFAULT_STAGE = {
     caPath: '/Users/dev/Library/ca/rootCA.pem',
     caTrusted: true,
     covered: ['stackvo.loc', '*.stackvo.loc'],
+    required: ['stackvo.loc', '*.stackvo.loc'],
     missing: [],
-    stale: [],
+    // `stale` is a bool in `certs.rs` and an empty array here read as one for
+    // as long as nothing looked at it. `rejected` and `trust` were simply
+    // absent, and `CertificatesPane` reads `certs.rejected.length` without a
+    // guard — so the pane threw rather than drew, on a field the boundary
+    // really does return and `contracts/ipc.json` does not yet declare.
+    stale: false,
+    rejected: [],
+    error: null,
+    trust: [{ id: 'system', trusted: true }],
   },
 
   // Field for field from `commands::Project`. The first version of this stage

@@ -7,6 +7,64 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The screenshots exist, and producing them is no longer somebody's afternoon.**
+  `npm run screenshots` boots the built front end in Chromium behind
+  `tests/e2e/stage.js` — the same boundary the Playwright suite replaces — and
+  writes thirty-seven pictures into `docs/screenshots/` at 1600x1000@2x: six
+  pages, the project detail page's ten sections, the settings page's seventeen,
+  and four screens that have no address at all — the service detail sheet, the
+  instance settings sheet, the new-instance dialog and the new-project drawer,
+  each opened by the control that opens it. Both READMEs show twelve of them in a
+  four-column grid and link to [`docs/screenshots/README.md`](docs/screenshots/README.md),
+  where all thirty-seven are laid out by group. The detail sections are clicked, because `section` is a ref inside
+  `ProjectDetail.vue` and no URL names it; the settings panes are navigated to,
+  because `Settings.vue` reads `route.query.tab` and one of them is addressable
+  where the other is not. Sharing the suite's stage is the point rather than a
+  convenience: a generator with its own fixture drifts into photographing a
+  product no test has ever rendered.
+
+  It reports, per page, every command that page asked and nobody staged. `null`
+  is a legal reply over this boundary, so an unstaged command does not fail — it
+  draws a spinner that never resolves, in a picture meant to show the page doing
+  its work. The first run found the sharper version of the same class:
+  `WelcomeTour` renders **instead of** `<router-view>`, so ten files came out
+  byte-identical and every one of them was step 1 of 6. The rail clicks found
+  the other kind: Playwright's `hasText` matches a case-insensitive substring,
+  so the AI section's label selected **Cont(ai)ner** and that tab's picture was
+  the container pane — with the rail highlighted to say so, in a file nobody
+  would have doubted.
+
+  **And the settings panes found two things in the tree rather than in the
+  tool.** `tests/e2e/stage.js` answered `engine_status.platform` as
+  `dockerDesktop`, where `Platform` is `#[serde(rename_all = "kebab-case")]` —
+  so the doctor pane rendered the raw key `engine.platform.dockerDesktop` where
+  a person would read "Docker Desktop", and no assertion had ever looked. The
+  same file's `cert_status` was missing `rejected`, which `CertificatesPane`
+  reads as `certs.rejected.length` without a guard: the pane threw instead of
+  drawing. `certs.rs` returns that field; `contracts/ipc.json`'s `CertStatus`
+  does not declare it, which is why the stage was written without it — the
+  contract is behind the struct, and `notAfter` is typed `string?` there against
+  an `Option<i64>` as well.
+
+  **The catalogue page photographed as "No catalogue yet" for the same class of
+  reason.** It gates on `status.fetched === true`; the stage answered a
+  `market_status` without that field, so every picture of the market was the
+  screen a fresh install sees. And `Service.id` is the INSTANCE id on the market
+  model — the contract says so — while the stage still answered the pre-market
+  `mysql`, so `serviceFor(instance)` found nothing and every row's Detail button
+  rendered disabled. Neither is a bug in the app; both are a fixture that had
+  never been looked at.
+
+- **Nine of the Playwright suite's nineteen tests were failing, and the reason
+  was the same welcome tour.** `tests/e2e/stage.js` never answered `tourSeen`,
+  so every page assertion in `shell.e2e.js` and `rtl.e2e.js` was made against a
+  screen that renders instead of the router — "Dashboard is not visible" was
+  true, and about the wrong page. The stage answers it now, and `rtl.e2e.js`
+  answers it in its own override too: an override REPLACES `prefs_get` rather
+  than merging into it, which is what put the tour back over that one test after
+  the shared fix. Nineteen of nineteen pass. The same file's `engine_status` and
+  `cert_status` were corrected in the same pass, above.
+
 - **The Laravel ecosystem block, and the one pattern behind eight of its nine
   items: the piece was already here and its precondition was never said.**
 
@@ -1678,6 +1736,15 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   going stale on the commit that made them stale.
 
 ### Changed
+
+- **Three appearance defaults moved: corner radius 12 -> 24, UI scale 16 -> 15,
+  density compact -> spacious.** The defaults are the whole of what a first
+  launch looks like, and nobody opens the appearance pane before they have seen
+  one. Nothing is migrated and nothing is overwritten: `DEFAULT_APPEARANCE` is
+  what a preference falls back to when it was never set, so anybody who has
+  already chosen keeps their choice and this changes only the untouched install.
+  All 1,437 front-end specs pass unchanged, which is the fact worth recording —
+  no test had pinned the old three.
 
 - **The coverage floors were four points under the measurement and are now
   three; the measurement was four points stale and is now current.** The
