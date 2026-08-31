@@ -5,6 +5,7 @@ import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import RemedyAlert from '@/components/project/RemedyAlert.vue';
 
 /**
  * The editor itself, inside the container.
@@ -41,9 +42,6 @@ const props = defineProps({
   /** Re-read when the container comes up or goes down. */
   running: { type: Boolean, default: false },
 });
-
-/** The container predates the server volume; recreating it is the fix. */
-const emit = defineEmits(['apply']);
 
 const { t } = useI18n();
 const { copied, copy } = useCopyTick();
@@ -180,21 +178,19 @@ watch(
         <div class="text-caption">{{ t('containerEditor.noEditor') }}</div>
       </v-alert>
 
-      <!-- Worth saying, never a refusal. -->
-      <v-alert
+      <!-- Worth saying, never a refusal. The container predates the server
+           volume, so the editor re-downloads its server after every rebuild;
+           recreating it is the fix, and it is the same recreate three other
+           cards on this page offer. -->
+      <RemedyAlert
         v-if="caveats.includes('serverIsNotKept')"
-        type="warning"
-        variant="tonal"
+        :name="name"
+        remedy="recreate"
+        :text="t('containerEditor.serverNotKept')"
         density="compact"
         class="mt-4"
-      >
-        <div class="text-caption">{{ t('containerEditor.serverNotKept') }}</div>
-        <template #append>
-          <v-btn size="small" variant="text" @click="emit('apply')">
-            {{ t('containerEditor.recreate') }}
-          </v-btn>
-        </template>
-      </v-alert>
+        @done="load"
+      />
       <div v-if="caveats.includes('musl')" class="text-caption text-medium-emphasis mt-3">
         {{ t('containerEditor.musl') }}
       </div>

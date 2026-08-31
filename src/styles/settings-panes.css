@@ -121,3 +121,78 @@
     width: 160px;
   }
 }
+
+/* The theme preview: two cards, each drawn in a theme that is registered but
+   not current. They sit side by side where there is room and stack where there
+   is not — the point of the pair is the comparison, and a comparison that
+   needs scrolling between its halves is not one.
+   
+   Only the track definition lives here. Vuetify has no `d-grid`, so the two
+   `grid-` declarations have nowhere else to go; everything else the preview
+   needs — the gap, and the card's padding, radius, border and column — is a
+   Vuetify utility on the element, because this application is Vuetify's and a
+   hand-written rule that restates one is a second place for it to drift.
+   `.border` in particular is *verbatim* what was written here by hand, down to
+   `rgba(var(--v-border-color), var(--v-border-opacity))`. */
+.settings-scroll .theme-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* The audit. A grid rather than a table because it is three columns of two
+   different kinds — a label that wraps and two figures that must line up — and
+   `tabular-nums` only does its job when the column is fixed. */
+.settings-scroll .theme-audit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(84px, auto));
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: thin solid rgba(var(--v-border-color), calc(var(--v-border-opacity) / 2));
+  font-size: 0.8125rem;
+}
+
+.settings-scroll .theme-audit-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-scroll .theme-audit-head {
+  font-size: 0.75rem;
+  opacity: var(--v-medium-emphasis-opacity);
+}
+
+.settings-scroll .theme-audit-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.settings-scroll .theme-audit-ratio {
+  /* The whole reason the ratios are worth showing is that they can be compared
+     down the column, and proportional digits break that at a glance. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tonal ramp: nine steps, equal width, no gaps. Butted together rather
+   than spaced because the thing being shown is the *transition* — a gap
+   between two tones is a gap in the evidence that they are evenly spaced. */
+.settings-scroll .theme-ramp {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  /* The clip is what makes nine square blocks read as one bar; the radius that
+     it clips to comes from `rounded-lg` on the element, which `global.css`
+     points at `--app-radius` so the ramp follows the corner setting like
+     everything else. */
+  overflow: hidden;
+}
+
+.settings-scroll .theme-ramp-step {
+  display: grid;
+  place-items: center;
+  min-height: 30px;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  /* The tone number is written on its own colour, so it is the one label in
+     this pane that cannot take its ink from the theme. */
+  opacity: 0.72;
+}

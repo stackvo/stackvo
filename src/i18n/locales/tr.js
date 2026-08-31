@@ -1214,7 +1214,6 @@ export default {
       'Bu kapalıyken uzantı imajda kalıyor. Orada bir maliyeti yok, ve hata ayıklamayı yeniden açmak yeniden derleme değil bir konteyner yeniden başlatması.',
     stillActive:
       'Çalışan konteynerde hâlâ açık. Ayar kapalı, ama bir konteynerin ortam değişkenleri oluşturulurken sabitlenir — konteyneri yeniden oluşturun, hata ayıklama durur. Eklenti imajda kaldığı için bu, yeniden derleme değil saniyelik bir iştir.',
-    rebuildNow: 'Şimdi yeniden üret ve derle',
     needsRebuild:
       'Eklenti imaja derleniyor, bu yüzden proje yeniden üretilip derlenene kadar bunun bir etkisi olmaz.',
     notActive:
@@ -1541,7 +1540,6 @@ export default {
       "Bu makinede VS Code bulunamadı. Aşağıdaki adres, aynı konteyneri VS Code'un kendi Klasör Aç penceresinden açar.",
     serverNotKept:
       'Bu konteyner düzenleyici volume’undan önce oluşturulmuş; VS Code her yeniden derlemeden sonra sunucusunu yeniden indirir. Konteyneri yeniden oluşturmak onu korur.',
-    recreate: 'Konteyneri yeniden oluştur',
     musl: "Alpine imajı. VS Code'un musl derlemesi var; JetBrains'in yok.",
     address: 'Adres',
     addressWhy:
@@ -1777,6 +1775,8 @@ export default {
     themeColors: 'Tema ve renkler',
     themeColorsDesc: 'Uygulamanın görünümünü kişiselleştir',
     primaryColor: 'Ana renk',
+    harmony: 'İkincil renk',
+    harmonyHint: 'Ana renkten türetilir. Onay kutuları ve ikincil butonlar bu rengi kullanır.',
     neutralPalette: 'Nötr palet',
     radius: 'Köşe yuvarlaklığı ({px}px)',
     resetAppearance: 'Varsayılanlar',
@@ -1785,8 +1785,11 @@ export default {
     fontFamily: 'Yazı tipi',
     fontFamilyHint: 'Yalnızca sistemde kurulu yazı tipleri listelenir.',
     uiScale: 'Arayüz ölçeği ({px}px)',
-    highContrast: 'Yüksek kontrast',
-    highContrastHint: 'İkincil metni ve ayraçları belirginleştirir.',
+    contrast: 'Kontrast',
+    contrastStandard: 'Standart',
+    contrastMedium: 'Orta',
+    contrastHigh: 'Yüksek',
+    contrastHint: 'İkincil metni ve ayraçları güçlendirir. Standart WCAG AA, yüksek AAA hedefler.',
     reduceMotion: 'Animasyonları azalt',
     density: 'Arayüz yoğunluğu',
     densityCompact: 'Sık',
@@ -1805,16 +1808,52 @@ export default {
     darkConsoles: 'Konsolları her zaman koyu tut',
     darkConsolesHint: 'Log ve terminal panelleri açık temada da koyu kalır.',
     presets: 'Ön ayarlar',
-    presetsDesc: 'Bir görünümü adlandırıp sonra tek tıkla geri dön',
+    presetsDesc: 'Bir görünümü adlandır, geri dön, ya da başka bir yere taşı',
     presetName: 'Ön ayar adı',
     savePreset: 'Kaydet',
     noPresets: 'Henüz kayıtlı ön ayar yok.',
+    share: 'Bu görünümü paylaş',
+    copyLook: 'Ayar olarak kopyala',
+    copySnippet: 'Vuetify teması olarak kopyala',
+    importLook: 'Bir görünümün JSON’u',
+    importLookHint: 'Başka bir stackvo penceresinden kopyalanmış ayarları yapıştır.',
+    importAction: 'İçe aktar',
+    importDone: 'Görünüm uygulandı.',
+    importPartial: 'Görünüm uygulandı. Tanınmayan alanlar atlandı: {fields}.',
+    importFailed: 'Bu bir görünüm değil. Beklenen, kopyalanmış ayar JSON’u.',
+    preview: 'Önizleme ve denetim',
+    previewDesc: 'Her iki tema yan yana, ve ölçülen kontrast oranları',
+    previewBody: 'Gövde metni',
+    previewCaption: 'İkincil metin, seçilen kontrast düzeyinde',
+    previewPrimary: 'Ana',
+    tones: 'Ton şeridi',
+    tonesHint:
+      'Her aksanın Material ton merdiveni. Sayılar tonu gösterir; üstlerine gelin, kod ve renk kodu görünür.',
+    previewSecondary: 'İkincil',
+    contrastAuditPair: 'Ölçülen çift',
+    contrastAuditFail: 'Zayıf',
+    contrastAudit: {
+      body: 'Gövde metni / yüzey',
+      caption: 'İkincil metin / yüzey',
+      onPrimary: 'Buton metni / ana renk',
+      onSecondary: 'Buton metni / ikincil renk',
+      success: 'Çalışıyor yazısı / yüzey',
+      warning: 'Uyarı yazısı / yüzey',
+      error: 'Hata yazısı / yüzey',
+      info: 'Bilgi yazısı / yüzey',
+    },
     neutrals: {
       graphite: 'Grafit',
       carbon: 'Karbon',
       midnight: 'Gece mavisi',
       forest: 'Orman',
       warm: 'Sıcak gri',
+    },
+    harmonies: {
+      analog: 'Analog (hue −30°)',
+      triadic: 'Triadik uyum (−120°)',
+      split: 'Bölünmüş tümleyen (−150°)',
+      mono: 'Monokrom (daha az doygun)',
     },
     fonts: {
       system: 'Sistem',
@@ -2320,6 +2359,11 @@ export default {
     composeRestart: 'Yığını yeniden başlat',
   },
 
+  remedy: {
+    rebuild: 'Projeyi yeniden derle',
+    recreate: 'Konteyneri yeniden oluştur',
+  },
+
   requirements: {
     title: 'Bu projenin ihtiyaç duyduğu servisler',
     description:
@@ -2501,7 +2545,7 @@ export default {
     noSupervisord:
       'Bu proje sunucusunu supervisord olmadan çalıştırıyor (apache, frankenphp, swoole, roadrunner ya da PHP dışı bir runtime). Gösterilecek süreç yok.',
     noSocket:
-      'supervisord çalışıyor ama konuşmuyor: bu imaj, StackVo üretilen yapılandırmaya soketi eklemeden önce derlenmiş. Projeyi yeniden derleyin.',
+      'supervisord çalışıyor ama konuşmuyor: bu imaj, StackVo üretilen yapılandırmaya soketi eklemeden önce derlenmiş.',
     stopped: 'Container çalışmıyor.',
     counts: '{total} süreçten {running} tanesi çalışıyor',
     logToStdout: 'Bu süreç logunu container’ın stdout’una yazıyor — Loglar sekmesinde.',

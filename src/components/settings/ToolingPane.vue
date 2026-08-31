@@ -207,7 +207,6 @@ defineExpose({ shellState, installable });
     icon="mdi-console-line"
     :title="t('settings.tooling.shells.title')"
     :description="t('settings.tooling.shells.description')"
-    class="mt-6"
   >
     <v-alert type="info" variant="tonal" density="comfortable" class="mb-4">
       <div class="text-body-2">{{ t('settings.tooling.shells.whatItDoes') }}</div>
@@ -286,7 +285,6 @@ defineExpose({ shellState, installable });
     icon="mdi-toolbox-outline"
     :title="t('settings.tooling.tools.title')"
     :description="t('settings.tooling.tools.description')"
-    class="mt-6"
   >
     <v-alert type="info" variant="tonal" density="comfortable" class="mb-4">
       <div class="text-body-2">{{ t('settings.tooling.tools.whatItDoes') }}</div>

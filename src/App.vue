@@ -476,7 +476,21 @@ onMounted(async () => {
   // After the boot rather than before it: a crash notice competing with the
   // preflight gate would be two things asking for attention at once, and the
   // gate is the one that stops the app being usable.
-  crashes.value = await api.crashReports().catch(() => []);
+  // `asList` as well as the `catch`, because the two cover different failures
+  // and only one of them was covered. The catch is for a command that
+  // *rejects*; this guards one that **resolves with something that is not a
+  // list**. The snackbar below reads `crashes.length` during render, so a
+  // non-list here is not a wrong notice, it is a shell that throws while
+  // painting and stops rendering at this point.
+  //
+  // Today's Rust returns `Vec<Report>`, which is `[]` and never null, so this
+  // is not a bug being fixed — it is the same guard the other fifteen list
+  // loads in this repository already use, on the one that was written without
+  // it. What it costs is nothing; what it buys is that the contract changing
+  // to a nullable answer cannot take the window's render down with it. The
+  // mocked `api` in `app-shell.spec.js` resolves `null` for every command, and
+  // that alone produced forty unhandled render errors in one run.
+  crashes.value = asList(await api.crashReports().catch(() => []));
   await loadPrefs().catch(() => {});
 
   metrics.start();

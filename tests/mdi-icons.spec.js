@@ -86,12 +86,24 @@ describe('the icons this app names', () => {
    * scan losing the Rust tree fails here rather than quietly shipping three
    * pickers of blank squares again. Each of these is one row of `apps.rs`, and
    * no `.vue` file repeats any of them.
+   *
+   * ## Pick product icons, not descriptive ones
+   *
+   * This list held `mdi-pencil-outline` — `apps.rs`'s generic editor row — and
+   * it stopped working the day `UsageToday.vue` drew a pencil beside an
+   * editable figure. Nothing was wrong with either file: a witness has to be an
+   * icon the front end has no reason to want, and "a pencil" is one every
+   * interface eventually wants.
+   *
+   * `mdi-ghost` is Ghostty, the way `mdi-firefox` is Firefox and
+   * `mdi-powershell` is PowerShell. A name that belongs to a product is a name
+   * only the catalogue of products has a use for, which is what makes it hold.
    */
   it('reads the icons only the Rust catalogues name', () => {
     const everything = iconsInSource(SOURCE_ROOTS);
     const frontendOnly = iconsInSource('src');
 
-    for (const name of ['mdi-apple', 'mdi-firefox', 'mdi-powershell', 'mdi-pencil-outline']) {
+    for (const name of ['mdi-apple', 'mdi-firefox', 'mdi-powershell', 'mdi-ghost']) {
       expect(everything.has(name), `${name} is named in apps.rs and was not read`).toBe(true);
       expect(frontendOnly.has(name), `${name} is now in src/ too — pick another`).toBe(false);
     }

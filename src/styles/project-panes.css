@@ -22,6 +22,19 @@
   background: rgba(var(--v-theme-surface-bright), 0.55);
   border: thin solid rgba(var(--v-border-color), calc(var(--v-border-opacity) / 2));
   padding: 16px;
+
+  /* And the corner, which most of these panes were getting for free and six of
+     them were not. `.pane` is a class, not a component: a pane written as a
+     `v-card` picks the radius up from the rule in `global.css` that follows the
+     appearance setting, and a pane written as a plain `<section>` — Dusk,
+     Bisect, Dependencies, Boost, Octane, Dashboards — picked up nothing and
+     shipped square. Two boxes with the same fill, the same hairline and the
+     same 16px gap, one of them square, do not read as "a different card": they
+     read as one card that has been cut, which is exactly how they were
+     reported. Set here rather than by converting six `<section>`s to cards,
+     because the element is the semantic choice and the surface is this
+     sheet's. */
+  border-radius: var(--app-radius);
 }
 
 /* Between two group cards, whichever kind each one is.

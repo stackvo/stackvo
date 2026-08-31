@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
@@ -78,7 +79,10 @@ const mountPane = (running = true) =>
       props: ['running'],
       template: '<v-app><SupervisorPane name="shop" :running="running" /></v-app>',
     },
-    { props: { running }, global: { plugins: [vuetify, i18n] } }
+    // Pinia because the pane's one actionable state carries a `RemedyAlert`,
+    // and the standard remedy reads the operations store to know whether this
+    // project already has work in flight.
+    { props: { running }, global: { plugins: [createPinia(), vuetify, i18n] } }
   );
 
 beforeEach(() => {
@@ -160,7 +164,17 @@ describe('the three ways it can be empty', () => {
     await flushPromises();
 
     expect(pane.text()).toContain(en.projectSupervisor.noSocket);
-    expect(pane.text()).toContain('Rebuild');
+
+    // And it is a button, not a sentence ending in "rebuild the project". The
+    // sentence was all this pane had: the standard remedy is what turned it
+    // into something that can be acted on where it is read.
+    const rebuild = pane.find('[data-test="remedy-rebuild"]');
+    expect(rebuild.exists()).toBe(true);
+    expect(rebuild.text()).toBe(en.remedy.rebuild);
+
+    await rebuild.trigger('click');
+    await flushPromises();
+    expect(calls).toContainEqual(['projectBuild', 'shop']);
   });
 
   it('says the container is not running', async () => {

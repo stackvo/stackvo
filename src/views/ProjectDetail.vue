@@ -990,13 +990,14 @@ onUnmounted(() => {
              would put a switch in the UI that reads as done while nothing has
              been compiled in, which is worse than no switch. -->
         <template v-if="shows('debug')">
+          <!-- The two remedies it can offer are `RemedyAlert`s inside the pane
+               and run themselves; this page re-reads on the falling edge of the
+               same busy flag they set. -->
           <XdebugPane
             :name="name"
             :runtime="project?.runtime"
             :running="running"
             @changed="reloadManifest"
-            @rebuild="act((n) => api.projectBuild(n))"
-            @apply="applyToContainer"
           />
         </template>
 
@@ -1100,7 +1101,7 @@ onUnmounted(() => {
                of thing as the three panes below it: an address that reaches
                this container. The difference is which way it points — those
                let something outside in, and this one puts the editor inside. -->
-          <EditorPane :name="name" :running="running" @apply="applyToContainer" />
+          <EditorPane :name="name" :running="running" />
         </template>
         <!-- SHARE ---------------------------------------------------------- -->
         <template v-if="shows('container')">

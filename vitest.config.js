@@ -22,7 +22,22 @@ export default mergeConfig(
       setupFiles: ['tests/setup.js'],
       // Vuetify components pull in .css from node_modules; without this the
       // transform pipeline treats them as modules to execute.
-      server: { deps: { inline: ['vuetify'] } },
+      server: { deps: { inline: ['vuetify', '@material/material-color-utilities'] } },
+
+      // `@material/material-color-utilities` needs handling too, and for a
+      // different reason: it declares `"type": "module"` and then writes
+      // extensionless relative imports (`from './dynamic_color'`), which no ESM
+      // resolver accepts. Bundlers guess the extension, so Vite builds it and
+      // the app runs; Node, which is what loads an untouched dependency here,
+      // refuses it outright.
+      //
+      // Inlined rather than pre-bundled through `deps.optimizer`, which was
+      // tried first and does not fix this: the optimizer changes how a
+      // dependency is *bundled*, and the failure here is that Vitest hands an
+      // un-inlined dependency to Node's own loader, which never reaches Vite's
+      // resolver at all. Inlining is what puts it back on the pipeline that can
+      // guess the extension — and it is also the honest choice for fidelity,
+      // since the test then loads what the build ships.
 
       // Measured *and* enforced, in that order.
       //

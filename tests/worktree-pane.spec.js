@@ -252,11 +252,16 @@ describe('the form', () => {
       .trigger('click');
     await flushPromises();
 
+    // The whole payload rather than the two fields this test is named for: the
+    // form is what the backend sees, and a field that quietly appears in it —
+    // or quietly stops being sent — is exactly what nothing else would notice.
+    // `minutes` is the lease, `null` because this test never sets one.
     expect(api.worktreeCreate).toHaveBeenCalledWith('shop', 'feature/x', {
       newBranch: false,
       name: null,
       database: 'copy',
       instance: 'mysql-9-4',
+      minutes: null,
     });
   });
 });

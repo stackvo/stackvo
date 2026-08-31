@@ -96,6 +96,37 @@ export function contrast(a, b) {
 /** WCAG AA for body text. Large text is 3, and nothing here assumes large. */
 export const AA_TEXT = 4.5;
 
+/** WCAG AAA for body text. What the `high` contrast level aims at. */
+export const AAA_TEXT = 7;
+
+/**
+ * A translucent colour laid over an opaque one, flattened to what is seen.
+ *
+ * Needed because the number that decides whether this application passes is not
+ * the contrast between two theme colours — it is the contrast between a
+ * *composite* and a theme colour. Every caption, hint and field label here is
+ * drawn as `rgba(on-surface, α)` where α is the text style's own alpha (0.87)
+ * times `medium-emphasis-opacity`, and asking `contrast` about the two theme
+ * colours alone answers 16.4:1 for something that renders at 5.29:1.
+ *
+ * That gap is the whole of the bug the emphasis opacity was raised twice to
+ * fix, and it stayed invisible for both attempts because nothing in the
+ * codebase could state the rendered colour. This can, and it agrees with the
+ * record: at the old 0.68 it gives `#787b7f` at 4.25:1 on white, which is the
+ * colour and the ratio `appearance.js` wrote down from an axe run.
+ *
+ * Simple source-over compositing: the backdrop is opaque, so there is no alpha
+ * to carry out and the result is a straight per-channel mix.
+ */
+export function over(color, background, alpha) {
+  const fg = parse(color);
+  const bg = parse(background);
+  if (!fg || !bg || !Number.isFinite(alpha)) return null;
+
+  const a = Math.max(0, Math.min(1, alpha));
+  return toHex(fg.map((channel, i) => channel * a + bg[i] * (1 - a)));
+}
+
 /**
  * The same colour, moved until it can be read on `background`.
  *

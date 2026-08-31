@@ -495,7 +495,7 @@ defineExpose({ load });
           <!-- Drawn as a permission and not a setting: what it produces is a
                session token on disk, so it is off until pressed, it ends by
                itself, and turning it off says what it deleted. -->
-          <div v-if="capture" class="capture mt-4" data-test="capture">
+          <div v-if="capture" class="mt-4" data-test="capture">
             <div class="text-caption text-medium-emphasis mb-2">{{ t('spx.captureWhat') }}</div>
 
             <div v-if="!capture.armed" class="d-flex align-center ga-2 flex-wrap">
@@ -707,7 +707,9 @@ defineExpose({ load });
                 :disabled="working"
                 @click="replay(report)"
               >
-                <v-icon size="18">{{ report.mutates ? 'mdi-database-edit-outline' : 'mdi-replay' }}</v-icon>
+                <v-icon size="18">{{
+                  report.mutates ? 'mdi-database-edit-outline' : 'mdi-replay'
+                }}</v-icon>
                 <v-tooltip v-if="report.mutates" activator="parent" location="top">
                   {{ t('spx.replayWrites') }}
                 </v-tooltip>
