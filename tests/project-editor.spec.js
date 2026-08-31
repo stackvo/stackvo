@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
@@ -91,25 +92,20 @@ const withReadiness = (patch, top = {}) => ({
 
 const withJetbrains = (patch) => ({ ...READY, jetbrains: { ...JETBRAINS, ...patch } });
 
-const emitted = [];
-
 const mountPane = () =>
   mount(
     {
       components: { EditorPane },
-      template: '<v-app><EditorPane name="shop" :running="true" @apply="onApply" /></v-app>',
-      methods: {
-        onApply() {
-          emitted.push('apply');
-        },
-      },
+      template: '<v-app><EditorPane name="shop" :running="true" /></v-app>',
     },
-    { global: { plugins: [vuetify, i18n] } }
+    // Pinia because the one caveat this pane can act on carries a
+    // `RemedyAlert`, which reads the operations store rather than handing the
+    // work back to the page through an emit.
+    { global: { plugins: [createPinia(), vuetify, i18n] } }
   );
 
 beforeEach(() => {
   calls.length = 0;
-  emitted.length = 0;
   for (const key of Object.keys(replies)) delete replies[key];
   replies.editorStatus = READY;
 });
@@ -248,9 +244,15 @@ describe('the caveat with a fix', () => {
 
     expect(wrapper.text()).toContain('downloads its server again after every rebuild');
 
-    const recreate = wrapper.findAll('button').find((b) => b.text().includes('Recreate'));
+    // The standard remedy, run where it is read rather than emitted to the
+    // page. `compose_up_project` is the recreate: the image already has what it
+    // needs, only the container is behind.
+    const recreate = wrapper.find('[data-test="remedy-recreate"]');
+    expect(recreate.exists()).toBe(true);
+
     await recreate.trigger('click');
-    expect(emitted).toEqual(['apply']);
+    await flushPromises();
+    expect(calls).toContainEqual(['composeUpProject', 'shop']);
   });
 
   it('says nothing about the volume when the container already has it', async () => {

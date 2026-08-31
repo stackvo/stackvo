@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { contrast, luminance, parse, readable, AA_TEXT } from '@/lib/contrast.js';
-import { STATUS_PALETTES, NEUTRALS } from '@/lib/appearance.js';
+import { CONTRAST_LEVELS, STATUS_PALETTES, NEUTRALS } from '@/lib/appearance.js';
 
 /**
  * The arithmetic behind "can this be read".
@@ -80,6 +80,57 @@ describe('making a colour readable', () => {
         }
       }
     }
+  });
+
+  /**
+   * And the same sweep once the contrast setting is allowed to move the
+   * target, which is the whole of what that setting now does to these four
+   * colours.
+   *
+   * Over every neutral family rather than graphite alone, because the surface
+   * `readable` measures against is whichever family is selected — `warm`'s
+   * `#FAF7F3` and `midnight`'s `#080D1A` are not the same problem, and a sweep
+   * over one of them would pass while the other did not.
+   *
+   * Written as `>=` against the level's own target rather than against 4.5:
+   * the point of three stops is that the number moves, and a test that only
+   * knew about AA would go on passing if `high` silently stopped raising it.
+   */
+  it('reaches the target of every contrast level, on every neutral family', () => {
+    for (const [name, level] of Object.entries(CONTRAST_LEVELS)) {
+      for (const family of NEUTRALS) {
+        for (const surface of [family.light.surface, family.dark.surface]) {
+          for (const palette of STATUS_PALETTES) {
+            for (const [role, colour] of Object.entries(palette.colors)) {
+              const got = readable(colour, surface, level.target);
+              expect(
+                contrast(got, surface),
+                `${name}: ${palette.id}.${role} on ${family.id} ${surface} came back ${got}`
+              ).toBeGreaterThanOrEqual(level.target);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  /**
+   * The three levels have to be ordered, and nothing in `CONTRAST_LEVELS`
+   * enforces it — it is a literal somebody can edit. An unordered set would be
+   * a "high contrast" that lowers the bar, which is worse than no setting.
+   */
+  it('offers three levels that actually climb', () => {
+    const { standard, medium, high } = CONTRAST_LEVELS;
+    expect(standard.target).toBeLessThan(medium.target);
+    expect(medium.target).toBeLessThan(high.target);
+    expect(standard.emphasis).toBeLessThan(medium.emphasis);
+    expect(medium.emphasis).toBeLessThan(high.emphasis);
+    expect(standard.border).toBeLessThan(medium.border);
+    expect(medium.border).toBeLessThan(high.border);
+
+    // The baseline is the one that has to be right on its own: the two above
+    // it are enhancements, and this is the number axe measured.
+    expect(standard.target).toBe(AA_TEXT);
   });
 
   /**

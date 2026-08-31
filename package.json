@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Native desktop app for StackVo \u2014 Docker-based local development environment manager",
+  "description": "Native desktop app for StackVo — Docker-based local development environment manager",
   "license": "MIT",
   "author": "Fahrettin Aksoy",
   "repository": {
@@ -59,6 +59,7 @@
     "types:tsc": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@material/material-color-utilities": "^0.4.0",
     "@mdi/font": "^7.4.47",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-autostart": "^2.5.1",

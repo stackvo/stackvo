@@ -191,6 +191,23 @@ describe('unused translations', () => {
       [...allSource.matchAll(/['"]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)['"]/g)].map((m) => m[1])
     );
 
+    // A fifth way, and the `catalogueText` shape seen from the other end: a
+    // helper that builds the *whole* key from a literal and hands the finished
+    // string to `t()`. `DiagnosticsPane` has
+    // `labelKey = (id) => \`settings.compliance.clause.${id.replace(…)}\``, so
+    // the backtick is in the helper and the `t()` call sees a variable — the
+    // rule above needs the two next to each other and reported all seventeen
+    // compliance clauses as dead.
+    //
+    // Matched on the literal rather than on the call, but not loosely: it still
+    // has to be a template, it still has to end at an interpolation, and the
+    // prefix has to carry **two** dots. One would match `\`foo.${x}\``; a path
+    // like `\`docs/help/${locale}\`` cannot match at all, because a slash is not
+    // in the class.
+    const built = [...allSource.matchAll(/`([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)\.\$\{/g)].map(
+      (m) => m[1]
+    );
+
     // A namespace held as a plain string and joined to an id at run time:
     // `catalogueText('quickCommands', spec.id, spec.about)` composes the key
     // inside a shared helper, so the whole prefix is live wherever the helper
@@ -206,7 +223,7 @@ describe('unused translations', () => {
       // Vuetify's own component strings; it looks them up internally.
       if (key.startsWith('$vuetify.')) return false;
       if (usedKeys.has(key) || indirect.has(key)) return false;
-      return ![...prefixes, ...composed].some((prefix) => key.startsWith(prefix + '.'));
+      return ![...prefixes, ...built, ...composed].some((prefix) => key.startsWith(prefix + '.'));
     });
 
     expect(dead, 'translated but unreachable').toEqual([]);

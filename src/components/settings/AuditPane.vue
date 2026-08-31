@@ -108,6 +108,7 @@ function when(at) {
 <template>
   <SettingsGroup
     help="settings-audit"
+    icon="mdi-clipboard-text-clock-outline"
     :title="t('audit.title')"
     :description="t('audit.description')"
   >
@@ -138,53 +139,62 @@ function when(at) {
         {{ t('audit.unreadable', { count: trail.unreadable }) }}
       </v-alert>
 
-      <v-list density="compact" class="pa-0">
-        <v-list-item v-for="(entry, i) in entries" :key="`${entry.at}-${i}`" class="px-0">
-          <template #prepend>
-            <v-icon :color="COLOURS[entry.outcome]" size="18">
-              {{ ICONS[entry.outcome] ?? 'mdi-circle-small' }}
-            </v-icon>
-          </template>
-          <v-list-item-title class="text-body-2">
-            <code>{{ entry.action }}</code>
-            <span class="text-medium-emphasis"> — {{ entry.subject }}</span>
-          </v-list-item-title>
-          <v-list-item-subtitle class="text-caption">
-            {{ when(entry.at) }}
-            <span v-if="entry.detail"> · {{ entry.detail }}</span>
-            <!-- Why there is no button, in the words the plan recorded. A row
+      <!-- The trail scrolls inside the card rather than lengthening it.
+           `total` is capped on the Rust side, but the cap is a tail of the
+           file and not a screenful: fifty entries made this the one card on
+           the page taller than the window, so the two sentences under the
+           list — the one naming the assistant, and the one saying this is a
+           tail rather than the history — were below the fold on exactly the
+           pane whose whole point is that you can see what was done. -->
+      <div class="audit-trail">
+        <v-list density="compact" class="pa-0 bg-transparent">
+          <v-list-item v-for="(entry, i) in entries" :key="`${entry.at}-${i}`" class="px-0">
+            <template #prepend>
+              <v-icon :color="COLOURS[entry.outcome]" size="18">
+                {{ ICONS[entry.outcome] ?? 'mdi-circle-small' }}
+              </v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">
+              <code>{{ entry.action }}</code>
+              <span class="text-medium-emphasis"> — {{ entry.subject }}</span>
+            </v-list-item-title>
+            <v-list-item-subtitle class="text-caption">
+              {{ when(entry.at) }}
+              <span v-if="entry.detail"> · {{ entry.detail }}</span>
+              <!-- Why there is no button, in the words the plan recorded. A row
                  that simply had no button would read as an app that had not
                  thought about it. -->
-            <span v-if="entry.undo?.kind === 'none'">
-              · {{ t('audit.noUndo', { because: entry.undo.because }) }}
-            </span>
-            <span v-else-if="undoable(entry)">
-              ·
-              {{ t('audit.undoSteps', { count: entry.undo.steps.length, steps: steps(entry) }) }}
-            </span>
-          </v-list-item-subtitle>
+              <span v-if="entry.undo?.kind === 'none'">
+                · {{ t('audit.noUndo', { because: entry.undo.because }) }}
+              </span>
+              <span v-else-if="undoable(entry)">
+                ·
+                {{ t('audit.undoSteps', { count: entry.undo.steps.length, steps: steps(entry) }) }}
+              </span>
+            </v-list-item-subtitle>
 
-          <template #append>
-            <!-- The append-only join: the original line still says what it
+            <template #append>
+              <!-- The append-only join: the original line still says what it
                  said, and the undo that names it is what makes this chip
                  true. -->
-            <v-chip v-if="entry.undone" size="x-small" variant="tonal" color="success">
-              {{ t('audit.undone') }}
-            </v-chip>
-            <v-btn
-              v-else-if="undoable(entry)"
-              size="small"
-              variant="tonal"
-              prepend-icon="mdi-undo-variant"
-              :loading="undoing === entry.at"
-              :disabled="undoing !== null && undoing !== entry.at"
-              @click="undo(entry)"
-            >
-              {{ t('audit.undo') }}
-            </v-btn>
-          </template>
-        </v-list-item>
-      </v-list>
+              <v-chip v-if="entry.undone" size="x-small" variant="tonal" color="success">
+                {{ t('audit.undone') }}
+              </v-chip>
+              <v-btn
+                v-else-if="undoable(entry)"
+                size="small"
+                variant="tonal"
+                prepend-icon="mdi-undo-variant"
+                :loading="undoing === entry.at"
+                :disabled="undoing !== null && undoing !== entry.at"
+                @click="undo(entry)"
+              >
+                {{ t('audit.undo') }}
+              </v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
+      </div>
 
       <p class="text-caption text-medium-emphasis mt-3">{{ t('audit.assistant') }}</p>
 
@@ -194,3 +204,14 @@ function when(at) {
     </template>
   </SettingsGroup>
 </template>
+
+<style scoped>
+/* Tall enough to be a list rather than a peephole, short enough that the card
+   still ends inside the window on a laptop. `vh` rather than a pixel count for
+   the same reason `.env-table` next door uses one: the pane is measured
+   against the screen it is read on, not against a number someone typed. */
+.audit-trail {
+  max-height: 52vh;
+  overflow-y: auto;
+}
+</style>

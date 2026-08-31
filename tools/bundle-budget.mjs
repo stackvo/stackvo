@@ -47,32 +47,44 @@
  */
 
 /**
- * Measured 2026-08-29, on a clean `npm run build`.
+ * Measured 2026-08-31, on a clean `npm run build`.
  *
  * Kept beside the ceilings so the distance is visible — a ceiling far above a
  * number last measured a year ago is not a budget, it is a formality.
+ *
+ * ## Read the gap before the numbers
+ *
+ * These were two days stale and the drift was not small: `eager` was recorded
+ * at 1248.8 and the tree had been at 1333.4 for some time, so every build was
+ * printing "+85 KB since measured" and nobody could tell which commit had
+ * spent it. That is the failure mode this docblock warns about, arriving from
+ * the other direction — not a ceiling too far above the number, but a number
+ * too far behind the tree.
+ *
+ * The headroom that leaves is now thin, and it is written here rather than
+ * fixed here: `eager` has 4.2% under its ceiling and `total` 2.2%, against the
+ * ~12% and ~11% the ceilings below describe as the proportion they have always
+ * been given. Raising a ceiling is a deliberate act with its reason in the
+ * commit message, and "the measurement caught up with the tree" is not by
+ * itself one. The next commit to need the room is the one that should argue
+ * for it.
  */
 export const measured = {
   /**
-   * index.js 690 KB + vue.js 173 KB + index.css 404 KB.
+   * index.js 766 KB + vue.js 169 KB + index.css 406 KB.
    *
-   * **Down 266 KB, and it is a trim rather than drift.** The stylesheet was 704
-   * KB, of which 408 was Material Design Icons declaring 7,448 glyph rules for
-   * an application that names 356 of them. The build now emits only the rules
-   * something here can reach — see `mdiUsedIconsOnly` in `vite.config.js` and
-   * the list in `tools/mdi-icons.mjs` — which takes that file to 32 KB.
+   * Up 92.4 KB on the last figure written here, and almost none of it is the
+   * work that took this measurement. 84.6 of the 92.4 were already in the tree
+   * before it started — the drift the docblock above describes. The remainder
+   * is roughly eight kilobytes of theme derivation in `lib/appearance.js` and
+   * `lib/contrast.js`, which are on this path deliberately: the theme is
+   * applied before the first paint so the window never shows the wrong palette.
    *
-   * The 2.4 KB it went back up is the scan learning to read `src-tauri/src`.
-   * Eighteen icons are named only there — the terminal, editor and browser
-   * catalogues live in `apps.rs` — so the first version of this trim was
-   * stripping every icon those three pickers draw. Kilobytes bought back three
-   * lists of blank squares.
-   *
-   * `index.js` grew 48 KB over the same period, which is the growth this
-   * ceiling exists to make visible and is now visible against a smaller number
-   * rather than hidden inside a larger one.
+   * The icon trim that took the stylesheet from 704 KB to 32 is still holding —
+   * `check-bundle.mjs` prints the kept-rule count on every run, and the build
+   * emits only the 385 rules something in `src/` or `src-tauri/src/` names.
    */
-  eagerKb: 1248.8,
+  eagerKb: 1341.2,
   /**
    * Every asset, including the lazy route chunks and xterm's 333 KB.
    *
@@ -81,12 +93,22 @@ export const measured = {
    * ~4% larger than the bytes in it. A budget measured one way and enforced
    * another is a budget that drifts by a rounding rule.
    *
-   * The largest single asset left is the icon **font**, 394 KB of woff2 holding
-   * all 7,448 glyphs. Subsetting it needs a font toolchain where the stylesheet
-   * needed no dependency at all, so it is written down here as the next piece
-   * of this work rather than done badly.
+   * Up 227 KB, and unlike `eager` most of this one *is* deliberate: 66 KB of it
+   * is `@material/material-color-utilities`, which draws the tonal ramp on the
+   * appearance page. It is the reason the two numbers moved so differently —
+   * the package is reached only from `lib/tones.js`, which only the settings
+   * pane imports, so it lands in the lazily-loaded Settings chunk (245 KB) and
+   * costs the first paint nothing. That separation is the whole design, and
+   * these two figures are what proves it held: `eager` moved 0.5 KB when it
+   * landed and `total` moved 66.
+   *
+   * The largest single asset is still the icon **font**, 394 KB of woff2
+   * holding all 7,448 glyphs. Subsetting it needs a font toolchain where the
+   * stylesheet needed no dependency at all, so it stays written down here as
+   * the next piece of this work rather than done badly — and it is now also
+   * where the headroom for the next feature is going to have to come from.
    */
-  totalKb: 2705.9,
+  totalKb: 2933.0,
 };
 
 export const ceilings = {

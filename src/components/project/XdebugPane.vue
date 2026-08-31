@@ -7,6 +7,7 @@ import { useCopyTick } from '@/composables/useCopyTick';
 import { useOperationsStore } from '@/stores/operations';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import RemedyAlert from '@/components/project/RemedyAlert.vue';
 
 /**
  * Xdebug's three layers, and the switch that moves all of them.
@@ -16,25 +17,26 @@ import PaneHeader from '@/components/PaneHeader.vue';
  * showing — hence `changed`: the view re-reads the manifest rather than this
  * pane reaching across to an editor it does not own.
  *
- * ## Two warnings, two different fixes, and both are now actionable
+ * ## Two warnings, two different fixes, and both are actionable
  *
  * The warnings used to end at a sentence. "The extension is compiled into the
  * image, so this has no effect until the project is regenerated and rebuilt"
  * is a true thing to say and a useless place to stop: the reader is left
  * holding a fact and a page to go hunting through for the button that answers
- * it. `rebuild` and `apply` are those buttons, offered where the problem is
- * stated.
+ * it.
  *
- * They are deliberately **two** emits and not one. A first switch-on has to
- * regenerate and rebuild the image, which is minutes; a container that merely
- * predates the overlay needs recreating, which is seconds. Offering the
- * expensive one for both would teach people to reach for it every time, and
- * offering the cheap one for both would produce a container that still has no
- * extension in it.
+ * They are deliberately **two** remedies and not one. A first switch-on has to
+ * rebuild the image, which is minutes; a container that merely predates the
+ * overlay needs recreating, which is seconds. Offering the expensive one for
+ * both would teach people to reach for it every time, and offering the cheap
+ * one for both would produce a container that still has no extension in it.
  *
- * Neither runs on its own. A rebuild recreates the container, and a switch that
- * quietly started one is a surprise nobody asked for — so this asks, which is
- * what a warning with a button in it is.
+ * Both are `RemedyAlert` now rather than two hand-written alerts and two emits
+ * the page turned back into calls. This pane is where that pattern was worked
+ * out; three other cards were re-deriving it, one of them badly, so it became
+ * a component. The re-read this pane already does on the falling edge of the
+ * busy flag is what that component emits as `done`, so nothing here changed
+ * except who owns the markup.
  */
 const props = defineProps({
   name: { type: String, required: true },
@@ -42,7 +44,7 @@ const props = defineProps({
   running: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['changed', 'rebuild', 'apply']);
+const emit = defineEmits(['changed']);
 
 const { t } = useI18n();
 const ops = useOperationsStore();
@@ -208,45 +210,26 @@ defineExpose({ ideState });
            automatically: a rebuild is minutes and recreates the container, and
            a switch that quietly started one would be a surprise the user did
            not ask for. -->
-      <v-alert v-if="status.needsRebuild" type="warning" variant="tonal" class="mt-3">
-        <div class="text-caption">{{ t('xdebug.needsRebuild') }}</div>
-        <v-btn
-          size="small"
-          color="warning"
-          variant="tonal"
-          class="mt-2"
-          prepend-icon="mdi-hammer-wrench"
-          :loading="ops.isBusy(name)"
-          :disabled="busy"
-          @click="emit('rebuild')"
-        >
-          {{ t('xdebug.rebuildNow') }}
-        </v-btn>
-      </v-alert>
-      <v-alert
-        v-else-if="status.enabled && status.running && status.active === false"
-        type="warning"
-        variant="tonal"
+      <RemedyAlert
+        v-if="status.needsRebuild"
+        :name="name"
+        remedy="rebuild"
+        :text="t('xdebug.needsRebuild')"
+        :disabled="busy"
         class="mt-3"
-      >
-        <div class="text-caption">{{ t('xdebug.notActive') }}</div>
-        <!-- A different fault with a different fix: the image has the
-             extension, the container was created before the overlay. That is a
-             recreate, which is seconds, not a rebuild. Offering the expensive
-             one here would teach people to reach for it every time. -->
-        <v-btn
-          size="small"
-          color="warning"
-          variant="tonal"
-          class="mt-2"
-          prepend-icon="mdi-autorenew"
-          :loading="ops.isBusy(name)"
-          :disabled="busy"
-          @click="emit('apply')"
-        >
-          {{ t('projectDetail.applyToContainer') }}
-        </v-btn>
-      </v-alert>
+      />
+      <!-- A different fault with a different fix: the image has the extension,
+           the container was created before the overlay. That is a recreate,
+           which is seconds, not a rebuild. Offering the expensive one here
+           would teach people to reach for it every time. -->
+      <RemedyAlert
+        v-else-if="status.enabled && status.running && status.active === false"
+        :name="name"
+        remedy="recreate"
+        :text="t('xdebug.notActive')"
+        :disabled="busy"
+        class="mt-3"
+      />
       <v-alert
         v-else-if="status.enabled && status.active === true"
         type="success"
@@ -262,26 +245,14 @@ defineExpose({ ideState });
            on. Not a rebuild: the extension stays in the image on purpose, so
            there is nothing to build and a rebuild would cost minutes for
            nothing. -->
-      <v-alert
+      <RemedyAlert
         v-else-if="!status.enabled && status.active === true"
-        type="warning"
-        variant="tonal"
+        :name="name"
+        remedy="recreate"
+        :text="t('xdebug.stillActive')"
+        :disabled="busy"
         class="mt-3"
-      >
-        <div class="text-caption">{{ t('xdebug.stillActive') }}</div>
-        <v-btn
-          size="small"
-          color="warning"
-          variant="tonal"
-          class="mt-2"
-          prepend-icon="mdi-autorenew"
-          :loading="ops.isBusy(name)"
-          :disabled="busy"
-          @click="emit('apply')"
-        >
-          {{ t('projectDetail.applyToContainer') }}
-        </v-btn>
-      </v-alert>
+      />
 
       <!-- The path mapping is the step people get wrong, and both halves
            are already known here. -->

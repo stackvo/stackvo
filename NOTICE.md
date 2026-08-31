@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 601 Rust crates and 42 npm packages.
+Counted from 601 Rust crates and 43 npm packages.
 
 ## Summary
 
@@ -25,7 +25,7 @@ Counted from 601 Rust crates and 42 npm packages.
 | --- | ---: | ---: |
 | (MIT OR Apache-2.0) AND Unicode-3.0 | 1 |  |
 | 0BSD OR MIT OR Apache-2.0 | 1 |  |
-| Apache-2.0 | 6 | 1 |
+| Apache-2.0 | 6 | 2 |
 | Apache-2.0 / MIT | 1 |  |
 | Apache-2.0 AND ISC | 1 |  |
 | Apache-2.0 AND MIT | 1 |  |
@@ -61,7 +61,7 @@ Counted from 601 Rust crates and 42 npm packages.
 | Unlicense/MIT | 2 |  |
 | Zlib | 1 |  |
 | Zlib OR Apache-2.0 OR MIT | 20 |  |
-| **Total** | **601** | **42** |
+| **Total** | **601** | **43** |
 
 ## Rust crates (601)
 
@@ -669,7 +669,7 @@ Counted from 601 Rust crates and 42 npm packages.
 | zvariant_utils | 2.1.0 | MIT |
 | zvariant_utils | 3.5.0 | MIT |
 
-## npm packages (42)
+## npm packages (43)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -681,6 +681,7 @@ Counted from 601 Rust crates and 42 npm packages.
 | @intlify/message-compiler | 9.14.5 | MIT |
 | @intlify/shared | 9.14.5 | MIT |
 | @jridgewell/sourcemap-codec | 1.5.5 | MIT |
+| @material/material-color-utilities | 0.4.0 | Apache-2.0 |
 | @mdi/font | 7.4.47 | Apache-2.0 |
 | @tauri-apps/api | 2.11.1 | Apache-2.0 OR MIT |
 | @tauri-apps/plugin-autostart | 2.5.1 | MIT OR Apache-2.0 |
@@ -959,6 +960,7 @@ be carried.
 - Copyright 2020 Andrew Straw
 - Copyright 2020 Tomasz "Soveu" Marx
 - Copyright 2020 Yoshua Wuyts
+- Copyright 2021 Google LLC
 - Copyright 2021, Maarten de Vries <maarten@de-vri.es>
 - Copyright 2022 Kirill Chibisov
 - Copyright 2023 Dirkjan Ochtman

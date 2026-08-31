@@ -1234,7 +1234,6 @@ export default {
       'The extension stays in the image while this is off. It costs nothing there, and turning debugging back on is a container restart rather than a rebuild.',
     stillActive:
       'Still switched on inside the running container. The setting is off, but a container\u2019s environment is fixed when it is created — recreate it and debugging stops. The extension stays in the image, so this is seconds rather than a rebuild.',
-    rebuildNow: 'Regenerate and rebuild now',
     needsRebuild:
       'The extension is compiled into the image, so this does nothing until the project is regenerated and rebuilt.',
     notActive:
@@ -1563,7 +1562,6 @@ export default {
       'VS Code was not found on this machine. The address below opens the same container from VS Code’s own Open Folder dialog.',
     serverNotKept:
       'This container was created before the editor volume, so VS Code downloads its server again after every rebuild. Recreating the container keeps it.',
-    recreate: 'Recreate container',
     musl: 'An Alpine image. VS Code publishes a server build for it; JetBrains does not.',
     address: 'The address',
     addressWhy:
@@ -1805,6 +1803,8 @@ export default {
     themeColors: 'Theme and colours',
     themeColorsDesc: 'Personalise how the app looks',
     primaryColor: 'Accent colour',
+    harmony: 'Secondary colour',
+    harmonyHint: 'Derived from the accent. Checkboxes and secondary buttons are drawn in it.',
     neutralPalette: 'Neutral palette',
     radius: 'Corner radius ({px}px)',
     resetAppearance: 'Defaults',
@@ -1813,8 +1813,11 @@ export default {
     fontFamily: 'Typeface',
     fontFamilyHint: 'Only faces the system already has are listed.',
     uiScale: 'Interface scale ({px}px)',
-    highContrast: 'High contrast',
-    highContrastHint: 'Strengthens secondary text and dividers.',
+    contrast: 'Contrast',
+    contrastStandard: 'Standard',
+    contrastMedium: 'Medium',
+    contrastHigh: 'High',
+    contrastHint: 'Strengthens secondary text and dividers. Standard meets AA, high targets AAA.',
     reduceMotion: 'Reduce motion',
     density: 'Interface density',
     densityCompact: 'Tight',
@@ -1833,16 +1836,52 @@ export default {
     darkConsoles: 'Keep consoles dark',
     darkConsolesHint: 'Log and terminal panels stay dark in the light theme too.',
     presets: 'Presets',
-    presetsDesc: 'Name a look and come back to it in one click',
+    presetsDesc: 'Name a look, come back to it, or move it somewhere else',
     presetName: 'Preset name',
     savePreset: 'Save',
     noPresets: 'No presets saved yet.',
+    share: 'Share this look',
+    copyLook: 'Copy as settings',
+    copySnippet: 'Copy as a Vuetify theme',
+    importLook: 'A look, as JSON',
+    importLookHint: 'Paste settings copied from another stackvo window.',
+    importAction: 'Import',
+    importDone: 'Look applied.',
+    importPartial: 'Look applied. Fields this build does not know were skipped: {fields}.',
+    importFailed: 'That is not a look. Expected the copied settings JSON.',
+    preview: 'Preview and audit',
+    previewDesc: 'Both themes side by side, and the ratios they measure',
+    previewBody: 'Body text',
+    previewCaption: 'Secondary text, at the chosen contrast',
+    previewPrimary: 'Primary',
+    tones: 'Tonal ramp',
+    tonesHint:
+      'Material’s tone ladder for each accent. The numbers are tones; hover for the code and the hex.',
+    previewSecondary: 'Secondary',
+    contrastAuditPair: 'Measured pair',
+    contrastAuditFail: 'Low',
+    contrastAudit: {
+      body: 'Body text on surface',
+      caption: 'Secondary text on surface',
+      onPrimary: 'Button text on accent',
+      onSecondary: 'Button text on secondary',
+      success: 'Running label on surface',
+      warning: 'Warning label on surface',
+      error: 'Failed label on surface',
+      info: 'Info label on surface',
+    },
     neutrals: {
       graphite: 'Graphite',
       carbon: 'Carbon',
       midnight: 'Midnight',
       forest: 'Forest',
       warm: 'Warm grey',
+    },
+    harmonies: {
+      analog: 'Analogous (hue −30°)',
+      triadic: 'Triadic harmony (−120°)',
+      split: 'Split-complementary (−150°)',
+      mono: 'Monochromatic (less saturated)',
     },
     fonts: {
       system: 'System',
@@ -2348,6 +2387,19 @@ export default {
     composeRestart: 'Restart the stack',
   },
 
+  /**
+   * The two standard remedies, named once.
+   *
+   * Every card that can end up behind the manifest or behind the overlay ends
+   * up offering one of these, so the label is not the card's to word: a
+   * "Regenerate and rebuild now" in one pane and a "Rebuild the project" in
+   * the next read as two different acts, and they are the same one.
+   */
+  remedy: {
+    rebuild: 'Rebuild the project',
+    recreate: 'Recreate the container',
+  },
+
   requirements: {
     title: 'Services this project needs',
     description:
@@ -2533,7 +2585,7 @@ export default {
     noSupervisord:
       'This project runs its server without supervisord (apache, frankenphp, swoole, roadrunner, or a runtime that is not PHP). There is nothing to show.',
     noSocket:
-      'supervisord is running and will not talk: this image was built before StackVo put a socket in the generated config. Rebuild the project.',
+      'supervisord is running and will not talk: this image was built before StackVo put a socket in the generated config.',
     stopped: 'The container is not running.',
     counts: '{running} of {total} running',
     logToStdout:

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia } from 'pinia';
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';
@@ -602,16 +602,20 @@ describe('the develop flag and the coverage mode', () => {
  * Deliberately a button and not an automatic rebuild: it is minutes and it
  * recreates the container, and a switch that quietly started one would be a
  * surprise nobody asked for.
+ *
+ * Both warnings carry the shared `RemedyAlert` rather than a hand-written
+ * alert and an emit the page turns back into a call, so what is asserted here
+ * is the command that actually runs. That is the stronger claim of the two: an
+ * emit could be wired to the wrong handler and this file would never know.
  */
 describe('acting on the Xdebug warnings', () => {
-  const mountPane = (attrs = {}) =>
+  const mountPane = () =>
     mount(
       {
         components: { XdebugPane },
-        template:
-          '<v-app><XdebugPane name="shop" runtime="php" @rebuild="$attrs.onRebuild" @apply="$attrs.onApply" /></v-app>',
+        template: '<v-app><XdebugPane name="shop" runtime="php" /></v-app>',
       },
-      { attrs, global: { plugins: [createPinia(), vuetify, i18n] } }
+      { global: { plugins: [createPinia(), vuetify, i18n] } }
     );
 
   it('offers the rebuild the warning asks for, and asks rather than doing it', async () => {
@@ -622,19 +626,18 @@ describe('acting on the Xdebug warnings', () => {
       active: false,
       running: false,
     };
-    const onRebuild = vi.fn();
-    const wrapper = mountPane({ onRebuild });
+    const wrapper = mountPane();
     await vi.waitFor(() => expect(wrapper.text()).toContain('rebuild'));
 
-    const button = wrapper
-      .findAllComponents({ name: 'VBtn' })
-      .find((b) => b.text() === 'Regenerate and rebuild now');
-    expect(button, 'the warning has no button to act on').toBeTruthy();
+    const button = wrapper.find('[data-test="remedy-rebuild"]');
+    expect(button.exists(), 'the warning has no button to act on').toBe(true);
+    expect(button.text()).toBe('Rebuild the project');
 
     // Nothing has run yet — the switch does not start a build on its own.
-    expect(onRebuild).not.toHaveBeenCalled();
+    expect(calls.some(([n]) => n === 'projectBuild')).toBe(false);
     await button.trigger('click');
-    expect(onRebuild).toHaveBeenCalledTimes(1);
+    await flushPromises();
+    expect(calls).toContainEqual(['projectBuild', 'shop']);
     wrapper.unmount();
   });
 
@@ -652,21 +655,19 @@ describe('acting on the Xdebug warnings', () => {
       active: false,
       running: true,
     };
-    const onApply = vi.fn();
-    const wrapper = mountPane({ onApply });
+    const wrapper = mountPane();
     await vi.waitFor(() =>
       expect(wrapper.findAllComponents({ name: 'VBtn' }).length).toBeGreaterThan(0)
     );
 
-    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
-    expect(labels).not.toContain('Regenerate and rebuild now');
+    expect(wrapper.find('[data-test="remedy-rebuild"]').exists()).toBe(false);
 
-    const apply = wrapper
-      .findAllComponents({ name: 'VBtn' })
-      .find((b) => b.text() === 'Recreate the container');
-    expect(apply, 'nothing offered for a container that is behind').toBeTruthy();
+    const apply = wrapper.find('[data-test="remedy-recreate"]');
+    expect(apply.exists(), 'nothing offered for a container that is behind').toBe(true);
     await apply.trigger('click');
-    expect(onApply).toHaveBeenCalledTimes(1);
+    await flushPromises();
+    expect(calls).toContainEqual(['composeUpProject', 'shop']);
+    expect(calls.some(([n]) => n === 'projectBuild')).toBe(false);
     wrapper.unmount();
   });
 
@@ -682,9 +683,8 @@ describe('acting on the Xdebug warnings', () => {
     const wrapper = mountPane();
     await vi.waitFor(() => expect(wrapper.text()).toContain('IDE setup'));
 
-    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
-    expect(labels).not.toContain('Regenerate and rebuild now');
-    expect(labels).not.toContain('Recreate the container');
+    expect(wrapper.find('[data-test="remedy-rebuild"]').exists()).toBe(false);
+    expect(wrapper.find('[data-test="remedy-recreate"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });
@@ -769,26 +769,23 @@ describe('the panes re-read when the operation finishes', () => {
       active: true,
       running: true,
     };
-    const onApply = vi.fn();
     const wrapper = mount(
       {
         components: { XdebugPane },
-        template: '<v-app><XdebugPane name="shop" runtime="php" @apply="$attrs.onApply" /></v-app>',
+        template: '<v-app><XdebugPane name="shop" runtime="php" /></v-app>',
       },
-      { attrs: { onApply }, global: { plugins: [createPinia(), vuetify, i18n] } }
+      { global: { plugins: [createPinia(), vuetify, i18n] } }
     );
     await vi.waitFor(() => expect(wrapper.text()).toContain('Still switched on'));
 
-    const apply = wrapper
-      .findAllComponents({ name: 'VBtn' })
-      .find((b) => b.text() === 'Recreate the container');
-    expect(apply, 'nothing offered for a container still carrying Xdebug').toBeTruthy();
+    const apply = wrapper.find('[data-test="remedy-recreate"]');
+    expect(apply.exists(), 'nothing offered for a container still carrying Xdebug').toBe(true);
     await apply.trigger('click');
-    expect(onApply).toHaveBeenCalledTimes(1);
+    await flushPromises();
+    expect(calls).toContainEqual(['composeUpProject', 'shop']);
 
     // And not the expensive one: the extension stays in the image on purpose.
-    const labels = wrapper.findAllComponents({ name: 'VBtn' }).map((b) => b.text());
-    expect(labels).not.toContain('Regenerate and rebuild now');
+    expect(wrapper.find('[data-test="remedy-rebuild"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });
@@ -1106,10 +1103,15 @@ describe('php-spx', () => {
     // The caveat travels with the number rather than living in the help file:
     // it is the sentence that stops one run being read as a benchmark.
     expect(shown).toContain('not a benchmark');
+    // Three arguments, the third being the snapshot to restore before the
+    // second run. `undefined` here because this test picks none — asserted
+    // rather than trimmed off, so that the day the pane starts sending one by
+    // accident is a day this fails.
     expect(calls.find(([n]) => n === 'requestReplay')).toEqual([
       'requestReplay',
       'shop',
       'spx-full-1',
+      undefined,
     ]);
     wrapper.unmount();
   });
