@@ -1,398 +1,480 @@
-# StackVo Desktop
+<div align="center">
 
-A Docker-based local development environment manager, as a native desktop app.
+<!-- LOGO — docs/images/logo.png (512×512) goes here
+     docs/images/logo.png (512×512) goes here
+     <img src="docs/images/logo.png" alt="StackVo" width="120"> -->
 
-**Self-contained.** It used to need a checkout of the Bash StackVo project
-beside it, to read that project's generator and templates from. The generator
-was ported to Rust (the shell was deleted), the service templates now ship
-inside the binary, and this repository took over the `stackvo/stackvo` name the
-Bash tree used to hold — so there is nothing to clone beside it any more. That
-sentence used to carry a link to `stackvo/stackvo`, which now points here: a
-reader following it to find the other project landed back on this one.
+# StackVo
 
-A workspace is a folder this app creates, not one you have to fetch. Point it at
-an empty directory and it writes the `.env`, the templates and the project tree
-itself. An existing checkout still works and is left exactly as it is.
+**A desktop app that manages Docker-based local development environments.**
 
-## Installing it
+Every project gets its own PHP version, its own database, its own domain and its
+own HTTPS certificate — without typing `docker compose` or installing a single
+PHP on your machine.
 
-Six installer formats are built for every tagged release, two per platform:
+[![CI](https://img.shields.io/github/actions/workflow/status/stackvo/stackvo/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/stackvo/stackvo/actions/workflows/ci.yml)
+[![Nightly](https://img.shields.io/github/actions/workflow/status/stackvo/stackvo/nightly.yml?branch=main&style=flat-square&logo=github&label=nightly)](https://github.com/stackvo/stackvo/actions/workflows/nightly.yml)
+[![Release](https://img.shields.io/github/v/release/stackvo/stackvo?style=flat-square&sort=semver&display_name=tag&label=release)](https://github.com/stackvo/stackvo/releases)
+[![Downloads](https://img.shields.io/github/downloads/stackvo/stackvo/total?style=flat-square&label=downloads)](https://github.com/stackvo/stackvo/releases)
+[![License](https://img.shields.io/github/license/stackvo/stackvo?style=flat-square&label=license)](LICENSE)
 
-| Platform | Formats                       | Needs                                        |
-| -------- | ----------------------------- | -------------------------------------------- |
-| macOS    | `.dmg`                        | macOS 10.15 or later, Apple Silicon or Intel |
-| Windows  | `.msi`, `.exe` (NSIS)         | Windows 10 or later, x64 or ARM64            |
-| Linux    | `.deb`, `.rpm`, `.AppImage`   | x86_64 or aarch64                            |
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square)](#2-installation)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
+[![Rust](https://img.shields.io/badge/Rust-stable-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Vue](https://img.shields.io/badge/Vue-3-42B883?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)](.nvmrc)
+[![Docker](https://img.shields.io/badge/Docker-required-2496ED?style=flat-square&logo=docker&logoColor=white)](#1-requirements)
 
-**No release is published yet**, so today the only route is building from source
-— `npm install && npm run tauri:dev`, with the toolchain under
-[How it is built](#how-it-is-built). This paragraph is the one that changes when
-the first tag ships; until then it is the honest answer.
+[![Issues](https://img.shields.io/github/issues/stackvo/stackvo?style=flat-square&label=issues)](https://github.com/stackvo/stackvo/issues)
+[![Pull requests](https://img.shields.io/github/issues-pr/stackvo/stackvo?style=flat-square&label=PRs)](https://github.com/stackvo/stackvo/pulls)
+[![Contributors](https://img.shields.io/github/contributors/stackvo/stackvo?style=flat-square)](https://github.com/stackvo/stackvo/graphs/contributors)
+[![Last commit](https://img.shields.io/github/last-commit/stackvo/stackvo?style=flat-square)](https://github.com/stackvo/stackvo/commits/main)
+[![Code of Conduct](https://img.shields.io/badge/Contributor%20Covenant-adapted-4baaaa?style=flat-square)](CODE_OF_CONDUCT.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+[![Stars](https://img.shields.io/github/stars/stackvo/stackvo?style=flat-square)](https://github.com/stackvo/stackvo/stargazers)
 
-Whichever way you get it, it needs **Docker** — Docker Desktop on macOS and
-Windows, Docker Engine on Linux, or an API-compatible runtime. Colima, OrbStack
-and **Podman** are recognised by name; Podman's rootless socket
-(`$XDG_RUNTIME_DIR/podman/podman.sock`) is looked for before the system ones,
-because rootless is the case somebody runs Podman for. The app will open, report
-and offer to start Docker when it is not running, which is the one thing the
-container-based web UI could never do.
+[Türkçe](README_TR.md) &nbsp;·&nbsp; **English**
 
-The engine name is a label, never a branch: nothing here does anything different
-because of which of the four answered. That is also why a non-Docker engine
-works at all — no version string is compared against a minimum, and Podman
-reports its own version (`5.1.1`) beside the Docker API level it emulates
-(`1.41`).
+[Quick start](#quick-start-5-minutes) ·
+[Features](#why-stackvo) ·
+[Examples](#usage-by-example) ·
+[CLI](#using-it-from-a-terminal-stackvo) ·
+[Architecture](#architecture) ·
+[Comparison](#how-it-compares)
 
-### Opening a build that is not code-signed
+</div>
 
-**Releases are not code-signed, and that is a decision rather than an
-oversight.** The app is distributed from GitHub Releases and from nowhere else —
-no App Store, no Microsoft Store, no Snap, no Flathub, no Homebrew cask, no
-winget. An Apple Developer Program membership and an Authenticode certificate
-are not store requirements; they are needed for a file downloaded from a
-release page too, and both are a recurring cost with an identity attached.
-Skipping them is the last external dependency dropped from the chain.
+> **Screenshot:** `docs/images/01-dashboard.png` — the dashboard
+> <!-- <img src="docs/images/01-dashboard.png" alt="StackVo dashboard" width="100%"> -->
 
-The cost lands on you, once, at first launch: **your operating system does not
-recognise what you downloaded.** Here is exactly what you will see and exactly
-what to do about it.
+---
 
-**macOS.** Gatekeeper quarantines anything downloaded from a browser, and for an
-unsigned bundle it does not say *"unidentified developer"* — it says
-**"StackVo is damaged and can't be opened. You should move it to the Trash."**
-That message is about the quarantine attribute and not about the file, and
-nothing on that dialog tells you so, which is why it is written here.
+## Table of contents
 
-Either of these clears it:
+- [What is StackVo?](#what-is-stackvo)
+- [Why StackVo?](#why-stackvo)
+- [Quick start (5 minutes)](#quick-start-5-minutes)
+- [Screenshots](#screenshots)
+- [Core concepts](#core-concepts)
+- [Usage by example](#usage-by-example)
+- [Using it from a terminal (`stackvo`)](#using-it-from-a-terminal-stackvo)
+- [Using it from an AI assistant (MCP)](#using-it-from-an-ai-assistant-mcp)
+- [Coming from another tool](#coming-from-another-tool)
+- [Supported stack](#supported-stack)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Security and privacy](#security-and-privacy)
+- [How it compares](#how-it-compares)
+- [Building from source](#building-from-source)
+- [Status and roadmap](#status-and-roadmap)
+- [FAQ](#faq)
+- [Contributing, support and license](#contributing-support-and-license)
 
-- Right-click (or Control-click) the app in `/Applications` → **Open**, then
-  **Open** again in the dialog that follows. macOS remembers the choice for that
-  copy.
-- Or, from a terminal:
+---
+
+## What is StackVo?
+
+StackVo is a desktop application that manages the **local development
+environment** on your machine. For each project it brings up the web server, the
+PHP (or Node, Python, Go, Ruby, Rust) version, the database and any supporting
+services as **Docker containers** — you just press a button in a window.
+
+Put simply:
+
+```text
+The old way                                   With StackVo
+─────────────────────────────────────────     ────────────────────────────────
+brew install php@8.1                          New project → pick PHP 8.4
+…now the other project needs PHP 8.4          Other project → pick PHP 8.1
+MySQL 8.0 installed, project wants 5.7        Each project gets its own MySQL
+edit /etc/hosts by hand                       Domain is automatic: shop.loc
+click through the certificate warning         HTTPS is automatic and trusted
+```
+
+Three sentences:
+
+1. **A project is a container.** Two projects can hold two PHP versions, two
+   databases and two sets of environment variables on one machine without
+   arguing.
+2. **The app runs on your host, not inside a container.** If Docker is down it
+   tells you and offers to start it; it can stop the whole stack; it reads real
+   host CPU and memory.
+3. **One core, three surfaces:** the window, the `stackvo` command line, and an
+   MCP server for AI assistants. All three go through the same contract.
+
+> **Who is it for?** Developers juggling several PHP/Laravel/WordPress/Node
+> projects at once, who would rather not debug "it works on my machine", and who
+> want a team to share one environment definition.
+
+---
+
+## Why StackVo?
+
+| Feature | What it gives you |
+|---------|-------------------|
+| **Isolated environment per project** | PHP 5.6–8.5, Node, Python, Go, Ruby, Rust — no project breaks another's versions. |
+| **Automatic HTTPS and domains** | An address like `shop.loc`, a trusted mkcert certificate, routing through Traefik. No browser warning. |
+| **A real desktop app** | Tauri 2 + Rust. ~27 MB installed, CLI included. Not a web UI — it opens even when Docker is down. |
+| **30+ ready services** | MySQL, MariaDB, PostgreSQL, MongoDB, Redis, Valkey, RabbitMQ, Kafka, Elasticsearch, MinIO, Grafana, phpMyAdmin… |
+| **A full environment per git branch** | Each worktree gets its own hostname **and its own database**. What cloud "preview environments" sell — locally and free. |
+| **"Why was this request slow?"** | Profiler, query log and your `dump()` calls on one axis; replay a recorded request with one click. |
+| **In-app mail inbox** | Sent mail is captured and read inside the app — no browser tab round trip. |
+| **Named database snapshots** | Take one before a migration, restore it by name. Scheduled snapshots too. |
+| **A monorepo as one project** | `api/` in Go, `web/` in Next.js, `worker/` in Python — one entry, one start, one certificate. |
+| **Public tunnels, 9 providers** | Cloudflare, ngrok, Tailscale, zrok, Pinggy, localtunnel, localhost.run, LocalXpose. |
+| **MCP for AI assistants** | 38 tools; writes sit behind an explicit flag, a project scope and a time limit. |
+| **Imports from 7 tools** | XAMPP, Laragon, MAMP, Valet, Sail, Herd, DDEV — it brings your projects over. |
+| **It measures the cost** | *"`shop` has held 4.2 GB·hours and used 38 minutes of CPU today."* The only tool here that measures what Docker costs you. |
+| **Accessible and localised** | English and Turkish UI, RTL support, an EN 301 549-shaped conformance statement backed by tests. |
+
+---
+
+## Quick start (5 minutes)
+
+### 1) Requirements
+
+| Requirement | Detail |
+|-------------|--------|
+| **Docker** | Docker Desktop on macOS/Windows, Docker Engine on Linux. **Podman, Colima and OrbStack** are recognised too (Podman's rootless socket is looked for first). |
+| **OS** | macOS 10.15+, Windows 10+, Linux (x86_64 / aarch64) |
+| **Disk** | ~27 MB for the app, plus Docker images (GB) |
+
+> If Docker is not running the app still opens, reports it, and offers to start
+> it — the one thing a dashboard living inside a container could never do.
+
+### 2) Installation
+
+Six installers are built per release, two per platform:
+
+| Platform | Formats | Notes |
+|----------|---------|-------|
+| macOS | `.dmg` | Apple Silicon and Intel |
+| Windows | `.msi`, `.exe` (NSIS) | x64 and ARM64 |
+| Linux | `.deb`, `.rpm`, `.AppImage` | x86_64 and aarch64 |
+
+> **No release is published yet.** Today the only route is
+> [building from source](#building-from-source). This section gets download
+> links when the first tag ships.
+
+<details>
+<summary><b>Opening a build that is not code-signed</b> (read this if macOS says "damaged")</summary>
+
+Releases are not code-signed, and that is a decision rather than an oversight
+(see the [FAQ](#faq)). At first launch your OS will complain:
+
+- **macOS** — "StackVo is damaged and can't be opened" is about the quarantine
+  attribute, not about the file. Right-click the app → **Open** → **Open** again.
+  Or from a terminal:
 
   ```sh
   xattr -dr com.apple.quarantine /Applications/StackVo.app
   ```
 
-**Windows.** SmartScreen shows *"Windows protected your PC"* and hides the
-button that runs it. Click **More info**, then **Run anyway**. The installer
-itself is not blocked — this is a warning with an extra click, not a refusal.
+- **Windows** — SmartScreen shows "Windows protected your PC". Click
+  **More info** → **Run anyway**.
+- **Linux** — Nothing to do. An AppImage needs `chmod +x`, as every AppImage does.
 
-**Linux.** Nothing to do. `.deb`, `.rpm` and `.AppImage` carry no equivalent
-gate; an AppImage needs its executable bit (`chmod +x`), which is true of every
-AppImage.
+Every release publishes `SHA256SUMS-<target>.txt` beside its artifacts, and the
+app's updater verifies a **minisign** signature over the update manifest.
 
-**What you can check instead of a signature.** Every release publishes a
-`SHA256SUMS-<target>.txt` beside its artifacts, and the app's own updater
-verifies a **minisign** signature over the update manifest — that key
-(`plugins.updater.pubkey`) is separate from platform code signing and is in
-place. So updates are verified even though the first download is not, and the
-one file you cannot verify that way is precisely the first one, which is the one
-the checksum list is there for.
+</details>
 
-### What Docker costs you
+### 3) First run
 
-This is the decision that separates StackVo from the local-binary tools in the
-same category, and it is worth reading before you install rather than after:
+The first launch asks exactly one question: **where should the workspace live?**
 
-| | StackVo | A tool that installs PHP on the host |
-| --- | --- | --- |
-| First install | the app (~27 MB) **plus** Docker and its images (GB) | one installer, ~100 MB |
-| A project's first `up` | an image build — minutes | seconds |
-| **Changing PHP version** | rewrite the manifest, rebuild the image | immediate |
-| Idle memory | the Docker VM, Traefik and whatever services are on | the language runtime alone |
-
-What you get for it is the thing none of them can offer: every project's
-environment is a container, so two projects can hold two PHP versions, two
-databases and two sets of environment variables without arguing, and what runs
-on your machine is what a Dockerfile says rather than what your `brew` history
-says.
-
-If that trade is wrong for you, it is wrong for you. It is not a gap anyone is
-going to close — it is the architecture.
-
-Two more things follow from it, and both are limits rather than gaps. They are
-written here because "is this missing or is this decided?" is a question worth
-answering before you install, not after.
-
-**There is no portable install, and there cannot be one.** Laragon, ForgeKit and
-Laraflare all ship a copy-the-folder-and-go install, and on Windows that is a
-real feature people choose on. It is not expressible here: the images and
-volumes live in Docker's own store, not in any directory this application owns.
-`STACKVO_ROOT` is half an answer — your workspace moves with you, the engine
-does not.
-
-**StackVo does not run inside a Codespace or Gitpod.** DDEV does, and lists it
-on its front page. This is a desktop application: it talks to a Docker socket on
-the machine it is running on and draws a window. What it does instead is
-**export** a devcontainer, which DDEV does not — so a project set up here can be
-opened in a cloud environment even though this application cannot follow it
-there. The loopback HTTP surface and the CLI make a headless use technically
-possible; neither is positioned as one, and calling it supported would be
-selling something nobody has tested end to end.
-
-## Coming from something else
-
-StackVo imports from **seven** other local environments, which is the widest
-list in this category: **XAMPP, Laragon, MAMP, Laravel Valet, Laravel Sail,
-Laravel Herd and DDEV**. It finds them on this machine, shows what it found, and
-brings the projects over.
-
-It copies by default and moves only if you ask. **It never writes a byte into
-the installation it is importing from** — no PATH edits, no disabled services,
-nothing to undo if you decide to go back. Taking the other tool apart on your
-behalf is a decision about your machine that this one does not make for you.
-
-## What it does that gets missed
-
-Six things in this app are finished, tested, and have never been mentioned in a
-document a user reads. They are listed here rather than buried:
-
-| | What it is |
-| --- | --- |
-| **Production image build** | `release.rs` and seven IPC commands: plan, build, save, load, recipe, push-plan, push. A local dev environment that also builds the image you ship. |
-| **A full environment per git branch** | `worktree.rs` and seven commands. Each worktree gets its own hostname, **its own database** — with a login granted on that database alone, so the branch cannot reach the one it was branched from — and its own environment variables. The thing cloud "preview environments" sell, locally and free. |
-| **A sandbox to hand an assistant** | The same worktree, with an expiry and a registration that scopes the MCP server to it: the assistant gets one branch, its own copy of the database, and four writing tools instead of twelve. Its output is the branch; the environment is disposable. |
-| **Why was this request slow** | `request_explain` and `request_timeline` put the profiler, the query log and your `dump()` calls on one axis around a single request. |
-| **Devcontainer export** | A project can hand out a `.devcontainer` for people who want to work inside the container rather than beside it. |
-| **Replaying the request that actually failed** | A recording holds the request *line* and nothing else, so a POST re-sent from one is a different request — which this refuses by name. Capturing the session lifts that, and because what it stores **is** the credential, it is built as a permission rather than a setting: off until pressed, armed in minutes, ending by itself even across a night the app spent closed, and **deleting what it took** when you stop. No screen and no report ever shows a captured value — a count of cookies and a size of body is all any of them get. |
-| **A monorepo as one project** | `api/` in Go, `web/` in Next.js, `worker/` in Python: one entry, one start, one certificate. Every other tool's unit is a *site* — one directory, one runtime — so a monorepo becomes three entries you have to remember are related; a local binary cannot do otherwise. A component gets a Dockerfile, a compose service on the project's own profile and a Traefik router, and inherits the sidecar's containment: no host port, a path that cannot leave the project, a container named from the project. |
-| **The project's own supply chain** | `pkg.rs` verifies every file of every service package against a digest; the project beside it pulls four hundred libraries and nothing looked at them. `deps.rs` reads `composer.lock` and `package-lock.json` **on this machine** — plain-`http://` sources named package by package, packages nothing verifies counted, and every index they came from. Asking a public database whether any has an advisory is a **separate** button, because it sends the names and versions off the machine, and the sentence saying so is above it. |
-| **Which containers can leave the machine** | Whether a container can route out is asked of Docker, not inferred: a network created `internal` has no gateway, so a container whose every network is internal provably cannot. Beside it, the registry each running image actually came from — which is the follow-up an administrator who set a mirror has: *who bypassed it*. It says out loud what it cannot see: Docker keeps no connection log, so there are no destinations here, and this app will not install a capture or a proxy to get them. |
-| **A bisect that carries the environment** | `git bisect` moves the code and nothing else, so a search through a range where the runtime changed runs old code against a new environment and can accuse an innocent commit. This reads `stackvo.json` and `stackvo.lock` **at the revision under test** and lists what differs. It reports and does not install: matching an old service version means replacing a container whose volume holds your data, twenty times over a ten-step search. |
-| **A lock file for a project's services** | `stackvo.json` names services without versions, so two machines can both satisfy `redis` at 7.0 and 7.2. `stackvo.lock` records what this one resolved to — version, source, and the **package manifest digest**, which is what tells two publications of one version apart. Written only when you ask: a lock the app refreshed on its own would always agree with the machine and could never disagree with it. `verify` then reports the wrong version, the right version out of a different package, and a lock that has fallen behind the manifest. |
-| **A compliance report for the administrator's policy** | `policy_status` says what the file states; `compliance.rs` measures whether any of it holds here. Most findings are not somebody breaking a rule — the mirror applies as files are *generated*, the package allow-list as one is *installed*, `requireSignature` on the *next* refresh — so a policy that arrived after the machine was set up has work left. Four states, and `silent` (the policy has no opinion) is never counted as a pass. The verdict is called `attestable`, not `compliant`: this layer is not a security boundary and the app will not issue a certificate for one. |
-| **A scan for credentials nobody moved** | `leaks.rs` matches the *value*, not the key's name — `AKIA…`, `ghp_…`, a PEM private-key header — across `.env` and every file git is tracking. Each finding carries a fingerprint and a masked preview and never the value; the history is asked by path, never by putting a secret on a command line; and a tracked `.env` comes with the standard repair, plus the two halves it cannot do said out loud. |
-| **The other half of onboarding** | The repository declares what a project needs; `stackvo verify <project>` — and a button on its page — answers whether this machine has it, line by line, and what to do about each one that it does not. Everything here helps you set things up; this is the half that checks. |
-| **Send a recorded request again** | A recording of a page carries a button that re-issues that exact request with the profiler on and shows both numbers. The commonest loop in performance work — did my change help — as one click instead of four steps. |
-| **What Docker actually cost you** | `usage.rs` adds up the CPU and memory readings the sampler already takes — *"`shop` has held 4.2 GB·hours and used 38 minutes of CPU today"* — and tells you once on the day a project passes a budget you set. Every tool in this category has Docker's cost; this is the one that measures it. |
-| **An answer to "it works on my machine"** | The diagnostic bundle carries a flat, path-free, credential-free fingerprint of the machine, and Settings will hold a colleague's against yours and list only what the two disagree about. Every product here says the container solves this; the same compose file on two Docker versions is two different things. |
-| **An audit trail** | `audit.rs` records the acts that cannot be undone, for whoever has to account for the machine — and every writing call an assistant makes, refusals included, each carrying what would put it back. |
-| **MCP for AI assistants** | 38 tools, with writes behind an explicit flag. See [Driving it from an AI assistant](#driving-it-from-an-ai-assistant). |
-
-## Why a desktop app
-
-In StackVo today the dashboard is itself a container: it runs inside the Docker stack it manages,
-reaches the engine through a mounted `docker.sock`, is routed by Traefik at `stackvo.loc`, and needs
-a hosts-file entry and a self-signed-certificate click-through to open. That one decision is where
-most of the friction comes from — the UI can't tell you Docker is down (it needs Docker to run), it
-can't stop the stack (that would kill itself), it writes files as root and chowns them back, and it
-reads host CPU stats from inside a container, where they're wrong.
-
-StackVo Desktop inverts the relationship. The app runs on the host as a normal user process and
-drives Docker directly. Traefik and the project/service containers are unchanged — only the control
-plane moves.
-
-|                    | Web UI (today)                           | Desktop                            |
-| ------------------ | ---------------------------------------- | ---------------------------------- |
-| Runs as            | container, root, `chmod 666 docker.sock` | host process, invoking user        |
-| Docker down        | unreachable                              | opens, reports, offers to start it |
-| Host metrics       | `/proc` inside a container               | `sysinfo` on the host              |
-| Stopping the stack | impossible (kills the UI)                | `compose_down`                     |
-| Hosts file         | manual `sudo tee -a /etc/hosts`          | reviewed diff, one elevated write  |
-| Windows            | WSL2 only                                | native — no shell, no bash         |
-| Install size       | ~600 MB of images                        | ~27 MB, CLI included               |
-
-## Status
-
-**Phase 0 — contracts.** Complete. See [contracts/](contracts/).
-**Phase 1 — skeleton + read-only views.** Complete. The app runs, finds a StackVo
-checkout, reports the Docker engine, and reads real host metrics.
-**Phase 2 — control.** Complete. Start/stop/restart/build projects and services,
-enable/disable services, live container logs, and stack-wide `up`/`down` — all
-with streamed progress instead of a blocked request.
-**Phase 3 — desktop integration.** Complete. Tray, native notifications, a
-watcher on `projects/*/stackvo.json`, an elevated hosts-file helper that shows a
-diff first, real terminals (container _and_ host), autostart and single-instance.
-
-**Phase 4 — generator port.** Complete. All five web servers the Bash tree had,
-the Node runtime, `docker-compose.projects.yml` and both Traefik files are
-ported to Rust and verified byte-for-byte against it. A sixth arrived after the
-port: **RoadRunner**, which is Laravel Octane's other driver — Octane has
-exactly two and this shipped one, which for a project using Octane is a coin
-toss it can lose. Windows path and named-pipe handling is written and
-unit-tested; see the caveat below.
-
-The two Octane drivers are the only servers that *are* the HTTP server: both run
-on the `php-cli` image and Traefik is pointed at 8000 rather than 80. What
-separates them is the cost — Swoole is a PHP extension compiled into the
-interpreter, RoadRunner is a Go binary that talks to PHP over a pipe, so nothing
-about the PHP build changes for it.
-
-**Phase 5 — releases.** Signed auto-updates are wired: the app checks an
-endpoint, verifies the bundle signature against the key compiled into the build,
-installs and restarts. `.github/workflows/release.yml` builds and signs for six
-targets. **Two things are yours to supply** and are deliberately absent from
-this repo — the signing key pair and the endpoint that serves `latest.json`:
-
-```bash
-npm run tauri signer generate -- -w ~/.tauri/stackvo.key
+```text
+~/.stackvo/                 ← the default; change it with STACKVO_ROOT
+├── .env                    the stack's settings (services, ports, TLD)
+├── generated/              rendered compose/Dockerfiles — safe to delete
+├── certs/                  mkcert certificates
+└── projects/
+    └── shop/
+        ├── stackvo.json    the manifest — the only file you edit by hand
+        └── Dockerfile      rendered
 ```
 
-Put the public half in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`,
-and the private half in the `TAURI_SIGNING_PRIVATE_KEY` repository secret.
-Without both, builds produce unsigned artifacts that the updater refuses — the
-correct failure, not a bug to route around.
+Point it at an empty folder and the app writes everything itself. An existing
+StackVo workspace is used as it is and left exactly as it is.
 
-Verification is differential, not by inspection — a generator that produces
-"basically the same" output silently changes people's images:
+### 4) Your first project
 
-- `tools/make-fixtures.sh` runs the real Bash generator in a throwaway sandbox
-  (a copy of `core/` + `.env`, never the user's projects) and freezes its output
-  as fixtures, one per server.
-- `tests/fixtures_differential.rs` compares the Rust renderer against them.
-- `npm run diagnose` runs the same comparison **live** against your own
-  projects, and reports which match.
+Everything runs from the window. **Projects → New project** opens a wizard:
 
-### The generator takeover, and how it ended
+| Step | What it asks |
+|------|--------------|
+| 1 | Project name and folder — the domain is derived from the name (`shop` → `shop.loc`) |
+| 2 | Framework: Laravel, WordPress, Symfony, plain PHP, Node… |
+| 3 | Runtime and version (PHP 8.4, Node 22…), and the web server (nginx, caddy…) |
+| 4 | The services you want: MySQL, Redis, Mailpit… |
 
-The Rust generator no longer runs alongside the Bash one — it replaced it. The
-port reached byte-for-byte parity on all 28 fixtures against real data, and the
-Bash engine was retired in the same change. `generate_with` now has two
-behaviours rather than three:
+Press **Create**, and this is what happens behind it:
 
-| Mode     | Behaviour                                                                 |
-| -------- | ------------------------------------------------------------------------- |
-| `rust`   | Renders and writes. **The default**, and the only writer.                  |
-| `verify` | Renders without writing and reports drift against what is already on disk. |
-| `bash`   | Retired. Kept in the enum so an old caller gets a sentence, not a parse error. |
-
-`verify` changed meaning when Bash left and is more useful for it: it used to
-ask whether two generators agreed, and now asks whether the files on disk still
-match what this one would write — which catches a hand-edited generated file,
-something byte parity only ever caught by accident.
-
-The generator's output is the input to every container you run, so "probably
-identical" was not a standard worth shipping. The fixtures that proved parity
-are still in the tree and still run: they are what keeps a change to the
-renderer from silently changing an image.
-
-### Windows status
-
-The pure logic — drive-letter to bind-mount conversion (`C:\Users\me` →
-`/c/Users/me`), named-pipe detection, `DOCKER_HOST` scheme stripping — lives in
-`src-tauri/src/paths.rs` with no `cfg` gates, so its tests run on every
-platform. That is deliberate: Windows behaviour verified only on Windows is
-Windows behaviour nobody verifies.
-
-The `#[cfg(target_os = "windows")]` blocks in `engine.rs`, `hosts.rs` and
-`pty.rs` **are compiled and unit-tested**: `windows-latest` is in the CI matrix
-and the four failures that first run surfaced were fixed. Cross-compiling from a
-Mac still fails in `tauri-build`, which wants `llvm-rc` to embed the app
-manifest, so a local `cargo build` on macOS proves nothing about them — CI does.
-
-What is still **not** verified is the part a compiler cannot answer: the hosts
-file write through UAC, the named pipe against a real Docker Desktop, and
-whether a project's domain resolves in a browser on that machine. Those need
-somebody at a Windows machine, and until this line says otherwise, nobody has
-been.
-
-```bash
-npm install
-npm run tauri:dev      # run the app
-
-npm test               # everything: vitest + Rust unit, integration, differential
-npm run test:js        # front end only
-npm run lint           # eslint + prettier
-npm run audit          # cargo-deny + npm audit
-npm run contracts:check
-npm run diagnose       # headless end-to-end check
-npm run bundle:budget  # raw asset sizes against tools/bundle-budget.mjs
+```text
+stackvo.json  ──►  renderer (Rust)  ──►  Dockerfile + compose fragment + Traefik router
+                                           │
+                                           ├─ the container comes up
+                                           ├─ one line into /etc/hosts (diff shown first, one elevated write)
+                                           └─ an mkcert certificate  →  https://shop.loc
 ```
 
-`cargo bench` measures the generator's render path. It is deliberately not in
-CI: a hosted runner's variance is wider than the regressions a threshold would
-be set to catch, so it is an instrument you run on a quiet machine rather than
-a gate. The bundle budget is a gate for the opposite reason — bytes are the
-same on every machine.
+Progress is not a guessed bar: the build **streams Docker's own output**, so you
+read the same lines you would in a terminal. When it finishes, click the domain
+on the project row — the browser opens, with no certificate warning.
 
-CI runs all of these on Linux, macOS and Windows, with `cargo clippy -- -D
-warnings` and `cargo fmt --check`. The Rust toolchain is pinned in
-`src-tauri/rust-toolchain.toml`, so a new stable release cannot turn the build
-red without a commit.
+> **Screenshot:** `docs/images/02-new-project.png` — the new-project wizard
+> <!-- <img src="docs/images/02-new-project.png" alt="New project" width="100%"> -->
 
-### Driving it from a terminal
+### 5) Everyday use — where things are
 
-`stackvo` is a command-line interface over the same core the window drives.
+The seven pages down the left are the whole application:
 
-```bash
-stackvo path-install          # link it into the app's own directory, and onto PATH
-stackvo status
-stackvo logs shop --follow
-stackvo doctor --json | jq '.ports[] | select(.state != "ok")'
+| Page | What it is for |
+|------|----------------|
+| **Dashboard** | The machine: CPU, memory, disk, network, running projects, Docker's health |
+| **Projects** | The project list; start / stop / rebuild from the row, open the domain |
+| **Catalogue** | Install services and pick versions; run two instances of one service side by side |
+| **Logs** | Every project's logs in one place, live |
+| **Dumps** | Your application's `dump()` / `dd()` output — without printing it to the browser |
+| **Mail** | The mail your app sent; HTML preview, search, link checks |
+| **Settings** | Domain, certificates, PHP, diagnostics, backups, AI assistants |
+
+Clicking a project name opens the **project page**: 45 panes, each about one
+subject — Overview, Services, Logs, Terminal, Xdebug, Profiler, Why slow,
+Snapshots, Worktrees, Share, Production image, Manifest… Every pane carries a
+**?** button that explains, in its own words, what it does.
+
+**When something goes wrong:** *Doctor*, under **Settings → Diagnostics**, says
+what is broken and how to fix it, line by line — and most findings come with a
+button that fixes them.
+
+> If you prefer a terminal, everything above also has a
+> [`stackvo` equivalent](#using-it-from-a-terminal-stackvo). It is not needed to
+> use the app — the CLI is there for scripts and CI.
+
+---
+
+## Screenshots
+
+> Images are added later. The filenames and what each one should show are listed
+> here already — drop the files into `docs/images/` and uncomment the block below.
+
+| # | File | Screen |
+|---|------|--------|
+| 1 | `docs/images/01-dashboard.png` | **Dashboard** — CPU, memory, disk, network, running projects |
+| 2 | `docs/images/02-new-project.png` | **New-project wizard** |
+| 3 | `docs/images/03-project-detail.png` | **Project page** — overview, services, logs |
+| 4 | `docs/images/04-services.png` | **Service catalogue** — versions and instances |
+| 5 | `docs/images/05-why-slow.png` | **"Why was this slow?"** — profile + queries + dumps |
+| 6 | `docs/images/06-mail.png` | **Mail inbox** |
+| 7 | `docs/images/07-terminal.png` | **Container terminal** |
+| 8 | `docs/images/08-settings.png` | **Settings** — domain, certificates, PHP, diagnostics |
+| 9 | `docs/images/09-worktree.png` | **Per-branch environment** (worktree) |
+| 10 | `docs/images/10-cli-tui.png` | **`stackvo tui`** — the terminal UI |
+
+<!--
+<p align="center">
+  <img src="docs/images/01-dashboard.png" width="49%">
+  <img src="docs/images/03-project-detail.png" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/05-why-slow.png" width="49%">
+  <img src="docs/images/06-mail.png" width="49%">
+</p>
+-->
+
+---
+
+## Core concepts
+
+Understand five things and you understand the whole app.
+
+### 1. The workspace
+
+The one folder the app manages: settings (`.env`), rendered files
+(`generated/`) and projects. There is no database — **the directory is the
+state**. `generated/` can be deleted at any time and is rebuilt on demand.
+
+### 2. The manifest — `stackvo.json`
+
+The file that describes a project, and **the only one you are meant to edit**.
+Commit it, and a teammate gets the same environment.
+
+```json
+{
+  "name": "shop",
+  "framework": "laravel",
+  "php": { "version": "8.4", "extensions": ["redis", "intl", "gd"] },
+  "server": "nginx",
+  "domain": "shop.loc",
+  "services": ["mysql", "redis", "mailpit"],
+  "commands": {
+    "reindex": { "exec": ["php", "artisan", "app:reindex"], "about": "Rebuild the search index" }
+  }
+}
 ```
 
-Both `stackvo` and `stackvo-mcp` **ship inside the app** — `externalBin` in
-`tauri.conf.json`, built by `tools/sidecars.mjs`, landing beside the main binary
-in `Contents/MacOS/`. `path-install` is the step that used to be "remember where
-you built it": it links them into a directory the app owns and writes one line,
-between markers and after a backup, into your shell's startup file. `stackvo
-tools` shows the whole state and `stackvo path-remove` takes the line back out.
-Settings → Tooling is the same thing with buttons.
+### 3. Generation
 
-From a checkout, `npm run sidecars` builds them; `cargo build --release --bin
-stackvo` still works and `tooling.rs` finds either copy.
+Compose files and Dockerfiles are **rendered from the manifest every time**,
+never edited in place. So you change the manifest, not the output.
+**Settings → Workspace → Generator** reports whether what is on disk still matches
+what the renderer would write — which is how a hand-edited generated file is
+caught.
 
-`--help` splits them by what they do: sixteen that read, twenty-one that change
-the stack, one screen, nineteen that run a program in the project's own
-container, and two for shell completion. Every one takes `--json`, and the table you see is
-rendered _from_ that value rather than from a second query, so the two cannot
-come to describe different things.
+### 4. Services and packages
 
-**Tab completion, in all four shells.** `stackvo path-install` writes it into
-the same marked block as the `PATH` line, so one `path-remove` takes both back
-out; `stackvo completions zsh` prints the stub on its own for a package
-manager. The shell side is four lines and knows nothing — it collects what has
-been typed and asks `stackvo complete`, which answers from the same table
-`--help` is rendered from. So a command added to the CLI is completable the
-moment it exists, and one removed stops being offered; there is no second copy
-of the command list in a language no test reads.
+MySQL, Redis, Elasticsearch and friends come from a **package catalogue**, which
+is signed: `registry.json` with minisign, then a sha256 per manifest, then a
+sha256 per file. Two instances of one service — **MySQL 8.0 and 8.4** — can run
+side by side.
 
-It completes commands, flags, and the positionals whose placeholder names a
-list this app already keeps — `<project>` from your own projects, `<client>`,
-`<target>`, `<tool>`, `[shell]`, and a literal `on|off`. It deliberately offers
-**nothing** after a passthrough: `stackvo artisan migrate --<TAB>` must not
-suggest `--json`, because the parser stopped at `artisan` and that flag would
-reach artisan instead. `examples/completion_probe.rs` drives real bash and zsh
-and checks all of it, which is not ceremony — the first version of the bash
-stub narrowed `IFS` before expanding the word list, and on the bash macOS ships
-that silently collapsed `artisan migrate` into one word. Every Rust test passed
-while it did.
+### 5. Three surfaces, one core
 
-**stdout is the answer, stderr is the narration.** A compose build scrolls past
-on stderr while `--json` stays clean on stdout, and a failure leaves stdout
-empty with a non-zero status. The exit code separates the two failures a script
-wants to handle rather than report: `3` is "nothing is set up on this machine",
-`4` is "Docker is not running"; `2` is a bad command line and `1` is everything
-else.
+```text
+                   ┌──────────────────────────────┐
+   Window ─────────►│                              │
+   (Vue 3)          │   Rust core                  │──► Docker / Compose
+   stackvo CLI ────►│   (130 modules, 348 commands)│──► Traefik · mkcert · hosts
+   stackvo-mcp ────►│                              │──► Filesystem (workspace)
+   (AI assistant)   └──────────────────────────────┘
+```
 
-An unrecognised flag is an **error**, not a shrug — a tool that ignores
-`--tial 50` and uses the default has told you it did something it did not do.
+All three read `contracts/ipc.json`. A CLI command that implements something the
+contract does not declare **does not compile** — that is a test, not a habit.
 
-**Where packages come from, and how you know.** The index is checked before it
-is parsed — a minisign signature over `registry.json`, against keys the machine
-already trusts, then a sha256 per manifest, then a sha256 per file. The official
-registry key is pinned — its own key pair, never the updater's, so a leak of
-either forges one thing and not both — and the published index is signed with
-its private half, so the chain runs end to end.
+---
 
-Which signatures get checked is the publisher's decision rather than a setting
-you have to find. A signature that is there is checked, and a check that fails
-is a refusal — never a quiet fall-through to "unsigned, then". A signature that
-is *not* there is accepted only from a source that has never given one: once
-this machine has taken a verified index from a source, that source going back
-to unsigned is refused, because anyone who can serve a tampered index can also
-serve a 404 for its signature. The official catalogue is known to sign, so that
-holds on a first refresh too, before this machine has learned anything. `policy.market.requireSignature` still only
-tightens — it refuses a missing signature too. An organisation running its own
-mirror never waited on any of this: it signs its own index and pins its own key
-with `policy.market.additionalKeys`. Keys rotate through a `known-keys.json` signed by a key
-already trusted, and a key retired by a build cannot be brought back by any
-document. A version its publisher has withdrawn is refused at install, and
-`stackvo doctor` lists withdrawn versions this machine already has.
+## Usage by example
 
-**The commands this project runs.** The built-in catalogue is what most
-projects have; a project declares the rest in its own `stackvo.json`:
+Everything here is done **from the window**. The manifest (`stackvo.json`)
+snippets are the second route — "the same thing, from the file" — not a
+requirement.
+
+### Changing the PHP version
+
+Pick it from **Project → Overview → PHP version**. The app says the image needs
+rebuilding and rebuilds it on one button.
+
+The same change can come from the manifest that lives in your repository; save
+the file and the app notices and asks:
+
+```jsonc
+// projects/shop/stackvo.json
+"php": { "version": "8.1" }   // was 8.4
+```
+
+### Turning a service on
+
+The **Catalogue** page lists what can be installed. **Redis → Install**, pick a
+version, then tick it on **Project → Services**. The connection string sits in
+that same pane; the password appears on a click.
+
+If two projects want two Redis versions, both run: services are installed as
+**instances**, not as one global copy.
+
+### Domains and HTTPS
+
+Handled for you on the first project. To look at it directly:
+
+- **Settings → HTTPS certificate** — one wildcard certificate covers the
+  dashboard, every service and every project; the reissue button lives here.
+- **Settings → Domain** — change the TLD (`.loc`), see the `/etc/hosts` lines.
+  Writing hosts is **one elevated call** and shows the diff first.
+
+### Debugging with Xdebug
+
+Flip the switch on **Project → Xdebug**. The pane also gives you the port and
+the path mapping your IDE needs (`/var/www/html` ↔ the project folder), and says
+whether anything is listening — so "why isn't my breakpoint hit" is answered on
+one screen.
+
+### "Why was this request slow?"
+
+On **Project → Why slow**, press **Record**, load the page in your browser, then
+stop. Click a request and three sources line up:
+
+- what the sampling profiler saw,
+- what the database was actually asked (including the same query asked 40 times),
+- your application's own `dump()` calls.
+
+The same pane has a **Replay** button: it re-issues the recorded request with the
+profiler on and puts both numbers side by side — the commonest loop in
+performance work ("did my change help?") as one click instead of four steps.
+
+> **Screenshot:** `docs/images/05-why-slow.png`
+
+### Reading the mail your app sent
+
+The **Mail** page captures it and shows it **inside the app**: HTML preview, link
+checks, search. No browser tab needed.
+
+### Database snapshots
+
+**Project → Snapshots** → give it a name → **Take**. Restore is in the same pane
+and asks for confirmation. **Settings → Backups** makes it scheduled — measured
+from the last snapshot rather than from the clock, so a laptop that was closed
+for three days owes one snapshot, not three.
+
+### A full environment per git branch
+
+**Project → Worktrees** → pick the branch → **Create**. The branch gets its own
+hostname (`feature-checkout.shop.loc`), **its own database** and its own
+environment variables.
+
+The database really is separate: the login granted on it reaches only that
+database, so the branch cannot read the one it was branched from. One button in
+the same pane removes the whole thing.
+
+### Exposing a project publicly
+
+**Project → Share** — pick a provider and start. Nine are supported: Cloudflare
+(anonymous and named), ngrok, Tailscale, zrok, Pinggy, localtunnel,
+localhost.run, LocalXpose. Providers that hold a stable address get a password
+guard in front of the tunnel.
+
+### A monorepo as one project
+
+**Project → The rest of this repository** adds the repo's other directories as
+components with their own runtimes. In the manifest:
+
+```json
+{
+  "name": "platform",
+  "components": [
+    { "name": "api",    "path": "api",    "runtime": "go",     "port": 8080 },
+    { "name": "web",    "path": "web",    "runtime": "nodejs", "port": 3000 },
+    { "name": "worker", "path": "worker", "runtime": "python" }
+  ]
+}
+```
+
+One entry, one start, one certificate. Each component gets its own Dockerfile,
+compose service and Traefik router — and none of them can open a host port.
+
+### Handing the stack to a teammate
+
+`.env` is never committed (it holds every password), so whoever clones the repo
+gets a perfect manifest and still has to be told "turn on MySQL 8.4 and Redis".
+That sentence has a home in the repository — `stackvo.preset.json`:
+
+```json
+{
+  "services": { "mysql": { "enabled": true, "version": "8.4" },
+                "redis": { "enabled": true, "version": "7.2" } },
+  "settings": { "DEFAULT_TLD_SUFFIX": "loc" }
+}
+```
+
+Open the project and the **Requirements** card says a preset is there and **shows
+the plan first** — a file that arrived with someone else's clone must not rewrite
+your stack because you opened a page. A preset can never carry a secret; the
+schema has nowhere to put one.
+
+### Defining your own commands
+
+A project's own command lives in the manifest and appears as a button on
+**Project → Commands**:
 
 ```json
 "commands": {
@@ -400,375 +482,360 @@ projects have; a project declares the rest in its own `stackvo.json`:
 }
 ```
 
-`stackvo commands` lists both, `stackvo run reindex` runs one, and the project
-pane shows them together with the declared ones marked. They run **in the
-project's container and nowhere else** — there is no `host` form, which is why
-this needed no approval prompt: a container already runs the repository's code.
-A step that has to touch your machine is a hook, where it is approved against a
-digest first.
+For the commands you run in *every* project there is **Settings → Machine
+commands** — the same schema, in one `commands.json` at the root of your
+workspace. If a project declares the same id, **the project wins**, and the pane
+says which file each row came from. Commands run **in the project's container and
+nowhere else**; there is no `host` form.
 
-**What a clone brings, and the half it used to miss.** `stackvo.json` is in the
-repository, so a teammate already has the project. What they do not have is the
-*stack* — which of the twenty services are on and at which versions — because
-that is in `.env`, the one file nobody commits, since it is also where every
-password is. So the clone succeeds, the manifest is perfect, and somebody still
-has to say out loud "turn on MySQL 8.4 and Redis".
+### Building the production image from here
 
-That sentence is a **preset**, and it now has a place to live:
+**Project → Production image** shows the plan, builds the image, saves it and
+pushes it to a registry. Your local dev environment also builds the image you
+ship.
 
-```
-<project>/stackvo.preset.json
-```
+### Devcontainer export
 
-Beside the manifest, in the repository. Open the project and its requirements
-card says one is there and what applying it would change — the same
-plan-then-apply review the Settings import uses, because a file that arrived
-with somebody else's clone must not rewrite your stack because you opened a
-page. A preset can never carry a secret: it holds enabled and version per
-service plus an allow-list of global settings, so there is nowhere in it to put
-one.
+**Project → Devcontainer → Export** writes a `.devcontainer` for teammates who
+prefer working *inside* the container — so a project set up here opens in a cloud
+environment too.
 
-**And the commands *you* run in every project.** One file at the root of your
-workspace, above all of them:
+---
 
-```json
-{ "commands": { "tail": { "exec": ["tail", "-f", "storage/logs/laravel.log"] } } }
-```
+## Using it from a terminal (`stackvo`)
 
-`commands.json` is the same schema, the same argv rule and the same container
-boundary — deliberately not a second shape and deliberately not a second threat
-model. It is the union of two decisions already taken: a file on disk may
-declare a command, and a declared command runs in the project's container. The
-point is that it needs nobody's repository: a command you run in all of them is
-exactly the one no single project should have to carry. If a project declares
-the same id, **the project wins** and the pane says which file each row came
-from; an id already in the built-in catalogue is refused, and the pane says so.
+> **This section is optional.** Everything above is done from the window; the CLI
+> is a second face on the same core, and it earns its place in specific spots:
+> scripts, CI steps, running one command in the project you have `cd`-ed into, and
+> answering a question without opening a window.
 
-**And the commands a *package* brought.** Installing the Redis package can also
-give you `redis-cli`, the way installing `ddev-redis` gives you `ddev
-redis-cli` — with one difference: every byte of it was verified before it was
-read, and re-verified on every read rather than only at install. A package may
-name a command for the reason a project may name one in its own container and a
-sidecar may not: it already chose the image, already wrote the compose fragment
-and already decides what that container runs. What is still *built* rather than
-inherited is the containment — only an enabled instance is offered, the command
-never reaches the host, and the container name is derived from the instance
-rather than declared, so a package can no more name somebody else's container
-than it can name a host port. Those rows are tagged with the instance they run
-in, because *"this does not touch your project"* is what to say before somebody
-presses a button.
-
-**A screen, when one command at a time is not what you want.**
+`stackvo` and `stackvo-mcp` **ship inside the app**; there is nothing extra to
+download. **Settings → Tooling** does the same job with buttons.
 
 ```bash
-stackvo tui
+stackvo path-install      # links them into the app's own directory and onto PATH
+stackvo tools             # where everything is, and its state
+stackvo path-remove       # takes the line back out (a backup was made first)
 ```
 
-Every project and service, live, with the cursor on one of them: enter starts
-or stops it, `l` shows its last lines, `q` leaves. There is no TUI library
-behind it — `ratatui` was measured at 25 new packages for a list, a detail line
-and a status bar, so the drawing is the same column arithmetic the tables use
-and raw mode is one call each to `libc` and `windows-sys`, both already in the
-lock file. `examples/tui_probe.rs` runs it in a real pty and reads the
-terminal's settings back afterwards, because the failure mode of getting this
-wrong is somebody's shell.
-
-**The project's container, from the working directory.** `cd` into a project and:
+### Everyday commands
 
 ```bash
-stackvo php -v          # the PHP that project declares, on a host with none
+stackvo status                        # projects and services
+stackvo up shop / down shop           # start / stop
+stackvo restart shop
+stackvo logs shop --follow            # live logs
+stackvo open shop                     # open in a browser
+stackvo doctor --json | jq '.ports[] | select(.state != "ok")'
+stackvo tui                           # full-screen terminal UI
+```
+
+### Running things in the project's container
+
+`cd` into a project and type:
+
+```bash
+stackvo php -v            # the project's PHP, on a host that has none
 stackvo artisan migrate --force
 stackvo composer install
-stackvo wp plugin list  # and console, rails, bundle, yarn, pnpm
-stackvo python -V       # and ruby, go, cargo, bun, deno
-stackvo shell           # an interactive shell in the container
-stackvo exec <program>  # anything else
+stackvo npm run build
+stackvo wp plugin list    # also console, rails, bundle, yarn, pnpm
+stackvo python -V         # and ruby, go, cargo, bun, deno
+stackvo shell             # an interactive shell in the container
+stackvo exec <program>    # anything else
 ```
 
-**Every runtime this app generates a container for has a row**, not just PHP and
-Node — `manifest::LANG_RUNTIMES` names six more and `cli_surface.rs` fails the
-build if one of them has no way to be run. The images are built in a single
-stage, so `stackvo cargo test` reaches a cargo that is still there. The
-framework rows come from `quickcmd`'s catalogue rather than from a README, which
-is why `wp` carries `--allow-root` (the container runs as root and wp-cli
-refuses without it) and why there is no `drush` row: nothing in this app says
-how Drupal is driven, and a row that usually fails is worse than no row.
+Everything after the command name is passed on **untouched** and the exit code
+is passed **through** — which is what makes `stackvo artisan test` meaningful in
+a CI script.
 
-Running one that is not there exits **127**, the way a shell does, and adds one
-line naming what the project actually is — Docker's own message says `python`
-is not on `PATH` and cannot know that this is a PHP project.
+### The contract scripts can rely on
 
-Which project comes from the working directory — matched against the real
-project list rather than a folder name, deepest first, so a worktree wins over
-the project it sits inside. `--project` names another from anywhere. Standing in
-`app/Http` runs there, in `/var/www/html/app/Http`, so it behaves the way the
-command would on the host.
+| Rule | Detail |
+|------|--------|
+| `--json` | On **every** command. The table you see is rendered *from* that value, so the two cannot drift. |
+| stdout / stderr | The answer is on stdout, the narration on stderr. A failure leaves stdout empty. |
+| Exit codes | `3` = nothing set up on this machine · `4` = Docker not running · `2` = bad command line · `1` = everything else · `127` = a runtime this project does not have |
+| Unknown flags | An **error** — never silently ignored. |
+| Completion | bash, zsh, fish, PowerShell. The command list lives in one place, so a new command is completable the moment it exists. |
 
-Everything after the command name is passed on untouched, which is what makes
-`artisan migrate --force` work — so StackVo's own flags go before it, and
-`stackvo --help artisan` (rather than `stackvo artisan --help`, which reaches
-artisan) prints this app's usage. The exit code is passed through, so
-`stackvo artisan test` means what it says in a CI script.
+---
 
-Like the MCP tool table, every command names the `contracts/ipc.json` command it
-implements, and `cli_surface.rs` cross-checks the pair: a command naming
-something the contract does not declare fails the build, and so does a command
-listed under "Reads" whose contract command is a mutation. Dispatch matches on
-an enum rather than on the command's name, so a command in the table with no
-implementation does not compile.
+## Using it from an AI assistant (MCP)
 
-### Driving it from an AI assistant
+`stackvo-mcp` is an MCP server over the same core the window drives. An assistant
+can answer *"why is shop.loc not loading?"* from the preflight report, the hosts
+file, the certificate's SAN list and the container's last hundred log lines —
+with no window open.
 
-`stackvo-mcp` is an MCP server over the same core the app drives, so an
-assistant can answer "why is shop.loc not loading?" from the preflight report,
-the hosts file, the certificate's SAN list and a container's last hundred log
-lines — without a window open.
+**Settings → AI assistants** lists the eight clients on this machine and
+registers the server in one click:
 
-```bash
-cargo build --release --bin stackvo-mcp
-```
+Claude Code · Claude Desktop · Cursor · Windsurf · VS Code · Gemini CLI ·
+Codex · Zed
 
-Then **Settings → AI assistants**, which lists all eight — Claude Code, Claude
-Desktop, Cursor, Windsurf, VS Code, the Gemini CLI, Codex and Zed — says which
-of them are on this machine and which already point at the server, and
-registers it in one click. `stackvo mcp` prints the same table in a terminal
-and `stackvo mcp-install <id>` does the same write.
+Each client's own config file is read, a **single `stackvo` entry** is inserted,
+and the file is written back — every other server in it survives, and a
+`.stackvo-backup` copy is kept first.
 
-It reads each client's own configuration file, inserts a single `stackvo` entry
-and writes it back, so every other server in that file survives; a copy is kept
-beside it as `.stackvo-backup` first. Codex is TOML and is edited with a
-format-preserving editor rather than a serialiser, so comments, key order and
-quoting come back as they were. A file that is JSON _with comments_ — VS Code's
-format — is reported rather than rewritten, with the block to paste, because
-stripping the comments to make the edit possible would delete the reader's own
-notes:
+### Granting access — read-only by default
 
-```json
-{ "mcpServers": { "stackvo": { "command": "/path/to/stackvo-mcp" } } }
-```
+You grant it with the switches on **Settings → AI assistants**, and the pane
+writes back the sentence your choice amounts to — *"this assistant may restart
+`shop`, for the next half hour"*.
 
-The 38 tools cover the questions an assistant is actually asked. The reads go
-wider than the stack's own state: `system` and `container_stats` for a machine
-that has run out of memory, `hosts` for a domain that does not resolve,
-`log_read` for the application's own exception rather than the container's
-stdout, `service_connection` for a connection string, `service_instances` for a
-workspace running MySQL 8.0 and 8.4 side by side, `packages` for what could be
-installed, `mail_message` for the body of a mail the application sent, and
-`snapshots` for what could be restored, `ide_debug` for why a breakpoint is
-not being hit — the port, the mapping, and whether anything is listening — and
-`profiler` for why one page is slow, which is the sampling profiler rather than
-the one that costs several times the request, and `hotspots` for the answer that
-question actually wants — the functions one recorded run spent its time in,
-read from the trace rather than from SPX's own web UI.
+| Setting | Effect |
+|---------|--------|
+| *(default)* | Reads only. 26 of the 38 tools are visible. |
+| **Allow writes** | Adds the 12 mutating tools — `stack_down` among them, so it can stop the whole stack. |
+| **Bound to a project** | The server is bound to one project; the eight tools no project can bound are **not offered at all**. |
+| **Time limit** | The writing half ends by itself after the time you set. |
+| **Tool by tool** | When even those four are more than the job needs, only the tools you name are opened. |
 
-Four of them answer **"why was this request slow"** rather than "is it running",
-and they are the ones worth knowing about: `explain_request` joins the profile,
-the query log and the application's own `dump()` calls around a single recorded
-request; `timeline` puts the same events on one axis when there is no recording;
-`query_log` is what the database was actually asked, including the same question
-asked forty times; and `flame` keeps the call paths that a flat ranking loses.
-No other tool in this category correlates a dump with the query that caused it,
-so no other assistant can be asked this.
+The limits:
 
-**Read-only by default.** 12 of the 38 tools change things and appear only with
-`--allow-writes`: `xdebug_set`, `certificates_reissue`, `project_start`,
-`project_stop`, `project_restart`, `service_start`, `service_stop`,
-`service_restart`, `snapshot_take`, `stack_up`, `stack_down`, `generate`. Read
-that list before passing the flag — it grants an assistant the ability to **stop
-the whole stack** and to stop a shared service every project depends on, not
-just to toggle Xdebug. Every tool is annotated `readOnlyHint` /
-`destructiveHint`, so a client can require confirmation for a tool it has never
-seen.
+- **No tool returns a password**, and a test asserts no schema on this surface has
+  a `reveal`, `password`, `secret` or `token` property.
+- **Restoring a snapshot is deliberately not a tool.** Taking one is — it adds a
+  file and changes nothing. Writing data over live rows belongs to the app's own
+  confirmation.
+- Every writing call — **refusals included** — is written to the audit trail, most
+  of them carrying what would put the act back, so it can be reversed from
+  Settings in one click.
 
-**Or bounded, tool by tool and project by project.** The flag is not the only
-shape a grant takes. `--project=shop` bounds the server to one project, and the
-twelve writing tools become the four a project can bound — `xdebug_set`,
-`project_start`, `project_stop`, `project_restart` — while the eight no project
-bounds, `stack_down` among them, are not offered at all. A scope that still
-served `stack_down` would be reporting a limit it was not applying, which is
-worse than having no limit. It bounds the reads as well, and exactly this far:
-no tool that *names* a project answers for one outside the scope, so another
-project's manifest, request traces, profile and log files are not readable
-through it, and the project listings show what is in scope rather than naming
-what is not. It is not information isolation and is not described as one — the
-machine-wide instruments still answer, because they are about the machine
-rather than about a project: the doctor, the hosts table, the mail catcher, one
-database service's query log, one container's log by id. Bounding those would
-leave a scoped assistant unable to diagnose the project it *was* given, which
-is the whole reason the surface exists.
+### Telling the assistant *when* to use it
 
-`--for=30m` ends the writing half that long after the server starts, because an
-assistant's session outlives the task it was given. `--allow=project_restart`
-names the tools outright when the four are still more than the job needs. The
-Settings pane writes the same flags into the client's file, so what is
-registered reads as the sentence somebody actually meant — *this assistant may
-restart `shop`, for the next half hour* — and `stackvo mcp-install cursor
---allow-writes --project=shop --for=30m` is that same registration from the
-command line. A flag this server does not recognise stops it from starting
-rather than quietly granting something else.
+**Settings → AI rules** writes that into the instruction file the assistant
+already reads:
 
-**And it is written down.** Every writing call made through this server is
-recorded in the audit trail with what it was done to and how it ended — the
-refusals too, which is usually the line worth having: an assistant that tried
-to stop the whole stack and was told it may not is what you want to see when
-you decide what to grant next time. Most of those lines also carry *what would
-put the act back*, worked out **before** the call ran, so it can be reversed
-from Settings in one click: what a `stack_down` stopped exists only before it
-stopped it, and a compensation worked out later would be worked out against a
-machine that has already changed. Where an act cannot be put back — a restart
-went through the state an undo would return to, a generate overwrote output
-that was not kept — the line says so in its own words instead of offering a
-button that would not keep its promise.
-
-Restoring a snapshot is deliberately **not** a tool. Taking one is: it is the
-call to make before asking for a migration, it adds a file and changes nothing.
-Putting data back over live rows is a decision for the app's own confirmation,
-not for a tool call.
-
-No tool returns a password, and no tool takes an argument that asks for one —
-`service_connection` is hard-coded to the unrevealed form, and a test asserts
-that no schema on this surface has a `reveal`, `password`, `secret` or `token`
-property. The app shows a credential on a click, to the person sitting there;
-this surface has no equivalent and is not going to grow one.
-
-The server speaks protocol revisions `2025-06-18`, `2025-03-26` and
-`2024-11-05`, and answers `initialize` with the one the client asked for. A
-server that answers with a revision the client did not request is entitled to be
-hung up on, which reads to the user as "it does not work" with nothing in any
-log.
-
-The tool table names, for each tool, the `contracts/ipc.json` command it
-implements, and three tests cross-check the two: a tool naming a command that
-does not exist fails, a read-only tool backed by a declared `mutation` fails,
-and a write-gated tool backed by a mere `query` fails — the gate would be
-guarding nothing. Generating the list outright was the obvious move and is the
-wrong one: dispatch cannot be generated, so a generated list advertises tools
-that fail when called.
-
-**Not exposed:** the rest of the mutating surface. 69 of the 344 commands take
-an `AppHandle` because they report progress through Tauri's event system, and a
-stdio subprocess has no app to emit into. Decoupling that is a refactor of its
-own; pretending otherwise would mean advertising `project_build` and having it
-fail. Service control is no longer in that set — `progress::Null` is what let
-`instance_start` and its pair off the window, which is why starting Redis from
-a chat window works here and did not a release ago.
-
-### Telling the assistant when to use it
-
-Registering the server makes the tools reachable. It does not make them used: an
-assistant that has never seen this stack reads the source, guesses at nginx, and
-suggests editing a generated file — because nothing told it that
-`stackvo_doctor` answers that question in one call.
-
-**Settings → AI rules** writes that into the instructions file the assistant
-already reads. Six files, one per file rather than one per product, because
-Codex and Zed both read `AGENTS.md`:
-
-| File                                           | Read by                 |
-| ---------------------------------------------- | ----------------------- |
-| `CLAUDE.md`                                    | Claude Code             |
-| `AGENTS.md`                                    | Codex, Zed              |
-| `.cursor/rules/stackvo.mdc`                    | Cursor                  |
-| `.github/instructions/stackvo.instructions.md` | VS Code, GitHub Copilot |
-| `.windsurf/rules/stackvo.md`                   | Windsurf                |
-| `GEMINI.md`                                    | Gemini CLI              |
-
-In the project, or in the home directory for the three clients that read a
-global file. `stackvo rules` prints the same table in a terminal,
-`stackvo rules-install <id>` does the same write, and `--project <name>` aims it
-at one project rather than the workspace root. A project's own detail page
-carries the same three controls under **AI**, scoped to that project — the
-rules are per project, so that is where somebody looks for them first. What it says is what a model gets wrong without being told, in the
-order it gets it wrong: which tool answers which question; that everything under
-the generated directory is overwritten and the input is what to change; that
-`docker compose` by hand takes a name and a port the next generate expects to
-own; and that a writing tool can stop the whole stack, so take a snapshot first
-and ask before calling one.
+| File | Read by |
+|------|---------|
+| `CLAUDE.md` | Claude Code |
+| `AGENTS.md` | Codex, Zed |
+| `.cursor/rules/stackvo.mdc` | Cursor |
+| `.github/instructions/stackvo.instructions.md` | VS Code, Copilot |
+| `.windsurf/rules/stackvo.md` | Windsurf |
+| `GEMINI.md` | Gemini CLI |
 
 Only the region between `<!-- stackvo:rules:begin -->` and
-`<!-- stackvo:rules:end -->` is ever written. This is somebody's own `CLAUDE.md`
-— a file with no markers is appended to, never replaced, everything else comes
-back byte for byte, and a copy is kept beside it as `.stackvo-backup` first. The
-front matter Cursor and VS Code need to apply the file at all is written when
-the file is created and never again, because a user who narrowed `applyTo` meant
-it. A test asserts that every tool the rules name is a tool that exists — rules
-that send an assistant at a tool the server would refuse are worse than no rules.
+`<!-- stackvo:rules:end -->` is ever written; the rest of the file comes back
+byte for byte.
 
-### When something goes wrong
+---
 
-The app writes a rotating log — seven days, then it drops the oldest.
-**Settings → Application log** shows where and opens the folder. Password and
-token values are masked as the log is written, so it is safe to attach to an
-issue, but read it first.
+## Coming from another tool
 
-**Settings → Diagnostic bundle** packages the same log with `preflight`,
-`doctor`, the engine state and the version into one zip, masked a second time on
-the way in. What it holds and what it deliberately leaves out — no `.env`, no
-project sources — is listed in [PRIVACY.md](PRIVACY.md), along with everything
-this app stores and every host it can reach. There is no telemetry; that
-sentence is held up by a test rather than by a promise
-(`src-tauri/tests/privacy_claims.rs`).
+StackVo imports from **seven** other local environments — the widest list in
+this category:
+
+| Source | Found in | Source | Found in |
+|--------|----------|--------|----------|
+| **XAMPP** | `htdocs` | **Laravel Sail** | `docker-compose.yml` |
+| **Laragon** | `www` | **Laravel Herd** | the site list |
+| **MAMP** | `htdocs` | **DDEV** | `.ddev/config.yaml` |
+| **Laravel Valet** | parked/linked sites | | |
+
+How it works:
+
+1. It finds what is installed on this machine and **shows you what it found**.
+2. It **copies** by default, and moves only if you ask.
+3. It **never writes a byte into the installation it is importing from** — no
+   PATH edits, no disabled services. Nothing to undo if you change your mind.
+
+---
+
+## Supported stack
+
+### Languages and versions
+
+| Language | Versions | Default |
+|----------|----------|---------|
+| **PHP** | 5.6 · 7.0–7.4 · 8.0–8.5 | 8.4 |
+| **Node.js** | 16 · 18 · 20 · 21 · 22 · 23 | 22 |
+| **Python** | 2.7 · 3.5–3.14 | 3.14 |
+| **Go** | 1.11–1.23 | 1.23 |
+| **Ruby** | 2.4–3.3 | 3.3 |
+| **Rust** | 1.70–1.84 | 1.84 |
+
+### Web servers
+
+`nginx` · `apache` · `caddy` · `frankenphp` · **`swoole`** · **`roadrunner`**
+
+The last two are Laravel Octane's two drivers; both *are* the HTTP server, so
+Traefik points at 8000 rather than 80.
+
+### Services
+
+| Category | Services |
+|----------|----------|
+| **Databases** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server |
+| **Cache** | Redis · Memcached · Valkey · Dragonfly |
+| **Queue / messaging** | RabbitMQ · Kafka · Soketi · Beanstalkd |
+| **Search** | Elasticsearch · Kibana · Meilisearch · Typesense · Solr |
+| **Storage** | MinIO |
+| **Monitoring** | Grafana · Prometheus · Graylog |
+| **Dev tools** | MailHog · Mailpit · Blackfire |
+| **Admin UIs** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin |
+
+### PHP extensions
+
+More than 80 extensions are known (`apcu`, `imagick`, `intl`, `redis`, `swoole`,
+`mongodb`, `xdebug`, `sqlsrv`…). The default set is one that has been **verified
+to build** on the PHP version you picked.
+
+---
+
+## Architecture
+
+### The big picture
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  StackVo Desktop  (a normal user process on the host)               │
+│                                                                     │
+│  ┌───────────────┐   contracts/ipc.json    ┌────────────────────┐   │
+│  │  Front end    │  348 commands/75 events │  Back end (Rust)   │   │
+│  │  Vue 3        │◄───────────────────────►│  130 modules       │   │
+│  │  Vuetify 3    │      Tauri IPC          │  ~76k lines        │   │
+│  │  Pinia        │                         │                    │   │
+│  │  ~38k lines   │                         │                    │   │
+│  └───────────────┘                         └─────────┬──────────┘   │
+└──────────────────────────────────────────────────────┼──────────────┘
+                                                       │ bollard / compose
+                          ┌────────────────────────────▼───────────────┐
+                          │  Docker · Podman · Colima · OrbStack        │
+                          │  ┌────────┐ ┌──────────┐ ┌───────────────┐  │
+                          │  │Traefik │ │ shop     │ │ mysql · redis │  │
+                          │  │(proxy) │ │ (project)│ │ (services)    │  │
+                          │  └────────┘ └──────────┘ └───────────────┘  │
+                          └────────────────────────────────────────────┘
+```
+
+### The one flow worth knowing
+
+A user clicks *Create project*:
+
+```text
+Vue component
+  └─ composable (src/composables/useX.js)        state, no markup
+       └─ api.projectCreate(spec)                src/lib/ipc.js
+            └─ invoke('project_create', {...})   Tauri IPC
+                 └─ #[tauri::command] project_create      src-tauri/src/commands.rs
+                      ├─ state.root()                     the workspace, or an error
+                      ├─ manifest::parse / validate       a schema, not free-form JSON
+                      ├─ scaffold::write(...)             the project's files
+                      ├─ generator::render(...)           compose + Dockerfile + proxy
+                      └─ runner::run_operation(...)       docker compose, streamed
+                           └─ events: project:creating → project:created
+```
+
+### Back-end bands
+
+Dependency arrows only ever point **downward**:
+
+```text
+  entry        2.0k   lib.rs, main.rs, menu, tray
+      ▼
+  commands.rs 14.9k   the IPC surface: 348 commands — validation, orchestration
+      ▼
+  domain      89.7k   107 modules: generator, manifest, certs, hosts, mail,
+      ▼               xdebug, profile, worktree, policy, audit… (no Tauri types)
+  platform     6.6k   engine (Docker), runner, elevate, pty, watcher, git
+      ▼
+  primitives   2.3k   error, events, progress, inflight, logging, contracts
+```
+
+`commands.rs` is the **only** file that mentions `AppHandle`. Everything below it
+can be called from a test, from the `diagnose` example, or from the MCP surface,
+with no running application.
+
+### Front-end shape
+
+```text
+src/
+  views/          9 pages, one per route
+  components/     shared widgets + project/ (45 panes) and settings/ (23 panes)
+  composables/    18 files: state and boundary calls, no markup
+  stores/         Pinia: app, appearance, inventory, metrics, operations
+  lib/            ipc.js (the generated client), format, events
+  i18n/           en.js, tr.js
+```
+
+The rule: **a view composes panes, a pane owns markup, a composable owns state,
+and only the composable talks to `api`.**
+
+### Why a desktop app rather than a container
+
+| | A dashboard inside a container | StackVo Desktop |
+|--|-------------------------------|-----------------|
+| Runs as | container, root, `chmod 666 docker.sock` | host process, the invoking user |
+| Docker down | unreachable | opens, reports, offers to start it |
+| Host metrics | `/proc` inside a container (wrong) | `sysinfo` on the host |
+| Stopping the stack | impossible (kills the UI) | `compose_down` |
+| hosts file | manual `sudo tee -a /etc/hosts` | reviewed diff, one elevated write |
+| Windows | WSL2 only | native — no shell, no bash |
+| Install size | ~600 MB of images | ~27 MB, CLI included |
+
+### Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Shell | Tauri 2 (WebView, Rust) |
+| Back end | Rust — `bollard` (Docker API), `serde`, `tokio` |
+| Front end | Vue 3 (`<script setup>`), Vuetify 3, Pinia, Vue Router, vue-i18n |
+| Terminal | xterm.js over a real PTY |
+| Proxy / TLS | Traefik + mkcert |
+| Tests | Vitest, Playwright, axe-core, `cargo test`, differential fixtures |
+| Package verification | minisign + sha256 |
+
+The full map: **[ARCHITECTURE.md](ARCHITECTURE.md)**
+
+---
+
+## Configuration
 
 ### Where things are kept
 
-Three directories, and which one you want depends on whose failure you are
-looking at. `src-tauri/src/appdir.rs` owns the first two and the reasoning.
+| | macOS | Windows | Linux |
+|--|-------|---------|-------|
+| App log | `~/Library/Logs/StackVo/` | `%LOCALAPPDATA%\StackVo\logs\` | `~/.local/state/stackvo/logs/` |
+| Preferences | `~/Library/Application Support/StackVo/` | `%APPDATA%\StackVo\` | `~/.config/stackvo/` |
+| Stack state | `~/.stackvo/` | `~/.stackvo/` | `~/.stackvo/` |
 
-|             | macOS                                    | Windows                        | Linux                          |
-| ----------- | ---------------------------------------- | ------------------------------ | ------------------------------ |
-| App log     | `~/Library/Logs/StackVo/`                | `%LOCALAPPDATA%\StackVo\logs\` | `~/.local/state/stackvo/logs/` |
-| Preferences | `~/Library/Application Support/StackVo/` | `%APPDATA%\StackVo\`           | `~/.config/stackvo/`           |
-| Stack state | `~/.stackvo/`                            | `~/.stackvo/`                  | `~/.stackvo/`                  |
+`~/.stackvo` is yours to move and safe to delete; nothing the app needs **in
+order to start** is kept there.
 
-**The app log and preferences** follow each platform rather than one string
-forced onto all three: Apple's log folder, `%LOCALAPPDATA%`, and
-`XDG_STATE_HOME` — which is where the XDG specification puts logs, and which
-this wrote outside of until it was noticed. Both are named `StackVo` and not
-`com.stackvo.desktop`: the bundle identifier is what the OS calls this app —
-the `Preferences` plist, the code signature, the privacy prompts — and these
-two folders are ours to name and the ones a person is asked to open. Postman,
-Termius and Redis Insight all split it the same way.
+### Environment variables
 
-**Stack state** is `~/.stackvo`, or wherever `STACKVO_ROOT` points: the `.env`,
-the templates, the generated compose files, the certificates, and
-`logs/projects/<name>/` — which is where a _project's_ web server writes, and is
-not the same thing as the app log above. It is the user's to move and safe to
-delete; nothing the app needs in order to start is kept there.
-
-Raise the log level with `STACKVO_LOG=stackvo_desktop=debug`.
+| Variable | What it does |
+|----------|--------------|
+| `STACKVO_ROOT` | Moves the workspace |
+| `STACKVO_LOG` | Log level — e.g. `stackvo_desktop=debug` |
+| `STACKVO_POLICY_FILE` | Points at a different policy file, so you can test one without root |
+| `DOCKER_HOST` | As usual; the scheme is stripped where needed |
 
 ### Keeping credentials out of `.env`
 
-**Settings → Where credentials are kept** moves a database password, token or
-server id into this machine's keystore — Keychain, Credential Manager or the
-Secret Service — and leaves a reference in its place:
+**Settings → Where credentials are kept** moves a password, token or server id
+into the machine's keystore (Keychain / Credential Manager / Secret Service) and
+leaves a reference behind:
 
 ```sh
 SERVICE_MYSQL_ROOT_PASSWORD=keychain:SERVICE_MYSQL_ROOT_PASSWORD@a1b2c3d4
 ```
 
-That takes it out of the file that gets backed up, synced, and pasted into
-support threads. **It does not take it off the disk**: the real value is still
-rendered into `generated/docker-compose.dynamic.yml`, because that is where
-Compose reads it from. Getting it out of there too changes the generated bytes
-and is a v2 change. `src-tauri/src/secrets.rs` carries the reasoning and the
-rest of the rules, and `secrets_claims.rs` holds every place that states them.
+That takes it out of the file that gets backed up, synced and pasted into support
+threads. **It does not take it off the disk** — the real value is still rendered
+into the generated compose file, because that is where Compose reads it from.
+That limit is documented rather than glossed over.
 
-One key at a time and reversible, because `stackvo.sh` reads `.env` directly and
-would use the reference string as the password. If you use both tools on one
-workspace, leave the credentials where they are; **Settings → Doctor** says so
-if you have not.
+### Rolling it out to more than one machine
 
-### Deploying it to more than one machine
-
-There is a fourth location, and it is the only one the person at the keyboard
-does not own: a policy file an administrator writes.
-
-|         |                                                         |
-| ------- | ------------------------------------------------------- |
-| macOS   | `/Library/Managed Preferences/com.stackvo.desktop.json` |
-| Windows | `%ProgramData%\StackVo\policy.json`                     |
-| Linux   | `/etc/stackvo/policy.json`                              |
+| | Path |
+|--|------|
+| macOS | `/Library/Managed Preferences/com.stackvo.desktop.json` |
+| Windows | `%ProgramData%\StackVo\policy.json` |
+| Linux | `/etc/stackvo/policy.json` |
 
 ```json
 {
@@ -779,103 +846,247 @@ does not own: a policy file an administrator writes.
 }
 ```
 
-`settings` overrides both the shipped default and the workspace's `.env`.
-`locked` refuses a write to those keys from Settings, and only works for keys
-`settings` also sets — "do not change this" without saying _to what_ leaves
-every machine on whatever it happened to have. `registryPrefix` is prepended to
-every image reference in the generated Dockerfiles and compose files, except
-one that already names a registry, one already carrying the prefix, and the
-`stackvo-*` images that are built here and exist in no registry at all.
+- `settings` overrides both the shipped default and the workspace's `.env`.
+- `locked` refuses writes to those keys from Settings.
+- `registryPrefix` is prepended to every generated image reference (except one
+  that already names a registry).
+- **This is not a security boundary**, and the app says so: it tells a
+  co-operating application what your organisation intends, nothing more.
 
-A file that does not parse applies nothing and the app starts normally, but the
-failure is shown in Settings rather than logged — a policy that quietly does
-nothing is one the administrator believes is in force.
+**Settings → Compliance** measures whether any of the policy is actually holding
+on this machine, rather than repeating what the file says.
 
-`STACKVO_POLICY_FILE` points at a different file, which is how you test one
-without root. **This is not a security boundary.** The override exists, the
-file is usually within the user's reach, and the layer tells a co-operating app
-what your organisation intends — nothing more. `src-tauri/src/policy.rs` says
-what that costs and `policy_claims.rs` keeps the sentence from being dropped.
+---
 
-`diagnose` is the headless equivalent of the dashboard — it exercises every
-read-only command and prints what the UI would show, which makes it a genuine
-troubleshooting tool as well as the port's end-to-end check. It deliberately
-does not run the mutating commands: those would restart your stack.
+## Security and privacy
 
-The CLI is not being replaced. Both tools read the same `stackvo.json` and `.env`, so a project
-created in either works in the other. That compatibility is enforced by a checked-in contract and a
-validator, not by convention.
+- **No telemetry.** That sentence is held up by a test, not by a promise
+  (`src-tauri/tests/privacy_claims.rs`).
+- **Logs are masked.** Password and token values are masked as the log is
+  written; the diagnostic bundle masks a second time and contains no `.env` and
+  no project sources.
+- **The package chain is verified.** The index is signed with minisign, then a
+  sha256 per manifest and per file. A signature that is there is **checked**, and
+  a failed check is a refusal — never a quiet fall-through to "unsigned, then".
+- **A scan for credentials nobody moved.** It matches the *value*, not the key's
+  name (`AKIA…`, `ghp_…`, a PEM header) across `.env` and every file git tracks.
+  Findings carry a fingerprint and a masked preview, never the value.
+- **Which containers can leave the machine** is asked of Docker rather than
+  inferred: a network created `internal` has no gateway, so a container whose
+  every network is internal provably cannot route out.
+- **An audit trail** records acts that cannot be undone, and every writing call
+  an assistant makes — refusals included.
 
-Phase 0 turned up four live bugs in shipped StackVo, found purely by writing the format down:
+More: [SECURITY.md](SECURITY.md) · [PRIVACY.md](PRIVACY.md)
 
-- Node projects created through the web UI generate as PHP and cannot build ([C-01](contracts/CONFLICTS.md))
-- Four of the six advertised runtimes have no generator at all ([C-02](contracts/CONFLICTS.md))
-- The default extension set can't build on the default PHP version ([C-06](contracts/CONFLICTS.md))
-- `mongo-express` never starts in minimal mode — profile name mismatch ([C-09](contracts/CONFLICTS.md))
+---
 
-## Roadmap
+## How it compares
 
-| Phase | Scope                                                                              |
-| ----- | ---------------------------------------------------------------------------------- |
-| 0 ✅  | Freeze the config contract, extract the extension matrix, derive the IPC surface   |
-| 1 ✅  | Tauri + Vue skeleton; port the existing dashboard; read-only views on real metrics |
-| 2 ✅  | Container control via `bollard`; streamed build/log progress                       |
-| 3 ✅  | Tray, notifications, fs-watcher, hosts helper, PTY, autostart, single-instance     |
-| 4 🚧  | Generator port to Rust, native Windows, signed auto-updates                        |
+This table is about **what each tool chose**, not about better or worse.
 
-**What no commit can close** is not on this list and is worth naming: the
-update endpoint has to be published, the signing key pair generated, and the
-Apple and Windows certificates bought. Those are decisions and purchases rather
-than work, and the build says so out loud — `npm run updates:check` reports an
-endpoint that is not there, and a release run warns on every unsigned target.
+| | **StackVo** | Herd | ServBay | Laragon | DDEV | Laradock | Devilbox | FlyEnv |
+|---|---|---|---|---|---|---|---|---|
+| Approach | Docker + desktop | Native binaries | Native binaries | Native binaries | Docker + CLI | Docker + compose | Docker + compose | Native binaries |
+| Interface | Desktop + CLI + TUI + MCP | Desktop | Desktop | Desktop | CLI | none | Web intranet | Desktop |
+| Platforms | mac · Win · Linux | mac · Win | mac · Win | Win | mac · Win · Linux | all | all | mac · Win · Linux |
+| Project isolation | Container | Site | Site | Site | Container | Shared stack | Shared stack | Site |
+| Automatic HTTPS | Yes (mkcert) | Yes | Yes | Yes | Yes | manual | Yes | Yes |
+| Per-branch env + **own DB** | Yes | No | No | No | partial | No | No | No |
+| Request-level "why slow" | Yes (profile+queries+dumps) | partial (Pro) | No | No | No | No | No | No |
+| Replay a recorded request | Yes | No | No | No | No | No | No | No |
+| In-app mail inbox | Yes | Yes (Pro) | Yes (Pro) | Yes | web UI | web UI | web UI | Yes |
+| Named DB snapshots | Yes (+ scheduled) | No | scheduled | scheduled | Yes | No | No | No |
+| Monorepo as one project | Yes | No | No | No | No | No | No | No |
+| MCP / AI integration | Yes — 38 tools, scoped | No | Yes | No | No | No | No | Yes |
+| Builds the production image | Yes | No | No | No | No | Yes | No | No |
+| Devcontainer export | Yes | No | No | No | No | No | No | No |
+| Import sources | **7** | 1 | a few | No | a few | No | No | a few |
+| Measures resource cost | Yes | No | No | No | No | No | No | No |
+| Admin policy (MDM) | Yes | No | team plan | No | No | No | No | No |
+| Portable install | No (by architecture) | No | No | Yes | No | No | No | Yes |
+| Runs in Codespaces/Gitpod | No | No | No | No | Yes | Yes | Yes | No |
+| Price | Free, MIT | Free + Pro $99/yr | Free + Pro | Free | Free, Apache-2 | Free, MIT | Free, MIT | Free |
 
-## How it is built
+<sub>Compiled from each project's own documentation, August 2026. If a row is
+wrong, please open an issue and it will be corrected.</sub>
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — the map: the four bands of the Rust
-  side, the one request flow worth knowing, and what the front end's panes and
-  composables are for.
-- **[ACCESSIBILITY.md](ACCESSIBILITY.md)** — the conformance
-  statement, in the shape EN 301 549 asks for. Every number in it is reproduced
-  by `npm run test:e2e`, and a test fails if the statement and the routes it
-  claims come apart.
-- **E — IPC surface.** Every command in `contracts/ipc.json` must be registered
-  in `src-tauri/src/lib.rs` and wrapped in `src/lib/ipc.js`.
-- **F — reachability.** Every wrapper must be called by some view or store, and
-  every declared event must actually be emitted.
+### Being honest: what Docker costs you
 
-Without them the contract quietly drifts ahead of the code. It had: by the end
-of Phase 3, **22 declared commands had no implementation** — including
-`project_create`, so the app could not create a project at all. Suite F then
-found **21 wrappers no view called** and **4 events nothing emitted**.
+| | StackVo | A tool that installs PHP on the host |
+|---|---|---|
+| First install | the app (~27 MB) **plus** Docker and its images (GB) | one installer, ~100 MB |
+| A project's first `up` | an image build — minutes | seconds |
+| **Changing PHP version** | rewrite the manifest, rebuild the image | immediate |
+| Idle memory | the Docker VM, Traefik and whatever services are on | the language runtime alone |
 
-Current state: **no errors, one warning** — and the warning is the expected one,
-for a checkout with no projects in it to read. It was six until the ten
-`SERVER_*` keys the app sets were finally described in the schema; the contract
-had been claiming to be the single source of truth for a set of keys it did not
-mention.
+What you get for it is the thing none of them can offer: every project's
+environment is a container, so what runs on your machine is what a Dockerfile
+says rather than what your `brew` history says.
 
-That number is deliberately not a promise. It was written here as "4 errors, all
-of them pre-existing StackVo bugs" and stayed after the four were fixed, because
-nothing checks a number in prose. `src-tauri/tests/contract_agreement.rs` is the
-part that _is_ checked, and it covers the two edges this suite does not.
+**Two limits, both decided rather than missing:**
 
-`tools/measure-env-usage.mjs` is a separate check with the same intent: it
-measures which `.env` keys the checkout actually reads and reconciles that
-against the `status` labels in the contract. It exists because the first,
-hand-run version of that measurement was executed from the wrong directory and
-mislabelled twelve keys — a number that looked like evidence and was not
-checkable later.
+- **There is no portable install, and there cannot be one.** Images and volumes
+  live in Docker's own store. `STACKVO_ROOT` is half an answer — your workspace
+  moves with you, the engine does not.
+- **It does not run inside Codespaces or Gitpod.** This is a desktop
+  application. What it does instead is **export a devcontainer**, so a project
+  set up here can be opened in a cloud environment.
 
-## Contributing, and getting help
+---
 
-- [SUPPORT.md](SUPPORT.md) — where a question goes, what to attach to a bug
-  report, and what this project can and cannot promise. The last part is short
-  and worth reading before adopting it somewhere hard to leave.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build it and what the checks want.
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — be decent to people; argue with the
-  work as hard as it deserves.
-- [SECURITY.md](SECURITY.md) — report privately, never as a public issue.
+## Building from source
 
-## License
+### Requirements
 
-MIT
+- Node.js **22+** (an `.nvmrc` is provided)
+- Rust (stable; the version is pinned in `src-tauri/rust-toolchain.toml`)
+- Tauri 2 system dependencies — [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/)
+- Docker, to run the app
+
+### Build and run
+
+```bash
+git clone https://github.com/stackvo/stackvo.git
+cd stackvo
+npm install
+npm run tauri:dev          # run the app in development
+
+npm run tauri:build        # produce the installers
+```
+
+### Tests and checks
+
+```bash
+npm test                   # vitest + Rust unit, integration and differential tests
+npm run test:js            # front end only
+npm run test:e2e           # Playwright, accessibility included
+npm run lint               # eslint + prettier
+npm run audit              # cargo-deny + npm audit
+npm run contracts:check    # IPC contract agreement
+npm run diagnose           # headless end-to-end check
+npm run bundle:budget      # asset size budget
+```
+
+CI runs all of it on **Linux, macOS and Windows**, with `cargo clippy -D
+warnings` and `cargo fmt --check`.
+
+### House rules worth knowing
+
+- **The contract comes first.** A command absent from `contracts/ipc.json` can
+  be neither registered in `lib.rs` nor driven from the CLI; tests enforce it.
+- **Generated files are never hand-edited.** `generated/` must always be
+  reproducible, and `generator_verify` proves it on a real machine.
+- **A pane's markup and its styles move together.** `<style scoped>` reaches only
+  its own component; `tests/pane-styles.spec.js` checks it.
+
+More: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
+## Status and roadmap
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 0 | Freeze the config contract, extract the extension matrix, derive the IPC surface | Done |
+| 1 | Tauri + Vue skeleton; read-only views on real metrics | Done |
+| 2 | Container control via `bollard`; streamed build/log progress | Done |
+| 3 | Tray, notifications, fs-watcher, hosts helper, PTY, autostart | Done |
+| 4 | Generator port to Rust, native Windows, signed auto-updates | In progress |
+| 5 | Release plumbing (signing key pair, update endpoint) | In progress |
+
+**What no commit can close** is named out loud: publishing the update endpoint,
+generating the signing key pair, and buying the Apple and Windows certificates.
+Those are decisions and purchases rather than work — `npm run updates:check`
+reports a missing endpoint, and a release run warns on every unsigned target.
+
+---
+
+## FAQ
+
+<details>
+<summary><b>Is Docker required?</b></summary>
+
+Yes. Docker Desktop, Docker Engine, or an API-compatible runtime (Podman,
+Colima, OrbStack). The engine's name is only a label — nothing branches on which
+of them answered.
+</details>
+
+<details>
+<summary><b>Why isn't it code-signed?</b></summary>
+
+The app is distributed from GitHub Releases and nowhere else. An Apple Developer
+membership and an Authenticode certificate are recurring costs with an identity
+attached, and skipping them was the last external dependency dropped from the
+chain. In exchange: every release publishes `SHA256SUMS`, and the updater
+verifies a minisign signature.
+</details>
+
+<details>
+<summary><b>What happens to my existing StackVo (Bash/web UI) setup?</b></summary>
+
+It keeps working. Both tools read the same `stackvo.json` and `.env`, so a
+project created in either works in the other. That compatibility is enforced by
+a checked-in contract and a validator, not by convention.
+</details>
+
+<details>
+<summary><b>Can I run two versions of the same service at once?</b></summary>
+
+Yes. Services are installed as instances; MySQL 8.0 and 8.4 can run side by
+side, and each project connects to the one it asked for.
+</details>
+
+<details>
+<summary><b>What's the state of Windows support?</b></summary>
+
+The pure logic — drive-letter to bind-mount conversion, named-pipe detection,
+`DOCKER_HOST` scheme stripping — is written without `cfg` gates, so its tests run
+on **every** platform, and `windows-latest` is in the CI matrix. What a compiler
+cannot answer is still unverified: the hosts-file write through UAC, the named
+pipe against a real Docker Desktop, and whether a project's domain resolves in a
+browser there. Until this line says otherwise, nobody has checked.
+</details>
+
+<details>
+<summary><b>Where does my data go?</b></summary>
+
+Nowhere. No telemetry, no reporting. The only network calls are ones **you
+press**: refreshing the package catalogue, checking for updates, and asking a
+public database whether your dependencies have advisories. That last one is a
+separate button because it sends package names off the machine, and the sentence
+saying so sits above it. Full detail: [PRIVACY.md](PRIVACY.md)
+</details>
+
+<details>
+<summary><b>Can I use it on a server or in CI?</b></summary>
+
+It is not a design goal. The CLI and the loopback HTTP surface make headless use
+technically possible, but it has not been tested end to end, so it is not called
+supported.
+</details>
+
+---
+
+## Contributing, support and license
+
+| Document | What's in it |
+|----------|--------------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to build it and what the checks want |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The map of the code |
+| [SUPPORT.md](SUPPORT.md) | Where a question goes, what to attach to a bug report |
+| [SECURITY.md](SECURITY.md) | Report privately, never as a public issue |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | The conformance statement, EN 301 549-shaped |
+| [PRIVACY.md](PRIVACY.md) | What is stored, and every host it can reach |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Be decent to people; argue with the work as hard as it deserves |
+| [CHANGELOG.md](CHANGELOG.md) | Every change, with the reasoning behind it |
+| [README_TR.md](README_TR.md) | Bu belgenin Türkçesi — the same document in Turkish |
+| [docs/README-legacy.md](docs/README-legacy.md) | The previous long-form README, kept for its design notes |
+
+**License:** [MIT](LICENSE) © 2026 Fahrettin Aksoy
+
+<div align="center">
+
+**[Back to top](#stackvo)** &nbsp;·&nbsp; [Bu belgeyi Türkçe okuyun](README_TR.md)
+
+</div>
