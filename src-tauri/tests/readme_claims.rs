@@ -453,13 +453,16 @@ fn the_readme_counts_the_surfaces_it_advertises() {
         "the README no longer says how many release commands there are"
     );
 
+    // Seven since `worktree_passport_keys`: a branch with a hostname of its own
+    // is a branch Passport has no signing key for, and generating one is a
+    // command rather than a variable.
     let worktree = count("worktree_");
     assert_eq!(
-        worktree, 6,
+        worktree, 7,
         "commands.rs now has {worktree} worktree_* commands"
     );
     assert!(
-        readme.contains("six commands"),
+        readme.contains("seven commands"),
         "the README no longer says how many worktree commands there are"
     );
 
@@ -513,4 +516,64 @@ fn the_four_measuring_commands_are_reachable_from_an_assistant() {
              that were built and unreachable"
         );
     }
+}
+
+/// The one installation step the project's own decision creates.
+///
+/// Distribution is GitHub Releases and there is **no code signing** — a
+/// decision, and one whose cost lands on the person who downloads the file:
+/// macOS says *"is damaged and can't be opened"* and Windows hides the button
+/// behind SmartScreen. Without that written down, every macOS download is a
+/// support ticket, because the message is about a quarantine attribute and
+/// names the file instead.
+///
+/// This holds the README against **`release.yml`'s own warnings**, which are
+/// what the build actually says when the secrets are absent. The pair goes
+/// wrong in the direction that matters: somebody adds signing, the workflow
+/// stops warning, and the README keeps telling people to right-click past a
+/// dialog they will never see.
+#[test]
+fn the_readme_says_how_to_open_an_unsigned_build() {
+    let readme = readme();
+    let workflow = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("src-tauri has a parent")
+            .join(".github/workflows/release.yml"),
+    )
+    .expect(".github/workflows/release.yml is readable");
+
+    // The workflow is the measurement: these are the two states it warns about
+    // when the signing secrets are not set.
+    assert!(
+        workflow.contains("macOS artifacts will be UNSIGNED"),
+        "release.yml no longer warns that macOS artifacts are unsigned — either          signing was added, in which case the README section this test guards is          now wrong, or the warning was reworded and this test is checking nothing"
+    );
+    assert!(
+        workflow.contains("SmartScreen warning"),
+        "release.yml no longer warns about SmartScreen"
+    );
+
+    // And the README has to carry the step each of those leaves to the user.
+    for claim in [
+        // macOS says "damaged", which is the whole reason this is written out:
+        // the message is about the quarantine attribute and does not say so.
+        "damaged",
+        "com.apple.quarantine",
+        // Windows hides the button rather than refusing the install.
+        "SmartScreen",
+        "Run anyway",
+    ] {
+        assert!(
+            readme.contains(claim),
+            "the README does not tell an unsigned build's user about {claim:?};              without it every macOS download is a support ticket"
+        );
+    }
+
+    // The two things that ARE verifiable are named, so "unsigned" does not read
+    // as "nothing is checked".
+    assert!(
+        readme.contains("SHA256SUMS-") && readme.contains("minisign"),
+        "the README says the build is unsigned without saying what can still be          verified — the checksum list and the updater's own signature"
+    );
 }

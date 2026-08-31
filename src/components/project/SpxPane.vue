@@ -181,9 +181,67 @@ const record = () =>
  */
 const replayed = ref(null);
 
+/**
+ * K-5 — the snapshot the second run starts from.
+ *
+ * A captured session made a POST replayable, and what took the old refusal's
+ * place is a request that **does the thing again**: a second order, a second
+ * charge, a second row. Not a reason to refuse it — somebody replaying a POST
+ * is doing it deliberately — but a reason to offer the one thing that makes
+ * pressing it twice safe, which this app already has.
+ *
+ * Never chosen for them. This app cannot know which snapshot holds the state
+ * the original ran under, so picking one would be answering a question nobody
+ * asked with data it does not have.
+ */
+const snapshots = ref([]);
+const startFrom = ref(null);
+
+/** `{ service, name }` for the backend, or nothing at all. */
+const chosenSnapshot = computed(() => {
+  const found = snapshots.value.find((s) => `${s.service}/${s.name}` === startFrom.value);
+  return found ? { service: found.service, name: found.name } : undefined;
+});
+
+async function loadSnapshots() {
+  snapshots.value = asList(await api.dbSnapshots().catch(() => []));
+}
+
 const replay = (report) =>
   run(`replay:${report.key}`, async () => {
-    replayed.value = await api.requestReplay(props.name, report.key);
+    replayed.value = await api.requestReplay(props.name, report.key, chosenSnapshot.value);
+  });
+
+/**
+ * The other half: replaying a POST needs the request's cookies and its body,
+ * which means writing somebody's session token to disk.
+ *
+ * So this is a permission and it is drawn as one. Off until pressed, armed in
+ * minutes with the length chosen here, and the button that turns it off says
+ * how many captures it deleted — because a permission that ends leaving its
+ * harvest behind is a permission the person believes ended.
+ *
+ * Nothing on this screen ever shows a captured value. The status call answers
+ * with a count of cookie names and a size of body: enough to say *there is
+ * something here to replay*, and not a second place the credential exists.
+ */
+const capture = ref(null);
+const minutes = ref(15);
+
+async function loadCapture() {
+  capture.value = await api.captureStatus(props.name).catch(() => null);
+}
+
+const arm = () =>
+  run('capture', async () => {
+    await api.captureArm(props.name, Number(minutes.value));
+    await loadCapture();
+  });
+
+const disarm = () =>
+  run('capture', async () => {
+    await api.captureDisarm(props.name);
+    await loadCapture();
   });
 
 /**
@@ -226,8 +284,13 @@ watch(
   () => {
     close();
     justRecorded.value = null;
+    capture.value = null;
+    replayed.value = null;
+    startFrom.value = null;
     load();
     loadCommands();
+    loadCapture();
+    loadSnapshots();
   },
   { immediate: true }
 );
@@ -375,6 +438,35 @@ defineExpose({ load });
             }}
           </v-alert>
 
+          <!-- K-5. Offered whenever there is a snapshot to offer, rather than
+               only beside a POST: a GET can write too, and this app cannot know
+               which routes do. The sentence says what it buys and what it does
+               not, because a snapshot makes a replay repeatable and does not
+               make two runs a controlled experiment. -->
+          <template v-if="snapshots.length">
+            <v-select
+              v-model="startFrom"
+              :items="
+                snapshots.map((s) => ({
+                  title: `${s.service} / ${s.name}`,
+                  value: `${s.service}/${s.name}`,
+                }))
+              "
+              :label="t('spx.startFrom')"
+              :placeholder="t('spx.startFromNone')"
+              persistent-placeholder
+              clearable
+              density="compact"
+              variant="outlined"
+              hide-details
+              class="mt-3"
+              data-test="replay-snapshot"
+            />
+            <p class="text-caption text-medium-emphasis mt-1">
+              {{ startFrom ? t('spx.startFromChosen') : t('spx.startFromWhy') }}
+            </p>
+          </template>
+
           <!-- Both numbers, and the difference — never a verdict. One run
                against one run is not a benchmark, and a green "faster" would
                invite a conclusion the measurement cannot carry. -->
@@ -393,8 +485,87 @@ defineExpose({ load });
                 ({{ replayed.wallTimeUs < 0 ? '' : '+' }}{{ micros(replayed.wallTimeUs) }})
               </span>
             </div>
+            <div v-if="replayed.restored" class="text-medium-emphasis mt-1">
+              {{ t('spx.replayedFrom', { snapshot: replayed.restored }) }}
+            </div>
             <div class="text-medium-emphasis mt-1">{{ t('spx.replayCaveat') }}</div>
           </v-alert>
+
+          <!-- ---- the session half ------------------------------------- -->
+          <!-- Drawn as a permission and not a setting: what it produces is a
+               session token on disk, so it is off until pressed, it ends by
+               itself, and turning it off says what it deleted. -->
+          <div v-if="capture" class="capture mt-4" data-test="capture">
+            <div class="text-caption text-medium-emphasis mb-2">{{ t('spx.captureWhat') }}</div>
+
+            <div v-if="!capture.armed" class="d-flex align-center ga-2 flex-wrap">
+              <v-select
+                v-model="minutes"
+                :items="[5, 15, 30, 60]"
+                :label="t('spx.captureMinutes')"
+                density="compact"
+                variant="outlined"
+                hide-details
+                style="max-width: 150px"
+                :disabled="!capture.bridge"
+              />
+              <v-btn
+                size="small"
+                variant="tonal"
+                color="warning"
+                prepend-icon="mdi-record-circle-outline"
+                :loading="busy === 'capture'"
+                :disabled="!capture.bridge"
+                data-test="capture-arm"
+                @click="arm"
+              >
+                {{ t('spx.captureArm') }}
+              </v-btn>
+            </div>
+            <!-- The two flags are separate permissions and not independent: the
+                 bridge's prepend file is the only thing that reads this one's.
+                 The backend refuses the arm, and this is the same fact said
+                 before the press — a sentence rather than an error. -->
+            <div
+              v-if="!capture.armed && !capture.bridge"
+              class="text-caption text-medium-emphasis mt-2"
+              data-test="capture-needs-bridge"
+            >
+              {{ t('spx.captureNeedsBridge') }}
+            </div>
+
+            <template v-else>
+              <v-alert type="warning" variant="tonal" density="compact" class="text-caption">
+                {{
+                  t('spx.captureArmed', {
+                    minutes: capture.remainingMinutes,
+                    count: capture.captured,
+                  })
+                }}
+                <!-- Counts and sizes. Never a cookie value, never a body. -->
+                <div
+                  v-for="row in capture.recent"
+                  :key="`${row.request}-${row.bodyBytes}`"
+                  class="mono mt-1"
+                  data-test="capture-row"
+                >
+                  {{ row.request }} · {{ t('spx.captureCookies', { count: row.cookies }) }} ·
+                  {{ row.bodyBytes }} B
+                </div>
+              </v-alert>
+              <v-btn
+                size="small"
+                variant="tonal"
+                class="mt-2"
+                prepend-icon="mdi-delete-outline"
+                :loading="busy === 'capture'"
+                data-test="capture-disarm"
+                @click="disarm"
+              >
+                {{ t('spx.captureDisarm') }}
+              </v-btn>
+            </template>
+          </div>
 
           <div class="d-flex align-start ga-2 mt-4">
             <v-select
@@ -522,16 +693,24 @@ defineExpose({ load });
               <!-- Offered on every row, refused with a reason on the ones it
                    cannot serve. A button hidden for a POST would leave somebody
                    wondering why the row above has one. -->
+              <!-- A replay that would write says so on the row, and the
+                   backend is what decided it: the rule lives on the recording
+                   (`spx::Report::mutates`) rather than being re-derived here
+                   from a string. -->
               <v-btn
                 icon
                 size="x-small"
                 variant="text"
-                :aria-label="t('spx.replay')"
+                :aria-label="report.mutates ? t('spx.replayWrites') : t('spx.replay')"
+                :color="report.mutates ? 'warning' : undefined"
                 :loading="busy === `replay:${report.key}`"
                 :disabled="working"
                 @click="replay(report)"
               >
-                <v-icon size="18">mdi-replay</v-icon>
+                <v-icon size="18">{{ report.mutates ? 'mdi-database-edit-outline' : 'mdi-replay' }}</v-icon>
+                <v-tooltip v-if="report.mutates" activator="parent" location="top">
+                  {{ t('spx.replayWrites') }}
+                </v-tooltip>
               </v-btn>
               <v-btn
                 v-if="status.viewBase"

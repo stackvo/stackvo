@@ -358,9 +358,9 @@ fn later_catalogues() -> Vec<Catalogue> {
 
 /// The reader has to be finding rows, or every assertion below passes by
 /// comparing two empty sets. Counts rather than "more than zero", because the
-/// number is the thing that was measured: 26 quick commands, 7 providers, 4
+/// number is the thing that was measured: 30 quick commands, 7 providers, 4
 /// tools, 2 of this repository's own binaries, 3 shipped recipes and 5 edit
-/// instructions between them — forty-seven sentences printed in English to
+/// instructions between them — fifty-one sentences printed in English to
 /// everyone. (Six recipe edits are written; five are distinct, because both
 /// database recipes name the same one.)
 #[test]
@@ -373,7 +373,7 @@ fn the_later_catalogues_are_read_at_all() {
     assert_eq!(
         counts,
         vec![
-            ("quickCommands", 26),
+            ("quickCommands", 30),
             ("oauthNotes", 7),
             ("toolingWhy", 4),
             ("toolingOwn", 2),

@@ -51,6 +51,16 @@ const PROMISED: &[(&str, &str)] = &[
         "agent_install",
     ),
     ("unregistering it", "agent_remove"),
+    ("registering a project's own MCP server", "boost_register"),
+    (
+        "generating a worktree's own Passport signing keys",
+        "worktree_passport_keys",
+    ),
+    ("declaring a browser container for Dusk", "dusk_apply"),
+    (
+        "teaching that container to trust this machine's CA",
+        "dusk_trust",
+    ),
     ("writing the AI rules", "rules_apply"),
     ("writing an IDE's debug configuration", "ide_debug_apply"),
     (
@@ -59,6 +69,8 @@ const PROMISED: &[(&str, &str)] = &[
     ),
     ("installing a host tool", "tooling_install"),
     ("taking a project's `.env` out of git", "env_untrack"),
+    ("moving a project's checkout to bisect it", "bisect"),
+    ("arming a capture window", "capture_arm"),
 ];
 
 #[test]

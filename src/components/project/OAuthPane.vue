@@ -104,18 +104,36 @@ watch(() => [props.name, path.value], load, { immediate: true });
 
     <!-- The table is the feature. Which of the two addresses a provider takes
          is invisible at its console, and the failure is a rejected form with
-         no explanation on it. -->
+         no explanation on it.
+         
+         The chip says which address to paste rather than what the provider
+         lacks. "Needs public" reads as a fault in the provider or in the
+         project, and it is neither: three of these accept only a public
+         hostname and that is a fact about their console, not a problem with
+         this machine. What somebody has to *do* is paste one of the two
+         strings above, so that is what the chip names. -->
     <div v-for="provider in result?.providers ?? []" :key="provider.id" class="provider">
       <v-chip
         size="x-small"
         variant="tonal"
-        :color="provider.accepts === 'any' ? 'success' : 'warning'"
+        :color="provider.accepts === 'any' ? 'success' : 'info'"
         class="mr-2"
       >
-        {{ provider.accepts === 'any' ? t('oauth.takesLocal') : t('oauth.takesPublic') }}
+        {{ provider.accepts === 'any' ? t('oauth.pasteLocal') : t('oauth.pastePublic') }}
       </v-chip>
       <span class="font-weight-medium">{{ provider.label }}</span>
       <span class="text-caption text-medium-emphasis ml-2">{{ oauthNote(provider) }}</span>
+      <!-- Only on the rows that cannot proceed, and only while they cannot.
+           The line above already says no tunnel is running; this says which of
+           these providers that actually stops, which is the row somebody is
+           looking at when they wonder why the box is empty. -->
+      <span
+        v-if="provider.accepts !== 'any' && !result?.public"
+        class="text-caption text-warning ml-2"
+        data-test="needs-tunnel"
+      >
+        {{ t('oauth.startATunnel') }}
+      </span>
     </div>
   </v-card>
 </template>

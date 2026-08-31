@@ -377,6 +377,7 @@ pub async fn list_projects(root: &std::path::Path) -> Result<Vec<Project>> {
                         hooks: Default::default(),
                         commands: Default::default(),
                         sidecars: Default::default(),
+                        components: Default::default(),
                         providers: Vec::new(),
                         local: Vec::new(),
                     },
@@ -1982,6 +1983,61 @@ pub fn project_sidecars(state: State<'_, AppState>, name: String) -> Result<Vec<
         .collect())
 }
 
+/// One component of this repository, with the two names it is reached by.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeclaredComponent {
+    pub id: String,
+    pub runtime: String,
+    pub path: String,
+    /// The hostname a browser reaches it at. Absent for a part that is not
+    /// meant to be reached from outside — a queue worker, a scheduler.
+    pub domain: Option<String>,
+    pub version: String,
+    pub install: Option<String>,
+    pub build: Option<String>,
+    pub start: String,
+    pub port: u16,
+    /// `stackvo-<project>-<id>`, which is what the project's other containers
+    /// connect to. No host address beside it, and by construction rather than
+    /// by omission: a component has no host port.
+    pub container: String,
+}
+
+/// The other runtimes this repository declared.
+///
+/// A separate command from `project_sidecars` because they are separate
+/// declarations answering separate questions — see [`crate::component`] for the
+/// table. A project with no `components` key answers with an empty list rather
+/// than an error: declaring none is the ordinary case, and it is the case every
+/// project that existed before the field is in.
+#[tauri::command]
+pub fn project_components(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<Vec<DeclaredComponent>> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let manifest = manifest::read(&dir.join("stackvo.json"), &name)?;
+
+    Ok(manifest
+        .components
+        .iter()
+        .map(|(id, component)| DeclaredComponent {
+            container: crate::component::container_name(&name, id),
+            id: id.clone(),
+            runtime: component.runtime.clone(),
+            path: component.path.clone(),
+            domain: component.domain.clone(),
+            version: component.version.clone(),
+            install: component.install.clone(),
+            build: component.build.clone(),
+            start: component.start.clone(),
+            port: component.port,
+        })
+        .collect())
+}
+
 /// Agree to this project's host commands, exactly as they are now.
 ///
 /// The digest is sent back by the caller rather than recomputed here, and that
@@ -3015,10 +3071,9 @@ pub(crate) async fn wanted_domains(root: &std::path::Path) -> Vec<String> {
                 .into_iter()
                 .chain(
                     p.manifest
-                        .aliases
-                        .iter()
-                        .filter(|a| crate::manifest::resolves_through_hosts(a))
-                        .cloned(),
+                        .extra_hostnames()
+                        .into_iter()
+                        .filter(|a| crate::manifest::resolves_through_hosts(a)),
                 )
                 .collect::<Vec<_>>()
         })
@@ -4130,7 +4185,10 @@ pub async fn spx_record_request(
 ) -> Result<crate::spx::Report> {
     let root = state.root()?;
     workspace::project_dir(&root, &name)?;
-    record_request(&state, &root, &name, path.as_deref().unwrap_or("/")).await
+    // No session: this is a request somebody is making now, not one being
+    // repeated. Sending a captured cookie here would silently record a
+    // different visitor's page than the address the person typed.
+    record_request(&state, &root, &name, path.as_deref().unwrap_or("/"), None).await
 }
 
 /// Send one request with the profiler on, and hand back the recording it made.
@@ -4145,6 +4203,7 @@ async fn record_request(
     root: &std::path::Path,
     name: &str,
     path: &str,
+    session: Option<crate::capture::Session>,
 ) -> Result<crate::spx::Report> {
     let name = name.to_string();
     let root = root.to_path_buf();
@@ -4186,7 +4245,12 @@ async fn record_request(
     // arithmetic over `exec_ts` — see `explain::Window::of` for the premise
     // that removes, and `spx::record_observed` for where it is kept.
     let opened = host_seconds();
-    let code = crate::spx::send(&url, &crate::spx::trigger_cookie(&profiler_key, &config)).await?;
+    let code = crate::spx::send_as(
+        &url,
+        &crate::spx::trigger_cookie(&profiler_key, &config),
+        session.as_ref(),
+    )
+    .await?;
 
     // The report lands during the request's own shutdown, which can finish
     // after the response has been flushed. A few tries beats a sleep long
@@ -4249,11 +4313,30 @@ async fn record_request(
 /// session is a different request, and one that usually answers 419. So it is
 /// refused with the reason instead of run, because a result that looks like an
 /// answer and is not is worse than a refusal.
+/// ## K-5: binding the replay to a snapshot
+///
+/// The refusal above was lifted for a POST once a session could be captured,
+/// and what took its place is a request that **does the thing again** — a
+/// second order, a second charge, a second row. That is not a reason to refuse
+/// it: somebody replaying a POST is doing it on purpose. It is a reason to
+/// offer the one thing that makes pressing it twice safe, which this
+/// application already has — a **named database snapshot**.
+///
+/// `snapshot` restores one before the second run. Four rules, and each of them
+/// is a refusal rather than a convenience:
+///
+/// | Rule | Why |
+/// | --- | --- |
+/// | Restored **before** the replay, never after | Restoring afterwards would discard what the replay did, which is the thing somebody replayed a POST to look at |
+/// | The restore takes its own **safety copy** first | The same net `db_restore` puts under an ordinary restore, and for the same reason: pressing a button on a profiling screen must not be the irreversible act |
+/// | **Never chosen automatically** | This app cannot know which snapshot holds the state the original ran under. Picking one would be answering a question nobody asked with data it does not have |
+/// | It buys **repeatability, not comparability** | The `before` recording ran against whatever state existed at the time, and nothing recorded what that was. A snapshot means the replay can be run again from a stated point; it does not make the two numbers a controlled experiment, and the report carries the name so the premise is on screen |
 #[tauri::command]
 pub async fn request_replay(
     state: State<'_, AppState>,
     name: String,
     key: String,
+    snapshot: Option<ReplaySnapshot>,
 ) -> Result<crate::explain::Replay> {
     let root = state.root()?;
     workspace::project_dir(&root, &name)?;
@@ -4265,10 +4348,21 @@ pub async fn request_replay(
 
     // `Unsupported` rather than `InvalidInput`: the caller did nothing wrong
     // and there is no argument to correct. The recording is what it is.
-    let path =
-        crate::explain::replayable(&before).map_err(|why| Error::new(Code::Unsupported, why))?;
+    //
+    // Read whatever was captured for this project — an empty list on every
+    // machine that has never armed a window, which is the ordinary case, and
+    // then this behaves exactly as it did before capture existed.
+    let sessions = crate::capture::read(&root, &name);
+    let (path, session) = crate::explain::replayable_with(&before, &sessions)
+        .map_err(|why| Error::new(Code::Unsupported, why))?;
 
-    let after = record_request(&state, &root, &name, &path).await?;
+    // The snapshot, when one was named — before the request and not after.
+    let restored = match &snapshot {
+        Some(chosen) => Some(restore_before_replay(&state, &root, chosen).await?),
+        None => None,
+    };
+
+    let after = record_request(&state, &root, &name, &path, session.cloned()).await?;
 
     // Deliberately not audited, and not because it is harmless: it sends a real
     // request to the person's own site, which runs their code. It is the same
@@ -4282,7 +4376,163 @@ pub async fn request_replay(
         peak_memory: after.peak_memory as i64 - before.peak_memory as i64,
         before,
         after,
+        restored,
     })
+}
+
+/// Which snapshot a replay should start from.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaySnapshot {
+    /// The service the snapshot belongs to — snapshots live per service, and
+    /// two services may hold one with the same name.
+    pub service: String,
+    /// The snapshot's own name, as `db_snapshots` reports it.
+    pub name: String,
+}
+
+/// Put a named snapshot back, so the second run starts where it is told to.
+///
+/// A thin composition of two things that already exist, and deliberately not a
+/// second implementation of either: `safety_snapshot` is the net `db_restore`
+/// puts under every restore, and `db::restore` is the restore itself. Returns
+/// the name that was restored, so the caller can put it beside the numbers.
+///
+/// **A failure stops the replay.** Somebody who named a snapshot asked for the
+/// second run to start from it; sending the request anyway would run it from a
+/// state they did not choose and report a number under a premise that is not
+/// true.
+async fn restore_before_replay(
+    state: &State<'_, AppState>,
+    root: &std::path::Path,
+    chosen: &ReplaySnapshot,
+) -> Result<String> {
+    // Validated before it is joined to a path, as everywhere else a name
+    // reaches the filesystem.
+    let name = crate::snapshot::safe_name(&chosen.name)?;
+    let path = crate::snapshot::path_for(root, &chosen.service, &name)?;
+    if !path.is_file() {
+        return Err(Error::not_found(format!(
+            "snapshot {name} of {}",
+            chosen.service
+        )));
+    }
+
+    safety_snapshot(state, &chosen.service).await?;
+
+    // The same one-at-a-time key `db_operation` takes, and taken after the
+    // safety copy for the reason `safety_snapshot` gives: holding it across
+    // both would deadlock against the copy this exists to make.
+    let _busy = state.inflight.acquire(format!("db:{}", chosen.service))?;
+    db::restore(root, &chosen.service, &path, |_| {}).await?;
+
+    crate::audit::record_with(
+        "db_restore",
+        &chosen.service,
+        crate::audit::Outcome::Ok,
+        Some(format!("{name}, before a replay")),
+    );
+    Ok(name)
+}
+
+/// Whether this project is recording the sessions its requests run under.
+///
+/// [`crate::capture`] carries the reasoning. The short form: replaying a POST
+/// needs the request's cookies and body, which means writing somebody's session
+/// token to disk — so it is off until asked for, armed in minutes, and turning
+/// it off deletes what it took.
+///
+/// The captured values are never in this answer. `cookies` is a count of names
+/// and `bodyBytes` is a size: the screen has to be able to say *what would be
+/// sent* without being a second place the credential exists.
+#[tauri::command]
+pub fn capture_status(state: State<'_, AppState>, name: String) -> Result<serde_json::Value> {
+    let root = state.root()?;
+    let window = crate::capture::armed(&root, &name);
+    let sessions = crate::capture::read(&root, &name);
+
+    Ok(serde_json::json!({
+        "armed": window.is_some(),
+        "remainingMinutes": window
+            .as_ref()
+            .map(|w| w.remaining_minutes(&crate::snapshot::now_rfc3339())),
+        "expires": window.as_ref().map(|w| w.expires.clone()),
+        "maxMinutes": crate::capture::MAX_MINUTES,
+        // The outer flag, so the pane can say why arming would be refused
+        // before somebody presses it. `capture::arm` is what enforces it; this
+        // is the same fact offered early, which is the difference between a
+        // sentence and an error.
+        "bridge": crate::capture::bridge_on(&root, &name),
+        "captured": sessions.len(),
+        // Described, never quoted. Newest last, and only the last few: this is
+        // a screen that says "there is something to replay", not a log.
+        "recent": sessions
+            .iter()
+            .rev()
+            .take(5)
+            .map(|s| {
+                let mut described = serde_json::to_value(s.describe()).unwrap_or_default();
+                if let Some(map) = described.as_object_mut() {
+                    map.insert("request".into(), serde_json::json!(s.request));
+                }
+                described
+            })
+            .collect::<Vec<_>>(),
+    }))
+}
+
+/// Start recording, for a stated number of minutes.
+///
+/// Audited, and this is the sharpest case in the whole trail: the act being
+/// recorded is a decision to write credentials to disk. The entry carries the
+/// project and the length — never a cookie, never a body, for the reason
+/// [`crate::leaks`] already wrote down about its own findings.
+#[tauri::command]
+pub fn capture_arm(
+    state: State<'_, AppState>,
+    name: String,
+    minutes: u32,
+) -> Result<crate::capture::Window> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let outcome = crate::capture::arm(&root, &name, minutes);
+    crate::audit::record_with(
+        "capture_arm",
+        &name,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        Some(format!("{minutes} minutes")),
+    );
+    outcome
+}
+
+/// Stop, and delete what was captured.
+///
+/// Audited with the count, because "how many were deleted" is the half somebody
+/// checking afterwards actually wants — and because a disarm that found nothing
+/// and a disarm that removed forty are different facts about a machine.
+#[tauri::command]
+pub fn capture_disarm(state: State<'_, AppState>, name: String) -> Result<crate::capture::Cleared> {
+    let root = state.root()?;
+    let outcome = crate::capture::disarm(&root, &name);
+    crate::audit::record_with(
+        "capture_arm",
+        &name,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        outcome
+            .as_ref()
+            .ok()
+            .map(|c| format!("disarmed, {} deleted", c.deleted)),
+    );
+    outcome
 }
 
 /// The host clock, in the unit and epoch every other source on the axis uses.
@@ -5369,18 +5619,37 @@ pub async fn quick_command_run(
     // means reading a file under a path built from this name.
     workspace::project_dir(&root, &name)?;
     let spec = crate::quickcmd::resolve(&root, &name, &id)?;
-    let container = crate::engine::container_name(&name);
+
+    // A package's command runs in that service instance's own container; every
+    // other row runs in the project's. Derived by `quickcmd::resolve_package`
+    // from the instance rather than read out of the package, so a package can
+    // no more name somebody else's container than it can name a host port.
+    let container = spec
+        .container
+        .clone()
+        .unwrap_or_else(|| crate::engine::container_name(&name));
 
     // `docker exec` needs something to exec into. Without this the failure is
     // Docker's "No such container", which reads as a broken button rather than
     // as a project that is not running.
-    let running = crate::engine::inspect(&name)
+    //
+    // Asked of whatever this row actually runs in: checking the project while
+    // executing in a service container would pass on a stopped Redis and fail
+    // on a stopped project that this row does not touch.
+    let subject = spec
+        .container
+        .as_ref()
+        .map(|c| c.trim_start_matches(engine::CONTAINER_PREFIX).to_string())
+        .unwrap_or_else(|| name.clone());
+    let running = crate::engine::inspect(&subject)
         .await
         .map(|d| d.running)
         .unwrap_or(false);
     if !running {
-        return Err(Error::new(Code::Conflict, format!("{name} is not running"))
-            .with_hint(crate::hints::START_PROJECT_FOR_COMMANDS));
+        return Err(
+            Error::new(Code::Conflict, format!("{subject} is not running"))
+                .with_hint(crate::hints::START_PROJECT_FOR_COMMANDS),
+        );
     }
 
     if spec.interactive {
@@ -5409,10 +5678,63 @@ pub async fn quick_command_run(
         }),
     );
 
+    // The one row that needs a step before it: `wayfinder:generate` reads the
+    // route list, and a cached one makes it generate against yesterday's
+    // routes. Two argv arrays run in sequence rather than one `sh -c "a && b"`,
+    // because "never a shell string" is a rule and not a habit.
+    let before = (!spec.first.is_empty()).then(|| {
+        crate::quickcmd::exec_argv(
+            &container,
+            &crate::quickcmd::Resolved {
+                argv: spec.first.clone(),
+                ..spec.clone()
+            },
+        )
+    });
+
     let handle = app.clone();
     let subject = name.clone();
     let op_id = operation_id.clone();
     tauri::async_runtime::spawn(async move {
+        // Stops if the first step fails. Generating against a route cache that
+        // was not cleared is the exact failure the step exists to prevent, and
+        // doing it anyway would produce wrong output with a green console above
+        // it.
+        if let Some(before) = before {
+            // Streamed rather than run as its own operation: one operation, two
+            // commands, and a console that announced success halfway through
+            // would be announcing it for the half that does not matter. The
+            // lines still arrive — the reader sees both commands.
+            let sink = events::sink(&handle);
+            let first = runner::stream("docker", &before, &root, |line| {
+                crate::progress::emit(
+                    &sink,
+                    "build:progress",
+                    serde_json::json!({
+                        "operationId": op_id,
+                        "subject": subject,
+                        "line": line,
+                    }),
+                );
+            })
+            .await;
+
+            if !first.map(|o| o.success).unwrap_or(false) {
+                crate::progress::emit(
+                    &sink,
+                    "build:success",
+                    serde_json::json!({
+                        "operationId": op_id,
+                        "subject": subject,
+                        "success": false,
+                        "durationMs": 0,
+                        "error": format!("{} failed", before.join(" ")),
+                    }),
+                );
+                return;
+            }
+        }
+
         let _ = runner::run_operation(
             &events::sink(&handle),
             runner::Operation {
@@ -6538,10 +6860,9 @@ fn wanted_hosts(manifest: &Manifest) -> Vec<String> {
         .cloned()
         .chain(
             manifest
-                .aliases
-                .iter()
-                .filter(|a| crate::manifest::resolves_through_hosts(a))
-                .cloned(),
+                .extra_hostnames()
+                .into_iter()
+                .filter(|a| crate::manifest::resolves_through_hosts(a)),
         )
         .filter(|d| hosts::is_valid_domain(d))
         .collect()
@@ -8120,7 +8441,7 @@ async fn drop_project_host(app: &AppHandle, manifest: &Manifest) {
         .domain
         .iter()
         .cloned()
-        .chain(manifest.aliases.iter().cloned())
+        .chain(manifest.extra_hostnames())
         .filter(|d| hosts::is_valid_domain(d))
         .filter(|d| managed.contains(&d.to_ascii_lowercase()))
         .collect();
@@ -8236,6 +8557,136 @@ pub async fn containers_stop_all(
 ) -> Result<Vec<String>> {
     let _busy = state.inflight.acquire("stack")?;
     bulk(&app, events::STOP).await
+}
+
+/// Rebuild every project's image, one after another.
+///
+/// ## Why it is not one `docker compose build`
+///
+/// A bare `docker compose build` is one process, and one broken Dockerfile ends
+/// it — leaving the projects behind it in the list unbuilt, with nothing on
+/// screen saying which those were. That is the failure `generator::render` had
+/// already answered for a broken manifest: **report the one that fell and carry
+/// on with the rest**, because nine working projects should not be lost to
+/// report the tenth.
+///
+/// So the builds are sequential, each one a `docker compose build <name>` that
+/// can fail on its own, and the answer names every project that did. Compose
+/// caches layers between them, so the second run of an unchanged project is a
+/// few seconds rather than a build.
+///
+/// ## One operation, and one generate
+///
+/// The whole sweep is a single operation in the console rather than one per
+/// project: it is one press and one thing to watch. The tree is regenerated
+/// **once** at the start rather than per project — `generate` writes every
+/// project's Dockerfile in one pass, so doing it per project would be the same
+/// work N times.
+///
+/// ## `noCache` is not the default, and that is the decision
+///
+/// "Rebuild" and "pull every layer again from scratch" are different jobs, and
+/// the second one takes minutes per project. The flag exists for the case
+/// somebody actually means it — a base image that moved under a tag — and is
+/// off otherwise.
+///
+/// Takes the `stack` lock, the same subject start-all, stop-all and restart-all
+/// hold: rebuilding while the stack is being restarted is two commands writing
+/// the same containers.
+#[tauri::command]
+pub async fn projects_build_all(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    no_cache: Option<bool>,
+) -> Result<serde_json::Value> {
+    let root = state.root()?;
+    let _busy = state.inflight.acquire("stack")?;
+    let operation_id = events::next_operation_id("build");
+
+    // Read off disk rather than through `list_projects`, which asks the engine.
+    // What is being rebuilt is what has a manifest, and a stopped daemon is a
+    // reason this button exists rather than a reason it cannot answer.
+    let dir = workspace::require_projects_root(&root)?;
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir() && path.join("stackvo.json").is_file())
+        .filter_map(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .filter(|n| !n.starts_with('.'))
+                .map(str::to_string)
+        })
+        .collect();
+    names.sort();
+
+    events::emit(
+        &app,
+        "build:start",
+        serde_json::json!({ "operationId": operation_id, "project": "*" }),
+    );
+
+    let outcome = async {
+        // Once, for all of them.
+        generate(&app, &root, &operation_id, "projects").await?;
+
+        let mut built = Vec::new();
+        let mut failed = Vec::new();
+
+        for name in &names {
+            let mut args = runner::compose_base_args(&root);
+            args.push("build".into());
+            if no_cache.unwrap_or(false) {
+                args.push("--no-cache".into());
+            }
+            args.push(name.clone());
+
+            // The error is kept rather than propagated: propagating would make
+            // the first broken project the end of the sweep, which is the
+            // behaviour this command exists to avoid.
+            match runner::run_operation(
+                &events::sink(&app),
+                runner::Operation {
+                    operation_id: &operation_id,
+                    subject: name,
+                    progress_event: "build:progress",
+                    finished_event: "build:progress",
+                    program: "docker",
+                    args: &args,
+                    cwd: &root,
+                    env: &[],
+                },
+            )
+            .await
+            {
+                Ok(()) => built.push(name.clone()),
+                Err(_) => failed.push(name.clone()),
+            }
+        }
+
+        Ok::<_, Error>(serde_json::json!({
+            "operationId": operation_id,
+            "built": built,
+            // Named, never counted. "Two failed" sends somebody to look at
+            // twenty projects; naming them sends them to two.
+            "failed": failed,
+        }))
+    }
+    .await;
+
+    events::emit(
+        &app,
+        "build:built",
+        serde_json::json!({
+            "operationId": operation_id,
+            "project": "*",
+            "ok": outcome.is_ok(),
+        }),
+    );
+
+    outcome
 }
 
 #[tauri::command]
@@ -8931,6 +9382,15 @@ pub struct WorktreeSupport {
     pub reason: Option<String>,
     /// The worktrees of this project that this app knows about.
     pub worktrees: Vec<WorktreeRow>,
+    /// What a branch's own hostname breaks, when this project is a worktree.
+    ///
+    /// Sanctum ties a session to a list of hostnames and Passport keeps its
+    /// signing key in a gitignored file — so a branch environment signs people
+    /// out with a 419 and answers token requests with a stack trace, and
+    /// nothing on screen says why. `None` for a project that is not a worktree.
+    /// See [`crate::worktree::Auth`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<crate::worktree::Auth>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -9079,6 +9539,13 @@ pub async fn worktree_support(state: State<'_, AppState>, name: String) -> Resul
         .as_ref()
         .map(|record| masked_worktree_env(crate::worktree::env_for(&root, record)));
 
+    // What a hostname of its own breaks for Sanctum and Passport. Beside the
+    // environment rather than inside it, because half of it is not a variable
+    // at all: a missing signing key is a file, and the repair is a command.
+    let auth = record
+        .as_ref()
+        .map(|record| crate::worktree::auth_for(&root, record));
+
     Ok(WorktreeSupport {
         git_available,
         repository,
@@ -9101,6 +9568,7 @@ pub async fn worktree_support(state: State<'_, AppState>, name: String) -> Resul
         branches,
         instances,
         reason,
+        auth,
         worktrees: worktree_rows(&root, &children),
     })
 }
@@ -9666,6 +10134,111 @@ pub async fn worktree_remove(
     }
 
     outcome.map(|_| operation_id)
+}
+
+/// Give this worktree its own Passport signing keys.
+///
+/// ## Why this is a command and not a copy
+///
+/// Passport signs tokens with `storage/oauth-private.key`, and that file is in
+/// `.gitignore` — so a fresh worktree does not have one and every token request
+/// comes back as a stack trace about a missing file.
+///
+/// The obvious repair is to copy the parent's key across, and it is refused.
+/// Copying a signing key into a second environment is the exact opposite of
+/// what a worktree's database isolation exists for: the branch would be able to
+/// mint tokens the place it branched from accepts. So this **generates a new
+/// pair**, which is what a separate environment means.
+///
+/// ## And why it will not run twice
+///
+/// A key that is already there is left alone, and that is a refusal rather than
+/// a no-op: `passport:keys` overwrites, and overwriting a key invalidates every
+/// token issued under it. Somebody who really wants a new pair can say so in
+/// the terminal, where the consequence is theirs.
+#[tauri::command]
+pub async fn worktree_passport_keys(state: State<'_, AppState>, name: String) -> Result<String> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let record = crate::worktree::Table::load(&root)?
+        .worktrees
+        .into_iter()
+        .find(|r| r.name == name)
+        .ok_or_else(|| {
+            Error::new(
+                Code::NotFound,
+                format!("{name} is not a worktree this app created"),
+            )
+        })?;
+
+    let auth = crate::worktree::auth_for(&root, &record);
+    if auth.passport.is_none() {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("{name} does not have laravel/passport in its composer.lock"),
+        ));
+    }
+    if !auth.passport_keys_missing {
+        return Err(Error::new(
+            Code::Conflict,
+            format!(
+                "{name} already has {} — regenerating it would invalidate every token issued under it",
+                crate::worktree::PASSPORT_PRIVATE_KEY
+            ),
+        ));
+    }
+
+    // `docker exec` needs something to exec into, and Docker's own "No such
+    // container" reads as a broken button rather than as a project that is not
+    // running — the sentence `quick_command_run` already refuses with.
+    let container = engine::container_name(&name);
+    if !engine::inspect(&name)
+        .await
+        .map(|d| d.running)
+        .unwrap_or(false)
+    {
+        return Err(Error::new(Code::Conflict, format!("{name} is not running"))
+            .with_hint(crate::hints::START_PROJECT_FOR_COMMANDS));
+    }
+
+    let args: Vec<String> = [
+        "exec",
+        "-i",
+        &container,
+        "php",
+        "artisan",
+        "passport:keys",
+        "--no-interaction",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+
+    let mut lines = Vec::new();
+    let output = runner::stream("docker", &args, &root, |line| {
+        lines.push(line.to_string());
+    })
+    .await?;
+
+    crate::audit::record_with(
+        "worktree_passport_keys",
+        &name,
+        if output.success {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        None,
+    );
+
+    if !output.success {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("passport:keys failed: {}", lines.join("\n")),
+        ));
+    }
+    Ok(lines.join("\n"))
 }
 
 /// Set the environment variables one worktree's container is given.
@@ -11405,6 +11978,20 @@ pub async fn project_verify(
         .map(|(id, _category)| id)
         .collect();
 
+    // A lock that will not parse is not silently ignored. Somebody wrote that
+    // file and is entitled to be told it is not being used — reading it as
+    // "no lock" would answer a weaker question than the one they asked and look
+    // identical on screen.
+    let lock = crate::lock::read(std::path::Path::new(&project.path))?;
+
+    // The Laravel half of the same question, read from the project's own
+    // `composer.json`. Absent for a project that has none, which is most of
+    // them — a Go project has no opinion about PHP.
+    let platform =
+        std::fs::read_to_string(std::path::Path::new(&project.path).join("composer.json"))
+            .ok()
+            .map(|text| crate::verify::platform_of(&text));
+
     Ok(crate::verify::verify(
         &crate::verify::Declared {
             name: &project.name,
@@ -11413,10 +12000,837 @@ pub async fn project_verify(
             built: project.built,
             generated_stale: project.generated_stale,
             domain_configured: project.domain_configured,
+            lock: lock.as_ref(),
+            platform: platform.as_ref(),
         },
         &crate::instances::Table::load(&root).unwrap_or_default(),
         &catalogue,
     ))
+}
+
+/// Write down what this project is actually running against.
+///
+/// ## Why this is a button and not something the app does for you
+///
+/// [`crate::lock`] carries the reasoning at length; the short form is that a
+/// lock the app refreshed on its own would record whatever the machine drifted
+/// to, would therefore always agree with the machine, and could never disagree
+/// with it. A check that cannot fail is worse than no check.
+///
+/// So this runs when somebody asks, and `project_verify` above only ever
+/// **reports** what it finds against the file. Nothing here installs, switches
+/// on, or changes a version.
+///
+/// Not audited, and that is a judgement rather than an oversight: this writes
+/// one file, inside the project directory the caller named, that the caller
+/// asked for and can delete. The trail in [`crate::audit`] is for the acts
+/// nobody can undo by looking at a directory — the keystore, `/etc/hosts`,
+/// certificate trust, git's index.
+#[tauri::command]
+pub async fn project_lock(state: State<'_, AppState>, name: String) -> Result<serde_json::Value> {
+    let root = state.root()?;
+    let dir = workspace::require_projects_root(&root)?.join(&name);
+    let manifest = manifest::read(&dir.join("stackvo.json"), &name)?;
+
+    // Refused on a manifest that did not validate. A lock is a claim about what
+    // a declaration resolved to, and a declaration nobody could read has not
+    // resolved to anything — writing the file anyway would put a fact in the
+    // repository derived from a file the app had already refused.
+    if !manifest.valid {
+        return Err(Error::new(
+            Code::InvalidManifest,
+            format!("{name}'s stackvo.json does not validate; fix it before locking"),
+        ));
+    }
+
+    let (lock, skipped) = crate::lock::resolve(
+        &manifest.services,
+        &crate::instances::Table::load(&root).unwrap_or_default(),
+        crate::snapshot::now_rfc3339(),
+    );
+    let path = crate::lock::write(&dir, &lock)?;
+
+    Ok(serde_json::json!({
+        "path": path.display().to_string(),
+        "locked": lock.services,
+        // What it could not lock, and why. Reported rather than swallowed: a
+        // lock file that quietly covers three of a project's five services is
+        // one somebody believes covers five.
+        "skipped": skipped,
+    }))
+}
+
+/// What this project depends on, read from its own lock files.
+///
+/// ## The asymmetry
+///
+/// `pkg.rs` verifies every file of every service package against a digest
+/// before it runs. Meanwhile the project beside it pulls four hundred libraries
+/// out of `composer.lock` and `package-lock.json` and nothing here has ever
+/// looked at them — which is the wrong way round, because those are somebody
+/// else's code in far greater quantity, running with the developer's own
+/// permissions.
+///
+/// No network. [`crate::deps`] carries the reasoning, and the half that needs
+/// one is [`deps_advisories`], deliberately a separate call.
+#[tauri::command]
+pub async fn deps_report(state: State<'_, AppState>, name: String) -> Result<crate::deps::Report> {
+    let (locks, deps) = read_dependencies(&state.root()?, &name)?;
+    Ok(crate::deps::report(locks, &deps))
+}
+
+/// Ask whether any of them has a published advisory.
+///
+/// ## What is sent, and why this is its own button
+///
+/// The **names and versions** of the project's dependencies go to
+/// `api.osv.dev`. No identifier, no project name, no path — and it is still a
+/// disclosure, so it is a separate action with its own sentence rather than
+/// something folded into the report above. `PRIVACY.md` says the same thing in
+/// the same words, and `privacy_claims.rs` holds it there.
+///
+/// The whole local half works with no network for ever. This is the only call
+/// in the pair that leaves the machine.
+///
+/// Not audited: nothing on this machine is changed. The trail is for acts
+/// somebody has to account for, and asking a public database a question about
+/// version numbers is not one — the disclosure is on the screen, before the
+/// press, which is where a consent decision belongs.
+#[tauri::command]
+pub async fn deps_advisories(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::deps::Report> {
+    let (locks, deps) = read_dependencies(&state.root()?, &name)?;
+    let mut report = crate::deps::report(locks, &deps);
+
+    // A failure propagates rather than yielding an empty list. "Nothing was
+    // found" and "I could not ask" must never look the same on a security
+    // screen, and `advisories: None` is what the report already means by the
+    // second.
+    report.advisories = Some(crate::deps::advisories(&deps).await?);
+    Ok(report)
+}
+
+/// Both lock files, and which packages the project itself asks for.
+///
+/// One reader for the two commands above, so the set that is reported and the
+/// set that is queried cannot come apart — a report saying four hundred and a
+/// query asking about three hundred would be worse than either alone.
+fn read_dependencies(
+    root: &std::path::Path,
+    name: &str,
+) -> Result<(Vec<String>, Vec<crate::deps::Dep>)> {
+    let dir = workspace::require_projects_root(root)?.join(name);
+    let read = |file: &str| std::fs::read_to_string(dir.join(file)).ok();
+
+    let mut locks = Vec::new();
+    let mut deps = Vec::new();
+
+    if let Some(lock) = read("composer.lock") {
+        let direct =
+            crate::deps::direct_from_composer_json(&read("composer.json").unwrap_or_default());
+        deps.extend(crate::deps::parse_composer_lock(&lock, &direct));
+        locks.push("composer.lock".to_string());
+    }
+
+    if let Some(lock) = read("package-lock.json") {
+        let direct =
+            crate::deps::direct_from_package_json(&read("package.json").unwrap_or_default());
+        deps.extend(crate::deps::parse_package_lock(&lock, &direct));
+        locks.push("package-lock.json".to_string());
+    }
+
+    Ok((locks, deps))
+}
+
+/// Whether Octane is what serves this project, and whether the reload is armed.
+///
+/// ## The bug this answers
+///
+/// Octane boots the application once and keeps it in memory, so an edited file
+/// changes nothing — a route added to `routes/web.php` does not exist until the
+/// workers are replaced, and the developer reloads the page, sees a 404, and
+/// goes looking for the mistake in their own code.
+///
+/// Laravel's answer is `octane:start --watch`, and its price is Node and
+/// chokidar **inside the image**: a second file watcher polling a bind mount
+/// this application is already watching. So the answer here is one action,
+/// `octane:reload`, optionally attached to the watcher that is already running.
+/// It adds nothing to the image. See [`crate::octane`].
+#[tauri::command]
+pub async fn octane_status(state: State<'_, AppState>, name: String) -> Result<OctaneStatus> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let manifest = manifest::read(&dir.join("stackvo.json"), &name)?;
+    // The workspace's own default, through the one derivation there is: a
+    // second reading of `SUPPORTED_SERVERS_DEFAULT` here is how one setting
+    // grew three answers the last time (`config::DEFAULT_SERVER`).
+    let default = crate::config::Env::load(&root)?.default_server();
+    let server = manifest.server_or(&default).to_string();
+
+    Ok(OctaneStatus {
+        octane: crate::octane::is_octane(&server),
+        server,
+        auto_reload: crate::octane::enabled_in(&prefs_get()?, &name),
+        watched: crate::octane::WATCHED
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    })
+}
+
+/// What this project's server is, and whether saves reload it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OctaneStatus {
+    /// What the manifest says serves it, resolved through the workspace default
+    /// — the one derivation, so the pane and the generator cannot disagree.
+    pub server: String,
+    /// Whether that server is one `octane:start` drives. `nginx`, `apache` and
+    /// `caddy` read the file on every request, so there is nothing to reload
+    /// and the button is not offered.
+    pub octane: bool,
+    pub auto_reload: bool,
+    /// The paths a save has to be under to count. Octane's own watch list,
+    /// reported so the pane can say what it reacts to rather than describe it.
+    pub watched: Vec<String>,
+}
+
+/// Turn the automatic reload on or off for one project.
+///
+/// **Off by default, and the default cannot be anything else**: a reload that
+/// arrives while a request is being served kills that request. Somebody has to
+/// decide that is a trade they want.
+///
+/// A preference rather than a manifest field. The manifest travels with the
+/// repository and describes what the project *is*; this is what one developer
+/// wants on one machine, and a colleague should not inherit it from a `git
+/// pull`.
+#[tauri::command]
+pub async fn octane_auto_reload(
+    _state: State<'_, AppState>,
+    name: String,
+    enabled: bool,
+) -> Result<OctaneStatus> {
+    let mut map = prefs_get()?
+        .get(crate::octane::PREF_KEY)
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(object) = map.as_object_mut() {
+        object.insert(name.clone(), serde_json::Value::Bool(enabled));
+    }
+    // The whole map in one key: `prefs_set` merges shallowly, so sending only
+    // this project's entry would drop every other project's.
+    prefs_set(serde_json::json!({ crate::octane::PREF_KEY: map }))?;
+
+    octane_status(_state, name).await
+}
+
+/// Replace this project's Octane workers now.
+///
+/// `octane:reload` rather than a restart: the server replaces its workers and
+/// the socket stays open, so nothing outside notices beyond the requests that
+/// were already in flight.
+#[tauri::command]
+pub async fn octane_reload(state: State<'_, AppState>, name: String) -> Result<String> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    if !engine::inspect(&name)
+        .await
+        .map(|d| d.running)
+        .unwrap_or(false)
+    {
+        return Err(Error::new(Code::Conflict, format!("{name} is not running"))
+            .with_hint(crate::hints::START_PROJECT_FOR_COMMANDS));
+    }
+
+    let mut lines = Vec::new();
+    let output = runner::stream(
+        "docker",
+        &crate::octane::reload_args(&name),
+        &root,
+        |line| {
+            lines.push(line.to_string());
+        },
+    )
+    .await?;
+
+    if !output.success {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("octane:reload failed: {}", lines.join("\n")),
+        ));
+    }
+    Ok(lines.join("\n"))
+}
+
+/// What it would take for `stackvo artisan dusk` to work here.
+///
+/// ## Two pieces, and neither works without the other
+///
+/// The **sidecar** is not the hard half: `imports.rs` already recognises Sail's
+/// `selenium` service by name and the manifest has supported sidecars since
+/// W-01, so a chromium container can be expressed today.
+///
+/// The hard half is the one no `docker-compose.yml` fixes. Dusk drives a
+/// browser and that browser has to open `https://<domain>` — from inside a
+/// container that does not know this machine's certificate authority. A test
+/// that falls over on a certificate warning is a failure that reads as an
+/// application bug, and the developer goes looking in their own code.
+///
+/// Nothing here runs a test suite. See [`crate::dusk`].
+#[tauri::command]
+pub async fn dusk_plan(state: State<'_, AppState>, name: String) -> Result<crate::dusk::Plan> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let (_, deps) = read_dependencies(&root, &name)?;
+
+    let manifest = manifest::read(&dir.join("stackvo.json"), &name).ok();
+    let domain = manifest
+        .as_ref()
+        .and_then(|m| m.domain.clone())
+        .unwrap_or_else(|| name.clone());
+    let declared = manifest
+        .as_ref()
+        .is_some_and(|m| m.sidecars.get(crate::dusk::SIDECAR_ID).is_some());
+
+    let container = crate::sidecar::container_name(&name, crate::dusk::SIDECAR_ID);
+    let running = engine::stackvo_containers()
+        .await
+        .ok()
+        .and_then(|c| c.values().find(|i| i.name == container).map(|i| i.running))
+        .unwrap_or(false);
+
+    Ok(crate::dusk::plan(
+        &dir,
+        &name,
+        &domain,
+        &deps,
+        declared,
+        running,
+        // Dusk hits a real database rather than a transaction that gets rolled
+        // back, and a branch with a database of its own is this application's
+        // own answer to that. Reported, never done for somebody.
+        crate::worktree::login_of(&root, &name).is_some(),
+    ))
+}
+
+/// Declare the browser container, and write Dusk's environment file.
+///
+/// Two writes, both of them refusals as much as writes: the sidecar is written
+/// into `stackvo.json` through the type the manifest reader itself produces, so
+/// a block written here is one the reader accepts; and `.env.dusk.local` is
+/// written **only when it is not already there**, because that file overrides
+/// the project's `.env` for the length of a run and overwriting somebody's copy
+/// would silently change what their suite tests.
+///
+/// The project's `DuskTestCase` is not touched. The driver, the window size and
+/// the Chrome flags are the repository's code, and this application does not
+/// write PHP into somebody's tests.
+#[tauri::command]
+pub async fn dusk_apply(state: State<'_, AppState>, name: String) -> Result<crate::dusk::Plan> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+
+    {
+        let _busy = state.inflight.acquire(format!("project:{name}"))?;
+        let path = dir.join("stackvo.json");
+        let mut manifest = manifest::read_committed(&path, &name)?;
+        manifest
+            .sidecars
+            .insert(crate::dusk::SIDECAR_ID, crate::dusk::sidecar());
+        manifest::write(&path, &manifest)?;
+    }
+
+    let env_path = dir.join(crate::dusk::ENV_FILE);
+    if !env_path.is_file() {
+        let domain = manifest::read(&dir.join("stackvo.json"), &name)
+            .ok()
+            .and_then(|m| m.domain)
+            .unwrap_or_else(|| name.clone());
+        crate::atomic::write(&env_path, &crate::dusk::env_file(&name, &domain))?;
+    }
+
+    crate::audit::record_with(
+        "dusk_apply",
+        &name,
+        crate::audit::Outcome::Ok,
+        Some(crate::dusk::image()),
+    );
+
+    dusk_plan(state, name).await
+}
+
+/// One step of the trust step, and what it said.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuskTrustStep {
+    pub id: String,
+    /// The whole line, so the pane can show what was run rather than describe
+    /// it. Nothing parses this back.
+    pub command: String,
+    pub ok: bool,
+    /// Whatever the command said, merged in arrival order.
+    pub output: String,
+    /// A failure here does not make the ones after it wrong.
+    pub optional: bool,
+}
+
+/// Teach the browser's container to trust this machine's certificate authority.
+///
+/// ## Why this is three results and not one boolean
+///
+/// The CA has to reach two places inside that container, and they fail
+/// separately: the **system bundle**, which is what `curl` and the JVM read,
+/// and the **NSS database**, which is what Chromium reads. The second needs a
+/// tool that is not in every image, so it is reported as itself rather than
+/// folded into "trust failed" — a step that says `certutil: not found` is a
+/// sentence somebody can act on.
+///
+/// ## And why it has to be done again
+///
+/// It writes into the container's writable layer, so **recreating the container
+/// loses it**. That is a property of the approach rather than a bug in it, it
+/// is not hidden, and the pane says so beside the button.
+#[tauri::command]
+pub async fn dusk_trust(state: State<'_, AppState>, name: String) -> Result<Vec<DuskTrustStep>> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let ca = crate::certs::ca_path(&root);
+    if !ca.is_file() {
+        return Err(Error::new(
+            Code::NotFound,
+            "this machine has no certificate authority yet".to_string(),
+        ));
+    }
+
+    let container = crate::sidecar::container_name(&name, crate::dusk::SIDECAR_ID);
+    let up = engine::stackvo_containers()
+        .await
+        .ok()
+        .and_then(|c| c.values().find(|i| i.name == container).map(|i| i.running))
+        .unwrap_or(false);
+    if !up {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("{container} is not running"),
+        ));
+    }
+
+    let mut out = Vec::new();
+    for step in crate::dusk::trust_steps(&name, &ca.display().to_string()) {
+        let mut lines = Vec::new();
+        let result = runner::stream("docker", &step.args, &root, |line| {
+            lines.push(line.to_string());
+        })
+        .await;
+
+        let ok = result.as_ref().map(|o| o.success).unwrap_or(false);
+        if let Err(error) = &result {
+            lines.push(error.message.clone());
+        }
+
+        out.push(DuskTrustStep {
+            id: step.id.to_string(),
+            command: format!("docker {}", step.args.join(" ")),
+            ok,
+            output: lines.join("\n"),
+            optional: step.optional,
+        });
+
+        // A required step that failed makes the ones after it meaningless: an
+        // `update-ca-certificates` over a file that was never copied would
+        // report success over nothing.
+        if !ok && !step.optional {
+            break;
+        }
+    }
+
+    crate::audit::record_with(
+        "dusk_trust",
+        &name,
+        if out.iter().all(|s| s.ok || s.optional) {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        None,
+    );
+    Ok(out)
+}
+
+/// Telescope, Horizon and Pulse — the way in, and the precondition nobody says.
+///
+/// ## Why this is not a link
+///
+/// All three open in `local` without authentication and this app already serves
+/// the project on its own domain, so `https://shop.loc/horizon` works today.
+/// Nothing anywhere says it exists, so nobody clicks it — and a link on its own
+/// would still leave the useful half undone, because each of the three goes
+/// **quietly empty** for a reason the developer cannot see: Horizon wants a
+/// `redis` queue connection and a five-minute `horizon:snapshot`, Telescope
+/// wants its migrations and a daily prune, Pulse refuses SQLite storage and
+/// needs a long-running `pulse:check`.
+///
+/// ## The limit, and where it is written
+///
+/// This reads `.env` and `composer.lock`. It does **not** read `config/*.php`,
+/// and a project that has run `config:cache` can make both of them lie. So
+/// every observation carries the key it read and the value it found rather than
+/// a verdict, and the caveat sits beside the row rather than at the top of the
+/// pane. [`crate::dashboards`] carries the reasoning.
+///
+/// Nothing is changed. The two scheduled jobs this offers are added through
+/// `scheduler_save`, which is the schedule's only writer.
+#[tauri::command]
+pub async fn dashboards_report(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::dashboards::Report> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let (_, deps) = read_dependencies(&root, &name)?;
+
+    let manifest = manifest::read(&dir.join("stackvo.json"), &name).ok();
+    let domain = manifest.as_ref().and_then(|m| m.domain.clone());
+    let schedule = manifest.map(|m| m.schedule).unwrap_or_default();
+
+    // Which of this project's workers are actually up. Asked of the engine
+    // rather than assumed from the manifest: a worker that was started and has
+    // since died is exactly the case a dashboard's empty page is a symptom of.
+    let running: Vec<crate::worker::Kind> = crate::worker::status_all()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|w| w.project == name && w.running)
+        .map(|w| w.kind)
+        .collect();
+
+    Ok(crate::dashboards::report(
+        &dir,
+        domain.as_deref(),
+        &deps,
+        &schedule,
+        &running,
+    ))
+}
+
+/// The MCP servers this project itself publishes, and whether they are
+/// registered in a way that can start here.
+///
+/// ## The break this reports
+///
+/// `php artisan boost:install` writes a `.mcp.json` into the project holding
+/// **`php artisan boost:mcp`** — a command line that assumes a `php` on the
+/// host. There is none, by decision (`tooling.rs`), so Laravel's own installer
+/// leaves a configuration that cannot start, and the failure shows up in
+/// somebody's assistant rather than in the tool that wrote it.
+///
+/// Three of the project's own files are read and nothing else: `composer.lock`
+/// for whether the packages are even installed, `routes/ai.php` for the servers
+/// this project registered by name, and the per-project client configurations
+/// for what stands today. No network. Nothing is changed — the repair is
+/// [`boost_register`], with its own press.
+#[tauri::command]
+pub async fn boost_status(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::boost::Report> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let (_, deps) = read_dependencies(&root, &name)?;
+
+    // The domain is the manifest's, and its absence is not an error: a project
+    // that has never been generated has no domain yet, and the only thing that
+    // costs is the URL beside a `Mcp::web()` route.
+    let domain = manifest::read(&dir.join("stackvo.json"), &name)
+        .ok()
+        .and_then(|m| m.domain);
+
+    Ok(crate::boost::report(
+        &dir,
+        &engine::container_name(&name),
+        domain.as_deref(),
+        &deps,
+    ))
+}
+
+/// Point one client configuration at the server inside the container.
+///
+/// Read, replace one entry, write back — [`crate::agents`]'s three rules,
+/// borrowed whole: a file that does not parse is refused rather than rewritten,
+/// everything else in it survives, and the previous contents are kept beside it
+/// as `.stackvo-backup`. An entry that already runs this server keeps the name
+/// it had, because a renamed entry is a second server in somebody's client
+/// rather than a repaired first one.
+#[tauri::command]
+pub async fn boost_register(
+    state: State<'_, AppState>,
+    name: String,
+    file: String,
+    server: String,
+) -> Result<String> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+
+    let Some(target) = crate::boost::file(&file) else {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("unknown configuration file {file}"),
+        ));
+    };
+    let Some(server) = crate::boost::Server::parse_id(&server) else {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("unknown server {server}"),
+        ));
+    };
+
+    let path = dir.join(target.path);
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let updated = crate::boost::register(
+        &existing,
+        target.shape,
+        &engine::container_name(&name),
+        &server,
+    )?;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
+    }
+    // Only where there was something to lose — an empty `.stackvo-backup`
+    // beside a file that never existed reads as a configuration this ate.
+    if !existing.is_empty() {
+        let backup = crate::agents::backup_path(&path);
+        std::fs::write(&backup, &existing)
+            .map_err(|e| Error::io(format!("writing {}", backup.display()), e))?;
+    }
+    crate::atomic::write(&path, &updated)?;
+
+    crate::audit::record_with(
+        "boost_register",
+        &name,
+        crate::audit::Outcome::Ok,
+        Some(format!("{} — {}", target.path, server.id())),
+    );
+
+    Ok(path.display().to_string())
+}
+
+/// What can leave this machine, as far as Docker can actually say.
+///
+/// ## Whose question this is
+///
+/// An administrator who pointed every pull at the organisation's mirror with
+/// `registryPrefix` has a follow-up — **who bypassed it** — and the same person
+/// wants to know which containers on this laptop can reach the internet at all.
+/// [`crate::egress`] carries the reasoning; the work here is asking the daemon.
+///
+/// ## Two exact answers and one honest number
+///
+/// The registry host and whether a container can route out are both facts
+/// Docker holds. The byte counters are reported with the caveat that makes them
+/// usable: they count every interface, the StackVo network included, so they
+/// are a floor on "did anything leave this container" and never a measure of
+/// internet traffic.
+///
+/// **It does not say where anything connected to.** Docker keeps no connection
+/// log, and answering that needs a capture inside the container's network
+/// namespace or a proxy in front of it — neither of which this app installs on
+/// somebody's machine to fill in a report. The refusal is on the screen rather
+/// than left as a gap.
+///
+/// Not audited: nothing is changed, and the trail is for acts somebody has to
+/// account for.
+#[tauri::command]
+pub async fn egress_report() -> Result<crate::egress::Report> {
+    let containers = engine::stackvo_containers().await.unwrap_or_default();
+
+    // One inspect per container for its networks, and one cached lookup per
+    // *network* for whether it routes — a workspace has thirty containers and
+    // three networks, so the naive shape would be twenty-seven wasted calls.
+    let mut networks: std::collections::BTreeMap<String, Option<bool>> = Default::default();
+    let mut measured = Vec::new();
+
+    for (id, info) in &containers {
+        let Ok(details) = engine::inspect(id).await else {
+            continue;
+        };
+        let attached = crate::egress::internal_flags(&details.networks, &mut networks).await;
+
+        // Only for a running container. Docker has no counters for a stopped
+        // one, and zero would read as "it has sent nothing" — a claim about
+        // traffic rather than about the absence of a measurement.
+        let (received, sent) = if info.running {
+            engine::container_traffic(id).await.unwrap_or((0, 0))
+        } else {
+            (0, 0)
+        };
+
+        measured.push((
+            info.name.clone(),
+            details
+                .image
+                .or_else(|| info.image.clone())
+                .unwrap_or_default(),
+            attached,
+            sent,
+            received,
+        ));
+    }
+
+    let observed: Vec<crate::egress::Observed> = measured
+        .iter()
+        .map(
+            |(container, image, networks, sent, received)| crate::egress::Observed {
+                container,
+                image,
+                networks,
+                sent: *sent,
+                received: *received,
+            },
+        )
+        .collect();
+
+    Ok(crate::egress::measure(
+        &observed,
+        crate::policy::current().registry_prefix(),
+    ))
+}
+
+/// `git bisect`, with the environment the commit was written against.
+///
+/// ## What is new here, and it is not the bisect
+///
+/// `git bisect` is thirty years old and this does not improve on it. What it
+/// adds is the half `git` cannot know about: **which environment the commit
+/// under test expected.** `stackvo.json` has always travelled with the
+/// repository and, since [`crate::lock`], `stackvo.lock` does too — so at every
+/// step this reads both *at that revision*, without touching the working tree,
+/// and says how this machine differs.
+///
+/// That difference is the reason a bisect can accuse an innocent commit: old
+/// code running against a new runtime is not the experiment anybody thought
+/// they were running.
+///
+/// ## It reports and does not install
+///
+/// [`crate::bisect`] carries the reasoning. The short form is that bringing the
+/// environment along would mean replacing containers whose volumes hold the
+/// developer's data, twenty times over a ten-step search, to answer a question
+/// about a diff.
+#[tauri::command]
+pub async fn bisect_status(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::bisect::Status> {
+    let root = state.root()?;
+    let dir = workspace::require_projects_root(&root)?.join(&name);
+    Ok(crate::bisect::status(
+        &dir,
+        &root,
+        &crate::instances::Table::load(&root).unwrap_or_default(),
+    )
+    .await)
+}
+
+/// Begin one. `bad` is where the behaviour is, `good` is where it is not.
+///
+/// Audited, with `start` in the detail, because this is the call that detaches
+/// HEAD — see the promise in [`crate::audit`].
+#[tauri::command]
+pub async fn bisect_start(
+    state: State<'_, AppState>,
+    name: String,
+    bad: String,
+    good: String,
+) -> Result<crate::bisect::Status> {
+    let root = state.root()?;
+    let dir = workspace::require_projects_root(&root)?.join(&name);
+
+    let outcome = crate::bisect::start(&dir, &bad, &good).await;
+    crate::audit::record_with(
+        "bisect",
+        &name,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        Some(format!("start {bad}..{good}")),
+    );
+    outcome?;
+
+    Ok(crate::bisect::status(
+        &dir,
+        &root,
+        &crate::instances::Table::load(&root).unwrap_or_default(),
+    )
+    .await)
+}
+
+/// Record a verdict for the commit that is checked out, and move on.
+///
+/// `skip` is offered beside `good` and `bad` because git offers it and leaving
+/// it out is worse than it looks: a commit that will not build has to be marked
+/// *something*, and without a third answer people mark it `good`, which poisons
+/// the search in a way nothing downstream can detect.
+#[tauri::command]
+pub async fn bisect_mark(
+    state: State<'_, AppState>,
+    name: String,
+    verdict: crate::bisect::Verdict,
+) -> Result<crate::bisect::Status> {
+    let root = state.root()?;
+    let dir = workspace::require_projects_root(&root)?.join(&name);
+
+    let outcome = crate::bisect::mark(&dir, verdict).await;
+    crate::audit::record_with(
+        "bisect",
+        &name,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        Some(format!("{verdict:?}").to_lowercase()),
+    );
+    outcome?;
+
+    Ok(crate::bisect::status(
+        &dir,
+        &root,
+        &crate::instances::Table::load(&root).unwrap_or_default(),
+    )
+    .await)
+}
+
+/// Stop, and put the checkout back on the branch it started from.
+///
+/// Always available, including when the search has already found its answer:
+/// the found screen is a detached HEAD like every other step, and a person who
+/// has copied the hash still has a repository to put back.
+#[tauri::command]
+pub async fn bisect_reset(state: State<'_, AppState>, name: String) -> Result<()> {
+    let root = state.root()?;
+    let dir = workspace::require_projects_root(&root)?.join(&name);
+
+    let outcome = crate::bisect::reset(&dir).await;
+    crate::audit::record_with(
+        "bisect",
+        &name,
+        if outcome.is_ok() {
+            crate::audit::Outcome::Ok
+        } else {
+            crate::audit::Outcome::Failed
+        },
+        Some("reset".to_string()),
+    );
+    outcome
 }
 
 /// Credentials sitting where they should not be.

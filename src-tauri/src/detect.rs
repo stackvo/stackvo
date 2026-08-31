@@ -68,6 +68,20 @@ pub struct Fingerprint {
     pub cargo_toml: bool,
     /// `Gemfile` — only Ruby.
     pub gemfile: bool,
+    /// `vendor/bin/pint` — Pint installed, not merely Laravel present.
+    ///
+    /// The three below are markers for a **package** rather than a framework,
+    /// and they follow the rest of this struct's rule rather than bending it: a
+    /// command is offered when the file it needs is there. `artisan` would have
+    /// been the lazy marker for all three and it is the wrong one — every
+    /// Laravel project has `artisan` and most have none of these, so the button
+    /// would produce `Command … is not defined` in an operation console, which
+    /// reads as a broken app rather than as a package nobody installed.
+    pub pint: bool,
+    /// `vendor/laravel/wayfinder`.
+    pub wayfinder: bool,
+    /// `vendor/laravel/boost`.
+    pub boost: bool,
     /// `bin/rails` — Rails, and not merely Ruby.
     ///
     /// A `Gemfile` is Sinatra, Jekyll and a Ruby script with two dependencies
@@ -782,6 +796,14 @@ pub fn fingerprint(dir: &Path) -> Fingerprint {
         bun_lock: dir.join("bun.lock").is_file()
             || dir.join("bun.lockb").is_file()
             || dir.join("bunfig.toml").is_file(),
+        // Packages rather than frameworks, for `quickcmd`'s four checking rows.
+        // Read as the path the package installs into rather than out of
+        // `composer.lock`, because this struct is a set of file markers and a
+        // lock file reader here would be a second answer to a question
+        // `deps.rs` already answers.
+        pint: dir.join("vendor/bin/pint").is_file(),
+        wayfinder: dir.join("vendor/laravel/wayfinder").is_dir(),
+        boost: dir.join("vendor/laravel/boost").is_dir(),
         npm_lock: dir.join("package-lock.json").is_file()
             || dir.join("yarn.lock").is_file()
             || dir.join("pnpm-lock.yaml").is_file(),

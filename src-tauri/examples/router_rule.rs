@@ -33,6 +33,7 @@ fn main() {
         node_port: None,
         php_version: Some("8.4"),
         sidecars: &sidecars,
+        components: &Default::default(),
     };
 
     // A compose document rather than a fragment, so the output can be handed

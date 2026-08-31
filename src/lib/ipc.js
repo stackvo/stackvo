@@ -477,7 +477,27 @@ export const api = {
    * request. That comes back as an error with the reason in it rather than as
    * a disabled button, because the reason is the useful part.
    */
-  requestReplay: (name, key) => call('request_replay', { name, key }),
+  /**
+   * Send a recorded request again, and hand back both recordings.
+   *
+   * `snapshot` — `{ service, name }` — restores a database snapshot before the
+   * second run, which is what makes replaying a POST safe to press twice. It
+   * is never chosen for you: this app cannot know which snapshot holds the
+   * state the original ran under.
+   */
+  requestReplay: (name, key, snapshot) => call('request_replay', { name, key, snapshot }),
+  /**
+   * Whether this project is recording the sessions its requests run under.
+   *
+   * The answer carries counts and sizes, never a cookie value or a body — the
+   * screen has to be able to say what would be sent without being a second
+   * place the credential exists.
+   */
+  captureStatus: (name) => call('capture_status', { name }),
+  /** Start recording, for a stated number of minutes. Audited. */
+  captureArm: (name, minutes) => call('capture_arm', { name, minutes }),
+  /** Stop, and delete what was captured. Audited, with the count. */
+  captureDisarm: (name) => call('capture_disarm', { name }),
   /** Profile one quick command. Resolves with an operation id, like a build. */
   spxRecordCommand: (name, id) => call('spx_record_command', { name, id }),
   /** Where one recording spent its time. */
@@ -656,6 +676,15 @@ export const api = {
    * anything is created, and carries them even when it refuses.
    */
   worktreeSupport: (name) => call('worktree_support', { name }),
+  /**
+   * Give this worktree its own Passport signing keys.
+   *
+   * Generates a new pair inside the branch's container. It never copies the
+   * parent's — a branch that could mint the parent's tokens is the opposite of
+   * what a worktree's isolation is for — and it refuses to overwrite a key that
+   * is already there, because that invalidates every token issued under it.
+   */
+  worktreePassportKeys: (name) => call('worktree_passport_keys', { name }),
   worktreeList: () => call('worktree_list'),
   worktreePlan: (name, branch, options = null) => call('worktree_plan', { name, branch, options }),
   worktreeCreate: (name, branch, options = null) =>
@@ -876,6 +905,14 @@ export const api = {
   // purpose — it is a receipt for the list that was on screen.
   projectHooksPlan: (name) => call('project_hooks_plan', { name }),
   projectSidecars: (name) => call('project_sidecars', { name }),
+  /**
+   * The other runtimes this repository declared.
+   *
+   * A separate call from `projectSidecars` because they are separate
+   * declarations: a sidecar is somebody else's image, a component is this
+   * repository's own code, built here and routed at its own hostname.
+   */
+  projectComponents: (name) => call('project_components', { name }),
   projectHooksApprove: (name, digest) => call('project_hooks_approve', { name, digest }),
   projectHooksRevoke: (name) => call('project_hooks_revoke', { name }),
   /**
@@ -934,6 +971,83 @@ export const api = {
    * none of it moves without somebody regenerating, installing or refreshing.
    */
   policyCompliance: () => call('policy_compliance'),
+  /**
+   * What can leave this machine, as far as Docker can say.
+   *
+   * Asked, not polled: it inspects every container and reads a stats sample per
+   * running one, which is cheap once and rude on a timer.
+   */
+  egressReport: () => call('egress_report'),
+  /**
+   * What a project depends on, read from its own lock files. No network.
+   */
+  depsReport: (name) => call('deps_report', { name }),
+  /**
+   * The same report, plus a query to `api.osv.dev`.
+   *
+   * A separate wrapper because it is a separate decision: this one sends the
+   * names and versions of the project's dependencies off the machine, and the
+   * sentence saying so sits above the button that calls it.
+   */
+  depsAdvisories: (name) => call('deps_advisories', { name }),
+  /**
+   * The MCP servers this project publishes, and whether they are registered in
+   * a way that can start here.
+   *
+   * `boost:install` writes `php artisan boost:mcp` into the project's
+   * `.mcp.json`, and there is no php on this host. Reads three of the project's
+   * own files, changes nothing, touches no network.
+   */
+  /**
+   * Telescope, Horizon and Pulse: the address each one answers on, and the
+   * precondition each one goes quietly empty without.
+   *
+   * Read from `.env` and `composer.lock` — not from `config/*.php`, which a
+   * `config:cache` can make disagree with both. Every row says which key it
+   * read, because that is what makes it an observation rather than a verdict.
+   */
+  /**
+   * What it would take for `stackvo artisan dusk` to work here.
+   *
+   * Reads. The image follows this machine's architecture — no arm64 Chrome
+   * exists, so Apple Silicon gets chromium.
+   */
+  /**
+   * Whether Octane serves this project, and whether saves reload it.
+   *
+   * `nginx`, `apache` and `caddy` read the file on every request, so there is
+   * nothing to reload and the card says so instead of offering a no-op.
+   */
+  octaneStatus: (name) => call('octane_status', { name }),
+  /**
+   * Reload this project's workers when a save touches the application.
+   *
+   * Off by default, and it has to be: a reload arriving while a request is
+   * being served kills that request.
+   */
+  octaneAutoReload: (name, enabled) => call('octane_auto_reload', { name, enabled }),
+  /** Replace the workers now. The socket stays open. */
+  octaneReload: (name) => call('octane_reload', { name }),
+  duskPlan: (name) => call('dusk_plan', { name }),
+  /** Declare the browser container, and write .env.dusk.local if it is absent. */
+  duskApply: (name) => call('dusk_apply', { name }),
+  /**
+   * Teach the browser's container to trust this machine's CA.
+   *
+   * Three results rather than one: the system bundle and Chromium's NSS
+   * database fail separately, and the second needs a tool not every image has.
+   * Writes into the container's writable layer, so recreating it loses this.
+   */
+  duskTrust: (name) => call('dusk_trust', { name }),
+  dashboardsReport: (name) => call('dashboards_report', { name }),
+  boostStatus: (name) => call('boost_status', { name }),
+  /**
+   * Point one of those files at the server inside the container.
+   *
+   * Read, replace one entry, write back — the same three rules
+   * `agentInstall` follows, on the same kind of file.
+   */
+  boostRegister: (name, file, server) => call('boost_register', { name, file, server }),
   /** Where each credential lives, and whether this machine has a keystore. */
   secretsStatus: () => call('secrets_status'),
   /**
@@ -1033,6 +1147,25 @@ export const api = {
    * "it checked and I am fine" from "it did not check".
    */
   projectVerify: (name) => call('project_verify', { name }),
+  /**
+   * Write `stackvo.lock`: the service versions and package digests this
+   * project is currently running against.
+   *
+   * A mutation, and only ever from a button. `lock.rs` carries the reasoning —
+   * a lock the app refreshed on its own would always agree with the machine and
+   * could never disagree with it.
+   */
+  projectLock: (name) => call('project_lock', { name }),
+  /**
+   * `git bisect`, with the environment the commit was written against.
+   *
+   * Read when the pane opens and after every step, never polled: a bisect only
+   * moves when somebody presses a button.
+   */
+  bisectStatus: (name) => call('bisect_status', { name }),
+  bisectStart: (name, bad, good) => call('bisect_start', { name, bad, good }),
+  bisectMark: (name, verdict) => call('bisect_mark', { name, verdict }),
+  bisectReset: (name) => call('bisect_reset', { name }),
   localeGet: () => call('locale_get'),
 
   /**
@@ -1060,6 +1193,13 @@ export const api = {
   containersStartAll: () => call('containers_start_all'),
   containersStopAll: () => call('containers_stop_all'),
   containersRestartAll: () => call('containers_restart_all'),
+  /**
+   * Rebuild every project's image, one after another.
+   *
+   * `failed` names the projects that did not build rather than counting them —
+   * the console has the output, this has the list.
+   */
+  projectsBuildAll: (noCache = false) => call('projects_build_all', { noCache }),
 
   composeUpProject: (name) => call('compose_up_project', { name }),
   composeRestart: () => call('compose_restart'),

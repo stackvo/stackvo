@@ -1297,6 +1297,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            components: Default::default(),
             providers: Vec::new(),
             local: Vec::new(),
         };

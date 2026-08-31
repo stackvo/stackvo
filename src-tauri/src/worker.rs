@@ -52,10 +52,33 @@ pub enum Kind {
     /// require, and `wss://shop.loc/app/<key>` is same-origin with a
     /// certificate the browser already trusts.
     Reverb,
+    /// Laravel Pulse's recorder — `pulse:check`.
+    ///
+    /// **A long process, and that is why it is here rather than in
+    /// [`crate::cron`].** Horizon's snapshot and Telescope's prune are commands
+    /// that start, do a thing and exit, which is what a schedule is for.
+    /// `pulse:check` is a loop: it takes a server's CPU, memory and disk
+    /// readings on an interval and does not return. A schedule entry for it
+    /// would start a second copy every time it fired.
+    Pulse,
+    /// Pulse's ingest worker — `pulse:work`.
+    ///
+    /// Only when the application ingests through Redis. With the default
+    /// storage ingest there is nothing to drain and this worker would sit doing
+    /// nothing while looking like a piece of the installation, which is worse
+    /// than not offering it.
+    PulseWork,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Queue, Kind::Scheduler, Kind::Horizon, Kind::Reverb];
+    pub const ALL: [Kind; 6] = [
+        Kind::Queue,
+        Kind::Scheduler,
+        Kind::Horizon,
+        Kind::Reverb,
+        Kind::Pulse,
+        Kind::PulseWork,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -63,6 +86,8 @@ impl Kind {
             Kind::Scheduler => "scheduler",
             Kind::Horizon => "horizon",
             Kind::Reverb => "reverb",
+            Kind::Pulse => "pulse",
+            Kind::PulseWork => "pulsework",
         }
     }
 
@@ -98,6 +123,8 @@ impl Kind {
                 "--host=0.0.0.0",
                 "--port=8080",
             ],
+            Kind::Pulse => &["php", "artisan", "pulse:check"],
+            Kind::PulseWork => &["php", "artisan", "pulse:work"],
         }
     }
 
@@ -173,6 +200,26 @@ pub fn available(root: &Path, project: &str) -> Vec<Kind> {
     }
     if requires("laravel/reverb") {
         out.push(Kind::Reverb);
+    }
+
+    // Pulse's two, and the second only when the application asks for it.
+    //
+    // `pulse:check` follows the same rule as the three above: the package is in
+    // `require`. `pulse:work` follows a *second* fact — the ingest — because it
+    // is a worker with nothing to do unless ingest goes through Redis, and a
+    // row that starts a process which immediately idles reads as a piece of the
+    // installation rather than as the no-op it is.
+    //
+    // The ingest is read from the project's own `.env`, and that is a limit
+    // rather than a measurement: a project that has run `config:cache` has a
+    // compiled configuration this does not read. It is the honest source
+    // available, and `dashboards.rs` says so beside every value it takes from
+    // there.
+    if requires("laravel/pulse") {
+        out.push(Kind::Pulse);
+        if crate::dashboards::env_value(&dir, "PULSE_INGEST").as_deref() == Some("redis") {
+            out.push(Kind::PulseWork);
+        }
     }
     out
 }
@@ -348,6 +395,10 @@ mod tests {
             ("myapp", Kind::Queue),
             ("parser.ajans", Kind::Scheduler),
             ("api-v2.shop", Kind::Horizon),
+            // The two that share a prefix: `pulse` must not claim
+            // `…-pulsework`, which is what a `starts_with` here would do.
+            ("shop", Kind::Pulse),
+            ("shop", Kind::PulseWork),
         ] {
             let id = container_id(project, kind);
             assert_eq!(parse_id(&id), Some((project.to_string(), kind)));
@@ -405,6 +456,41 @@ mod tests {
         assert_eq!(available(&dir, "app"), vec![Kind::Queue, Kind::Scheduler]);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Pulse's recorder follows the package; its ingest worker follows the
+    /// ingest, because a `pulse:work` with storage ingest is a process with
+    /// nothing to drain.
+    #[test]
+    fn pulses_ingest_worker_is_offered_only_where_the_env_asks_for_it() {
+        let dir = std::env::temp_dir().join(format!("stackvo-worker-pulse-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let project = dir.join("projects/app");
+        std::fs::create_dir_all(&project).unwrap();
+        crate::workspace::point_at_projects(&dir, &dir.join("projects")).unwrap();
+        std::fs::write(project.join("artisan"), "#!/usr/bin/env php").unwrap();
+        std::fs::write(
+            project.join("composer.json"),
+            r#"{ "require": { "php": "^8.2", "laravel/pulse": "^1.0" } }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            available(&dir, "app"),
+            vec![Kind::Queue, Kind::Scheduler, Kind::Pulse]
+        );
+
+        std::fs::write(project.join(".env"), "PULSE_INGEST=redis\n").unwrap();
+        assert_eq!(
+            available(&dir, "app"),
+            vec![Kind::Queue, Kind::Scheduler, Kind::Pulse, Kind::PulseWork]
+        );
+
+        // Neither of them is reachable from a browser, and neither runs a
+        // command that is not `pulse:`.
+        assert!(!Kind::Pulse.routed() && !Kind::PulseWork.routed());
+        assert_eq!(Kind::Pulse.command().last(), Some(&"pulse:check"));
+        assert_eq!(Kind::PulseWork.command().last(), Some(&"pulse:work"));
     }
 
     /// Reverb is the only worker a browser has to reach, and the whole of that

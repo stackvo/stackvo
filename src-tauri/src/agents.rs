@@ -542,7 +542,7 @@ pub fn toml_installed_command(text: &str) -> Option<String> {
 /// An empty or whitespace-only file is an empty object, not an error: that is
 /// what a file the client created and never wrote to looks like, and refusing
 /// it would report a working installation as broken.
-fn document(text: &str) -> Result<serde_json::Value> {
+pub(crate) fn document(text: &str) -> Result<serde_json::Value> {
     if text.trim().is_empty() {
         return Ok(serde_json::Value::Object(serde_json::Map::new()));
     }
@@ -575,6 +575,23 @@ fn document(text: &str) -> Result<serde_json::Value> {
 /// strings and touches no disk — the tests below drive it with the files real
 /// clients ship.
 pub fn insert(text: &str, shape: Shape, entry: serde_json::Value) -> Result<String> {
+    insert_named(text, shape, ENTRY, entry)
+}
+
+/// The same edit, under a name the caller chooses.
+///
+/// [`crate::boost`] registers a *project's* own MCP server — Boost's, or one
+/// the project declared in `routes/ai.php` — into the same files with the same
+/// three rules. What it cannot borrow is the name: [`ENTRY`] is this
+/// application's own server, and a repair that renamed somebody's Boost
+/// registration would leave two servers in their client rather than one working
+/// one.
+pub fn insert_named(
+    text: &str,
+    shape: Shape,
+    name: &str,
+    entry: serde_json::Value,
+) -> Result<String> {
     let mut document = document(text)?;
     let object = document.as_object_mut().expect("checked in `document`");
 
@@ -600,7 +617,7 @@ pub fn insert(text: &str, shape: Shape, entry: serde_json::Value) -> Result<Stri
         .with_hint(crate::hints::AGENT_CONFIG_UNPARSEABLE));
     };
 
-    map.insert(ENTRY.to_string(), entry);
+    map.insert(name.to_string(), entry);
     render(&document, text)
 }
 

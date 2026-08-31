@@ -149,6 +149,23 @@ pub fn repository_of(reference: &str) -> &str {
     }
 }
 
+/// The registry host a reference names, when it names one.
+///
+/// Docker's rule, and it is entirely about the first component: `mysql:8.0` has
+/// a colon and no host; `docker.io/library/mysql` has one. A first component
+/// counts as a host when it carries a dot or a port, or is `localhost`.
+///
+/// `None` therefore means **Docker Hub** rather than "no registry" — every
+/// unqualified reference is pulled from `docker.io`, and a caller that reported
+/// "none" would be reporting the one host it most wanted to name. Callers say
+/// so themselves rather than having a default baked in here, because the two
+/// readers want different words for it: [`crate::policy`] asks the yes/no
+/// question to decide whether to prefix, and [`crate::egress`] wants the name.
+pub fn registry_of(reference: &str) -> Option<&str> {
+    let (first, _) = reference.split_once('/')?;
+    (first.contains('.') || first.contains(':') || first == "localhost").then_some(first)
+}
+
 /// What this application ships, and whether it moves — for the screen that
 /// shows somebody what their machine will pull.
 #[derive(Debug, Clone, Serialize)]

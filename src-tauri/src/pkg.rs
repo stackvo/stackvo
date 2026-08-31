@@ -267,6 +267,32 @@ pub struct Support {
     pub source: Option<String>,
 }
 
+/// One command a package brings, run inside that package's own container.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Command {
+    /// A DNS label, and the only thing a caller ever sends.
+    ///
+    /// The catalogue's rule, unchanged: the frontend sends an id and never a
+    /// program. What is new is only where the id can come from.
+    pub id: String,
+    /// argv, never a shell string — [`crate::quickcmd`]'s rule, and it matters
+    /// more here than there: this text arrived over a network.
+    pub exec: Vec<String>,
+    /// One line about what it does. Shown beside the command.
+    ///
+    /// **Not translated, and that is a fact rather than an omission**: it is
+    /// the package author's sentence in the language they wrote it, exactly as
+    /// `market.rs` already treats a package's description. The pane marks it
+    /// with `lang=""` for the same reason.
+    #[serde(default)]
+    pub about: String,
+    /// Wants a TTY and a human at it — `redis-cli` does, `redis-cli info` does
+    /// not.
+    #[serde(default)]
+    pub interactive: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
@@ -295,6 +321,38 @@ pub struct Manifest {
     pub depends_on: Vec<Dependency>,
     #[serde(default)]
     pub companions: Vec<Companion>,
+    /// Commands this package brings with it.
+    ///
+    /// ## Why a package may name one at all
+    ///
+    /// The same argument [`crate::sidecar`] makes, on the other side of the
+    /// line. A project's `stackvo.json` may name a command because the
+    /// project's container **already runs that repository's code**, so naming a
+    /// command in it gains the repository nothing it did not have. A package
+    /// is not that: a sidecar is a different image, and that is why a sidecar's
+    /// containment had to be built rather than inherited.
+    ///
+    /// A package command is the *first* case, not the second. The package
+    /// already chose the image, already wrote the compose fragment and already
+    /// decides what that container runs — and it reached this machine through
+    /// the whole chain: a signature over the registry, the registry's hash over
+    /// this manifest, and this manifest's hashes over every byte beside it. A
+    /// package able to name `redis-cli` in a container it already defined has
+    /// gained nothing it did not already have.
+    ///
+    /// ## And the containment that is still built
+    ///
+    /// **The command runs in that instance's own container and nowhere else.**
+    /// It is not offered to a project, it never reaches the host, and the
+    /// container name is derived from the instance rather than declared — so a
+    /// package cannot name somebody else's container any more than it can name
+    /// a host port.
+    ///
+    /// This is the DDEV add-on shape — installing `ddev-redis` also gives you
+    /// `ddev redis-cli` — with the one thing DDEV does not have: every byte of
+    /// it was verified before it was read.
+    #[serde(default)]
+    pub commands: Vec<Command>,
     pub compose: Blob,
     pub support: Support,
     #[serde(default)]
@@ -441,6 +499,35 @@ impl Manifest {
             "supported" | "deprecated" | "eol"
         ) {
             return bad(format!("support status {:?}", self.support.status));
+        }
+
+        // Commands. The id is the only thing a caller ever sends, so it is held
+        // to the same shape every other id in this manifest is; the argv is
+        // held to `quickcmd`'s rule, which matters more here than it does
+        // there because this text arrived over a network.
+        unique(self.commands.iter().map(|c| c.id.as_str()), "command", &who)?;
+        for command in &self.commands {
+            if !is_id(&command.id) {
+                return bad(format!("command {:?} is not a DNS label", command.id));
+            }
+            // A command with no program is not a shorter spelling of anything —
+            // it is a row that resolves to `docker exec <container>` and hands
+            // the daemon no argument at all.
+            let Some(program) = command.exec.first() else {
+                return bad(format!("command {:?} has no argv", command.id));
+            };
+            if program.trim().is_empty() {
+                return bad(format!(
+                    "command {:?} starts with an empty word",
+                    command.id
+                ));
+            }
+            // No shell metacharacter check, and that is deliberate: there is no
+            // shell. The argv is passed to `docker exec` as an array, so a `;`
+            // inside a word is a `;` inside an argument. Refusing one here
+            // would be a rule that reads as security and only breaks
+            // legitimate arguments — `redis-cli --scan --pattern 'a*'` among
+            // them.
         }
 
         for companion in &self.companions {

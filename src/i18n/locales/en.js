@@ -13,6 +13,8 @@ export default {
     refresh: 'Refresh',
     loading: 'Loading…',
     never: '—',
+    yes: 'Yes',
+    no: 'No',
     cancel: 'Cancel',
     close: 'Close',
     copy: 'Copy',
@@ -268,6 +270,19 @@ export default {
     sshAgentNone: 'No SSH agent is running on this machine, so there is nothing to forward.',
   },
   worktree: {
+    auth: {
+      title: 'Session and tokens on this hostname',
+      sanctumSet:
+        'Sanctum ties a session to a list of hostnames, and this branch has one your project’s .env did not know about. StackVo gives this container:',
+      sanctumDefault:
+        'Sanctum is installed and nothing needed changing: your project pins neither SESSION_DOMAIN nor SANCTUM_STATEFUL_DOMAINS, so Laravel’s own default is the current host and Sanctum’s follows APP_URL — which StackVo has already pointed at this branch.',
+      passportMissing:
+        'Passport signs tokens with storage/oauth-private.key, and that file is gitignored — so this worktree does not have one and every token request comes back as a stack trace. StackVo will generate a new pair here. It does not copy the parent’s: a branch that could mint the tokens it branched from is the opposite of what its own database is for.',
+      passportPresent: 'Passport has its signing keys in this worktree.',
+      passportGenerate: 'Generate keys for this branch',
+      passportDone:
+        'Generated. Tokens issued in the parent are not valid here, and that is the point.',
+    },
     title: 'Worktrees',
     explain:
       'Give a branch an environment of its own: its own directory, its own hostname, its own database. Both branches run at the same time, and nothing is written into the checkout that git would notice.',
@@ -438,8 +453,19 @@ export default {
   },
 
   quickActions: {
+    confirmTitle: 'Every container on this machine',
+    confirmStart:
+      'Start every container that is switched on — every project and every service. Sites that are already up are left as they are.',
+    confirmStop:
+      'Stop every container at once. Every site on this machine goes down immediately, and starting them again is a separate act rather than an undo.',
+    confirmRestart:
+      'Restart every container. Each one goes down and comes back, so every site is briefly unreachable and anything holding state in memory loses it.',
+    confirmRebuild:
+      'Rebuild the image of every project on this machine, one after another. This takes as long as the builds do; a project that fails is named afterwards and the others still build.',
     startAll: 'Start all containers',
     stopAll: 'Stop all containers',
+    rebuildAll: 'Rebuild every project image',
+    rebuildFailed: 'These did not build: {names}. The console has the output.',
     restart: 'Restart all containers',
   },
 
@@ -1352,6 +1378,14 @@ export default {
   },
 
   spx: {
+    startFrom: 'Start the replay from a snapshot',
+    startFromNone: 'Whatever the database holds now',
+    startFromWhy:
+      'A replay of anything other than a GET does the thing again — a second order, a second row. Naming a snapshot restores it before the second run, so pressing replay twice starts from the same place both times. StackVo never picks one for you: it cannot know which snapshot holds the state the original ran under.',
+    startFromChosen:
+      'It is restored before the second run and never after — restoring afterwards would discard what the replay did. A safety copy of what is there now is taken first, as with any restore. This makes the replay repeatable; it does not make the two numbers a controlled experiment.',
+    replayedFrom: 'The second run started from the snapshot {snapshot}.',
+    replayWrites: 'Send again — this one writes',
     title: 'Sampling profiler (php-spx)',
     explain:
       'The profiler you can leave on. Xdebug records every call exactly and costs several times the request; this samples, so the page still feels like the page.',
@@ -1385,6 +1419,16 @@ export default {
     recording: 'Waiting for the page…',
     replay: 'Send this request again',
     replayedWhat: 'Sent {what} again and recorded it.',
+    captureWhat:
+      'A POST cannot be replayed from a recording, because a recording holds the request line and nothing else. Capturing the session changes that — and it means writing this project’s request cookies and form input to disk, which is why it is a permission with a clock on it rather than a setting.',
+    captureMinutes: 'For',
+    captureArm: 'Capture sessions',
+    captureNeedsBridge:
+      'The debug bridge is what would do the capturing, and it is off for this project. Switch it on in the Dumps pane first — arming a window now would grant the permission and record nothing.',
+    captureArmed:
+      'Recording sessions for {minutes} more minute(s). {count} captured so far — cookies and bodies, on this machine only.',
+    captureCookies: '{count} cookie(s)',
+    captureDisarm: 'Stop and delete what was captured',
     replayCaveat:
       'One run against one run is not a benchmark — a cold opcache, a cold query cache and whatever else this machine was doing are all inside the difference. Only a GET can be replayed: a recording names the request line and nothing else.',
     recordedOne: 'Recorded {what} — {took}.',
@@ -1470,6 +1514,7 @@ export default {
   },
 
   quickCmd: {
+    inInstance: 'in {instance}',
     title: 'Commands',
     explain:
       'The commands you run in this project, without opening a terminal and remembering the container name. Only what the project has the files for is offered.',
@@ -1940,6 +1985,27 @@ export default {
     showTourHint:
       'The six things the app does that are hardest to find. Shown once, on the next launch.',
     showTourAction: 'Show again',
+    egress: {
+      title: 'What can leave this machine',
+      desc: 'Which of your containers can reach the internet, and where each one’s image came from.',
+      run: 'Check',
+      summary:
+        'Images came from: {registries}. {contained} of {total} containers cannot route out at all.',
+      mirror:
+        'A policy points every pull at {prefix}. A container marked below did not come through it.',
+      container: 'Container',
+      registry: 'Image came from',
+      reach: 'Can reach out',
+      sent: 'Sent',
+      bypassed: 'Not from the mirror',
+      reachState: {
+        outside: 'Yes',
+        contained: 'No',
+        unknown: 'Cannot tell',
+      },
+      noDestinations:
+        'This does not say where anything connected to. Docker keeps no connection log, and answering that would need a packet capture inside each container’s network namespace or a proxy in front of it — neither of which this app will install on your machine to fill in a report. “Can reach out” is a property of the network Docker created, not a record of traffic; the byte counts include the StackVo network between your own containers, so treat them as “did anything leave at all”, not as internet usage.',
+    },
     compliance: {
       title: 'Is the policy actually holding?',
       desc: 'What an administrator pushed, held against what this machine currently is.',
@@ -2519,6 +2585,12 @@ export default {
     horizonDesc:
       'php artisan horizon — Laravel Horizon supervisor, offered because composer.json requires it.',
     reverb: 'Reverb',
+    pulse: 'Pulse recorder',
+    pulseDesc:
+      'php artisan pulse:check — takes this machine\u2019s readings on an interval so Pulse has something to draw. A long process, not a scheduled command: a schedule entry would start a second copy every time it fired.',
+    pulsework: 'Pulse ingest',
+    pulseworkDesc:
+      'php artisan pulse:work — drains what Pulse buffered in Redis into its storage. Offered only where .env says PULSE_INGEST=redis, because with storage ingest there is nothing to drain.',
     reverbDesc:
       'php artisan reverb:start — routed on this project\u2019s own domain under /app and /apps, so wss:// works with the certificate you already have.',
     start: 'Start',
@@ -2766,8 +2838,9 @@ export default {
     public: 'Public address',
     noTunnel:
       'No tunnel is running, so there is no public address. Start one in Share above if a provider refuses the local one.',
-    takesLocal: 'Local works',
-    takesPublic: 'Needs public',
+    pasteLocal: 'Paste the local one',
+    pastePublic: 'Paste the public one',
+    startATunnel: '— start a tunnel in Share above to get one',
   },
   landing: {
     title: 'Landing page',
@@ -2821,6 +2894,8 @@ export default {
       env: 'in .env on this machine',
       tracked: 'in a file git is tracking',
     },
+    modelKeyEgress:
+      'One of these is a model provider’s key, so this application sends every request it makes to a service outside this machine. Settings → Diagnostics → What can leave this machine answers the question that follows: which of your containers can reach the internet at all. It asks Docker rather than inferring it.',
     rule: {
       awsAccessKey: 'Looks like an AWS access key id',
       privateKey: 'Looks like a private key',
@@ -2830,8 +2905,218 @@ export default {
       googleApiKey: 'Looks like a Google API key',
       sendgridKey: 'Looks like a SendGrid key',
       openaiKey: 'Looks like an OpenAI key',
+      anthropicKey: 'Looks like an Anthropic key',
       unstoredSecret: 'Named as a credential and still in the file — move it to the keystore',
     },
+  },
+  bisect: {
+    title: 'Find the commit that did it',
+    desc: 'git bisect, plus the environment each commit was written against.',
+    noRepository: 'This project is not a git repository, so there is no history to search.',
+    explain:
+      'Name a revision where the behaviour is and one where it is not, and git halves the range at every step. What this adds is the half git cannot know: which runtime and which service versions the commit under test expected, and how this machine differs. Uncommitted changes are refused first — a bisect moves your checkout from commit to commit.',
+    bad: 'Where it is broken',
+    badHint: 'Usually HEAD.',
+    good: 'Where it worked',
+    goodHint: 'A tag, a branch, or a commit.',
+    start: 'Start bisecting',
+    steps: 'about {count} step(s) left',
+    markBad: 'Broken here',
+    markGood: 'Works here',
+    markSkip: 'Cannot test this one',
+    reset: 'Stop and put my checkout back',
+    found: '{commit} is the first commit where it is broken.',
+    noDrift:
+      'This machine matches what this commit expected, so the environment is not in your bisect.',
+    driftTitle: 'This commit expected a different environment',
+    drift: {
+      runtime: '{subject} {wanted}',
+      service: '{subject} {wanted}',
+      serviceOff: '{subject} {wanted}',
+    },
+    driftFound: 'You are running {found}.',
+    driftAbsent: 'It is not installed and switched on here.',
+    driftHint:
+      'Nothing is changed for you. Matching an old service version means replacing a container whose volume holds your data, so it is your decision — the Market page is where to make it, and it asks first. Until then, treat a result from this range with the difference above in mind.',
+  },
+  components: {
+    title: 'The rest of this repository',
+    explain:
+      'Other directories of this project, each built with its own runtime and reachable at its own hostname. One repository, one project, one start.',
+    servedAt: 'Served at',
+    noDomain:
+      'No hostname — reachable from this project’s other containers and from nothing outside. That is what a worker wants.',
+    reachedAt: 'Reached from the other containers at',
+    noHost:
+      'None of these opens a port on your machine. A component is reachable from this project’s containers, and from a browser only through the hostname it names — which is what stops two clones of one repository fighting over the same number.',
+  },
+  boards: {
+    title: 'Telescope, Horizon and Pulse',
+    desc: 'These already open on this project’s own domain. What nothing says is why each of them can sit there empty while every container is green.',
+    read: 'Read this project’s dashboards',
+    noEnv:
+      'This project has no .env, so nothing below was read from one. That is not the same as nothing being wrong.',
+    noneInstalled:
+      'None of them is in composer.lock ({names}). Each installs inside this project’s container — for example `stackvo composer require laravel/horizon`.',
+    defaultPath:
+      'each dashboard’s own default path. A project that moved it moved it in config/*.php, which this app does not read.',
+    readFrom: 'Read from .env, key {key}.',
+    cachedConfig:
+      'A project that has run config:cache has a compiled configuration this does not read, and it can say something else.',
+    workerUp: '{name} is running.',
+    workerDown: '{name} is not running — start it on the Workers card.',
+    scout:
+      'Scout is installed and its driver is {driver}. Switching the service on was the easy half: an empty index returns nothing for every search, so the application looks broken while every container here is green. Filling it is the application\u2019s job, not this app\u2019s.',
+    scoutHow:
+      'StackVo does not offer a button for it, because scout:import takes a model class name it cannot know — and a button that filled in a guess and ran it would be worse than none. Put your own line in the commands block of stackvo.json and it appears beside the built-in ones:',
+    addToSchedule: 'Add to this project’s schedule',
+    alreadyScheduled: 'Already scheduled',
+    horizon: {
+      title: 'Horizon',
+      what: 'A supervisor and a dashboard for Redis queues — throughput, wait times, failed jobs, and a retry button.',
+    },
+    telescope: {
+      title: 'Telescope',
+      what: 'A recorder for requests, queries, jobs, mail, cache hits and exceptions, with the query behind each one.',
+      migrations:
+        'Telescope needs `telescope:install` and `migrate` to have run. This app does not query your database, so it cannot tell you whether they have — an empty dashboard with no error is what a missing migration looks like.',
+    },
+    pulse: {
+      title: 'Pulse',
+      what: 'Server load, slow queries, slow jobs, slow requests and the users behind them, sampled continuously.',
+    },
+    observation: {
+      queueNotRedis:
+        'The queue connection is “{value}”, and Horizon only works with redis. It will load and show nothing.',
+      storageSqlite:
+        'Pulse’s storage is “{value}”. Its storage driver wants MySQL, MariaDB or PostgreSQL and refuses SQLite.',
+      ingestSharesTheQueuesRedis:
+        'Pulse ingests through Redis and names no connection of its own, so it shares the one the queue uses. Pulse asks for a separate connection: a busy queue and a busy ingest on one connection interfere.',
+    },
+    need: {
+      horizonSnapshot:
+        'Horizon’s metrics graphs stay flat until this runs on a timer — it is the only thing that writes a snapshot:',
+      telescopePrune:
+        'Without this, telescope_entries grows for as long as the project is open and the symptom is a full disk:',
+    },
+  },
+  boost: {
+    title: 'The MCP server inside this container',
+    desc: 'Laravel Boost installs an assistant server and registers it with `php artisan boost:mcp` — a php on your machine. There is none. This registers the one that works.',
+    read: 'Read this project’s MCP setup',
+    notInstalled: 'not installed',
+    installHow:
+      'None of the three is in composer.lock. Boost is a dev dependency and installs inside this project’s container: `stackvo composer require laravel/boost --dev`, then `stackvo artisan boost:install`. Come back here afterwards — what boost:install writes cannot start on this machine, and the row below is how it is repaired.',
+    noRoutes:
+      'laravel/mcp is installed and this project has no routes/ai.php, so it has not registered a server yet. StackVo reads the handles out of that file rather than assuming one: a handle invented here would produce `artisan mcp:start` failing in your assistant.',
+    noServers: 'Nothing in this project publishes an MCP server yet.',
+    serverBoost: 'Laravel Boost — schema, routes, tinker, version-aware documentation search',
+    serverLocal: 'Mcp::local(‘{handle}’) — over stdio',
+    serverWeb: 'Mcp::web(‘{path}’) — an HTTP route in the application',
+    webAlreadyServed:
+      'Nothing to register: this is an ordinary route, so it is already served on this project’s own domain over the certificate the browser trusts. No new certificate, no hosts entry, no second router.',
+    willWrite: 'The line that gets registered:',
+    register: 'Register',
+    repair: 'Repair',
+    wrote: 'Written: {path}. The previous contents are beside it as .stackvo-backup.',
+    state: {
+      absent: 'That file does not exist yet. Registering creates it.',
+      unregistered: 'The file is there and nothing in it runs this server.',
+      container: 'Registered, and it goes through this project’s container.',
+      hostPhp:
+        'Registered against a php on this machine — there is none, so this server cannot start. This is what boost:install writes.',
+      other:
+        'Registered as something StackVo does not recognise. Left alone: somebody wired this deliberately.',
+      unparseable:
+        'That file is not JSON this can edit, so it is not touched. A file with comments in it, or one that is halfway through an edit, is left exactly as it is.',
+    },
+  },
+  dusk: {
+    title: 'Browser tests (Dusk)',
+    desc: 'A browser in a container, and the certificate step nobody’s docker-compose.yml does — a Dusk test that dies on a certificate warning reads as a bug in your code.',
+    read: 'Read this project’s Dusk setup',
+    notInstalled:
+      'laravel/dusk is not in composer.lock. It installs inside this project’s container: `stackvo composer require laravel/dusk --dev`, then `stackvo artisan dusk:install`.',
+    version: 'laravel/dusk {version}.',
+    image: 'The browser container would be',
+    imageWhy:
+      'chromium rather than chrome on Apple Silicon: Google publishes no arm64 Chrome, and a browser under emulation is a suite that times out for a reason nobody finds.',
+    declared: 'The browser container is declared in stackvo.json',
+    notDeclared: 'The browser container is not declared yet',
+    up: 'and it is running.',
+    down: 'and it is not running.',
+    envPresent: '.env.dusk.local is already there. StackVo will not overwrite it.',
+    envWillWrite:
+      '.env.dusk.local would be written with this. Dusk loads it in place of .env for a run, so read it first:',
+    apply: 'Declare the container and write the file',
+    applyAgain: 'Update the declaration',
+    trustWhy:
+      'The browser has to open https:// from inside a container that does not know this machine’s certificate authority. This puts it in two places: the system bundle, which curl and the JVM read, and the NSS database, which is the one Chromium reads.',
+    trustAgain:
+      'It writes into the container’s writable layer, so recreating the container loses it and this has to be run again. That is how it works, not a fault in it.',
+    trust: 'Trust this machine’s CA in the browser',
+    trustNeedsRunning: 'Start the project first — this writes into a running container.',
+    step: {
+      copy: 'Copy the certificate authority into the container',
+      bundle: 'Add it to the system bundle',
+      nss: 'Add it to Chromium’s own certificate database',
+    },
+    databaseIsolated:
+      'Dusk writes to a real database rather than a transaction that gets rolled back — and this is a worktree with a database of its own, which is the right place for that.',
+    databaseShared:
+      'Dusk writes to a real database rather than a transaction that gets rolled back. A worktree gives a branch a database of its own, which is the honest place to run it.',
+    limit:
+      'This does not run your tests. It makes an environment `stackvo artisan dusk` can run in. Your DuskTestCase is not touched — the driver, the window size and the Chrome flags are your code.',
+  },
+  octane: {
+    title: 'Octane reload',
+    desc: 'Octane holds your application in memory, so an edited file changes nothing until the workers are replaced — and that reads as a bug in your code.',
+    read: 'Read this project’s server',
+    notOctane:
+      'This project is served by {server}, which reads the file on every request. There is nothing to reload — the reload only means something under swoole, roadrunner or frankenphp.',
+    isOctane:
+      'Served by {server}, which boots your application once and keeps it in memory. A route you add does not exist until the workers are replaced.',
+    auto: 'Reload the workers when I save',
+    autoCost:
+      'Off by default, and it has to be: a reload that arrives while a request is being served kills that request. Debounced by two seconds, so a composer install is one reload rather than four thousand.',
+    watched: 'A save counts when it is under:',
+    now: 'Reload now',
+    lastManual: 'Workers replaced at {at}.',
+    lastAuto: 'A save reloaded the workers at {at}.',
+    lastFailed: 'The reload at {at} failed. Check the project’s logs.',
+    notWatch:
+      'Laravel’s own answer is octane:start --watch, which installs Node and chokidar into your image to poll a bind mount this app is already watching. This adds nothing to the image.',
+  },
+  deps: {
+    title: 'What this project depends on',
+    desc: 'Read out of composer.lock and package-lock.json — where each library came from, and whether anything verifies it.',
+    read: 'Read the lock files',
+    noLock:
+      'No composer.lock or package-lock.json here, so there is nothing to read. That is not the same as a clean project — it means this cannot see one. A yarn.lock, pnpm-lock.yaml, go.sum or Cargo.lock is not read: each is another format, and a parser written from memory is how a report starts quietly missing half a project.',
+    summary:
+      '{total} packages from {locks}. {direct} of them are asked for by this project itself.',
+    hosts: 'Fetched from:',
+    localClean:
+      'Everything came from its ecosystem’s own index, over HTTPS, with a hash the lock can check.',
+    finding: {
+      insecureSource: '{subject} is fetched over plain HTTP',
+      noIntegrity: '{subject} packages have no integrity hash',
+      otherIndex: 'Packages come from {subject}',
+    },
+    fix: {
+      insecureSource:
+        'Whoever is on the network path chooses what arrives. {detail} — switch that source to HTTPS.',
+      noIntegrity:
+        'Nothing verifies those bytes. Regenerating the lock file with a current version of the package manager usually adds the hashes.',
+      otherIndex:
+        '{detail} of them. Not a fault — a private mirror is an ordinary thing to have — but it is a supply chain, and one nobody has written down is one nobody is watching.',
+    },
+    whatIsSent:
+      'The next button sends the names and versions of these packages to api.osv.dev, the public vulnerability database. Nothing else goes with it: no identifier, no project name, no path, no file contents. Everything above was read on this machine and never left it.',
+    ask: 'Check {count} packages for advisories',
+    noAdvisories: 'None of them has a published advisory today.',
+    direct: 'Direct',
+    transitive: 'Transitive',
   },
   verify: {
     title: 'Does this machine match?',
@@ -2845,9 +3130,14 @@ export default {
       service: 'The {subject} service',
       serviceOff: 'The {subject} service',
       unknownService: 'The {subject} service',
+      lockedVersion: 'The {subject} service',
+      lockedPackage: 'The {subject} service',
+      lockExtra: 'The {subject} service, in stackvo.lock',
       built: 'The image for {subject}',
       generated: 'The generated config for {subject}',
       domain: '{subject} in the hosts file',
+      phpVersion: 'The PHP composer.json asks for ({subject})',
+      phpExtension: 'The {subject} extension, required by composer.json',
     },
     fix: {
       manifest: 'It does not validate. The problems are listed above.',
@@ -2859,6 +3149,24 @@ export default {
       built: 'Never built here. Build the project once.',
       generated: 'Older than stackvo.json. Regenerate.',
       domain: 'Not in the hosts file, so it does not resolve. Fix it from the alert above.',
+      lockedVersion:
+        'A different version from the one this project was locked at. Install the locked version from the Market, or re-lock if this machine is now the reference.',
+      lockedPackage:
+        'The right version out of a different package. The same version number can be published twice; the digest is what tells them apart. Reinstall it from the catalogue the lock names, or re-lock.',
+      lockExtra:
+        'stackvo.lock names a service stackvo.json no longer declares. Nothing to install — re-lock to bring the file up to date.',
+      phpVersion:
+        'composer.json and stackvo.json name different PHP versions. The image builds anyway and composer install then fails inside the container with a platform requirement error — which names PHP and does not name the file to change. Change the php.version line in stackvo.json and rebuild.',
+      phpExtension:
+        'composer.json requires it and stackvo.json does not build it in, so composer install fails inside the container. Add it to php.extensions and rebuild.',
+    },
+    lock: 'Write stackvo.lock',
+    lockExplain:
+      'The declaration says which services; the lock says which versions, with the package digest that tells two builds of one version apart. Written only when you press this, and meant to be committed — it is what lets the check above hold another machine to what this one runs.',
+    locked: 'Locked {count} service(s).',
+    skipped: {
+      notinstalled: '{service} is not installed here, so it is not in the lock.',
+      off: '{service} is installed and switched off, so it is not in the lock.',
     },
   },
   usage: {
@@ -3169,6 +3477,10 @@ export default {
     'route-list': 'Every registered route.',
     'queue-restart': 'Tell the queue workers to pick up new code.',
     'storage-link': 'Create the public/storage symlink.',
+    pint: "Is this branch's formatting clean? Reports; changes nothing.",
+    test: 'Run the test suite — Pest or PHPUnit, whichever this project has.',
+    wayfinder: 'Regenerate the typed route helpers. Clears the route cache first.',
+    'boost-skill': 'Add a Boost skill to this project from skills.laravel.cloud.',
     'composer-install': 'Install PHP dependencies from the lock file.',
     'composer-dump': 'Rebuild the autoloader after adding a class.',
     'npm-install': 'Install JavaScript dependencies.',
@@ -3395,6 +3707,8 @@ export default {
       'The site is served over HTTPS with the certificate authority this workspace generated, and the app has to read it to verify one. Settings has a certificates section for it.',
     spxRecordNeedsTheSite:
       'The site did not answer. Start the project and open it in a browser once before recording a request against it.',
+    captureNeedsTheBridge:
+      "The debug bridge is what records a session, so it has to be on before a capture window can be armed. Switch it on in this project's debug pane, then arm the window.",
     buildTheMcpServer:
       'Build it first: `cargo build --release --bin stackvo-mcp` in the StackVo checkout.',
     keystoreEntryIsGone:
