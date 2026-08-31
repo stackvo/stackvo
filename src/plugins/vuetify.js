@@ -19,8 +19,19 @@ import { i18n } from '@/i18n';
 
 const brand = {
   primary: '#1976D2',
-  secondary: '#5C6BC0',
-  accent: '#82B1FF',
+  // Not a chosen colour: this is exactly `harmonise('#1976D2', 'analog')`, the
+  // partner `applyAppearance` derives for the default accent, written out so
+  // the seed matches what the first apply will put here a moment later.
+  //
+  // It replaces `#5C6BC0`, which was chosen — and which nothing ever moved. The
+  // accent setting rewrote `primary` and left that indigo in place, so a purple
+  // application had blue checkboxes, blue timeline rules and a blue replay
+  // button, because the md3 blueprint draws checkboxes in `secondary` and
+  // `project-panes.css` reads `--v-theme-secondary` directly.
+  secondary: '#108282',
+  // `accent` was here and Vuetify 3 has no such role. It was carried over from
+  // the Vuetify 2 theme this was ported from, generated no CSS variable and no
+  // utility class, and was read by nothing in this repository.
   error: '#FF5252',
   info: '#2196F3',
   success: '#4CAF50',
@@ -106,7 +117,34 @@ const defaults = {
 export default createVuetify({
   blueprint: md3,
   icons: { defaultSet: 'mdi', aliases, sets: { mdi } },
-  theme: { defaultTheme: 'dark', themes: { dark, light } },
+  theme: {
+    defaultTheme: 'dark',
+    themes: { dark, light },
+    // One colour and one step each way, and the scope is a measurement rather
+    // than a preference.
+    //
+    // Vuetify generates these as *runtime* CSS, into the injected theme
+    // stylesheet, which means `tools/check-bundle.mjs` cannot see them: turning
+    // this on moved the built assets by 0.1 KB and the generated stylesheet by
+    // a great deal more. Measured through `theme.styles`, against a 13.0 KB
+    // baseline:
+    //
+    //   primary ±1    +1.0 KB   (+8%)   ← this
+    //   primary ±2    +3.0 KB   (+23%)
+    //   primary and secondary ±2   +6.1 KB   (+47%)
+    //
+    // And that string is rebuilt on every theme change — every accent swatch
+    // clicked, every contrast stop pressed. Nothing in this repository asks for
+    // a tonal variant today; every tint of the accent on screen is written as
+    // `rgba(var(--v-theme-primary), α)`, which composites over whatever surface
+    // is behind it and needs no generated colour at all.
+    //
+    // So this is the smallest scope that makes `text-primary-lighten-1` and
+    // `-darken-1` exist, for the case that alpha cannot serve: a chart series
+    // that has to stay opaque over an unknown background. Widen it when
+    // something asks, and put the new number above.
+    variations: { colors: ['primary'], lighten: 1, darken: 1 },
+  },
   locale: { adapter: createVueI18nAdapter({ i18n, useI18n }) },
   defaults,
 });

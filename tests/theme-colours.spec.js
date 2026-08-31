@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CONSOLE_BACKGROUND, DEFAULT_APPEARANCE } from '../src/lib/appearance';
+import vuetify from '../src/plugins/vuetify';
+import { CONSOLE_BACKGROUND, DEFAULT_APPEARANCE, harmonise } from '../src/lib/appearance';
 
 /**
  * Colours that must come from the theme, and one that must come from one place.
@@ -116,5 +117,79 @@ describe('the charts and the theme', () => {
    */
   it('still has the default accent the old literals were copied from', () => {
     expect(DEFAULT_APPEARANCE.primary).toBe('#1976D2');
+  });
+
+  /**
+   * The tonal utilities exist, and the accent is the one they follow.
+   *
+   * `variations` is three words of configuration that produce nothing visible
+   * and fail silently: written wrong, or dropped in a merge, the classes simply
+   * are not generated and the only symptom is an element with no colour. This
+   * asks the running theme for them.
+   *
+   * The scope is asserted too — `primary` only, one step each way. Not
+   * tidiness: the variations are generated into the *runtime* stylesheet, which
+   * `check-bundle.mjs` cannot measure and which is rebuilt on every theme
+   * change, so widening this is a cost no other guard in this repository would
+   * report. See the note in `plugins/vuetify.js` for the measured numbers.
+   */
+  it('generates the accent variations, and only those', () => {
+    const colors = vuetify.theme.computedThemes.value.dark.colors;
+
+    expect(colors['primary-lighten-1'], 'the tonal utilities were not generated').toBeTruthy();
+    expect(colors['primary-darken-1']).toBeTruthy();
+
+    // Two of the six are not generated at all. `secondary-darken-1` is a colour
+    // Vuetify's own stock light and dark themes declare — it has been in this
+    // application's palette since the first commit, is never re-themed by
+    // `applyAppearance`, and nothing draws it — and `on-secondary-darken-1` is
+    // the on-colour derived from it. Written out rather than filtered away,
+    // because a reader counting six here would otherwise conclude the scope is
+    // wider than it is.
+    const named = Object.keys(colors).filter((key) => /-(lighten|darken)-\d+$/.test(key));
+    expect(named.toSorted(), 'the variation scope has widened unmeasured').toEqual([
+      'on-primary-darken-1',
+      'on-primary-lighten-1',
+      'on-secondary-darken-1',
+      'primary-darken-1',
+      'primary-lighten-1',
+      'secondary-darken-1',
+    ]);
+
+    // What widening actually looks like, asserted separately so the reason a
+    // failure happened is visible in the message: a second step, or a second
+    // colour, each of which was measured before this scope was chosen.
+    expect(
+      named.filter((key) => key.endsWith('-2')),
+      'a second step was added'
+    ).toEqual([]);
+    expect(colors['secondary-lighten-1'], 'secondary was added to the scope').toBeUndefined();
+  });
+
+  /**
+   * A copy that arrived with the fix for the opposite bug.
+   *
+   * `secondary` used to be a *chosen* colour that nothing ever moved, which is
+   * why a purple accent had blue checkboxes. It is derived now — and the value
+   * in `plugins/vuetify.js` is the seed the window paints with for the frame
+   * before `applyAppearance` runs, hand-written because that file cannot import
+   * the module that imports it.
+   *
+   * So it is a copy, of exactly the kind this file exists to catch. Nothing
+   * recomputes it: move the default accent, or change the derivation, and the
+   * seed goes stale in silence — the window would paint one secondary at boot
+   * and a different one a tick later.
+   *
+   * Asserted against the derivation rather than against a second hex, so the
+   * only way to break it is to change one of the two things it claims to
+   * follow.
+   */
+  it('seeds the secondary colour with the value the first apply will derive', () => {
+    const seed = code('src/plugins/vuetify.js').match(/secondary: '(#[0-9a-fA-F]{6})'/);
+
+    expect(seed, 'the seed is gone, or was renamed out of reach of this test').toBeTruthy();
+    expect(seed[1].toLowerCase(), 'the seed no longer matches what boot will compute').toBe(
+      harmonise(DEFAULT_APPEARANCE.primary, DEFAULT_APPEARANCE.harmony)
+    );
   });
 });

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useIconRail } from '@/composables/useIconRail';
@@ -94,6 +94,31 @@ const updaterReady = ref(null);
  */
 const route = useRoute();
 const tab = ref('appearance');
+
+/**
+ * Every pane opens at its own top.
+ *
+ * One scrolling element serves all of them, so the offset carried over: the
+ * catalogue pane is several screens tall, and picking anything shorter from
+ * the rail after scrolling through it rendered that pane's content above the
+ * viewport. The rail said one thing had been selected and the page showed the
+ * end of it, or nothing at all — the same fault `ProjectDetail` fixed for its
+ * own rail, and the same fix, because the two pages are the same shape.
+ *
+ * After the DOM has the new pane in it. Resetting before that sets the offset
+ * on the old, taller content and the browser clamps it straight back when the
+ * shorter pane replaces it.
+ *
+ * `scrollTop`, not `scrollTo` — jsdom implements the property and not the
+ * method, so the method throws inside the watcher on every mount test while
+ * the suite stays green and only stderr says so.
+ */
+const scrollEl = ref(null);
+watch(tab, () =>
+  nextTick(() => {
+    if (scrollEl.value) scrollEl.value.scrollTop = 0;
+  })
+);
 
 /**
  * The panes, listed once.
@@ -506,7 +531,7 @@ onMounted(async () => {
     hide-bar
   >
     <div class="settings-layout">
-      <div class="settings-scroll">
+      <div ref="scrollEl" class="settings-scroll">
         <!-- One error surface for the whole page. Every action here writes to
              the same ref, and a banner that lives inside one group would be
              invisible for the four that are not open. -->
@@ -615,14 +640,14 @@ onMounted(async () => {
                  update card, which is the one place it is least likely to be
                  looked for — the question "what am I running" is asked far
                  more often than "is there a newer one". -->
-            <v-card variant="flat" class="about-hero mb-4">
-              <div class="d-flex align-center ga-4 pa-5 flex-wrap">
-                <v-avatar rounded="lg" size="56" color="primary">
-                  <v-icon size="32" icon="mdi-cube-outline" />
+            <v-card variant="flat" class="about-hero">
+              <div class="d-flex align-center ga-3 pa-4 flex-wrap">
+                <v-avatar rounded="lg" size="36" color="primary">
+                  <v-icon size="18" icon="mdi-cube-outline" />
                 </v-avatar>
                 <div class="min-w-0">
-                  <div class="text-h6">StackVo</div>
-                  <div class="text-body-2 text-medium-emphasis">{{ t('about.tagline') }}</div>
+                  <div class="text-body-2 font-weight-medium">StackVo</div>
+                  <div class="text-caption text-medium-emphasis">{{ t('about.tagline') }}</div>
                 </div>
                 <v-spacer />
                 <div class="d-flex align-center ga-2">
@@ -816,12 +841,31 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* The identity card reads as the page's masthead, so it sits on the surface
-   rather than in a group card — a heading inside a bordered box would look
-   like one more setting. */
+/* The identity card is a group card like the three under it.
+ *
+ * It used to be its own thing — an accent tint, a `pa-5` body, a `text-h6`
+ * name and a hard-coded `border-radius: 12px` — on the argument that a
+ * masthead should not read as one more setting. On screen it read as a
+ * different application: a wider card with a rounder corner (the 12px stayed
+ * put while every other box on the page followed the appearance setting), a
+ * taller header, and a gap under it that was `mb-4` on top of the section's
+ * own `ga-4` — thirty-two pixels where every other pair had sixteen.
+ *
+ * So it borrows `SettingsGroup`'s surface rather than restating one, and its
+ * header is the 36px avatar plus body/caption pair every group on this page
+ * has. What still distinguishes it is what should: it is first, and it is the
+ * only card with no help button. */
 .about-hero {
-  background: rgba(var(--v-theme-primary), 0.06);
-  border-radius: 12px;
+  background: rgba(var(--v-theme-surface-bright), 0.55);
+  border: thin solid rgba(var(--v-border-color), calc(var(--v-border-opacity) / 2));
+}
+
+/* Named by the identity card's text block. Vuetify has no such utility and the
+   two components that define it do so in their own scoped blocks, so without
+   this the class reached nothing and a long tagline pushed the version chips
+   off the row. */
+.about-hero .min-w-0 {
+  min-width: 0;
 }
 
 .about-links :deep(.v-list-item) {

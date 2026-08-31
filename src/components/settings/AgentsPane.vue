@@ -388,7 +388,6 @@ defineExpose({ snippet, state, rulesState, grantArgs });
     icon="mdi-script-text-outline"
     :title="t('settings.agents.rules.title')"
     :description="t('settings.agents.rules.description')"
-    class="mt-6"
   >
     <v-alert type="info" variant="tonal" density="comfortable" class="mb-4">
       <div class="text-body-2">{{ t('settings.agents.rules.whatItDoes') }}</div>
