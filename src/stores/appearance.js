@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { api } from '@/lib/ipc';
-import { DEFAULT_APPEARANCE, applyAppearance } from '@/lib/appearance';
+import { DEFAULT_APPEARANCE, applyAppearance, migrate } from '@/lib/appearance';
 
 /**
  * The appearance settings, loaded once at boot and applied app-wide.
@@ -36,7 +36,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
     // otherwise silently lose the choice.
     const legacy = prefs?.theme ? { theme: prefs.theme } : {};
 
-    value.value = { ...DEFAULT_APPEARANCE, ...legacy, ...(prefs?.appearance ?? {}) };
+    value.value = migrate({ ...DEFAULT_APPEARANCE, ...legacy, ...(prefs?.appearance ?? {}) });
     presets.value = Array.isArray(prefs?.appearancePresets) ? prefs.appearancePresets : [];
     apply();
     loaded.value = true;
@@ -105,7 +105,11 @@ export const useAppearanceStore = defineStore('appearance', () => {
     // Merged over the defaults, not applied raw: a preset saved by an older
     // version has no field for a setting added since, and the current value
     // would otherwise leak into a look that never contained it.
-    return preset ? set({ ...DEFAULT_APPEARANCE, ...preset.values }) : undefined;
+    //
+    // And migrated, for the field that changed shape rather than appearing. A
+    // preset is the one thing here that can outlive several releases unopened;
+    // without this, a look saved as "high contrast" would come back standard.
+    return preset ? set(migrate({ ...DEFAULT_APPEARANCE, ...preset.values })) : undefined;
   }
 
   async function deletePreset(name) {

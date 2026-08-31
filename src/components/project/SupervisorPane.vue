@@ -5,6 +5,7 @@ import { api } from '@/lib/ipc';
 import { stateColor, uptimeOf } from '@/composables/useSupervisors';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
+import RemedyAlert from '@/components/project/RemedyAlert.vue';
 import SupervisorCheckDialog from '@/components/project/SupervisorCheckDialog.vue';
 
 /**
@@ -16,6 +17,13 @@ import SupervisorCheckDialog from '@/components/project/SupervisorCheckDialog.vu
  *
  * The three ways it can be empty look identical on screen and send somebody to
  * three different places, so each says which one it is.
+ *
+ * One of the three is also the one this pane can answer. An image built before
+ * the generated config grew a supervisord socket has a supervisord in it that
+ * cannot be talked to, and the fix is a rebuild — which the warning named in
+ * prose and then left the reader to go and find. It carries the standard
+ * button now, and re-reads itself when the rebuild finishes rather than sitting
+ * on the warning it just made untrue.
  */
 const props = defineProps({
   name: { type: String, required: true },
@@ -110,9 +118,14 @@ async function openLog(process) {
       <div class="text-caption">{{ t('projectSupervisor.noSupervisord') }}</div>
     </v-alert>
 
-    <v-alert v-else-if="reach === 'noSocket'" type="warning" variant="tonal" class="mb-0">
-      <div class="text-caption">{{ t('projectSupervisor.noSocket') }}</div>
-    </v-alert>
+    <RemedyAlert
+      v-else-if="reach === 'noSocket'"
+      :name="name"
+      remedy="rebuild"
+      :text="t('projectSupervisor.noSocket')"
+      class="mb-0"
+      @done="load"
+    />
 
     <v-alert v-else-if="reach === 'stopped'" type="info" variant="tonal" class="mb-0">
       <div class="text-caption">{{ t('projectSupervisor.stopped') }}</div>

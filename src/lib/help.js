@@ -93,6 +93,7 @@ export const HELP_TOPICS = [
   'settings-agents',
   'settings-audit',
   'settings-appearance-presets',
+  'settings-appearance-preview',
   'settings-appearance-status-colors',
   'settings-appearance-theme-colors',
   'settings-appearance-typography',
