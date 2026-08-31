@@ -453,16 +453,6 @@ pub struct Explanation {
     pub findings: Vec<Finding>,
 }
 
-/// Put one recording, one query log and one axis around a single request.
-///
-/// `analysis` is `None` when the trace half could not be read; everything that
-/// does not depend on it still comes back. `observed` is the stretch this app
-/// watched the request across, when it was this app that sent it — and where
-/// there is one it replaces the arithmetic entirely, premise and all.
-/// `others` is every other recording the project holds — the report itself is
-/// filtered out by key rather than by the caller having to remember to remove
-/// it.
-#[allow(clippy::too_many_arguments)]
 // ------------------------------------------------------------------- replay
 
 /// Two recordings of one request, before and after.
@@ -480,6 +470,18 @@ pub struct Replay {
     /// whole so the difference can be read where it came from.
     pub wall_time_us: i64,
     pub peak_memory: i64,
+    /// The snapshot the second run started from, when one was named.
+    ///
+    /// `None` is the ordinary case and is not an omission: most replays are of
+    /// a GET, which writes nothing, and a database restore is not something to
+    /// do on somebody's behalf.
+    ///
+    /// What it buys is **repeatability, not comparability** — see
+    /// [`crate::spx::Report::mutates`]. The name is carried back so the premise
+    /// of the second run is on screen beside its numbers rather than
+    /// remembered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restored: Option<String>,
 }
 
 /// The path a recording could be replayed at, or why it cannot be.
@@ -539,6 +541,56 @@ pub fn replayable(report: &crate::spx::Report) -> std::result::Result<String, St
     Ok(path.to_string())
 }
 
+/// The path and, when one was captured, the session it ran under.
+///
+/// The same function as [`replayable`] with one thing added, and the split is
+/// the design: without a captured session the refusal above stands **word for
+/// word**, because it is still true — the request line is all there is, and a
+/// POST sent without its body is a different request. With one, the sentence
+/// stops being true and the refusal has to stop with it.
+///
+/// So a `POST` becomes replayable **only** for the recording a session was
+/// actually captured for. Not for POSTs in general, not for the next one to the
+/// same URL — [`crate::capture::matching`] joins on the request line and the
+/// clock together, and a recording it cannot match keeps the old answer.
+pub fn replayable_with<'a>(
+    report: &crate::spx::Report,
+    sessions: &'a [crate::capture::Session],
+) -> std::result::Result<(String, Option<&'a crate::capture::Session>), String> {
+    let line = report.request.as_deref().map(str::trim).unwrap_or_default();
+    let session = crate::capture::matching(sessions, line, report.recorded_at);
+
+    match replayable(report) {
+        // A GET is replayable either way; the session comes along when there is
+        // one, because a GET behind a login is as session-bound as a POST and
+        // replaying it logged out is the same wrong answer more quietly.
+        Ok(path) => Ok((path, session)),
+        Err(refusal) => {
+            // Only the "not a GET" refusal is lifted. A CLI run is still not a
+            // request and a path this app will not send is still not one — a
+            // captured session says nothing about either.
+            let Some(session) = session else {
+                return Err(refusal);
+            };
+            let path = line.split_once(' ').map(|(_, p)| p.trim()).unwrap_or(line);
+            if !path.starts_with('/') || report.cli {
+                return Err(refusal);
+            }
+            Ok((path.to_string(), Some(session)))
+        }
+    }
+}
+
+/// Put one recording, one query log and one axis around a single request.
+///
+/// `analysis` is `None` when the trace half could not be read; everything that
+/// does not depend on it still comes back. `observed` is the stretch this app
+/// watched the request across, when it was this app that sent it — and where
+/// there is one it replaces the arithmetic entirely, premise and all.
+/// `others` is every other recording the project holds — the report itself is
+/// filtered out by key rather than by the caller having to remember to remove
+/// it.
+#[allow(clippy::too_many_arguments)]
 pub fn explain(
     report: &Report,
     analysis: Option<&Analysis>,
@@ -749,6 +801,7 @@ mod tests {
             recorded_at: at,
             cli: false,
             request: Some(format!("GET /{key}")),
+            mutates: false,
             command: None,
             wall_time_us: wall_us,
             peak_memory: 0,

@@ -40,6 +40,44 @@ Ekranda bilerek bir **hüküm** yok. Bir koşuya karşı bir koşu, bir kıyasla
 
 **Yalnız bir GET yeniden gönderilebilir**, ve düğme gizlenmek yerine reddin sebebi söyleniyor. Bir kayıt isteğin *satırını* tutar — `GET /checkout` — başka bir şeyini değil: başlıklarını değil, gövdesini değil, altında koştuğu oturumu değil; çünkü bunları kaydeden bir şey yok. Bunlar olmadan yeniden gönderilen bir POST, farklı bir istektir; CSRF'i olan herhangi bir çatıda sayfa yerine 419 cevabı verir. Cevap gibi görünüp cevap olmayan bir sonuç, bir retten daha kötü olurdu.
 
+### Oturumları yakalamak, ki bir POST da yeniden gönderilebilsin
+
+Yukarıdaki ret, yalnızca oturumu kaydeden bir şey olmadığı sürece doğrudur. **Oturumları yakala** bunu değiştirir — ve neye çevirdiği, basmadan önce okunmaya değer.
+
+**Bu projenin istek çerezlerini ve form girdisini diske yazar.** Bir oturum çerezi kimlik bilgisinin **kendisidir**; onun işe yarar bir maskelenmiş sürümü yoktur, çünkü saklanmasının tüm sebebi değerin kendisidir. Dolayısıyla bu bir ayar değil, bir izindir — ve öyle inşa edildi:
+
+| Kural | Niçin |
+| --- | --- |
+| **Siz basana kadar kapalı** | Köprü, dump'larınızı gösteren bayraktan **ayrı** ikinci bir bayrak olmadan hiçbir şey yazmaz. "Dump'larımı göster" ile "oturum jetonumu kaydet" iki farklı izindir. |
+| **Dakika, asla süresiz** | Beş ile altmış arası. Pencere bir uzunluk olarak değil, **bittiği an** olarak saklanır — uygulama açıldığında saatini yeniden başlatan bir pencere, hiç kapanmayan bir penceredir. |
+| **Kendi kendine biter** | Uygulama o saatin tamamında kapalı kalmış olsa bile. Süre dolumu, yalnızca siz bakarken çalışan bir zamanlayıcıyla değil, **her soruluşta** denetlenir. |
+| **Durdurmak siler** | Yalnızca "yeni yakalama yok" değil: zaten alınmış olanlar da kaldırılır, ve düğme kaçını sildiğini söyler. Hasadını geride bırakarak biten bir izin, yalnızca bittiğine *inandığınız* izindir. |
+
+**Önce hata ayıklama köprüsünün açık olması gerekir, ve düğme bunu söyler — hiçbir şey kaydetmeyecek bir pencereyi açtırmak yerine.** İki bayrak bilerek ayrı izinlerdir, ama birbirinden bağımsız değildir: yakalama bayrağını okuyan tek şey köprünün prepend dosyasıdır. Köprü kapalıyken pencere açmak, izni verir, denetim kaydına satırı yazar ve hiçbir şey yakalamaz — geriye sizin POST'unuzun yeniden gönderilemeyeceği sonucu kalır. Önce **Dump'lar** bölümünden açın, sonra pencereyi başlatın.
+
+**Hiçbir ekran yakalananı göstermez.** Uyarının altındaki liste istek satırını, çerez **sayısını** ve gövde **boyutunu** verir — yeniden gönderilecek bir şey olduğunu size söylemeye yeter, ve oturum jetonunuzun var olduğu ikinci bir yer değildir. Denetim kaydında da yoktur: orası pencerenin açıldığını ve ne kadarlığına açıldığını kaydeder, yani birinin sonradan tarihlendirebilmesi gereken kısmı.
+
+Yakalanmış bir oturum bir kayda, istek satırı **ve** saat birlikte kullanılarak, iki saniyelik bir pencerede bağlanır. Tek başına ikisi de yanlış olurdu: yalnız satır, bir ziyaretçinin sepetini başka bir ziyaretçinin aynı sayfaya ait kaydına bağlardı. Eşleşmeyen bir kayıt eski reddi kelimesi kelimesine korur, çünkü o kayıt için hâlâ doğrudur.
+
+### Tekrarı bir anlık görüntüden başlatmak
+
+Bir oturum yakalandığında bir POST yeniden gönderilebiliyor — ve bu, o şeyin **yeniden yapılması** demek. İkinci bir sipariş. İkinci bir satır. İkinci bir tahsilat.
+
+Bu, onu reddetmek için bir sebep değil: bir POST'ta tekrara bilerek basıyorsunuz. Bu, iki kez basmayı güvenli kılan tek şeyi sunmak için bir sebep — ve StackVo'da o zaten var: **adlandırılmış bir veritabanı anlık görüntüsü**.
+
+**Tekrarı bir anlık görüntüden başlat** altından birini seçin, ikinci koşudan önce geri yüklenir. Dört kural, ve her biri bir kolaylık değil bir ret:
+
+| Kural | Niçin |
+| --- | --- |
+| Tekrardan **önce** geri yüklenir, sonra asla | Sonra yüklemek, tekrarın yaptığı şeyi silerdi — ki bir POST'u tekrarlamanızın sebebi tam olarak ona bakmaktı. |
+| Şu an oradakinin **güvenlik kopyası** önce alınır | Her geri yüklemenin aldığı ağın aynısı. Bir profil ekranındaki bir düğme, geri alınamaz olan eylem olmamalı. |
+| **StackVo asla seçmez** | Aslın hangi durumda koştuğunu bilemez, ve birini seçmek, sormadığınız bir soruyu sahip olmadığı veriyle cevaplamak olurdu. |
+| Bir başarısızlık **tekrarı durdurur** | İkinci koşunun o anlık görüntüden başlamasını istediniz. İsteği yine de göndermek, onu seçmediğiniz bir durumdan koşturmak ve doğru olmayan bir öncül altında bir sayı basmak olurdu. |
+
+**Ne kazandırdığı, açıkça: tekrarlanabilirlik, kıyaslanabilirlik değil.** İlk kayıt, o an veritabanında ne varsa ona karşı koştu ve bunu kaydeden bir şey yok. Anlık görüntü, tekrarı belirtilmiş bir noktadan yeniden koşabileceğiniz anlamına gelir — iki sayının kontrollü bir deney olduğu anlamına değil. Anlık görüntünün adı sonucun yanında gösteriliyor; böylece ikinci koşunun öncülü hafızanızda değil ekranda duruyor.
+
+Yazacak olan satırlar işaretli, ve işaret ekranın bir dizgeden tahmin etmesinden değil kaydın kendisinden geliyor: istek satırı `GET` olmayan her şey. Bir GET de yazabilir ve bunu buradaki hiçbir şey bilemez; işaretin daha fazlasını vaat etmek yerine neyi ölçtüğünü söylemesinin sebebi bu.
+
 ### Tek bir komut
 
 Bir göç, bir kuyruk işçisi, bir test koşusu. Yavaş olan çoğu zaman bir sayfa değildir ve bunların hiçbiri tarayıcıdan profillenemez. Projenin kendi komutlarından birini seçin; profilleyicinin altında, işlem konsolunda çalışır ve aynı listeye düşer.

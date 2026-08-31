@@ -433,6 +433,26 @@ pub const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// to `/login` would otherwise produce two recordings for one button, and the
 /// second one would be the one the list showed.
 pub async fn send(url: &str, cookie: &str) -> Result<u16> {
+    send_as(url, cookie, None).await
+}
+
+/// The same request, optionally as the one that was captured.
+///
+/// One function and not two, for the reason the replay already turns on: a
+/// replay that differed from the original in the profiler cookie, the redirect
+/// policy or the certificate root would not be comparable with it, and two
+/// implementations is how those come apart. `send` is this with no session,
+/// which is every caller that existed before capture did.
+///
+/// The captured `Cookie` header is **appended to** the profiler's trigger
+/// rather than replacing it: the trigger is what makes the request produce a
+/// recording at all, and a replay that sent the session and dropped the trigger
+/// would be a request with nothing to compare.
+pub async fn send_as(
+    url: &str,
+    cookie: &str,
+    session: Option<&crate::capture::Session>,
+) -> Result<u16> {
     let ca = crate::certs::ca_file();
     let pem = std::fs::read(&ca).map_err(|e| {
         Error::io(format!("reading {}", ca.display()), e)
@@ -452,15 +472,40 @@ pub async fn send(url: &str, cookie: &str) -> Result<u16> {
         .build()
         .map_err(|e| Error::new(Code::IoError, format!("preparing the request: {e}")))?;
 
-    let response = client
-        .get(url)
-        .header(reqwest::header::COOKIE, cookie)
-        .send()
-        .await
-        .map_err(|e| {
-            Error::new(Code::IoError, format!("requesting {url}: {e}"))
-                .with_hint(crate::hints::SPX_RECORD_NEEDS_THE_SITE)
-        })?;
+    // The trigger first, then whatever the visitor's browser sent. Two `Cookie`
+    // values on one request are joined with `; ` by the header itself, which is
+    // the form a browser would have sent them in anyway.
+    let cookies = match session.and_then(|s| s.cookie.as_deref()) {
+        Some(theirs) if !theirs.trim().is_empty() => format!("{cookie}; {theirs}"),
+        _ => cookie.to_string(),
+    };
+
+    let method = session
+        .map(|s| s.method.as_str())
+        .filter(|m| !m.is_empty())
+        .unwrap_or("GET");
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|_| Error::new(Code::InvalidInput, format!("{method} is not a method")))?;
+
+    let mut request = client
+        .request(method, url)
+        .header(reqwest::header::COOKIE, cookies);
+
+    if let Some(session) = session {
+        if let Some(kind) = session.content_type.as_deref().filter(|k| !k.is_empty()) {
+            request = request.header(reqwest::header::CONTENT_TYPE, kind);
+        }
+        // The body as it was, byte for byte. The bridge dropped anything over
+        // its cap rather than truncating, so what is here is whole or absent.
+        if let Some(body) = session.body.clone() {
+            request = request.body(body);
+        }
+    }
+
+    let response = request.send().await.map_err(|e| {
+        Error::new(Code::IoError, format!("requesting {url}: {e}"))
+            .with_hint(crate::hints::SPX_RECORD_NEEDS_THE_SITE)
+    })?;
 
     Ok(response.status().as_u16())
 }
@@ -576,6 +621,22 @@ pub struct Report {
     pub wall_time_us: u64,
     pub peak_memory: u64,
     pub call_count: u64,
+    /// Would sending this again **write** something?
+    ///
+    /// Everything that is not a `GET`, and never a CLI run — which `explain`
+    /// refuses to replay at all. Not a judgement about the application's own
+    /// routes (a GET can write too, and nothing here can know that), but the
+    /// one distinction the request line does carry, and the one that decides
+    /// whether the second run of a replay is the same act as the first.
+    ///
+    /// Computed here rather than in the window, so the rule lives with the
+    /// thing it is about and the front end never re-implements it. It became
+    /// worth stating when [`crate::explain::replayable_with`] made a POST
+    /// replayable: with a captured session the old refusal stopped being true,
+    /// and what took its place is a request that **does the thing again** — a
+    /// second order, a second charge, a second row. That is not a reason to
+    /// refuse it; it is a reason to say so before the press.
+    pub mutates: bool,
     /// Bytes both halves take together.
     pub bytes: u64,
 }
@@ -614,6 +675,7 @@ pub fn parse_report(text: &str, bytes: u64) -> Option<Report> {
         key,
         recorded_at: value.get("exec_ts").and_then(|v| v.as_i64()).unwrap_or(0),
         cli,
+        mutates: mutates(cli, request.as_deref()),
         request,
         command: string("cli_command_line"),
         // Named `_ms` in the file and holding microseconds. See the field.
@@ -622,6 +684,21 @@ pub fn parse_report(text: &str, bytes: u64) -> Option<Report> {
         call_count: number("call_count"),
         bytes,
     })
+}
+
+/// The rule behind [`Report::mutates`], over the two fields it reads.
+///
+/// A line with no method is one [`crate::explain::replayable`] refuses anyway,
+/// so calling it a write would be a warning about something that will not be
+/// sent.
+pub fn mutates(cli: bool, request: Option<&str>) -> bool {
+    if cli {
+        return false;
+    }
+    match request.map(str::trim).unwrap_or_default().split_once(' ') {
+        Some((method, _)) => !method.trim().eq_ignore_ascii_case("GET"),
+        None => false,
+    }
 }
 
 /// Every recorded profile for one project, newest first.
@@ -2170,5 +2247,52 @@ App::slow
             observed.display()
         );
         assert_eq!(observed.parent(), reports.parent());
+    }
+
+    /// The distinction that decides whether pressing replay twice is the same
+    /// act twice.
+    ///
+    /// It became worth stating when a captured session made a POST replayable:
+    /// the old refusal stopped being true, and what took its place is a request
+    /// that does the thing again.
+    #[test]
+    fn a_recording_that_would_write_is_told_apart_from_one_that_reads() {
+        assert!(!mutates(false, Some("GET /checkout?step=2")));
+        assert!(!mutates(false, Some("get /")));
+
+        for line in ["POST /checkout", "put /api/cart/1", "DELETE /api/cart/1"] {
+            assert!(mutates(false, Some(line)), "{line}");
+        }
+
+        // A CLI run is not a request at all and `explain::replayable` refuses
+        // it, so "this writes" would be a warning about something that will
+        // never be sent.
+        assert!(!mutates(true, Some("POST /checkout")));
+
+        // And a line with no method is one `replayable` also refuses.
+        assert!(!mutates(false, Some("/checkout")));
+        assert!(!mutates(false, None));
+        assert!(!mutates(false, Some("   ")));
+    }
+
+    /// The field is set where the line is parsed, so nothing downstream — the
+    /// window, the pane, an assistant — has to re-derive it.
+    #[test]
+    fn the_report_carries_the_answer_rather_than_leaving_it_to_be_worked_out() {
+        let json = serde_json::json!({
+            "key": "k",
+            "exec_ts": 1_700_000_000_i64,
+            "cli": 0,
+            "http_method": "POST",
+            "http_request_uri": "/checkout",
+            "wall_time_ms": 1234,
+            "peak_memory_usage": 1,
+            "call_count": 1
+        })
+        .to_string();
+
+        let report = parse_report(&json, 0).expect("a metadata file parses");
+        assert_eq!(report.request.as_deref(), Some("POST /checkout"));
+        assert!(report.mutates);
     }
 }

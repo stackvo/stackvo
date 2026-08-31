@@ -13,6 +13,8 @@ export default {
     refresh: 'Yenile',
     loading: 'Yükleniyor…',
     never: '—',
+    yes: 'Evet',
+    no: 'Hayır',
     cancel: 'Vazgeç',
     close: 'Kapat',
     copy: 'Kopyala',
@@ -261,6 +263,18 @@ export default {
     sshAgentNone: 'Bu makinede çalışan bir SSH ajanı yok, iletilecek bir şey de yok.',
   },
   worktree: {
+    auth: {
+      title: 'Bu ana bilgisayar adında oturum ve jetonlar',
+      sanctumSet:
+        'Sanctum bir oturumu bir ana bilgisayar adı listesine bağlıyor, ve bu dalın projenizin .env’inin bilmediği bir adı var. StackVo bu konteynere şunu veriyor:',
+      sanctumDefault:
+        'Sanctum kurulu ve değiştirilecek bir şey yoktu: projeniz ne SESSION_DOMAIN ne de SANCTUM_STATEFUL_DOMAINS sabitliyor, yani Laravel’in kendi varsayılanı geçerli ana bilgisayar, Sanctum’unki de APP_URL’i izliyor — ve StackVo onu zaten bu dala yöneltti.',
+      passportMissing:
+        'Passport jetonları storage/oauth-private.key ile imzalıyor ve o dosya gitignore’da — yani bu worktree’de yok ve her jeton isteği bir yığın iziyle dönüyor. StackVo burada yeni bir çift üretecek. Ana dalınkini kopyalamıyor: dallandığı yerin jetonlarını üretebilen bir dal, kendi veritabanının var olma sebebinin tam tersidir.',
+      passportPresent: 'Passport’un imza anahtarları bu worktree’de var.',
+      passportGenerate: 'Bu dal için anahtar üret',
+      passportDone: 'Üretildi. Ana dalda verilmiş jetonlar burada geçerli değil, ve amaç budur.',
+    },
     title: 'Worktree’ler',
     explain:
       'Bir dala kendi ortamını verin: kendi dizini, kendi adresi, kendi veritabanı. İki dal aynı anda çalışır ve checkout’a git’in fark edeceği hiçbir şey yazılmaz.',
@@ -430,8 +444,19 @@ export default {
   },
 
   quickActions: {
+    confirmTitle: 'Bu makinedeki her konteyner',
+    confirmStart:
+      'Açık olan her konteyneri başlat — her proje ve her servis. Zaten ayakta olan siteler olduğu gibi bırakılır.',
+    confirmStop:
+      'Her konteyneri aynı anda durdur. Bu makinedeki her site anında iner, ve onları yeniden başlatmak bir geri alma değil ayrı bir iştir.',
+    confirmRestart:
+      'Her konteyneri yeniden başlat. Her biri inip kalkar, yani her site kısa süre erişilemez olur ve bellekte durum tutan her şey onu kaybeder.',
+    confirmRebuild:
+      'Bu makinedeki her projenin imajını sırayla yeniden derle. Derlemeler ne kadar sürerse o kadar sürer; düşen bir proje sonrasında adıyla bildirilir, diğerleri yine derlenir.',
     startAll: 'Tüm konteynerleri başlat',
     stopAll: 'Tüm konteynerleri durdur',
+    rebuildAll: 'Her projenin imajını yeniden derle',
+    rebuildFailed: 'Şunlar derlenmedi: {names}. Çıktı konsolda.',
     restart: 'Tüm konteynerleri yeniden başlat',
   },
 
@@ -1333,6 +1358,14 @@ export default {
   },
 
   spx: {
+    startFrom: 'Tekrarı bir anlık görüntüden başlat',
+    startFromNone: 'Veritabanında şu an ne varsa',
+    startFromWhy:
+      'GET dışında bir şeyin tekrarı, o şeyi yeniden yapar — ikinci bir sipariş, ikinci bir satır. Bir anlık görüntü adlandırmak onu ikinci koşudan önce geri yükler; böylece tekrara iki kez basmak iki kez aynı yerden başlar. StackVo sizin yerinize seçmiyor: aslının hangi durumda koştuğunu bilemez.',
+    startFromChosen:
+      'İkinci koşudan önce geri yükleniyor, sonra değil — sonra yüklemek tekrarın yaptığı şeyi silerdi. Her geri yüklemede olduğu gibi, şu an oradakinin bir güvenlik kopyası önce alınıyor. Bu, tekrarı **tekrarlanabilir** yapar; iki sayıyı kontrollü bir deney yapmaz.',
+    replayedFrom: 'İkinci koşu {snapshot} anlık görüntüsünden başladı.',
+    replayWrites: 'Yeniden gönder — bu yazar',
     title: 'Örnekleyici profilleyici (php-spx)',
     explain:
       'Açık bırakabileceğiniz profilleyici. Xdebug her çağrıyı birebir kaydeder ve isteğin birkaç katına mal olur; bu örnekleme yapar, sayfa sayfa gibi kalır.',
@@ -1366,6 +1399,16 @@ export default {
     recording: 'Sayfa bekleniyor…',
     replay: 'Bu isteği yeniden gönder',
     replayedWhat: '{what} yeniden gönderildi ve kaydedildi.',
+    captureWhat:
+      'Bir POST, kayıttan yeniden gönderilemez; çünkü bir kayıt yalnızca istek satırını tutar. Oturumu yakalamak bunu değiştirir — ve bu, bu projenin istek çerezlerini ve form girdisini diske yazmak demektir. Bir ayar değil, üzerinde saat olan bir izin olmasının sebebi budur.',
+    captureMinutes: 'Süre',
+    captureArm: 'Oturumları yakala',
+    captureNeedsBridge:
+      'Yakalamayı yapacak olan hata ayıklama köprüsü bu proje için kapalı. Önce Dump’lar bölümünden açın — şimdi bir pencere açmak izni verir ve hiçbir şey kaydetmez.',
+    captureArmed:
+      '{minutes} dakika daha oturum kaydediliyor. Şimdiye kadar {count} yakalandı — çerezler ve gövdeler, yalnızca bu makinede.',
+    captureCookies: '{count} çerez',
+    captureDisarm: 'Durdur ve yakalananları sil',
     replayCaveat:
       'Bir koşuya karşı bir koşu, bir kıyaslama değildir — soğuk bir opcache, soğuk bir sorgu önbelleği ve bu makinenin o sırada yaptığı her şey farkın içindedir. Yalnız bir GET yeniden gönderilebilir: bir kayıt, isteğin satırını tutar, başka bir şeyini değil.',
     recordedOne: '{what} kaydedildi — {took}.',
@@ -1449,6 +1492,7 @@ export default {
   },
 
   quickCmd: {
+    inInstance: '{instance} içinde',
     title: 'Komutlar',
     explain:
       'Bu projede sık çalıştırdığınız komutlar; terminal açıp konteyner adını hatırlamanıza gerek kalmadan. Yalnızca projenin dosyalarının izin verdiği komutlar sunulur.',
@@ -1915,6 +1959,27 @@ export default {
     showTourHint:
       'Uygulamanın yaptığı, bulunması en zor altı şey. Bir sonraki açılışta bir kez gösterilir.',
     showTourAction: 'Tekrar göster',
+    egress: {
+      title: 'Bu makineden ne çıkabilir',
+      desc: 'Konteynerlerinizin hangisi internete erişebilir, ve her birinin imgesi nereden geldi.',
+      run: 'Kontrol et',
+      summary:
+        'İmgelerin geldiği yerler: {registries}. {total} konteynerin {contained} tanesi dışarı hiç çıkamıyor.',
+      mirror:
+        'Bir politika her çekmeyi {prefix} adresine yönlendiriyor. Aşağıda işaretlenen bir konteyner oradan geçmemiş.',
+      container: 'Konteyner',
+      registry: 'İmge nereden geldi',
+      reach: 'Dışarı erişebiliyor',
+      sent: 'Giden',
+      bypassed: 'Aynadan gelmemiş',
+      reachState: {
+        outside: 'Evet',
+        contained: 'Hayır',
+        unknown: 'Anlaşılamıyor',
+      },
+      noDestinations:
+        'Burası hiçbir şeyin nereye bağlandığını söylemez. Docker bir bağlantı kaydı tutmaz; bunu cevaplamak her konteynerin ağ ad alanının içinde bir paket yakalaması ya da önünde bir vekil sunucu ister — bu uygulama bir raporu doldurmak için ikisini de makinenize kurmaz. “Dışarı erişebiliyor”, Docker’ın oluşturduğu ağın bir özelliğidir, trafik kaydı değil; bayt sayıları da kendi konteynerleriniz arasındaki StackVo ağını içerir — dolayısıyla bunları “hiç bir şey çıktı mı” diye okuyun, internet kullanımı diye değil.',
+    },
     compliance: {
       title: 'Politika gerçekten tutuyor mu?',
       desc: 'Bir yöneticinin gönderdiği kurallar, bu makinenin şu anki hâline karşı ölçüldü.',
@@ -2486,6 +2551,12 @@ export default {
     horizon: 'Horizon',
     horizonDesc:
       'php artisan horizon — Laravel Horizon süpervizörü; composer.json gerektirdiği için sunulur.',
+    pulse: 'Pulse kaydedicisi',
+    pulseDesc:
+      'php artisan pulse:check — Pulse\u2019un çizecek bir şeyi olsun diye bu makinenin ölçümlerini aralıklarla alır. Uzun bir süreçtir, zamanlanmış bir komut değil: bir zamanlama satırı her tetiklendiğinde ikinci bir kopya başlatırdı.',
+    pulsework: 'Pulse toplayıcısı',
+    pulseworkDesc:
+      'php artisan pulse:work — Pulse\u2019un Redis\u2019te tamponladığını deposuna aktarır. Yalnızca .env PULSE_INGEST=redis dediğinde sunulur; depo üzerinden toplamada aktarılacak bir şey yoktur.',
     reverb: 'Reverb',
     reverbDesc:
       'php artisan reverb:start — projenin kendi alan adında /app ve /apps altında yönlendirilir; böylece wss:// mevcut sertifikayla çalışır.',
@@ -2734,8 +2805,9 @@ export default {
     public: 'Genel adres',
     noTunnel:
       'Çalışan tünel yok, bu yüzden genel adres de yok. Sağlayıcı yereli reddederse yukarıdaki Paylaş bölümünden bir tünel başlatın.',
-    takesLocal: 'Yerel yeterli',
-    takesPublic: 'Genel gerekiyor',
+    pasteLocal: 'Yereli yapıştırın',
+    pastePublic: 'Geneli yapıştırın',
+    startATunnel: '— bir tane almak için yukarıdaki Paylaş bölümünden tünel açın',
   },
   landing: {
     title: 'Açılış sayfası',
@@ -2790,6 +2862,8 @@ export default {
       env: 'bu makinedeki .env içinde',
       tracked: 'git’in takip ettiği bir dosyada',
     },
+    modelKeyEgress:
+      'Bunlardan biri bir model sağlayıcısının anahtarı; yani bu uygulama yaptığı her isteği bu makinenin dışındaki bir servise gönderiyor. Ardından gelen soruyu Ayarlar → Tanılama → Bu makineden ne çıkabilir cevaplıyor: konteynerlerinizden hangileri internete ulaşabiliyor. Çıkarım yapmıyor, Docker’a soruyor.',
     rule: {
       awsAccessKey: 'AWS erişim anahtarı kimliğine benziyor',
       privateKey: 'Özel anahtara benziyor',
@@ -2799,8 +2873,217 @@ export default {
       googleApiKey: 'Google API anahtarına benziyor',
       sendgridKey: 'SendGrid anahtarına benziyor',
       openaiKey: 'OpenAI anahtarına benziyor',
+      anthropicKey: 'Anthropic anahtarına benziyor',
       unstoredSecret: 'Adı kimlik bilgisi diyor ve hâlâ dosyada — anahtar deposuna taşıyın',
     },
+  },
+  bisect: {
+    title: 'Bunu yapan commit’i bul',
+    desc: 'git bisect — üstelik her commit’in yazıldığı ortamla birlikte.',
+    noRepository: 'Bu proje bir git deposu değil, dolayısıyla aranacak bir geçmiş yok.',
+    explain:
+      'Davranışın olduğu bir revizyonla olmadığı bir revizyonu söyleyin; git her adımda aralığı ikiye böler. Buranın eklediği şey git’in bilemeyeceği yarı: test edilen commit hangi çalışma zamanını ve hangi servis sürümlerini bekliyordu, ve bu makine nerede ayrışıyor. Commit’lenmemiş değişiklikler baştan reddedilir — bir bisect, çalışma kopyanızı commit’ten commit’e taşır.',
+    bad: 'Bozuk olduğu yer',
+    badHint: 'Genellikle HEAD.',
+    good: 'Çalıştığı yer',
+    goodHint: 'Bir etiket, bir dal ya da bir commit.',
+    start: 'Aramayı başlat',
+    steps: 'yaklaşık {count} adım kaldı',
+    markBad: 'Burada bozuk',
+    markGood: 'Burada çalışıyor',
+    markSkip: 'Bunu test edemiyorum',
+    reset: 'Durdur ve çalışma kopyamı geri koy',
+    found: 'Bozukluğun ilk göründüğü commit: {commit}.',
+    noDrift:
+      'Bu makine, bu commit’in beklediğiyle uyuşuyor — yani ortam, bisect’inizin içinde değil.',
+    driftTitle: 'Bu commit farklı bir ortam bekliyordu',
+    drift: {
+      runtime: '{subject} {wanted}',
+      service: '{subject} {wanted}',
+      serviceOff: '{subject} {wanted}',
+    },
+    driftFound: 'Sizde {found} çalışıyor.',
+    driftAbsent: 'Burada kurulu ve açık değil.',
+    driftHint:
+      'Sizin yerinize hiçbir şey değiştirilmiyor. Eski bir servis sürümüne inmek, veri biriminizi taşıyan bir konteyneri değiştirmek demektir — dolayısıyla bu sizin kararınız; verileceği yer Market sayfası ve orası önce sorar. O zamana kadar bu aralıktan çıkan sonucu, yukarıdaki farkı akılda tutarak değerlendirin.',
+  },
+  components: {
+    title: 'Bu deponun geri kalanı',
+    explain:
+      'Bu projenin diğer dizinleri — her biri kendi çalışma zamanıyla derlenir ve kendi hostname’inden erişilir. Tek depo, tek proje, tek başlatma.',
+    servedAt: 'Yayınlandığı adres',
+    noDomain:
+      'Hostname yok — bu projenin diğer konteynerlerinden erişilir, dışarıdan hiçbir yerden. Bir işçi (worker) için istenen şey budur.',
+    reachedAt: 'Diğer konteynerlerin eriştiği adres',
+    noHost:
+      'Bunların hiçbiri makinenizde port açmaz. Bir bileşene bu projenin konteynerlerinden erişilir, tarayıcıdan ise yalnızca adlandırdığı hostname üzerinden — bir deponun iki kopyasının aynı numara için çekişmesini engelleyen şey budur.',
+  },
+  boards: {
+    title: 'Telescope, Horizon ve Pulse',
+    desc: 'Bunlar bu projenin kendi alan adı altında zaten açılıyor. Söylenmeyen şey, her konteyner yeşilken bunların niye boş durabildiği.',
+    read: 'Bu projenin panolarını oku',
+    noEnv:
+      'Bu projede .env yok, yani aşağıdaki hiçbir şey bir .env’den okunmadı. Bu, bir şeyin yolunda olduğu anlamına gelmez.',
+    noneInstalled:
+      'Hiçbiri composer.lock’ta yok ({names}). Her biri bu projenin konteynerinin içine kuruluyor — örneğin `stackvo composer require laravel/horizon`.',
+    defaultPath:
+      'her panonun kendi varsayılan yolu. Onu taşımış bir proje config/*.php içinde taşımıştır, ve bu uygulama o dosyayı okumuyor.',
+    readFrom: '.env’den okundu, anahtar {key}.',
+    cachedConfig:
+      'config:cache koşmuş bir projenin, bunun okumadığı derlenmiş bir yapılandırması vardır ve o başka bir şey diyor olabilir.',
+    workerUp: '{name} çalışıyor.',
+    workerDown: '{name} çalışmıyor — İşçiler kartından başlatın.',
+    scout:
+      'Scout kurulu ve sürücüsü {driver}. Servisi açmak kolay yarıydı: boş bir dizin her aramaya hiçbir şey döndürür, yani buradaki her konteyner yeşilken uygulama bozuk görünür. Dizini doldurmak uygulamanın işi, bu uygulamanın değil.',
+    scoutHow:
+      'StackVo bunun için bir düğme sunmuyor, çünkü scout:import bilemeyeceği bir model sınıf adı alıyor — ve tahmin ettiği bir şeyi doldurup çalıştıran bir düğme, hiç düğme olmamasından kötü olurdu. Kendi satırınızı stackvo.json\u2019ın commands bloğuna koyun; yerleşiklerin yanında görünür:',
+    addToSchedule: 'Bu projenin zamanlamasına ekle',
+    alreadyScheduled: 'Zaten zamanlanmış',
+    horizon: {
+      title: 'Horizon',
+      what: 'Redis kuyrukları için bir gözetmen ve bir pano — verim, bekleme süreleri, düşen işler ve bir yeniden deneme düğmesi.',
+    },
+    telescope: {
+      title: 'Telescope',
+      what: 'İstekleri, sorguları, işleri, postaları, önbellek isabetlerini ve istisnaları kaydeden bir kayıtçı — her birinin arkasındaki sorguyla birlikte.',
+      migrations:
+        'Telescope’un `telescope:install` ve `migrate` koşmuş olmasını gerekiyor. Bu uygulama veritabanınıza sormuyor, yani koşup koşmadıklarını söyleyemez — hatasız boş bir pano, eksik bir göçün göründüğü şeydir.',
+    },
+    pulse: {
+      title: 'Pulse',
+      what: 'Sunucu yükü, yavaş sorgular, yavaş işler, yavaş istekler ve arkalarındaki kullanıcılar — sürekli örneklenerek.',
+    },
+    observation: {
+      queueNotRedis:
+        'Kuyruk bağlantısı “{value}”, ve Horizon yalnız redis ile çalışır. Sayfa açılır ve hiçbir şey göstermez.',
+      storageSqlite:
+        'Pulse’un deposu “{value}”. Depolama sürücüsü MySQL, MariaDB ya da PostgreSQL istiyor ve SQLite’ı reddediyor.',
+      ingestSharesTheQueuesRedis:
+        'Pulse Redis üzerinden topluyor ve kendi bağlantısını adlandırmıyor, yani kuyruğunkini paylaşıyor. Pulse ayrı bir bağlantı istiyor: yoğun bir kuyruk ile yoğun bir toplama tek bir bağlantıda birbirine giriyor.',
+    },
+    need: {
+      horizonSnapshot:
+        'Horizon’un ölçüm grafikleri bu bir zamanlayıcıyla koşana kadar düz kalır — anlık görüntüyü yazan tek şey budur:',
+      telescopePrune:
+        'Bu olmadan telescope_entries proje açık kaldığı sürece büyür ve belirtisi dolu bir disktir:',
+    },
+  },
+  boost: {
+    title: 'Bu konteynerin içindeki MCP sunucusu',
+    desc: 'Laravel Boost bir asistan sunucusu kuruyor ve onu `php artisan boost:mcp` ile kaydediyor — makinenizdeki bir php ile. Burada php yok. Bu kart çalışan kaydı yazıyor.',
+    read: 'Bu projenin MCP kurulumunu oku',
+    notInstalled: 'kurulu değil',
+    installHow:
+      'Üçünden hiçbiri composer.lock’ta yok. Boost bir geliştirme bağımlılığı ve bu projenin konteynerinin içine kuruluyor: `stackvo composer require laravel/boost --dev`, ardından `stackvo artisan boost:install`. Sonra buraya dönün — boost:install’ın yazdığı satır bu makinede başlayamaz, ve aşağıdaki satır onun onarımı.',
+    noRoutes:
+      'laravel/mcp kurulu ama bu projede routes/ai.php yok, yani henüz bir sunucu kaydedilmemiş. StackVo adı o dosyadan okuyor, varsaymıyor: burada uydurulan bir ad, asistanınızda düşen bir `artisan mcp:start` demek olurdu.',
+    noServers: 'Bu projede henüz MCP sunucusu yayımlayan bir şey yok.',
+    serverBoost: 'Laravel Boost — şema, rotalar, tinker, sürüme duyarlı belge araması',
+    serverLocal: 'Mcp::local(‘{handle}’) — stdio üzerinden',
+    serverWeb: 'Mcp::web(‘{path}’) — uygulamanın içinde bir HTTP rotası',
+    webAlreadyServed:
+      'Kaydedilecek bir şey yok: bu sıradan bir rota, yani zaten bu projenin kendi alan adı altında, tarayıcının güvendiği sertifikayla servis ediliyor. Yeni sertifika yok, hosts kaydı yok, ikinci bir yönlendirici yok.',
+    willWrite: 'Kaydedilecek satır:',
+    register: 'Kaydet',
+    repair: 'Onar',
+    wrote: 'Yazıldı: {path}. Eski içerik yanında .stackvo-backup olarak duruyor.',
+    state: {
+      absent: 'O dosya henüz yok. Kaydetmek onu oluşturur.',
+      unregistered: 'Dosya var ve içinde bu sunucuyu çalıştıran bir şey yok.',
+      container: 'Kayıtlı, ve bu projenin konteynerinin içinden geçiyor.',
+      hostPhp:
+        'Bu makinedeki bir php’ye kayıtlı — öyle bir php yok, yani bu sunucu başlayamaz. boost:install’ın yazdığı şey budur.',
+      other: 'StackVo’nun tanımadığı bir şeye kayıtlı. Dokunulmuyor: birisi bunu bilerek bağlamış.',
+      unparseable:
+        'O dosya bunun düzenleyebileceği bir JSON değil, o yüzden dokunulmuyor. İçinde yorum olan ya da yarısı düzenlenmiş bir dosya olduğu gibi bırakılır.',
+    },
+  },
+  dusk: {
+    title: 'Tarayıcı testleri (Dusk)',
+    desc: 'Konteynerin içinde bir tarayıcı, ve kimsenin docker-compose.yml’inin yapmadığı sertifika adımı — sertifika uyarısında düşen bir Dusk testi, sizin kodunuzda bir hata gibi okunur.',
+    read: 'Bu projenin Dusk kurulumunu oku',
+    notInstalled:
+      'laravel/dusk composer.lock’ta yok. Bu projenin konteynerinin içine kuruluyor: `stackvo composer require laravel/dusk --dev`, ardından `stackvo artisan dusk:install`.',
+    version: 'laravel/dusk {version}.',
+    image: 'Tarayıcı konteyneri şu olurdu:',
+    imageWhy:
+      'Apple Silicon’da chrome değil chromium: Google arm64 Chrome yayımlamıyor, ve emülasyon altında koşan bir tarayıcı, sebebini kimsenin bulamayacağı bir zaman aşımı demektir.',
+    declared: 'Tarayıcı konteyneri stackvo.json’da tanımlı',
+    notDeclared: 'Tarayıcı konteyneri henüz tanımlı değil',
+    up: 've çalışıyor.',
+    down: 've çalışmıyor.',
+    envPresent: '.env.dusk.local zaten var. StackVo onun üstüne yazmıyor.',
+    envWillWrite:
+      '.env.dusk.local şu içerikle yazılacak. Dusk onu bir koşu boyunca .env yerine yüklüyor, o yüzden önce okuyun:',
+    apply: 'Konteyneri tanımla ve dosyayı yaz',
+    applyAgain: 'Tanımı güncelle',
+    trustWhy:
+      'Tarayıcının https:// açması gerekiyor — bu makinenin sertifika otoritesini tanımayan bir konteynerin içinden. Bu adım onu iki yere koyuyor: curl ve JVM’in okuduğu sistem paketi, ve Chromium’un okuduğu NSS veritabanı.',
+    trustAgain:
+      'Konteynerin yazılabilir katmanına yazıyor, yani konteyner yeniden oluşturulduğunda kayboluyor ve bunun tekrar koşulması gerekiyor. Bu, işleyişin kendisi; bir kusuru değil.',
+    trust: 'Bu makinenin CA’sını tarayıcıda güven listesine ekle',
+    trustNeedsRunning: 'Önce projeyi başlatın — bu, çalışan bir konteynerin içine yazıyor.',
+    step: {
+      copy: 'Sertifika otoritesini konteynere kopyala',
+      bundle: 'Sistem paketine ekle',
+      nss: 'Chromium’un kendi sertifika veritabanına ekle',
+    },
+    databaseIsolated:
+      'Dusk, geri alınan bir işleme değil gerçek bir veritabanına yazıyor — ve burası kendi veritabanı olan bir worktree, yani bunun doğru yeri.',
+    databaseShared:
+      'Dusk, geri alınan bir işleme değil gerçek bir veritabanına yazıyor. Worktree bir dala kendi veritabanını veriyor; onu koşmanın dürüst yeri orası.',
+    limit:
+      'Bu, testlerinizi koşmuyor. `stackvo artisan dusk`’ın koşabileceği bir ortam kuruyor. DuskTestCase’inize dokunulmuyor — sürücü, pencere boyutu ve Chrome bayrakları sizin kodunuz.',
+  },
+  octane: {
+    title: 'Octane yeniden yükleme',
+    desc: 'Octane uygulamanızı bellekte tutuyor, yani düzenlenen bir dosya işçiler değişene kadar hiçbir şeyi değiştirmiyor — ve bu, sizin kodunuzda bir hata gibi okunuyor.',
+    read: 'Bu projenin sunucusunu oku',
+    notOctane:
+      'Bu proje {server} ile servis ediliyor; o, dosyayı her istekte okuyor. Yeniden yüklenecek bir şey yok — yeniden yükleme yalnızca swoole, roadrunner ya da frankenphp altında bir anlam taşıyor.',
+    isOctane:
+      '{server} ile servis ediliyor; uygulamanızı bir kez açıp bellekte tutuyor. Eklediğiniz bir rota, işçiler değişene kadar yok.',
+    auto: 'Kaydettiğimde işçileri yeniden yükle',
+    autoCost:
+      'Varsayılan olarak kapalı, ve öyle olmak zorunda: bir istek işlenirken gelen bir yeniden yükleme o isteği öldürür. İki saniye geciktirmeli, yani bir composer install dört bin değil bir yeniden yükleme demek.',
+    watched: 'Bir kayıt şunların altındaysa sayılıyor:',
+    now: 'Şimdi yeniden yükle',
+    lastManual: 'İşçiler {at} itibarıyla değiştirildi.',
+    lastAuto: 'Bir kayıt {at} itibarıyla işçileri yeniden yükledi.',
+    lastFailed: '{at} itibarıyla yeniden yükleme başarısız. Projenin günlüklerine bakın.',
+    notWatch:
+      'Laravel’in kendi cevabı octane:start --watch; bu, bu uygulamanın zaten izlediği bir bind mount’u yoklamak için imajınıza Node ve chokidar kuruyor. Buradaki yol imaja hiçbir şey eklemiyor.',
+  },
+  deps: {
+    title: 'Bu proje neye bağımlı',
+    desc: 'composer.lock ve package-lock.json’dan okunur — her kütüphane nereden geldi, ve onu doğrulayan bir şey var mı.',
+    read: 'Kilit dosyalarını oku',
+    noLock:
+      'Burada composer.lock ya da package-lock.json yok, yani okunacak bir şey de yok. Bu, temiz bir proje demek değil — buranın göremediği bir proje demek. yarn.lock, pnpm-lock.yaml, go.sum ya da Cargo.lock okunmuyor: her biri başka bir biçim, ve ezberden yazılmış bir ayrıştırıcı, bir raporun sessizce projenin yarısını kaçırmaya başlamasının yoludur.',
+    summary:
+      '{locks} dosyasından {total} paket. Bunların {direct} tanesini projenin kendisi istiyor.',
+    hosts: 'Çekildiği yerler:',
+    localClean:
+      'Her şey kendi ekosisteminin indeksinden, HTTPS üzerinden ve kilidin doğrulayabileceği bir özetle gelmiş.',
+    finding: {
+      insecureSource: '{subject} düz HTTP üzerinden çekiliyor',
+      noIntegrity: '{subject} paketin bütünlük özeti yok',
+      otherIndex: 'Paketler {subject} adresinden geliyor',
+    },
+    fix: {
+      insecureSource:
+        'Ağ yolunda kim varsa neyin geleceğine o karar verir. {detail} — o kaynağı HTTPS’e çevirin.',
+      noIntegrity:
+        'O baytları doğrulayan hiçbir şey yok. Kilit dosyasını paket yöneticisinin güncel bir sürümüyle yeniden üretmek genellikle özetleri ekler.',
+      otherIndex:
+        '{detail} tanesi. Bir kusur değil — özel bir ayna olağan bir şeydir — ama bu bir tedarik zinciridir, ve kimsenin yazmadığı bir tedarik zinciri kimsenin izlemediği zincirdir.',
+    },
+    whatIsSent:
+      'Aşağıdaki düğme, bu paketlerin adlarını ve sürümlerini kamuya açık zafiyet veritabanı api.osv.dev’e gönderir. Yanında başka hiçbir şey gitmez: kimlik yok, proje adı yok, yol yok, dosya içeriği yok. Yukarıdaki her şey bu makinede okundu ve buradan hiç çıkmadı.',
+    ask: '{count} paketi danışmalara karşı kontrol et',
+    noAdvisories: 'Bugün hiçbirinde yayımlanmış bir danışma yok.',
+    direct: 'Doğrudan',
+    transitive: 'Dolaylı',
   },
   verify: {
     title: 'Bu makine uyuyor mu?',
@@ -2814,9 +3097,14 @@ export default {
       service: '{subject} servisi',
       serviceOff: '{subject} servisi',
       unknownService: '{subject} servisi',
+      lockedVersion: '{subject} servisi',
+      lockedPackage: '{subject} servisi',
+      lockExtra: 'stackvo.lock içindeki {subject} servisi',
       built: '{subject} için imaj',
       generated: '{subject} için üretilmiş yapılandırma',
       domain: 'hosts dosyasında {subject}',
+      phpVersion: 'composer.json’un istediği PHP ({subject})',
+      phpExtension: 'composer.json’un gerektirdiği {subject} uzantısı',
     },
     fix: {
       manifest: 'Doğrulamadan geçmiyor. Sorunlar yukarıda listeleniyor.',
@@ -2828,6 +3116,24 @@ export default {
       built: 'Burada hiç derlenmemiş. Projeyi bir kez derleyin.',
       generated: 'stackvo.json’dan eski. Yeniden üretin.',
       domain: 'hosts dosyasında yok, yani çözümlenmiyor. Yukarıdaki uyarıdan düzeltin.',
+      lockedVersion:
+        'Bu projenin kilitlendiği sürümden farklı bir sürüm çalışıyor. Kilitli sürümü Market’ten kurun, ya da artık referans bu makineyse yeniden kilitleyin.',
+      lockedPackage:
+        'Doğru sürüm ama farklı bir paketten. Aynı sürüm numarası iki kez yayımlanabilir; ikisini ayıran şey digest’tir. Kilidin adlandırdığı katalogdan yeniden kurun, ya da yeniden kilitleyin.',
+      lockExtra:
+        'stackvo.lock, stackvo.json’un artık beyan etmediği bir servisi adlandırıyor. Kurulacak bir şey yok — dosyayı güncellemek için yeniden kilitleyin.',
+      phpVersion:
+        'composer.json ile stackvo.json farklı PHP sürümleri söylüyor. İmaj yine de derleniyor ve composer install konteynerin içinde bir platform gereksinimi hatasıyla düşüyor — o hata PHP’yi adıyla söylüyor ama değiştirilmesi gereken dosyayı söylemiyor. stackvo.json’daki php.version satırını değiştirip yeniden derleyin.',
+      phpExtension:
+        'composer.json onu gerektiriyor, stackvo.json onu imaja koymuyor; yani composer install konteynerin içinde düşüyor. php.extensions’a ekleyip yeniden derleyin.',
+    },
+    lock: 'stackvo.lock yaz',
+    lockExplain:
+      'Beyan hangi servisleri söyler; kilit hangi sürümleri — üstelik bir sürümün iki yapımını birbirinden ayıran paket digest’iyle. Yalnız bu düğmeye bastığınızda yazılır ve commit’lenmek üzeredir: yukarıdaki kontrolün başka bir makineyi buradakine göre denetleyebilmesini sağlayan şey odur.',
+    locked: '{count} servis kilitlendi.',
+    skipped: {
+      notinstalled: '{service} burada kurulu değil, kilide girmedi.',
+      off: '{service} kurulu ama kapalı, kilide girmedi.',
     },
   },
   usage: {
@@ -3137,6 +3443,10 @@ export default {
     'route-list': 'Kayıtlı bütün rotalar.',
     'queue-restart': 'Kuyruk işçilerine yeni kodu almalarını söyler.',
     'storage-link': 'public/storage sembolik bağını oluşturur.',
+    pint: 'Bu dalın biçimi temiz mi? Bildirir; hiçbir şeyi değiştirmez.',
+    test: 'Test paketini koşar — bu projede hangisi varsa, Pest ya da PHPUnit.',
+    wayfinder: 'Tipli rota yardımcılarını yeniden üretir. Önce rota önbelleğini temizler.',
+    'boost-skill': 'skills.laravel.cloud’dan bu projeye bir Boost becerisi ekler.',
     'composer-install': 'PHP bağımlılıklarını kilit dosyasından kurar.',
     'composer-dump': 'Sınıf eklendikten sonra otomatik yükleyiciyi yeniden kurar.',
     'npm-install': 'JavaScript bağımlılıklarını kurar.',
@@ -3370,6 +3680,8 @@ export default {
       'Site, bu çalışma alanının ürettiği sertifika otoritesiyle HTTPS üzerinden sunuluyor ve uygulamanın bir sertifikayı doğrulamak için onu okuması gerekiyor. Ayarlar’da bunun için bir sertifika bölümü var.',
     spxRecordNeedsTheSite:
       'Site cevap vermedi. Bir istek kaydetmeden önce projeyi başlatın ve tarayıcıda bir kez açın.',
+    captureNeedsTheBridge:
+      'Oturumu kaydeden şey hata ayıklama köprüsüdür; bir yakalama penceresi açılmadan önce onun açık olması gerekir. Bu projenin hata ayıklama bölümünden açın, sonra pencereyi başlatın.',
     buildTheMcpServer:
       'Önce derleyin: StackVo checkout’unda `cargo build --release --bin stackvo-mcp`.',
     keystoreEntryIsGone:

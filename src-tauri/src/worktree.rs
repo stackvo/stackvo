@@ -667,6 +667,16 @@ pub fn env_for(root: &Path, record: &Record) -> BTreeMap<String, String> {
         }
     }
 
+    // Sanctum's two, and only where they change something — see [`Auth`].
+    // Before the record's own variables, so a value somebody typed still wins.
+    let auth = auth_for(root, record);
+    if let Some(domain) = auth.session_domain {
+        env.insert("SESSION_DOMAIN".into(), domain);
+    }
+    if let Some(domains) = auth.stateful_domains {
+        env.insert("SANCTUM_STATEFUL_DOMAINS".into(), domains);
+    }
+
     for (key, value) in &record.env {
         env.insert(key.clone(), value.clone());
     }
@@ -678,6 +688,158 @@ pub fn env_for(root: &Path, record: &Record) -> BTreeMap<String, String> {
         crate::site::checked_key(key).is_ok() && crate::site::checked_value(value).is_ok()
     });
     env
+}
+
+// -------------------------------------------- a session, on a new hostname
+
+/// What a branch's own hostname breaks, and what it takes to un-break it.
+///
+/// ## The bug this feature produced by working
+///
+/// Every worktree gets a hostname of its own. Sanctum's SPA mode ties a session
+/// to a **list of hostnames** — `sanctum.stateful` and `SESSION_DOMAIN` — and
+/// the new host is in neither, so signing in on a branch returns 419 or 401
+/// with nothing on screen saying why. The developer blames their own code.
+///
+/// Passport is blunter. Its signing keys live in `storage/oauth-private.key`,
+/// and that file is in `.gitignore` — so a fresh worktree does not have it, and
+/// every token request comes back as a stack trace about a missing file.
+///
+/// ## Two rules, and both are refusals
+///
+/// | Rule | Why |
+/// | --- | --- |
+/// | A value the user wrote is never overwritten | This file is the application's, not this app's — the line `env_writer` already holds. In [`env_for`] the record's own variables are laid over these, so anything typed wins |
+/// | The parent's key is **never copied** | Copying a signing key into a second environment is the exact opposite of what a worktree's database isolation is for: the branch would be able to mint tokens for the place it branched from |
+///
+/// ## And two values that are written only when they change something
+///
+/// Neither is set unconditionally, and that is the measurement rather than a
+/// preference:
+///
+/// * **`SANCTUM_STATEFUL_DOMAINS`** — when the project does not pin one,
+///   Sanctum's own default already follows `APP_URL`, which [`env_for`] has
+///   just pointed at this branch. Writing a list there would *replace* that
+///   default and could only take hostnames away. It is written only where the
+///   project pins a list of its own, and then the branch's host is **appended**
+///   to it rather than replacing it.
+/// * **`SESSION_DOMAIN`** — Laravel's own default is the current host, which is
+///   already right. It is written only where the project pins a domain that
+///   does not cover the branch's host, which is the case where the cookie would
+///   otherwise never be sent.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Auth {
+    /// The version `composer.lock` names, when it names one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sanctum: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub passport: Option<String>,
+    /// What this worktree's container is given, when anything is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_domain: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stateful_domains: Option<String>,
+    /// Passport is installed and this worktree has no signing key.
+    pub passport_keys_missing: bool,
+}
+
+/// Where Passport keeps the key a fresh checkout does not have.
+pub const PASSPORT_PRIVATE_KEY: &str = "storage/oauth-private.key";
+
+/// Does a pinned cookie domain cover this host?
+///
+/// `.shop.loc` covers `feature-x.shop.loc`; `shop.loc` covers it too, because
+/// that is what a cookie domain means — a domain matches itself and everything
+/// under it. `api.shop.loc` covers neither. Written out rather than assumed
+/// because the whole value of the check is that it does **not** write a
+/// variable where the project's own value already works.
+fn covers(pinned: &str, host: &str) -> bool {
+    let pinned = pinned.trim().trim_start_matches('.');
+    !pinned.is_empty() && (host == pinned || host.ends_with(&format!(".{pinned}")))
+}
+
+/// `SESSION_DOMAIN` for this branch, or `None` where nothing needs saying.
+pub fn session_domain_for(pinned: Option<&str>, host: &str) -> Option<String> {
+    match pinned.map(str::trim).filter(|v| !v.is_empty()) {
+        // Laravel's own default is the current host, which is already this
+        // branch. Writing the value would change nothing and take a decision
+        // away from a file this app does not own.
+        None => None,
+        Some(pinned) if covers(pinned, host) => None,
+        Some(_) => Some(host.to_string()),
+    }
+}
+
+/// `SANCTUM_STATEFUL_DOMAINS` for this branch, or `None`.
+///
+/// Appended, never replaced: the pinned list is somebody's, and a branch that
+/// took `localhost:3000` out of it would break the SPA that is being developed
+/// against it.
+pub fn stateful_domains_for(pinned: Option<&str>, host: &str) -> Option<String> {
+    let pinned = pinned.map(str::trim).filter(|v| !v.is_empty())?;
+    if pinned
+        .split(',')
+        .any(|entry| entry.trim().eq_ignore_ascii_case(host))
+    {
+        return None;
+    }
+    Some(format!("{pinned},{host}"))
+}
+
+/// One value out of the first `.env` that has it: the worktree's own, then the
+/// project it was branched from.
+///
+/// In that order because a worktree that has been given its own file has been
+/// given it deliberately, and the parent's is what a fresh checkout is actually
+/// running against — `.env` is in `.gitignore`, so a new worktree usually has
+/// none at all.
+fn pinned_env(root: &Path, record: &Record, key: &str) -> Option<String> {
+    let parent = crate::workspace::projects_root(root).map(|dir| dir.join(&record.parent));
+    [Some(PathBuf::from(&record.path)), parent]
+        .into_iter()
+        .flatten()
+        .find_map(|dir| crate::dashboards::env_value(&dir, key))
+        .filter(|value| !value.is_empty())
+}
+
+/// What Sanctum and Passport need in this worktree.
+///
+/// Read from the worktree's own `composer.lock` — the branch's, not the
+/// parent's, because a branch that adds or removes a package is exactly the
+/// case where the two disagree.
+pub fn auth_for(root: &Path, record: &Record) -> Auth {
+    let dir = PathBuf::from(&record.path);
+    let lock = std::fs::read_to_string(dir.join("composer.lock")).unwrap_or_default();
+    let deps = crate::deps::parse_composer_lock(&lock, &Default::default());
+    let version = |package: &str| {
+        deps.iter()
+            .find(|d| d.ecosystem == crate::deps::Ecosystem::Packagist && d.name == package)
+            .map(|d| d.version.clone())
+    };
+
+    let sanctum = version("laravel/sanctum");
+    let passport = version("laravel/passport");
+
+    Auth {
+        session_domain: sanctum.as_ref().and_then(|_| {
+            session_domain_for(
+                pinned_env(root, record, "SESSION_DOMAIN").as_deref(),
+                &record.domain,
+            )
+        }),
+        stateful_domains: sanctum.as_ref().and_then(|_| {
+            stateful_domains_for(
+                pinned_env(root, record, "SANCTUM_STATEFUL_DOMAINS").as_deref(),
+                &record.domain,
+            )
+        }),
+        // Asked only where Passport is installed: a missing file in a project
+        // that never had Passport is not a finding, it is a project.
+        passport_keys_missing: passport.is_some() && !dir.join(PASSPORT_PRIVATE_KEY).is_file(),
+        sanctum,
+        passport,
+    }
 }
 
 /// What the framework calls this engine.
@@ -1793,6 +1955,56 @@ mod tests {
         // The host and the database survive unencoded, which is what makes the
         // URL readable in a log.
         assert!(url.ends_with("/stackvo_feature_x"), "{url}");
+    }
+
+    /// `SESSION_DOMAIN` is written only where the project's own value would
+    /// stop the cookie reaching the branch.
+    #[test]
+    fn a_pinned_cookie_domain_that_already_covers_the_branch_is_left_alone() {
+        let host = "feature-x.shop.loc";
+
+        // Laravel's own default is the current host. Nothing to say.
+        assert_eq!(session_domain_for(None, host), None);
+        assert_eq!(session_domain_for(Some("  "), host), None);
+        // A parent domain covers everything under it, with or without the dot.
+        assert_eq!(session_domain_for(Some(".shop.loc"), host), None);
+        assert_eq!(session_domain_for(Some("shop.loc"), host), None);
+        assert_eq!(session_domain_for(Some(host), host), None);
+        // And one that does not is the case this exists for.
+        assert_eq!(
+            session_domain_for(Some("api.shop.loc"), host).as_deref(),
+            Some(host)
+        );
+        // `shop.loc` is not covered by `xshop.loc` — the suffix test has to be
+        // on a label boundary or every domain covers its own suffixes.
+        assert_eq!(
+            session_domain_for(Some("xshop.loc"), "shop.loc").as_deref(),
+            Some("shop.loc")
+        );
+    }
+
+    /// The stateful list is appended to, never replaced — and it is not written
+    /// at all where the project leaves Sanctum's own default in place, because
+    /// that default already follows `APP_URL`.
+    #[test]
+    fn the_stateful_list_gains_the_branch_and_loses_nothing() {
+        let host = "feature-x.shop.loc";
+
+        assert_eq!(stateful_domains_for(None, host), None);
+        assert_eq!(stateful_domains_for(Some(""), host), None);
+        assert_eq!(
+            stateful_domains_for(Some("localhost,localhost:3000,shop.loc"), host).as_deref(),
+            Some("localhost,localhost:3000,shop.loc,feature-x.shop.loc")
+        );
+        // Already there: nothing to write, in either spelling.
+        assert_eq!(
+            stateful_domains_for(Some("shop.loc,feature-x.shop.loc"), host),
+            None
+        );
+        assert_eq!(
+            stateful_domains_for(Some("shop.loc, FEATURE-X.SHOP.LOC"), host),
+            None
+        );
     }
 
     #[test]

@@ -1444,6 +1444,12 @@ pub struct ComposeProject<'a> {
     /// them. Empty for every project that has not asked for one, which is
     /// every project that existed before the field did.
     pub sidecars: &'a crate::sidecar::Declared,
+    /// Other directories of this repository, each built with its own runtime.
+    ///
+    /// Empty for every single-runtime project, which is why the compose block
+    /// this produces is byte for byte what it always was for one — the property
+    /// `fixtures_differential.rs` freezes.
+    pub components: &'a crate::component::Declared,
 }
 
 /// Traefik uses dots as separators in router names, so a project called
@@ -1659,6 +1665,70 @@ fn render_sidecar(project: &str, id: &str, sidecar: &crate::sidecar::Sidecar) ->
     out
 }
 
+/// One component of this repository, as its own compose service.
+///
+/// The sidecar's shape with the two differences that make it a component:
+/// it is **built** from a subdirectory of the project rather than pulled, and
+/// it gets a **Traefik router** when it names a domain.
+///
+/// The build context is the chosen projects root plus the component's path,
+/// absolute for the reason the node project's context is: there is no relative
+/// path from `generated/` to a directory the user may keep on another volume.
+/// Everything a repository could use to reach past its own project is absent by
+/// construction — there is no `ports:` key written here at all, and
+/// `component::parse` refuses the declarations that would have wanted one.
+fn render_component(
+    project: &str,
+    id: &str,
+    component: &crate::component::Component,
+    projects_root: &str,
+) -> String {
+    use std::fmt::Write as _;
+
+    let container = crate::component::container_name(project, id);
+    let mut out = String::new();
+
+    // The service key is the container name for the reason `render_sidecar`
+    // gives: compose keys are file-wide, so two projects each declaring `api`
+    // would be one key written twice.
+    let _ = write!(
+        out,
+        "  {container}:\n    profiles: [\"projects\", \"project-{project}\"]\n    build:\n      context: {}\n      dockerfile: Dockerfile\n    image: stackvo-{}-{id}:latest\n    container_name: \"{container}\"\n    restart: unless-stopped\n",
+        component.context(&format!("{projects_root}/{project}")),
+        project.to_ascii_lowercase(),
+    );
+
+    // The same pair a node or lang project gets, and for the same reason: a
+    // server bound to 127.0.0.1 inside a container is reachable from nothing.
+    let _ = write!(
+        out,
+        "    environment:\n      HOST: 0.0.0.0\n      PORT: {}\n",
+        component.port
+    );
+
+    out.push_str("    networks:\n      - stackvo-net\n");
+
+    // Only when it named one. A worker with no domain is reachable from the
+    // project's other containers and from nothing outside, which is what a
+    // queue consumer wants — and inventing a URL for it would be putting a
+    // hostname in the certificate that nothing ever asks for.
+    if let Some(domain) = &component.domain {
+        let router = crate::component::router_name(project, id);
+        let _ = write!(
+            out,
+            "    labels:\n\
+             \x20     - \"traefik.enable=true\"\n\
+             \x20     - \"traefik.http.routers.{router}.rule=Host(`{domain}`)\"\n\
+             \x20     - \"traefik.http.routers.{router}.entrypoints=websecure\"\n\
+             \x20     - \"traefik.http.routers.{router}.tls=true\"\n\
+             \x20     - \"traefik.http.services.{router}.loadbalancer.server.port={}\"\n",
+            component.port
+        );
+    }
+
+    out
+}
+
 /// Every Docker volume the declared containers need, in the order they appear.
 ///
 /// Compose requires a named volume to be declared at the top level as well as
@@ -1718,6 +1788,17 @@ pub fn render_compose_projects(
             out.push('\n');
             out.push_str(&render_sidecar(project.name, id, sidecar));
         }
+        // After the sidecars, so a repository's own parts read together and a
+        // workspace with neither is unchanged.
+        for (id, component) in project.components.iter() {
+            out.push('\n');
+            out.push_str(&render_component(
+                project.name,
+                id,
+                component,
+                projects_root,
+            ));
+        }
     }
 
     out.push_str("\n\nnetworks:\n  stackvo-net:\n    external: true\n");
@@ -1756,6 +1837,7 @@ pub fn compose_projects_from<'a>(
                     node_port: m.node.as_ref().map(|n| n.port),
                     php_version: None,
                     sidecars: &m.sidecars,
+                    components: &m.components,
                 }
             } else if crate::manifest::LANG_RUNTIMES.contains(&m.runtime.as_str()) {
                 // Structurally a node project as compose sees it: snapshot
@@ -1768,6 +1850,7 @@ pub fn compose_projects_from<'a>(
                     node_port: m.lang.as_ref().map(|l| l.port),
                     php_version: None,
                     sidecars: &m.sidecars,
+                    components: &m.components,
                 }
             } else {
                 ComposeProject {
@@ -1778,6 +1861,7 @@ pub fn compose_projects_from<'a>(
                     node_port: None,
                     php_version: m.php.as_ref().map(|p| p.version.as_str()),
                     sidecars: &m.sidecars,
+                    components: &m.components,
                 }
             })
         })
@@ -2141,6 +2225,52 @@ pub fn render_generated(root: &std::path::Path) -> crate::error::Result<Rendered
                     scope: "projects",
                     content: content.to_string(),
                 });
+            }
+
+            // ---- the repository's other runtimes -------------------------
+            //
+            // One Dockerfile and one `.dockerignore` per component, written
+            // into the component's own directory — which is where its build
+            // context is, the same rule C-19 settled for a snapshot runtime.
+            // Nothing here runs for a project with no components, which is
+            // every project that existed before the field.
+            for (id, component) in m.components.iter() {
+                let dir = path.join(&component.path);
+                let rendered = if component.runtime == "node" {
+                    Ok(render_node_dockerfile(
+                        &format!("{name}/{id}"),
+                        &component.as_node(),
+                    ))
+                } else {
+                    render_lang_dockerfile(
+                        &component.runtime,
+                        &format!("{name}/{id}"),
+                        &component.as_lang(),
+                    )
+                };
+
+                match rendered {
+                    Ok(content) => files.push(GenFile {
+                        label: format!("{name}/{}/Dockerfile", component.path),
+                        path: dir.join("Dockerfile"),
+                        scope: "projects",
+                        content,
+                    }),
+                    Err(e) => errors.push((format!("{name}/{id}/Dockerfile"), e)),
+                }
+
+                let ignore = match component.runtime.as_str() {
+                    "node" => Some(NODE_DOCKERIGNORE),
+                    other => lang_dockerignore(other),
+                };
+                if let Some(content) = ignore {
+                    files.push(GenFile {
+                        label: format!("{name}/{}/.dockerignore", component.path),
+                        path: dir.join(".dockerignore"),
+                        scope: "projects",
+                        content: content.to_string(),
+                    });
+                }
             }
 
             // nginx.conf / supervisord.conf / Caddyfile per server; apache,
@@ -2852,6 +2982,7 @@ mod tests {
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            components: Default::default(),
             providers: Vec::new(),
             local: Vec::new(),
         }

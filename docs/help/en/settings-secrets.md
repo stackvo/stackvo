@@ -21,6 +21,12 @@ The list above is the direction you take **after** you know there is a credentia
 
 It matches the **value**, not only the key's name. Masking matches names by suffix (`PASSWORD`, `TOKEN`, `KEY`), which is right for masking and not enough here: a variable called `MY_FAVOURITE_THING` can hold an AWS key just as well. So every rule is a shape its issuer publishes — `AKIA…`, `ghp_…`, `xoxb-…`, `sk_live_…`, a PEM private-key header — and the name rule is kept as a second, independent net.
 
+### Model provider keys, and the question that follows
+
+Three of the shapes are model providers' — OpenAI's `sk-proj-…`, Google's `AIza…` and Anthropic's `sk-ant-…`. `laravel/ai` puts one of the three in the `.env` of every application that installs it, and Anthropic's was the last common provider this scanner could not see.
+
+They are not a *worse* finding than the others; every rule here matches a credential. What is different is that having one tells you something about the application: it sends **every request it makes** to a service outside this machine. So the scan puts one sentence next to it, pointing at the card that already answers the question that follows — **Settings → Diagnostics → What can leave this machine**, which asks Docker which containers can reach the internet rather than inferring it.
+
 There is deliberately **no** "long random-looking string" rule. That kind of rule fires on minified JavaScript, on a hash in a lockfile and on a base64 image, and a scanner people learn to ignore is worse than no scanner at all: a miss costs one finding, a false positive costs the feature.
 
 | What it looks at | Why |

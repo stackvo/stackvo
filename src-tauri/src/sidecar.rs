@@ -134,6 +134,24 @@ impl Declared {
         self.inner.by_id.get(id)
     }
 
+    /// Add or replace one, keeping the file's order.
+    ///
+    /// The one writer, and it exists for [`crate::dusk`]: a browser container
+    /// is the first sidecar this application itself has a reason to declare on
+    /// a project's behalf. It goes through the same type the parser produces,
+    /// so a sidecar written here is one the reader accepts — the alternative
+    /// was assembling JSON at the call site, which is how a manifest gains a
+    /// block that only the writer can read.
+    ///
+    /// An id that is already there keeps its position: a declaration somebody
+    /// edited and this app replaced should not also move down the file.
+    pub fn insert(&mut self, id: &str, sidecar: Sidecar) {
+        if !self.inner.by_id.contains_key(id) {
+            self.inner.order.push(id.to_string());
+        }
+        self.inner.by_id.insert(id.to_string(), sidecar);
+    }
+
     /// In the order the manifest declared them.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Sidecar)> {
         self.inner

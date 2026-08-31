@@ -43,6 +43,53 @@ works at all — no version string is compared against a minimum, and Podman
 reports its own version (`5.1.1`) beside the Docker API level it emulates
 (`1.41`).
 
+### Opening a build that is not code-signed
+
+**Releases are not code-signed, and that is a decision rather than an
+oversight.** The app is distributed from GitHub Releases and from nowhere else —
+no App Store, no Microsoft Store, no Snap, no Flathub, no Homebrew cask, no
+winget. An Apple Developer Program membership and an Authenticode certificate
+are not store requirements; they are needed for a file downloaded from a
+release page too, and both are a recurring cost with an identity attached.
+Skipping them is the last external dependency dropped from the chain.
+
+The cost lands on you, once, at first launch: **your operating system does not
+recognise what you downloaded.** Here is exactly what you will see and exactly
+what to do about it.
+
+**macOS.** Gatekeeper quarantines anything downloaded from a browser, and for an
+unsigned bundle it does not say *"unidentified developer"* — it says
+**"StackVo is damaged and can't be opened. You should move it to the Trash."**
+That message is about the quarantine attribute and not about the file, and
+nothing on that dialog tells you so, which is why it is written here.
+
+Either of these clears it:
+
+- Right-click (or Control-click) the app in `/Applications` → **Open**, then
+  **Open** again in the dialog that follows. macOS remembers the choice for that
+  copy.
+- Or, from a terminal:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/StackVo.app
+  ```
+
+**Windows.** SmartScreen shows *"Windows protected your PC"* and hides the
+button that runs it. Click **More info**, then **Run anyway**. The installer
+itself is not blocked — this is a warning with an extra click, not a refusal.
+
+**Linux.** Nothing to do. `.deb`, `.rpm` and `.AppImage` carry no equivalent
+gate; an AppImage needs its executable bit (`chmod +x`), which is true of every
+AppImage.
+
+**What you can check instead of a signature.** Every release publishes a
+`SHA256SUMS-<target>.txt` beside its artifacts, and the app's own updater
+verifies a **minisign** signature over the update manifest — that key
+(`plugins.updater.pubkey`) is separate from platform code signing and is in
+place. So updates are verified even though the first download is not, and the
+one file you cannot verify that way is precisely the first one, which is the one
+the checksum list is there for.
+
 ### What Docker costs you
 
 This is the decision that separates StackVo from the local-binary tools in the
@@ -104,10 +151,16 @@ document a user reads. They are listed here rather than buried:
 | | What it is |
 | --- | --- |
 | **Production image build** | `release.rs` and seven IPC commands: plan, build, save, load, recipe, push-plan, push. A local dev environment that also builds the image you ship. |
-| **A full environment per git branch** | `worktree.rs` and six commands. Each worktree gets its own hostname, **its own database** — with a login granted on that database alone, so the branch cannot reach the one it was branched from — and its own environment variables. The thing cloud "preview environments" sell, locally and free. |
+| **A full environment per git branch** | `worktree.rs` and seven commands. Each worktree gets its own hostname, **its own database** — with a login granted on that database alone, so the branch cannot reach the one it was branched from — and its own environment variables. The thing cloud "preview environments" sell, locally and free. |
 | **A sandbox to hand an assistant** | The same worktree, with an expiry and a registration that scopes the MCP server to it: the assistant gets one branch, its own copy of the database, and four writing tools instead of twelve. Its output is the branch; the environment is disposable. |
 | **Why was this request slow** | `request_explain` and `request_timeline` put the profiler, the query log and your `dump()` calls on one axis around a single request. |
 | **Devcontainer export** | A project can hand out a `.devcontainer` for people who want to work inside the container rather than beside it. |
+| **Replaying the request that actually failed** | A recording holds the request *line* and nothing else, so a POST re-sent from one is a different request — which this refuses by name. Capturing the session lifts that, and because what it stores **is** the credential, it is built as a permission rather than a setting: off until pressed, armed in minutes, ending by itself even across a night the app spent closed, and **deleting what it took** when you stop. No screen and no report ever shows a captured value — a count of cookies and a size of body is all any of them get. |
+| **A monorepo as one project** | `api/` in Go, `web/` in Next.js, `worker/` in Python: one entry, one start, one certificate. Every other tool's unit is a *site* — one directory, one runtime — so a monorepo becomes three entries you have to remember are related; a local binary cannot do otherwise. A component gets a Dockerfile, a compose service on the project's own profile and a Traefik router, and inherits the sidecar's containment: no host port, a path that cannot leave the project, a container named from the project. |
+| **The project's own supply chain** | `pkg.rs` verifies every file of every service package against a digest; the project beside it pulls four hundred libraries and nothing looked at them. `deps.rs` reads `composer.lock` and `package-lock.json` **on this machine** — plain-`http://` sources named package by package, packages nothing verifies counted, and every index they came from. Asking a public database whether any has an advisory is a **separate** button, because it sends the names and versions off the machine, and the sentence saying so is above it. |
+| **Which containers can leave the machine** | Whether a container can route out is asked of Docker, not inferred: a network created `internal` has no gateway, so a container whose every network is internal provably cannot. Beside it, the registry each running image actually came from — which is the follow-up an administrator who set a mirror has: *who bypassed it*. It says out loud what it cannot see: Docker keeps no connection log, so there are no destinations here, and this app will not install a capture or a proxy to get them. |
+| **A bisect that carries the environment** | `git bisect` moves the code and nothing else, so a search through a range where the runtime changed runs old code against a new environment and can accuse an innocent commit. This reads `stackvo.json` and `stackvo.lock` **at the revision under test** and lists what differs. It reports and does not install: matching an old service version means replacing a container whose volume holds your data, twenty times over a ten-step search. |
+| **A lock file for a project's services** | `stackvo.json` names services without versions, so two machines can both satisfy `redis` at 7.0 and 7.2. `stackvo.lock` records what this one resolved to — version, source, and the **package manifest digest**, which is what tells two publications of one version apart. Written only when you ask: a lock the app refreshed on its own would always agree with the machine and could never disagree with it. `verify` then reports the wrong version, the right version out of a different package, and a lock that has fallen behind the manifest. |
 | **A compliance report for the administrator's policy** | `policy_status` says what the file states; `compliance.rs` measures whether any of it holds here. Most findings are not somebody breaking a rule — the mirror applies as files are *generated*, the package allow-list as one is *installed*, `requireSignature` on the *next* refresh — so a policy that arrived after the machine was set up has work left. Four states, and `silent` (the policy has no opinion) is never counted as a pass. The verdict is called `attestable`, not `compliant`: this layer is not a security boundary and the app will not issue a certificate for one. |
 | **A scan for credentials nobody moved** | `leaks.rs` matches the *value*, not the key's name — `AKIA…`, `ghp_…`, a PEM private-key header — across `.env` and every file git is tracking. Each finding carries a fingerprint and a masked preview and never the value; the history is asked by path, never by putting a secret on a command line; and a tracked `.env` comes with the standard repair, plus the two halves it cannot do said out loud. |
 | **The other half of onboarding** | The repository declares what a project needs; `stackvo verify <project>` — and a button on its page — answers whether this machine has it, line by line, and what to do about each one that it does not. Everything here helps you set things up; this is the half that checks. |
@@ -391,6 +444,20 @@ exactly the one no single project should have to carry. If a project declares
 the same id, **the project wins** and the pane says which file each row came
 from; an id already in the built-in catalogue is refused, and the pane says so.
 
+**And the commands a *package* brought.** Installing the Redis package can also
+give you `redis-cli`, the way installing `ddev-redis` gives you `ddev
+redis-cli` — with one difference: every byte of it was verified before it was
+read, and re-verified on every read rather than only at install. A package may
+name a command for the reason a project may name one in its own container and a
+sidecar may not: it already chose the image, already wrote the compose fragment
+and already decides what that container runs. What is still *built* rather than
+inherited is the containment — only an enabled instance is offered, the command
+never reaches the host, and the container name is derived from the instance
+rather than declared, so a package can no more name somebody else's container
+than it can name a host port. Those rows are tagged with the instance they run
+in, because *"this does not touch your project"* is what to say before somebody
+presses a button.
+
 **A screen, when one command at a time is not what you want.**
 
 ```bash
@@ -578,7 +645,7 @@ guarding nothing. Generating the list outright was the obvious move and is the
 wrong one: dispatch cannot be generated, so a generated list advertises tools
 that fail when called.
 
-**Not exposed:** the rest of the mutating surface. 68 of the 311 commands take
+**Not exposed:** the rest of the mutating surface. 69 of the 344 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it

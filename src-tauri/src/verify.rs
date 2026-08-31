@@ -39,11 +39,18 @@
 //! ## What "matches" can and cannot mean today
 //!
 //! It means *the thing the repository named is here, installed and switched
-//! on*. It does not mean byte-identical: two machines can both satisfy
-//! `redis` and be running 7.0 and 7.2. Saying which of those is right needs a
-//! lock file, which is a separate item — so a version the declaration does not
-//! pin is reported as [`State::Ok`] with the version it found written beside
-//! it, rather than being called a match it has not checked.
+//! on*. On its own it does not mean byte-identical: two machines can both
+//! satisfy `redis` and be running 7.0 and 7.2, and a declaration that names no
+//! version cannot tell them apart.
+//!
+//! **[`crate::lock`] is what closes that**, and it is opt-in by design. When
+//! the project has a `stackvo.lock`, a declared service is held against the
+//! version *and the package digest* it was locked at, and three answers this
+//! module could not previously give become available: the wrong version, the
+//! right version out of a different package, and a lock entry for a service the
+//! manifest no longer declares. Without one, the behaviour is exactly what it
+//! was — the version found is reported beside an [`State::Ok`] rather than
+//! being called a match nothing checked.
 
 use crate::instances::Table;
 use crate::manifest::Manifest;
@@ -105,6 +112,138 @@ pub struct Declared<'a> {
     pub built: bool,
     pub generated_stale: bool,
     pub domain_configured: bool,
+    /// The project's `stackvo.lock`, when it has one.
+    ///
+    /// `None` is the overwhelmingly common case and is not a finding: a project
+    /// without a lock has not failed to write one, it has not asked for one.
+    /// What changes when it is present is how much a `service` check is allowed
+    /// to claim — see the module comment.
+    pub lock: Option<&'a crate::lock::Lock>,
+    /// What the project's own `composer.json` says it needs of the platform.
+    ///
+    /// `None` for a project that has no `composer.json`, which is most of them:
+    /// this is the Laravel half of the question and a Go project has no
+    /// opinion about PHP.
+    pub platform: Option<&'a Platform>,
+}
+
+/// The `require` block's demands on the platform, rather than on packages.
+///
+/// Read from `composer.json` — the file that states them — rather than from
+/// `composer.lock`, which records what was resolved. The distinction matters
+/// here: a lock file is the answer, and the question is what the project asked.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Platform {
+    /// The constraint as written: `^8.3`, `>=8.1 <9.0`.
+    pub php: Option<String>,
+    /// The extension names with `ext-` stripped, so they are spelled the way
+    /// `php.extensions` spells them.
+    pub extensions: Vec<String>,
+}
+
+/// Read the platform requirements out of a `composer.json`.
+///
+/// `require` only, not `require-dev`. A dev requirement is a tool for the test
+/// suite; failing the project's readiness on one would call a working
+/// installation broken.
+pub fn platform_of(composer_json: &str) -> Platform {
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(composer_json) else {
+        return Platform::default();
+    };
+    let Some(require) = json.get("require").and_then(|v| v.as_object()) else {
+        return Platform::default();
+    };
+
+    Platform {
+        php: require
+            .get("php")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        extensions: require
+            .keys()
+            // `ext-pdo_mysql` is spelled `pdo_mysql` in a manifest, and
+            // comparing the two spellings is how a check reports a missing
+            // extension that is right there.
+            .filter_map(|name| name.strip_prefix("ext-"))
+            .map(str::to_ascii_lowercase)
+            .collect(),
+    }
+}
+
+/// The platform half of the answer: what `composer.json` asks for, against what
+/// the manifest gives.
+///
+/// ## The failure this catches
+///
+/// `composer.json` says `"php": "^8.3"`. `stackvo.json` says `8.2`. The image
+/// builds without complaint, and `composer install` falls over **inside the
+/// container** with a platform requirement error — which names PHP and does not
+/// name the file that has to change. The developer is looking at a composer
+/// error and the fix is one line of a manifest.
+///
+/// ## Nothing new is measured
+///
+/// [`crate::detect::first_version`] already turns `^8.3` into `8.3`, and it is
+/// already used to *choose* a PHP line at adoption. What was missing is that
+/// the two were never compared again afterwards. This is a pure function over
+/// two files.
+///
+/// ## And what it refuses to claim
+///
+/// A constraint with no `major.minor` in it — `*`, or a bare `^8` — yields
+/// [`State::Unknown`] rather than a guess. `first_version` says so itself: a
+/// bare major is not a version this app can pin, and reporting "not satisfied"
+/// over a constraint nobody read is how a check teaches people to override it.
+fn platform_checks(platform: &Platform, manifest: &Manifest) -> Vec<Check> {
+    let Some(php) = &manifest.php else {
+        // No PHP block: this project is not served by PHP, so its
+        // `composer.json` — if it even has one — is not describing what runs
+        // here.
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+
+    if let Some(constraint) = &platform.php {
+        let wanted = crate::detect::first_version(constraint);
+        out.push(Check {
+            id: "phpVersion",
+            subject: constraint.clone(),
+            state: match &wanted {
+                None => State::Unknown,
+                Some(wanted) if *wanted == php.version => State::Ok,
+                Some(_) => State::Different,
+            },
+            // Both numbers, always — including on a pass. "8.3 asked, 8.3 given"
+            // is what makes the line worth reading rather than a green tick
+            // whose subject nobody can reconstruct.
+            detail: Some(match wanted {
+                Some(wanted) => format!(
+                    "composer.json wants {wanted}, stackvo.json gives {}",
+                    php.version
+                ),
+                None => format!("stackvo.json gives {}", php.version),
+            }),
+        });
+    }
+
+    // One row per missing extension, named. Counted would be the wrong shape
+    // here: the repair is per extension and the name is the whole of it.
+    for extension in &platform.extensions {
+        let present = php
+            .extensions
+            .iter()
+            .any(|have| have.eq_ignore_ascii_case(extension));
+        if !present {
+            out.push(Check {
+                id: "phpExtension",
+                subject: extension.clone(),
+                state: State::Missing,
+                detail: Some("required by composer.json".to_string()),
+            });
+        }
+    }
+
+    out
 }
 
 /// Hold the declaration against the machine.
@@ -131,7 +270,41 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
     });
 
     for service in &declared.manifest.services {
-        checks.push(service_check(service, instances, catalogue));
+        // The lock's answer when it has one, the presence answer otherwise.
+        // Split rather than branched inside one function: the two ask different
+        // questions of the same table, and a single function with a branch
+        // through the middle is one nobody can read either half of.
+        match declared
+            .lock
+            .and_then(|lock| lock.services.iter().find(|l| &l.service == service))
+        {
+            Some(locked) => checks.push(locked_check(locked, instances)),
+            None => checks.push(service_check(service, instances, catalogue)),
+        }
+    }
+
+    // A lock entry for something the manifest no longer declares. Not the
+    // machine's fault and not silently ignored either: the file in the
+    // repository is now describing a project that has moved on, and the repair
+    // is to re-lock rather than to install anything.
+    if let Some(lock) = declared.lock {
+        for entry in &lock.services {
+            if !declared.manifest.services.contains(&entry.service) {
+                checks.push(Check {
+                    id: "lockExtra",
+                    subject: entry.service.clone(),
+                    state: State::Different,
+                    detail: Some(format!("locked at {}, no longer declared", entry.version)),
+                });
+            }
+        }
+    }
+
+    // The Laravel half: what `composer.json` demands of the platform, against
+    // what the manifest gives it. Above `built`, because a mismatch here is why
+    // the build that follows will fail.
+    if let Some(platform) = declared.platform {
+        checks.extend(platform_checks(platform, declared.manifest));
     }
 
     checks.push(Check {
@@ -180,6 +353,59 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
         checks,
         ready,
     }
+}
+
+/// One **locked** service, against what is installed.
+///
+/// The three answers a declaration alone cannot produce. `Repackaged` is the
+/// one the digest is in the file for: the right version out of a different
+/// package is the substitution a version list cannot see, and on the day it
+/// matters it is the only thing that explains why one machine works.
+fn locked_check(locked: &crate::lock::Locked, instances: &Table) -> Check {
+    use crate::lock::Drift;
+
+    let (id, state, detail) = match crate::lock::compare(locked, instances) {
+        Drift::Same => ("service", State::Ok, Some(locked.version.clone())),
+        Drift::Absent => ("service", State::Missing, Some(locked.version.clone())),
+        Drift::Off => ("serviceOff", State::Different, Some(locked.version.clone())),
+        Drift::Version => (
+            "lockedVersion",
+            State::Different,
+            Some(format!(
+                "locked at {}, running {}",
+                locked.version,
+                running(&locked.service, instances).unwrap_or_else(|| "?".into())
+            )),
+        ),
+        // The version matches, so naming it again would say nothing. What is
+        // worth eight characters is which package it is now, because that is
+        // the fact somebody has to go and look up.
+        Drift::Repackaged => (
+            "lockedPackage",
+            State::Different,
+            Some(format!(
+                "{} from a different package ({}…)",
+                locked.version,
+                locked.sha256.chars().take(8).collect::<String>()
+            )),
+        ),
+    };
+
+    Check {
+        id,
+        subject: locked.service.to_string(),
+        state,
+        detail,
+    }
+}
+
+/// The version of a service that is switched on here, if any.
+fn running(service: &str, instances: &Table) -> Option<String> {
+    instances
+        .instances
+        .iter()
+        .find(|i| i.service == service && i.enabled)
+        .map(|i| i.version.clone())
 }
 
 /// One declared service, against what is installed.
@@ -259,7 +485,23 @@ mod tests {
             built: true,
             generated_stale: false,
             domain_configured: true,
+            lock: None,
+            platform: None,
         }
+    }
+
+    /// A manifest with a PHP block, which is what the platform checks compare
+    /// against — the `manifest` helper above deliberately has none.
+    fn php_manifest(version: &str, extensions: &[&str]) -> Manifest {
+        crate::manifest::normalize(
+            &serde_json::json!({
+                "name": "shop",
+                "runtime": "php",
+                "php": { "version": version, "extensions": extensions },
+            }),
+            "",
+            "shop",
+        )
     }
 
     fn table(rows: &[(&str, &str, bool)]) -> Table {
@@ -414,5 +656,223 @@ mod tests {
         let report = verify(&d, &table(&[]), &catalogue());
         assert!(!report.checks.iter().any(|c| c.id == "domain"));
         assert!(report.ready);
+    }
+
+    // ------------------------------------------------------- with a lock
+
+    fn lock(rows: &[(&str, &str, &str)]) -> crate::lock::Lock {
+        crate::lock::Lock {
+            lock_version: crate::lock::SCHEMA_VERSION,
+            at: "2026-08-30T09:14:02Z".into(),
+            services: rows
+                .iter()
+                .map(|(service, version, sha)| crate::lock::Locked {
+                    service: (*service).to_string(),
+                    version: (*version).to_string(),
+                    source: "official".into(),
+                    sha256: (*sha).to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    /// The upgrade a lock buys, as one assertion.
+    ///
+    /// Without one, `redis` installed and on is `Ok` whichever version it is —
+    /// which is honest and is as far as a declaration naming no version can go.
+    /// With one, the same table is `Different` and says which two versions are
+    /// in play, and that is the sentence somebody can act on.
+    #[test]
+    fn the_same_machine_reads_differently_once_there_is_a_lock() {
+        let m = manifest(&["redis"], None);
+        let instances = table(&[("redis", "7.0", true)]);
+
+        let unlocked = verify(&declared(&m), &instances, &catalogue());
+        assert_eq!(state_of(&unlocked, "service", "redis"), State::Ok);
+        assert!(unlocked.ready);
+
+        let l = lock(&[("redis", "7.2", "")]);
+        let mut d = declared(&m);
+        d.lock = Some(&l);
+        let report = verify(&d, &instances, &catalogue());
+        assert_eq!(
+            state_of(&report, "lockedVersion", "redis"),
+            State::Different
+        );
+        assert!(!report.ready);
+        assert_eq!(
+            report
+                .checks
+                .iter()
+                .find(|c| c.id == "lockedVersion")
+                .and_then(|c| c.detail.clone()),
+            Some("locked at 7.2, running 7.0".to_string()),
+            "both versions, because one of them alone is not actionable"
+        );
+    }
+
+    /// The right version out of a different package.
+    ///
+    /// The answer no version list can give, and the reason the digest is in the
+    /// file at all. `table` writes an empty sha256, so a lock carrying one is
+    /// enough to make the two disagree.
+    #[test]
+    fn a_republished_version_is_not_the_version_that_was_locked() {
+        let m = manifest(&["redis"], None);
+        let l = lock(&[("redis", "7.2", "0123456789abcdef")]);
+        let mut d = declared(&m);
+        d.lock = Some(&l);
+
+        let report = verify(&d, &table(&[("redis", "7.2", true)]), &catalogue());
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.id == "lockedPackage")
+            .expect("the digest disagreed and nothing said so");
+        assert_eq!(check.state, State::Different);
+        assert!(
+            check.detail.as_ref().unwrap().contains("01234567"),
+            "the package it should be is the fact somebody has to go and look up"
+        );
+    }
+
+    /// A lock entry for a service the manifest no longer declares.
+    ///
+    /// Nothing to install. The file in the repository has fallen behind the
+    /// project, and the repair is to re-lock — which is a different sentence
+    /// from every other line on this report.
+    #[test]
+    fn a_lock_that_names_a_service_the_manifest_dropped_says_so() {
+        let m = manifest(&["redis"], None);
+        let l = lock(&[("redis", "7.2", ""), ("kafka", "3.7", "")]);
+        let mut d = declared(&m);
+        d.lock = Some(&l);
+
+        let report = verify(&d, &table(&[("redis", "7.2", true)]), &catalogue());
+        assert_eq!(state_of(&report, "service", "redis"), State::Ok);
+        assert_eq!(state_of(&report, "lockExtra", "kafka"), State::Different);
+        assert!(!report.ready);
+    }
+
+    /// A declared service the lock does not name keeps the old behaviour.
+    ///
+    /// The lock has nothing to say about it, and inventing a finding out of
+    /// that would punish somebody for locking a project before installing the
+    /// rest of it. `project_lock` already reported what it could not lock, at
+    /// the moment it could not lock it.
+    #[test]
+    fn a_service_outside_the_lock_is_answered_the_way_it_always_was() {
+        let m = manifest(&["redis", "mysql"], None);
+        let l = lock(&[("redis", "7.2", "")]);
+        let mut d = declared(&m);
+        d.lock = Some(&l);
+
+        let report = verify(
+            &d,
+            &table(&[("redis", "7.2", true), ("mysql", "8.0", true)]),
+            &catalogue(),
+        );
+        assert_eq!(state_of(&report, "service", "redis"), State::Ok);
+        assert_eq!(state_of(&report, "service", "mysql"), State::Ok);
+        assert!(report.ready);
+    }
+
+    /// The failure this exists for: composer wants 8.3, the manifest gives 8.2,
+    /// the image builds fine and `composer install` dies inside the container
+    /// naming PHP but not the file that has to change.
+    #[test]
+    fn the_php_the_project_asks_for_is_held_against_the_php_it_is_given() {
+        let m = php_manifest("8.2", &["mbstring"]);
+        let mut d = declared(&m);
+        let platform =
+            platform_of(r#"{ "require": { "php": "^8.3", "laravel/framework": "^12.0" } }"#);
+        d.platform = Some(&platform);
+
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert_eq!(state_of(&report, "phpVersion", "^8.3"), State::Different);
+        assert!(!report.ready);
+
+        // Both numbers on the line, so the reader does not have to go and find
+        // the second one.
+        let detail = report
+            .checks
+            .iter()
+            .find(|c| c.id == "phpVersion")
+            .and_then(|c| c.detail.clone())
+            .unwrap();
+        assert!(detail.contains("8.3") && detail.contains("8.2"), "{detail}");
+    }
+
+    /// A matching pair passes and still says both numbers.
+    #[test]
+    fn a_matching_php_line_is_ok_and_still_reports_what_it_compared() {
+        let m = php_manifest("8.3", &[]);
+        let mut d = declared(&m);
+        let platform = platform_of(r#"{ "require": { "php": ">=8.3 <9.0" } }"#);
+        d.platform = Some(&platform);
+
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert_eq!(state_of(&report, "phpVersion", ">=8.3 <9.0"), State::Ok);
+        assert!(report.ready);
+    }
+
+    /// A constraint with no `major.minor` is `Unknown`, not a guess and not a
+    /// failure — a check that says "not satisfied" over something nobody read
+    /// is one people learn to override.
+    #[test]
+    fn a_constraint_this_cannot_read_is_not_reported_as_a_mismatch() {
+        for constraint in ["*", "^8"] {
+            let m = php_manifest("8.4", &[]);
+            let mut d = declared(&m);
+            let platform = platform_of(&format!(r#"{{ "require": {{ "php": "{constraint}" }} }}"#));
+            d.platform = Some(&platform);
+
+            let report = verify(&d, &table(&[]), &catalogue());
+            assert_eq!(state_of(&report, "phpVersion", constraint), State::Unknown);
+            // `Unknown` never holds `ready` back.
+            assert!(report.ready, "{constraint}");
+        }
+    }
+
+    /// The second half: `ext-*` against `php.extensions`, one row per missing
+    /// name, and `require-dev` left out of it.
+    #[test]
+    fn each_missing_extension_is_named_and_dev_requirements_are_not_counted() {
+        let m = php_manifest("8.3", &["mbstring", "pdo_mysql"]);
+        let mut d = declared(&m);
+        let platform = platform_of(
+            r#"{
+                "require": { "php": "^8.3", "ext-mbstring": "*", "ext-pdo_mysql": "*", "ext-intl": "*" },
+                "require-dev": { "ext-xdebug": "*" }
+            }"#,
+        );
+        d.platform = Some(&platform);
+
+        let report = verify(&d, &table(&[]), &catalogue());
+
+        // `ext-` is stripped before the comparison. `ext-pdo_mysql` and
+        // `pdo_mysql` are the same extension in two files' spellings, and
+        // reporting it as missing would send somebody looking for something
+        // that is right there.
+        let missing: Vec<&str> = report
+            .checks
+            .iter()
+            .filter(|c| c.id == "phpExtension")
+            .map(|c| c.subject.as_str())
+            .collect();
+        assert_eq!(missing, ["intl"]);
+    }
+
+    /// A project with no PHP block is not asked PHP questions, whatever its
+    /// `composer.json` happens to say.
+    #[test]
+    fn a_project_that_is_not_php_gains_no_platform_lines() {
+        let m = manifest(&[], None);
+        let mut d = declared(&m);
+        let platform = platform_of(r#"{ "require": { "php": "^8.3", "ext-intl": "*" } }"#);
+        d.platform = Some(&platform);
+
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert!(!report.checks.iter().any(|c| c.id.starts_with("php")));
     }
 }

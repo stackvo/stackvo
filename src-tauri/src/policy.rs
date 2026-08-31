@@ -911,14 +911,13 @@ pub fn run_image(reference: &str) -> String {
 
 /// Docker's rule for "the first component is a registry host, not a namespace".
 ///
-/// `mysql:8.0` has a colon and no host; `docker.io/library/mysql` has one. The
-/// difference is entirely whether there is a `/` at all, which is why the split
-/// comes first.
+/// One line, because the rule itself lives in [`crate::images::registry_of`].
+/// It was here first and moved when a second reader appeared: `egress.rs` needs
+/// the host's **name** where this needs only a yes or no, and two
+/// implementations of one rule is how a mirror and a report come to disagree
+/// about which images are already qualified.
 fn names_a_registry(reference: &str) -> bool {
-    let Some((first, _)) = reference.split_once('/') else {
-        return false;
-    };
-    first.contains('.') || first.contains(':') || first == "localhost"
+    crate::images::registry_of(reference).is_some()
 }
 
 /// Should this generated file have its image references rewritten?

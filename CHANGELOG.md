@@ -7,6 +7,587 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Laravel ecosystem block, and the one pattern behind eight of its nine
+  items: the piece was already here and its precondition was never said.**
+
+  `php artisan boost:install` writes a `.mcp.json` holding `php artisan
+  boost:mcp` — a command line that assumes a php on the host. There is none, by
+  decision, so Laravel's own installer leaves a configuration that cannot start
+  and the failure surfaces in somebody's assistant rather than in the tool that
+  wrote it. `boost.rs` writes the passage this application already owns
+  instead: `docker exec -i stackvo-<project> php artisan boost:mcp`. Not
+  `stackvo artisan`, and the reason is the working directory — the CLI resolves
+  which project it means from where it was started and an assistant starts its
+  servers from wherever it happens to be, so the passage that names the
+  container is the one that cannot pick the wrong project. The registration is
+  matched by **what it runs** rather than by what it is called, and an entry
+  that is already there keeps its own name: renaming it would leave two servers
+  in somebody's client instead of one working one. A `Mcp::web()` server needs
+  nothing at all — it is an ordinary route inside the application, already
+  served on the project's own domain over a certificate the browser trusts, so
+  that row shows the URL and offers no button.
+
+  **Telescope, Horizon and Pulse all opened at `https://<domain>/…` the whole
+  time** and nothing said so. A link would have been the cheap half. Each of
+  the three goes quietly empty for a reason the developer cannot see, and every
+  container is green while it happens: Horizon wants a `redis` queue connection
+  and a five-minute `horizon:snapshot`; Telescope wants its migrations and a
+  daily prune; Pulse refuses SQLite storage, wants a Redis connection separate
+  from the queue's, and needs a long-running `pulse:check` — which is why it is
+  a **worker** (`worker.rs` gained `Kind::Pulse`, and `Kind::PulseWork` where
+  the ingest asks for it) rather than a schedule entry that would start a second
+  copy every time it fired. The limit is stated where it applies rather than at
+  the top of a pane: this reads `.env` and `composer.lock`, not `config/*.php`,
+  so every observation carries **the key it read and the value it found** and
+  the sentence about a compiled configuration sits beside that row.
+
+  **A worktree's own hostname is the one Sanctum does not know**, which is a bug
+  this feature produced by working. Two variables are now written, and each only
+  where it changes something: `SANCTUM_STATEFUL_DOMAINS` only where the project
+  pins a list of its own — and the branch host is *appended* to it, because
+  where the project pins nothing Sanctum's default already follows `APP_URL` and
+  writing a list there could only take hostnames away; `SESSION_DOMAIN` only
+  where the project pins a domain that does not cover the branch host, because
+  Laravel's own default is the current host and is already right. Both go in
+  before the record's own variables, so a value somebody typed still wins.
+  Passport's signing key is **generated** in the branch's container and the
+  parent's is never copied — a branch able to mint the tokens it branched from
+  is the opposite of what its own database is for — and a key that is already
+  there is refused rather than overwritten.
+
+  **Dusk needed two pieces and neither works without the other.** The sidecar
+  was the easy half; the half no `docker-compose.yml` fixes is that the browser
+  has to open `https://` from inside a container that has never heard of this
+  machine's certificate authority, and a test that dies on a certificate
+  warning reads as an application bug. The CA now goes into two places that
+  fail separately — the system bundle and Chromium's NSS database — reported as
+  two results rather than one tick, because a step that says `certutil: not
+  found` is a sentence somebody can act on. It writes into the container's
+  writable layer, so recreating the container loses it; that is said beside the
+  button. The image follows the architecture (`standalone-chromium` on arm64,
+  because no arm64 Chrome exists and a browser under emulation is a suite that
+  times out for a reason nobody finds), and `.env.dusk.local` is shown before it
+  is written and never overwritten.
+
+  **Octane holds an edited file in memory**, so a route somebody adds does not
+  exist until the workers are replaced — and they go looking for the mistake in
+  their own code. Laravel's answer is `octane:start --watch` and its price is
+  Node and chokidar *inside the image*, polling a bind mount this application
+  already watches from the host. So the answer here is `octane:reload` attached
+  to the watcher that is already running: nothing is added to the image, which
+  makes it strictly better than the documented route rather than merely
+  different. Off by default, because a reload arriving mid-request kills that
+  request; debounced by seconds rather than milliseconds, because a `composer
+  install` touches thousands of files.
+
+  **`verify` gained its Laravel half with no new measurement.**
+  `detect::first_version` has turned `^8.3` into `8.3` all along and has used it
+  to *choose* a PHP line at adoption; the two were simply never compared again.
+  `composer.json` against the manifest catches a frequent, expensive failure —
+  the image builds, then `composer install` dies inside the container naming PHP
+  and not naming the file that has to change — and the `ext-*` half is one row
+  per missing extension, because the repair is per extension. `require-dev` is
+  not read, and a constraint with no `major.minor` in it is `unknown` rather
+  than a guess.
+
+  **The command catalogue had no check in it.** `pint --test` (the reporting
+  shape, never the bare command, because a formatter that rewrites the tree
+  behind a button is a diff nobody asked for), `artisan test`,
+  `wayfinder:generate` and `boost:add-skill`. Three of the four are offered on
+  the **package** that provides them rather than on `artisan`, because every
+  Laravel project has artisan and most have none of these. Wayfinder is the one
+  row with a pre-step — `route:clear` first, as two argv arrays in sequence
+  rather than one `sh -c "a && b"` — because it reads the route list and a
+  cached one makes it generate against yesterday's routes, which produces
+  *wrong* output under a green console. `pennant:purge` is absent and a test
+  holds it there.
+
+  **`sk-ant-` was the last common provider the leak scanner could not see.**
+  OpenAI's and Google's were already in the table, and `laravel/ai` puts one of
+  the three in the `.env` of every application that installs it. It is not a
+  worse finding than the others; what is different is that having one says the
+  application sends every request it makes outside this machine, so one sentence
+  beside it points at the egress report — which asks Docker which containers can
+  reach the internet rather than inferring it.
+
+  **Scout is the purest form of the pattern**: the service is a Market click and
+  an empty index returns nothing for every search while every container is
+  green. It gets a sentence and not a button, because `scout:import` takes a
+  model class name this application cannot know — and it points at the mechanism
+  that does exist, a project's own `commands` block.
+
+- **K-5: a replay can be bound to a database snapshot**, which is what makes
+  replaying a POST safe to press twice.
+
+  Capturing a session lifted the old refusal, and what took its place is a
+  request that **does the thing again** — a second order, a second row, a second
+  charge. That is not a reason to refuse it; somebody replaying a POST is doing
+  it on purpose. It is a reason to offer the one thing that makes pressing it
+  twice safe, which this application already had: a named snapshot.
+
+  Four rules, each a refusal rather than a convenience. It is restored **before**
+  the second run and never after, because restoring afterwards would discard
+  what the replay did — the thing a POST was replayed to look at. The restore
+  takes its own safety copy first, the same net `db_restore` puts under every
+  restore: pressing a button on a profiling screen must not be the irreversible
+  act. It is **never chosen automatically**, because this app cannot know which
+  snapshot holds the state the original ran under and picking one would be
+  answering an unasked question with data it does not have. And a failure at any
+  step **stops the replay**, because sending the request from a state the caller
+  did not choose would print a number under a premise that is not true.
+
+  What it buys is stated rather than implied: **repeatability, not
+  comparability.** The first recording ran against whatever the database held at
+  the time and nothing wrote that down, so a snapshot means the replay can be
+  run again from a stated point — not that the two numbers are a controlled
+  experiment. The snapshot's name comes back with the result so the second run's
+  premise sits beside its numbers.
+
+  A recording now carries `mutates` — whether sending it again would write.
+  Everything that is not a `GET`, and never a CLI run. It is computed where the
+  request line is parsed, so the window, the pane and an assistant all read one
+  answer instead of three re-derivations of a string, and the marking says what
+  it measured rather than promising more: a GET can write too, and nothing here
+  can know that.
+
+- **A capture window can no longer be armed while the bridge that would do the
+  capturing is off**, which was a permission that granted nothing.
+
+  The two flags are separate on purpose — *"show me my dumps"* and *"record my
+  session token"* are two permissions, and that separation is the point of the
+  design. They are not independent, though: the debug bridge's prepend file is
+  the only thing that reads the capture flag, and it returns at its first line
+  when the bridge is off. So arming without it wrote the flag into a directory
+  nothing was reading, took the sharpest entry in the audit trail — *credentials
+  are now being written* — and captured nothing at all.
+
+  What somebody concludes from an empty window is not "the bridge is off". It is
+  that their POST simply cannot be replayed, which is the wrong lesson to teach
+  with a button. This is the failure `channel.rs` names in one sentence — a
+  setting that silently does nothing — so it is now refused with the reason
+  (`capture::arm`, `Conflict`, the hint pointing at the switch), and
+  `capture_status` carries `bridge` so the pane says it **before** the press
+  rather than after.
+
+- **The README says how to open a build that is not code-signed**, which is the
+  one installation step this project's own distribution decision creates.
+
+  Releases come from GitHub Releases and nowhere else, and there is no code
+  signing — an Apple Developer Program membership and an Authenticode
+  certificate are not store requirements, they are needed for a file downloaded
+  from a release page too, and dropping them dropped the last external
+  dependency in the chain. The cost lands once, at first launch, on the person
+  who downloaded it.
+
+  It is written out because **macOS does not say "unidentified developer" for an
+  unsigned bundle — it says "is damaged and can't be opened. You should move it
+  to the Trash."** That message is about the quarantine attribute and not about
+  the file, and nothing on the dialog says so; without a paragraph naming it,
+  every macOS download is a support ticket where somebody cannot tell an
+  installation step from a corrupt file. Both routes out are given (right-click
+  → Open, or `xattr -dr com.apple.quarantine`), Windows gets its own step (More
+  info → Run anyway, which is a warning with an extra click rather than a
+  refusal), and Linux is named as having nothing to do rather than left out.
+
+  And the section says what *can* still be verified, so "unsigned" does not read
+  as "nothing is checked": the per-target `SHA256SUMS-…` list published beside
+  the artifacts, and the updater's own minisign signature over the update
+  manifest, whose key is separate from platform code signing and is in place.
+
+  `readme_claims.rs` holds the section against `release.yml`'s own warnings —
+  the ones the build prints when the signing secrets are absent. That is the
+  direction the pair goes wrong in: somebody adds signing, the workflow stops
+  warning, and the README keeps telling people to right-click past a dialog they
+  will never see.
+
+- **A package can bring its own commands**, which closes the second half of the
+  machine-wide commands item.
+
+  Installing the Redis package can also give you `redis-cli`, the way installing
+  `ddev-redis` gives you `ddev redis-cli` — with the one thing DDEV does not
+  have: every byte of it was verified before it was read, and re-verified on
+  every read rather than only at install.
+
+  A package may name a command for the reason a project may name one in its own
+  container and a **sidecar** may not: the package already chose the image,
+  already wrote the compose fragment and already decides what that container
+  runs. What is still *built* rather than inherited is the containment — only an
+  enabled instance is offered, the command never reaches the host, and the
+  container name is derived from the instance rather than declared, so a package
+  can no more name somebody else's container than it can name a host port. Ids
+  carry the instance (`redis-7-2:redis-cli`), so two installed versions of one
+  service are two rows rather than one collision and a project cannot shadow a
+  package's command by declaring the same string. The row is tagged with the
+  instance it runs in, because *"this does not touch your project"* is what to
+  say before somebody presses a button, and the package author's own sentence
+  carries `lang=""` rather than claiming this interface's language.
+
+  No shell-metacharacter rule is applied to the argv, and a test holds that
+  open: there is no shell, the argv reaches `docker exec` as an array, and a
+  refusal there would read as security while only breaking legitimate arguments
+  such as `redis-cli --scan --pattern 'a*'`.
+
+  The failure mode this feature could have had is the one the first half already
+  taught: *the layers were never joined up*, invisible to six tests that built
+  both halves by hand. Three tests now write a real package tree — manifest,
+  compose fragment, matching digest, instance table — and one of them corrupts
+  the compose file and asserts that nothing is offered, so the last link of the
+  chain is tested rather than assumed.
+
+- **Four things reported from the screen, and one of them was a bug in the
+  build.**
+
+  **An icon added while the dev server was running never appeared**, and the
+  cause was neither the icon nor the subsetter. `vite.config.js`'s
+  `mdi-used-icons-only` plugin scans the source trees inside `transform`, so it
+  reads them once — the first time Vite asks for `materialdesignicons.css` — and
+  Vite caches the result. Nothing in the module graph connects a `.vue` file to
+  that stylesheet, so adding `mdi-source-branch-check` to a new pane left the
+  cached, already-subsetted stylesheet being served for the rest of the session.
+  The pane drew a blank square while the name was a real icon and the scan did
+  collect it, which is why every check anybody would run said it was fine.
+
+  The plugin is now `apply: 'build'`. Subsetting exists to shrink the *shipped*
+  bundle; in dev nobody is measuring bundle size and correctness is what
+  matters. Nothing is lost: a name that is not an icon is caught by
+  `tests/mdi-icons.spec.js`, and a rule wrongly stripped by
+  `tools/check-bundle.mjs` after the build — two gates that fail loudly, where
+  the dev-server square failed silently.
+
+  **The catalogue's own sentence moved into the info tooltip** rather than
+  getting a tooltip of its own. A tooltip on plain text is reachable by no
+  keyboard and opened by no touch; the service row already carries a focusable
+  info button whose `aria-label` joins its facts into one string, so the summary
+  became the first of those facts — set apart from the counts, with no clamp,
+  because the tooltip is finally somewhere the whole sentence fits. The
+  two-line-under-the-name rendering and its `-webkit-line-clamp` are gone with
+  it; a style rule for a class nothing uses is one the next reader has to prove
+  is dead.
+
+  **The OAuth chips name the action instead of the lack.** "Needs public" reads
+  as a fault in the provider or in the project and is neither — three of the
+  seven accept only a public hostname, which is a fact about their console. The
+  chips now say *paste the local one* / *paste the public one*, and a row that
+  cannot proceed says so with the repair beside it rather than leaving somebody
+  to connect a warning at the top of the pane to a row at the bottom.
+
+  **A rebuild-everything button joins start, stop and restart in the app bar.**
+  `project_build` was per project, and changing a PHP version or a generator
+  template changes every project's Dockerfile. It is deliberately **not** one
+  `docker compose build`: that is a single process, and one broken Dockerfile
+  ends it leaving the projects behind it unbuilt with nothing saying which those
+  were — the answer `generator::render` already gave for a broken manifest.
+  So the builds are sequential and the result **names** every project that
+  failed rather than counting them.
+
+  `noCache` defaults to false — "rebuild" and "pull every layer again" are
+  different jobs and the second takes minutes per project.
+
+- **All four stack actions now ask first.** The app bar's start-all, stop-all,
+  restart-all and rebuild-all act on **every container on the machine**, and
+  none of them is undone by pressing another: stopping takes every site down
+  now, and starting them again is a different act with a different cost. A
+  single mis-aimed click on a toolbar is the cheapest way to lose an
+  afternoon's running state, and a toolbar is exactly where mis-aimed clicks
+  happen.
+
+  All four, not the slowest one. The first instinct was to guard only the
+  rebuild because it takes minutes — but stopping is the *abrupt* one, and a
+  dialog on only the slow one would have been in front of the wrong button.
+
+  `ConfirmDialog` is the application's first, and it does not ask "are you
+  sure?" — a question nobody can answer, because it does not say what about.
+  Each caller passes the sentence that names what will happen and to how many
+  things, which is `hints.rs`' rule applied to a dialog. The confirm button
+  carries the **same verb as the toolbar button that opened it** rather than
+  "OK", so the second press reads as the same act as the first, and it is
+  deliberately **not autofocused**: a dialog that opens with the destructive
+  action under the return key turns one stray keypress into two, which is the
+  opposite of what a second, deliberate act is for.
+
+- **Replaying the request that actually failed.** `explain::replayable` refused a
+  POST by name, with the reason: *"only the request line was recorded — not its
+  body, its headers or its session — and a POST replayed without them is a
+  different request, which is usually answered with a redirect or a 419 rather
+  than the page"*. That refusal was not a gap in the code. It was what the code
+  knew.
+
+  But the roadmap item's own example is the one that needs the other half:
+  *"this bug only happened in that basket."* A basket is a session, and
+  replaying it means recording the request's cookies and body — **somebody's
+  session token and their form input, written to disk.** So the feature is the
+  asking, not the storing.
+
+  **A permission, built like one, with four rules that are each a refusal.**
+  *Off, always, until armed* — the bridge writes nothing without a second flag
+  file, separate from the one that turns the bridge on, so "show me my dumps"
+  and "record my session token" are two permissions rather than one. *Minutes,
+  never indefinitely* — sixty at most, stored as an absolute expiry rather than
+  a duration, which is `stats_store.rs`'s lesson about a series reloaded
+  verbatim applied to a permission: a window that restarts its clock on launch
+  is a window that never closes. *It ends by itself*, swept when anything next
+  asks, because a timer that only runs while the app is open would leave one
+  open across a night the app spent closed — `worktree` expiry's arrangement.
+  *Disarming deletes* — not merely no new captures, but the ones already taken,
+  with the count reported: a permission that ends leaving its harvest behind is
+  one somebody only believes has ended.
+
+  **The value never reaches a report.** Redaction is unavailable here, because
+  the value is the entire point of keeping it — so what is done instead is time,
+  deletion, and never quoting. `capture_status` answers with a *count* of cookie
+  names and a *size* of body; the audit trail records the window being opened
+  and how long for, which is the fact somebody has to be able to date, and never
+  a captured value; and the diagnostics bundle reads the app's log directory
+  only, so it cannot pick these up.
+
+  **The join is the request line and the clock together**, within two seconds,
+  nearest wins. Either alone is wrong: the line by itself would attach one
+  visitor's basket to another visitor's recording of the same page, and the
+  clock by itself would attach whatever happened next. A recording with no match
+  keeps the old refusal **word for word**, because for that recording it is
+  still true — and only the "not a GET" refusal is ever lifted, since a CLI run
+  is still not a request and a path this app will not send is still not one.
+
+  `spx::send` grew one optional argument rather than a second implementation,
+  for the reason the replay already turns on: a replay differing from the
+  original in the profiler cookie, the redirect policy or the certificate root
+  would not be comparable with it. The captured `Cookie` is **appended to** the
+  profiler's trigger rather than replacing it — the trigger is what makes the
+  request produce a recording at all. A body over 64 KB is dropped by the bridge
+  rather than truncated: half a body is not a request.
+
+- **A monorepo is one project.** A repository with `api/` in Go, `web/` in
+  Next.js and `worker/` in Python is now one entry, one start, one certificate
+  and one set of hostnames.
+
+  Every other tool in this category makes it three, and the reason is
+  structural: their unit is a **site** — one directory, one runtime, one
+  hostname — so a monorepo becomes three entries somebody has to remember are
+  related, and nothing in the tool knows they are one thing. A local binary
+  cannot do otherwise, because a directory has one runtime when the binary
+  serving it has one. Containers are what make the other answer possible, and
+  every piece of it was already here: eight runtimes, a Dockerfile renderer for
+  each, Traefik routers generated per hostname. What was missing was a manifest
+  that could say so.
+
+  **Third of three, and the distinctions are the design.** `services` names a
+  *need* the machine satisfies from a package and shares between every project
+  that asked; a `sidecar` is *somebody else's image*, project-scoped, not built
+  and not routed; a **component** is *this repository's own code* in a
+  subdirectory, built here and routed at its own hostname. Folding any two
+  together would make "how many of these exist" a question with two answers.
+
+  **The containment is `sidecar.rs`'s and carries over exactly.** No host port —
+  a published one would be two clones of one repository fighting over 8080, and
+  a `ports` key is refused *by name* on the manifest with that reason. The
+  `path` stays inside the project: `..`, an absolute path and `.` itself are all
+  refused, because a build context is what Docker reads everything under. The
+  container is named from the project by `sidecar::container_name` **itself**
+  rather than a copy of it — they share one namespace, so an id used by both is
+  a manifest warning instead of two declarations quietly producing one
+  container. And it takes the project's own compose profile, so
+  `--profile project-shop` brings the whole repository up.
+
+  **A component's `domain` is deliberately not an alias.** An alias is another
+  name for the project's *own* container and reaches its Traefik rule; a
+  component domain names a *different* container, and merging them would route
+  `api.shop.loc` to the PHP app. They meet in `Manifest::extra_hostnames`, which
+  is the shape `/etc/hosts` and the certificate already wanted — so both get an
+  entry and a SAN with no change to either module.
+
+  **PHP is not a component runtime**, and is refused by name with the reason: a
+  PHP part needs a web server, a document root and a `php.ini` overlay, which
+  the project's own `runtime` already renders, which does not generalise to
+  several inside one project, and over which differential fixtures are frozen.
+  A component with no `domain` is not misconfigured either — it is reachable
+  from the project's other containers and from nowhere outside, which is what a
+  worker wants, and inventing a hostname for one would put a name in the
+  certificate that nothing ever asks for.
+
+  Everything is gated on the block being non-empty, so a single-runtime project
+  renders byte for byte what it always did.
+
+- **The same discipline `pkg.rs` applies to packages, applied to the project's
+  own.** `pkg.rs` verifies every file of every service package against a
+  manifest digest before it runs, refuses a moving tag, and checks a signature
+  over the index it came from. Meanwhile the project sitting beside it pulls
+  four hundred libraries out of `composer.lock` and `package-lock.json` and
+  nothing here had ever looked at them — which is the wrong way round: the
+  service packages are a catalogue this project publishes and can vouch for, and
+  the dependencies are somebody else's code, in far greater quantity, running
+  with the developer's own permissions.
+
+  **The local half reads what the lock file already says, and needs no
+  network.** A dependency fetched over plain `http://` is named package by
+  package, because whoever is on the path chooses what arrives — `market.rs`
+  refuses exactly that for this application's *own* catalogue, and a project
+  doing it for four hundred libraries is the same hole at scale. Packages the
+  lock carries no hash over are **counted** rather than listed, because on a
+  lock written by an older tool that is every package and four hundred identical
+  rows is a screen nobody reads. Every index other than the ecosystem's own is
+  named with a count: a private mirror is not a fault, but a supply chain nobody
+  wrote down is one nobody is watching.
+
+  Direct and transitive are kept apart — the distinction the roadmap's own
+  example turns on — and it comes from `composer.json` / `package.json`, because
+  `composer.lock` does not record it. Dev dependencies are included and not
+  marked apart: they are installed on this machine, they run in the same
+  container, and *"it is only a dev dependency"* is a sentence that has
+  introduced real incidents.
+
+  **The advisory query is a separate command, and the reason is the
+  disclosure.** It sends the **names and versions** of the project's
+  dependencies to `api.osv.dev` — no identifier, no project name, no path, no
+  file contents — and that is a real thing to say out loud, so it is written in
+  `PRIVACY.md` in those words rather than described as "checking for updates",
+  with `privacy_claims.rs` holding the document to it. The sentence sits above
+  the button rather than after it, because a consent decision belongs where the
+  decision is made. A failure is an **error**, never an empty list: "nothing was
+  found" and "I could not ask" must not look the same on a security screen, and
+  a null `advisories` is what the report already means by the second. Only OSV's
+  ids come back — an id is what somebody searches for, and a severity word this
+  build derived itself would be a judgement it is in no position to make.
+
+  `locks` names the files that were read, so "no findings" can be told apart
+  from "no lock file was found" — a project this cannot see is not a clean
+  project. Only `composer.lock` and `package-lock.json` are read: the two this
+  application's own runtimes reach for most, and the two that are JSON.
+  `yarn.lock`, `pnpm-lock.yaml`, `go.sum` and `Cargo.lock` are named as absent
+  rather than guessed at, the same call `images.rs` made about picking version
+  pins — a parser written from memory against a format nobody measured is how a
+  report starts quietly missing half a project.
+
+- **What can leave this machine, as far as Docker can actually say.** An
+  administrator who pointed every pull at the organisation's mirror with
+  `registryPrefix` has a follow-up — *who bypassed it* — and the same person
+  wants to know which containers on the laptop can reach the internet at all.
+  Neither question had an answer, and neither has one anywhere else in this
+  category: a local binary has no containers, so it has no network namespaces to
+  separate one program's traffic from another's.
+
+  **Whether a container can route out is a fact, not a heuristic.** A Docker
+  network created with `internal: true` gets no gateway installed, so a
+  container whose every network is internal cannot route out — asked of the
+  daemon rather than inferred from behaviour. The column is deliberately
+  asymmetric: one non-internal network is enough for *yes*, because one gateway
+  is all a packet needs, and nothing short of **every** network being *known*
+  internal earns a *no*. A network the daemon would not describe leaves the row
+  at "cannot tell", because a containment claim resting on a failed lookup is
+  the one wrong answer a report like this must not give.
+
+  **Where each image came from** is the mirror-bypass answer, exact. A reference
+  naming no host is reported as `docker.io` rather than as none — that is where
+  it is pulled from, and "none" would omit the one host most worth naming. The
+  rule that decides it moved into `images::registry_of`, which
+  `policy::names_a_registry` now asks as well: two implementations of one rule
+  is how a mirror and a report come to disagree about which references are
+  already qualified.
+
+  **It says out loud what it cannot see.** Docker keeps no connection log, so
+  there are no destinations here — answering *"which host did this container
+  talk to"* needs a packet capture inside the container's network namespace or a
+  proxy in front of it, and this app will not install either quietly to fill in
+  a report. The refusal is on the screen rather than left as a gap, for the
+  reason `compliance.rs` gives about its own `unmeasured`. The byte counters are
+  reported with the same honesty: they are per interface and include the StackVo
+  network between the user's own containers, so they are a floor on *"did
+  anything leave"* and never a measure of internet traffic. They are read with
+  `one_shot` — bytes are counters, not a percentage, so the two-reading shape
+  `container_stats` needs for CPU would turn a thirty-container report from one
+  second into a minute — and a stopped container reports nothing rather than
+  zero.
+
+- **`git bisect`, with the environment the commit was written against.**
+  `git bisect` moves the code and nothing else. Three months ago a project
+  declared PHP 8.3 and locked `redis` at 7.0; the container on the machine today
+  is 8.4 and 7.2 — so every step through that range runs **old code against a
+  new environment**, and the commit the search finally accuses may be innocent,
+  because the behaviour changed with the runtime rather than with the diff.
+
+  Nothing in this category does anything about that, because nothing in it knows
+  what environment a commit wanted. This does: `stackvo.json` has always
+  travelled with the repository and, since the lock file above, `stackvo.lock`
+  does too — and both are readable **at a revision**, with `git show
+  <rev>:<path>`, without touching the working tree. So every step lists what
+  that commit expected and how this machine differs. "Nothing differs" is a
+  result rather than an empty space: it means the environment is not in the
+  bisect, so whatever the search accuses is the code.
+
+  **It reports the difference and does not install it.** The obvious next move
+  is to make each step bring the environment along, and it is the wrong one:
+  matching an old service version means replacing a container whose volume holds
+  the developer's data, and a ten-step search would do that twenty times.
+  Destroying a database to answer a question about a diff is not a trade this
+  app makes on somebody's behalf. The mechanism to act is one click away on the
+  Market page, and it asks first.
+
+  Three refusals rather than fallbacks. **A dirty tree is refused before
+  anything moves**, by name and with the repair — git refuses most of these
+  itself, and a git error arriving in a desktop alert is a sentence written for
+  a terminal. **A revision is validated against an allowlist**, the same hazard
+  `git.rs` wrote its URL allowlist for: this is webview text reaching a
+  subprocess argument, and a value beginning with `-` is read by git as an
+  option, of which git has several that name a program to run. **Every move is
+  audited**, because starting a bisect and marking a step both put the user's
+  checkout on somebody else's commit, and *"my files are not what they were"* is
+  the loudest question a developer can have about their own machine.
+
+  `skip` is offered beside good and bad because git offers it, and leaving it
+  out is worse than it looks: a commit that will not build has to be marked
+  something, and without a third answer people mark it `good` — which poisons
+  the search in a way nothing downstream can detect. The step estimate and the
+  culprit are read back from git's own `BISECT_LOG` rather than recomputed, and
+  the culprit is recognised on git's exact sentence and nothing looser: a bisect
+  still running must never read as finished, because the finished screen is the
+  one somebody copies a hash out of.
+
+- **`stackvo.lock` — the versions a project was actually built against.**
+  `stackvo.json` declares what a project needs *around* it — `"services":
+  ["redis", "mysql"]` — and names no versions, which is right: a repository
+  should not have to guess what the person cloning it will have installed.
+
+  `verify.rs` had written the cost of that down in as many words: two machines
+  can both satisfy `redis` while running 7.0 and 7.2, so *"a version the
+  declaration does not pin is reported as `Ok` with the version it found written
+  beside it, rather than being called a match it has not checked … saying which
+  of those is right needs a lock file, which is a separate item"*. This is that
+  file, and it is the division every ecosystem settled on for the same reason:
+  **the manifest is intent, the lock is fact**, and both belong in the
+  repository because the second is what makes the first reproducible.
+
+  **`sha256` is what makes it a lock rather than a version list.** It is the
+  digest of the package *manifest* as the registry stated it at install time —
+  already recorded per instance in `instances::PackageRef`, already the thing
+  `pkg::Tree::load` verifies every file against. With it, "redis 7.2" out of
+  somebody else's catalogue is a different answer from "redis 7.2" out of the
+  official one, which is exactly the substitution a version list cannot see. It
+  is copied rather than recomputed: a second answer to a question that already
+  has one is how the two come to disagree.
+
+  **Written when somebody asks, never on its own.** A lock the app refreshed
+  quietly would record whatever the machine drifted to, would therefore always
+  agree with the machine, and could never disagree with it — and a check that
+  cannot fail is worse than no check. `project_verify` only ever reports against
+  the file; nothing in this path installs, switches on, or changes a version.
+
+  `verify` gains three answers it could not previously give: `lockedVersion`
+  (the wrong version is running, with both numbers, because one alone is not
+  actionable), `lockedPackage` (the right version out of a different package)
+  and `lockExtra` (the lock names a service the manifest has dropped, so the
+  repair is to re-lock rather than to install anything). Without a lock the
+  behaviour is unchanged, and a declared service the lock does not name keeps
+  the old answer — `project_lock` already reported what it could not lock, at
+  the moment it could not lock it.
+
+  Deliberately **not** locked: the runtime and the web server, which
+  `stackvo.json` already carries; and the images this application itself runs,
+  which belong to the machine rather than to any one project — one `cloudflared`
+  serves ten of them — and already have their pinning in the policy file's
+  `imagePins`. The output is sorted and newline-terminated, so re-locking an
+  unchanged workspace is byte-identical: a lock whose diff is noise is one
+  people stop reading in a pull request, which is the only place it does its
+  job. Also `stackvo lock <project>`, which is the form that belongs in CI.
+
 - **Which clause of the policy is actually holding.** `policy_status` answered
   what an administrator's file *says*. Nothing answered whether any of it was in
   force on the machine reading it, which is the question the person who deployed

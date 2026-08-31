@@ -1044,6 +1044,28 @@ pub async fn network_exists(name: &str) -> bool {
         .is_ok()
 }
 
+/// Was this network created with no route off the machine?
+///
+/// `Some(false)` is an ordinary bridge and Docker installed a gateway;
+/// `Some(true)` is `internal: true` and it did not. `None` is a daemon that
+/// would not describe the network, and [`crate::egress`] keeps that apart from
+/// both — a containment claim resting on a failed lookup is exactly the wrong
+/// answer for a report about what can leave.
+pub async fn network_is_internal(name: &str) -> Option<bool> {
+    use bollard::query_parameters::InspectNetworkOptions;
+
+    let network = connect()
+        .ok()?
+        .inspect_network(name, None::<InspectNetworkOptions>)
+        .await
+        .ok()?;
+
+    // Absent means false in Docker's own schema — the field is only emitted
+    // when set — so an answered inspect with no `Internal` is a routable
+    // network rather than an unknown one.
+    Some(network.internal.unwrap_or(false))
+}
+
 /// Create it, the way `install.sh` does: a plain user-defined bridge.
 pub async fn network_create(name: &str) -> Result<()> {
     use bollard::models::NetworkCreateRequest;
@@ -1243,6 +1265,41 @@ pub struct ContainerStats {
     pub block_read: u64,
     pub block_write: u64,
     pub online_cpus: u64,
+}
+
+/// Cumulative network counters for one container, in one request.
+///
+/// `container_stats` below deliberately asks for two readings, because a CPU
+/// *percentage* cannot be computed from one. Bytes are not a percentage — they
+/// are counters since the container started — so this asks for `one_shot` and
+/// returns immediately, which is the difference between a report over thirty
+/// containers taking a second and taking a minute.
+///
+/// `None` for a container that is not running: Docker has no counters to give,
+/// and zero would read as "it has sent nothing", which is a different claim.
+pub async fn container_traffic(id: &str) -> Option<(u64, u64)> {
+    use bollard::query_parameters::StatsOptionsBuilder;
+    use futures_util::StreamExt;
+
+    let sample = connect()
+        .ok()?
+        .stats(
+            &container_name(id),
+            Some(
+                StatsOptionsBuilder::new()
+                    .stream(false)
+                    .one_shot(true)
+                    .build(),
+            ),
+        )
+        .next()
+        .await?
+        .ok()?;
+
+    let nets = sample.networks.as_ref()?;
+    Some(nets.values().fold((0u64, 0u64), |(rx, tx), n| {
+        (rx + n.rx_bytes.unwrap_or(0), tx + n.tx_bytes.unwrap_or(0))
+    }))
 }
 
 /// One-shot stats sample.

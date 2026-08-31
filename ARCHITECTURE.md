@@ -20,8 +20,8 @@ Three parts, in the order a request travels:
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | [`src/`](src/)                         | 38k lines               |
-| Back end — Rust, 120 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
-| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 325 commands, 72 events |
+| Back end — Rust, 130 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
+| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 348 commands, 73 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -68,7 +68,7 @@ an accident of how it was first written:
 
 ### 3.1 Layers
 
-`src-tauri/src/` is flat — 120 modules, no subdirectories — but it is not
+`src-tauri/src/` is flat — 130 modules, no subdirectories — but it is not
 unstructured. There are four bands, and the dependency arrows only ever point
 downward:
 
@@ -76,10 +76,10 @@ downward:
   entry              2.0k   lib.rs, main.rs, menu, tray — plugins, state, the
       │                     handler list, the window
       ▼
-  commands.rs       14.9k   the IPC surface: 319 #[tauri::command] functions
+  commands.rs       14.9k   the IPC surface: 344 #[tauri::command] functions
       │                     argument validation, orchestration, nothing else
       ▼
-  domain            89.7k   97 modules: generator, manifest, certs, hosts,
+  domain            89.7k   107 modules: generator, manifest, certs, hosts,
       │                     mail, xdebug, profile, preset, migrate, worktree, …
       │                     one subject each; no Tauri types
       ▼
@@ -123,14 +123,14 @@ in both directions.
 | Subject        | Modules                                                                            | What it owns                                                                                                                                                                                         |
 | -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rendering      | `generator`, `template`, `skeleton`, `scaffold`                                    | Everything under `generated/`, the per-project Dockerfile, and the files a new project starts with                                                                                                   |
-| The manifest   | `manifest`, `detect`, `migrate`                                                    | `stackvo.json`: its schema, guessing one for an adopted folder, and moving old ones forward                                                                                                          |
+| The manifest   | `manifest`, `lock`, `deps`, `component`, `detect`, `migrate`                                                    | `stackvo.json`: its schema, the lock file that records what its service list resolved to, what its own `composer.lock` and `package-lock.json` pull in, the other directories of one repository that are built with their own runtimes, guessing a manifest for an adopted folder, and moving old ones forward                                                                                                          |
 | Docker         | `engine`, `runner`, `inflight`, `images`                                           | Talking to the daemon (bollard), running `docker compose` as a streamed operation, refusing two at once on one subject, and the one table of images this app runs but did not build                   |
-| Networking     | `certs`, `hosts`, `elevate`, `tunnel`, `tunnelid`                                  | TLS via mkcert, `/etc/hosts`, the one privileged call, the nine-provider tunnel table, and the guard that puts a password and a kept address in front of one (B-7)                                    |
+| Networking     | `certs`, `hosts`, `elevate`, `tunnel`, `tunnelid`, `egress`                                  | TLS via mkcert, `/etc/hosts`, the one privileged call, the nine-provider tunnel table, the guard that puts a password and a kept address in front of one (B-7), and which containers can route off the machine at all                                    |
 | Services       | `db`, `worker`, `quickcmd`, `repl`, `release`, `stats`                             | The optional stack, the per-project sidecars, the command catalogue, the snippet workbench, and the production image                                                                                 |
-| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`, `queuelog`, `explain`         | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — their output, what the queue worker reported it did, and the join that puts a recording, the query log and the axis around one request (B-1) |
+| PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`, `capture`, `queuelog`, `explain`         | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — their output, the time-boxed permission that records a request's session so a POST can be replayed, what the queue worker reported it did, and the join that puts a recording, the query log and the axis around one request (B-1) |
 | Node           | `devserver`                                                                        | The dev-server sidecar and the `allowedHosts` snippet                                                                                                                                                |
 | Mail           | `mail`                                                                             | The catcher, its search, and the HTML/link checks                                                                                                                                                    |
-| Branches       | `git`, `worktree`                                                                  | Cloning with the user's own git, and giving a branch its own directory, hostname, database and environment                                                                                           |
+| Branches       | `git`, `worktree`, `bisect`                                                                  | Cloning with the user's own git, giving a branch its own directory, hostname, database and environment, and walking history with the environment each commit was written against                                                                                           |
 | Diagnosis      | `doctor`, `preflight`, `diagnostics`, `applog`, `crash`, `verify`                            | What is wrong, what can be fixed automatically, and what to send when it cannot                                                                                                                      |
 | The cost       | `usage`, `stats`, `stats_store`, `idle`                                            | What each container has used, kept across restarts, and what to switch off when nothing is using it                                                                                                   |
 | Credentials    | `secrets`, `leaks`                                                                 | Where a password lives, and where one is that nobody moved                                                                                                                                           |
@@ -216,7 +216,7 @@ rejections".
 
 ## 5. The contract
 
-[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 325 commands, 72
+[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 348 commands, 73
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
@@ -328,7 +328,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (120 modules, 325 commands) come from
+covers `README.md`; the counts above (130 modules, 348 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 
