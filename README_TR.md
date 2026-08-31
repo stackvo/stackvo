@@ -43,8 +43,7 @@ Terminalde `docker compose` yazmadan, makinenize tek bir PHP kurmadan.
 
 </div>
 
-> **Ekran görüntüsü:** `docs/images/01-dashboard.png` — Panel
-> <!-- <img src="docs/images/01-dashboard.png" alt="StackVo paneli" width="100%"> -->
+<img src="docs/screenshots/dashboard.png" alt="StackVo paneli: sağlık, imajlar, CPU, bellek ve disk" width="100%">
 
 ---
 
@@ -225,8 +224,7 @@ imaj kurulurken Docker'ın yazdığı satırları olduğu gibi görürsünüz. B
 proje listesindeki satırın alan adına tıklayın — tarayıcı açılır, sertifika
 uyarısı çıkmaz.
 
-> **Ekran görüntüsü:** `docs/images/02-new-project.png` — Yeni proje sihirbazı
-> <!-- <img src="docs/images/02-new-project.png" alt="Yeni proje" width="100%"> -->
+<img src="docs/screenshots/project-new.png" alt="Yeni proje çekmecesi: ad, alan adı, runtime ve PHP yapılandırması" width="100%">
 
 ### 5) Günlük kullanım — nerede ne var
 
@@ -260,33 +258,19 @@ bir düğme vardır.
 
 ## Ekran görüntüleri
 
-> Bu bölümdeki görseller sonradan eklenecek. Dosya adları ve hangi ekranı
-> göstereceği aşağıda hazır duruyor — `docs/images/` klasörüne konulduğunda
-> yorum satırları açılacak.
+<table>
+  <tr><td width="25%" valign="top"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Panel"></a><br><sub><b>Panel</b><br>Sağlık, maliyet, makine</sub></td><td width="25%" valign="top"><a href="docs/screenshots/projects.png"><img src="docs/screenshots/projects.png" alt="Projeler"></a><br><sub><b>Projeler</b><br>Her proje ve durumu</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-detail.png"><img src="docs/screenshots/project-detail.png" alt="Proje detayı"></a><br><sub><b>Proje detayı</b><br>Bir proje ne yapıyor</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-new.png"><img src="docs/screenshots/project-new.png" alt="Yeni proje"></a><br><sub><b>Yeni proje</b><br>Ad, runtime, PHP</sub></td></tr>
+  <tr><td width="25%" valign="top"><a href="docs/screenshots/market.png"><img src="docs/screenshots/market.png" alt="Katalog"></a><br><sub><b>Katalog</b><br>Paketler ve sürümler</sub></td><td width="25%" valign="top"><a href="docs/screenshots/market-service-detail.png"><img src="docs/screenshots/market-service-detail.png" alt="Servis detayı"></a><br><sub><b>Servis detayı</b><br>Servise nasıl erişilir</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-detail-debugging.png"><img src="docs/screenshots/project-detail-debugging.png" alt="Hata ayıklama"></a><br><sub><b>Hata ayıklama</b><br>Xdebug, profil, dump</sub></td><td width="25%" valign="top"><a href="docs/screenshots/project-detail-terminal.png"><img src="docs/screenshots/project-detail-terminal.png" alt="Terminal"></a><br><sub><b>Terminal</b><br>Konteynerde bir kabuk</sub></td></tr>
+  <tr><td width="25%" valign="top"><a href="docs/screenshots/mail.png"><img src="docs/screenshots/mail.png" alt="Mail"></a><br><sub><b>Mail</b><br>Projelerin gönderdikleri</sub></td><td width="25%" valign="top"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="Günlükler"></a><br><sub><b>Günlükler</b><br>Uygulama ve sunucu</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Görünüm"></a><br><sub><b>Görünüm</b><br>Tema, yarıçap, yoğunluk</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings-doctor.png"><img src="docs/screenshots/settings-doctor.png" alt="Doctor"></a><br><sub><b>Doctor</b><br>Ne bozuk, adıyla</sub></td></tr>
+</table>
 
-| # | Dosya | Ekran |
-|---|-------|-------|
-| 1 | `docs/images/01-dashboard.png` | **Panel** — CPU, bellek, disk, ağ, çalışan projeler |
-| 2 | `docs/images/02-new-project.png` | **Yeni proje sihirbazı** |
-| 3 | `docs/images/03-project-detail.png` | **Proje sayfası** — genel bakış, servisler, günlükler |
-| 4 | `docs/images/04-services.png` | **Servis kataloğu** — sürüm seçimi ve örnekler |
-| 5 | `docs/images/05-why-slow.png` | **"Bu istek neden yavaştı?"** — profil + sorgu + dump |
-| 6 | `docs/images/06-mail.png` | **Mail kutusu** |
-| 7 | `docs/images/07-terminal.png` | **Konteyner terminali** |
-| 8 | `docs/images/08-settings.png` | **Ayarlar** — alan adı, sertifika, PHP, tanılama |
-| 9 | `docs/images/09-worktree.png` | **Dal başına ortam** (worktree) |
-| 10 | `docs/images/10-cli-tui.png` | **`stackvo tui`** — terminal arayüzü |
+**[Bütün ekranlar, tek sayfada →](docs/screenshots/README.md)** — otuz yedi görüntü: her sayfa,
+proje detayının on bölümü, ayarların on yedi paneli, ve kendi adresi olmayan dört ekran.
 
-<!--
-<p align="center">
-  <img src="docs/images/01-dashboard.png" width="49%">
-  <img src="docs/images/03-project-detail.png" width="49%">
-</p>
-<p align="center">
-  <img src="docs/images/05-why-slow.png" width="49%">
-  <img src="docs/images/06-mail.png" width="49%">
-</p>
--->
+Hepsi elle değil, `npm run screenshots` ile çekiliyor: 1600x1000@2x, ve Playwright
+takımının sahnelediği sınırın karşısında — yani arayüz değişince hepsi yeniden çekiliyor
+ve hiçbiri "o an pencere ne kadarsa" değil. Listedeki iki ekran hâlâ yok ve bu araçtan
+çıkamaz: dal başına worktree ortamı, ve bir terminal programı olan `stackvo tui`.
 
 ---
 
@@ -408,7 +392,7 @@ Aynı panelde **Tekrar gönder** düğmesi vardır: kaydedilen isteği profilley
 açıkken yeniden yollar ve iki ölçümü yan yana koyar — performans işinin en sık
 tekrarlanan döngüsü ("değişikliğim işe yaradı mı") dört adım yerine tek tık.
 
-> **Ekran görüntüsü:** `docs/images/05-why-slow.png`
+<img src="docs/screenshots/project-detail-debugging.png" alt="Hata ayıklama bölümü: Xdebug, profil çıkarıcı ve dump yakalayıcı" width="100%">
 
 ### E-postaları görmek
 
