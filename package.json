@@ -36,6 +36,7 @@
     "test:js": "vitest run",
     "test:js:watch": "vitest",
     "test:js:coverage": "vitest run --coverage",
+    "screenshots": "node tools/screenshots.mjs",
     "a11y:transcript": "vitest run tests/a11y-transcript.spec.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

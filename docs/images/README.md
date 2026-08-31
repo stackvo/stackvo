@@ -1,21 +1,16 @@
-# Screenshots
+# Images
 
-Drop the files below into this folder, then uncomment the `<img>` blocks in
-[`README.md`](../../README.md) and [`README_TR.md`](../../README_TR.md).
+**The screenshots are not here, and are not taken by hand.** They live in
+[`docs/screenshots/`](../screenshots/README.md) — thirty-seven of them, written by
+`npm run screenshots` at 1600x1000@2x against the boundary the Playwright suite
+stages. Re-running that command reshoots every one, which is what keeps them from
+drifting away from the tree; a file dropped in by hand would not.
 
-Recommended: PNG, 2560×1600 (retina) or 1280×800, light theme unless the shot is
-about theming.
+This folder is for the one image that cannot be generated:
 
-| File | Screen |
-|------|--------|
+| File | Image |
+|------|-------|
 | `logo.png` | App logo, 512×512, transparent background |
-| `01-dashboard.png` | Dashboard — CPU, memory, disk, network, running projects |
-| `02-new-project.png` | New-project wizard |
-| `03-project-detail.png` | Project page — overview, services, logs |
-| `04-services.png` | Service catalogue — versions and instances |
-| `05-why-slow.png` | "Why was this slow?" — profile + queries + dumps |
-| `06-mail.png` | Mail inbox |
-| `07-terminal.png` | Container terminal |
-| `08-settings.png` | Settings — domain, certificates, PHP, diagnostics |
-| `09-worktree.png` | Per-branch environment (worktree) |
-| `10-cli-tui.png` | `stackvo tui` — the terminal UI |
+
+Both READMEs reference it from the block at the top, commented out until the file
+is here: [`README.md`](../../README.md), [`README_TR.md`](../../README_TR.md).

@@ -49,10 +49,10 @@ export const DEFAULT_APPEARANCE = {
   /** How `secondary` is derived from the accent. See `harmonise`. */
   harmony: 'analog',
   neutral: 'graphite',
-  radius: 12,
+  radius: 24,
   fontFamily: 'system',
   /** Root px. Vuetify's type scale is in rem, so this scales the whole UI. */
-  fontSize: 16,
+  fontSize: 15,
   /** 'standard' | 'medium' | 'high'. See `CONTRAST_LEVELS`. */
   contrast: 'standard',
   rtl: false,
@@ -63,7 +63,7 @@ export const DEFAULT_APPEARANCE = {
    * favour of this: with them in place the setting moved nothing, because a
    * prop written on the component outranks any default.
    */
-  density: 'compact',
+  density: 'default',
   /** Terminals and log views keep a dark surface whatever the app theme is. */
   darkConsoles: true,
   reduceMotion: false,

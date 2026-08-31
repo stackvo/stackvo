@@ -29,7 +29,10 @@ import { stage } from './stage.js';
 const RAIL = 64;
 
 test('mirrors the window, the document and the overlays', async ({ page }) => {
-  await stage(page, { prefs_get: { appearance: { rtl: true } } });
+  // `tourSeen` again: an override REPLACES the stage's `prefs_get` rather than
+  // merging into it, so leaving it out here puts the welcome tour back over the
+  // page and `.nav-drawer` is null.
+  await stage(page, { prefs_get: { appearance: { rtl: true }, tourSeen: true } });
   await page.goto('/#/projects');
   await page.waitForLoadState('networkidle');
 
