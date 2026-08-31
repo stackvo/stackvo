@@ -6,12 +6,16 @@ pub mod apps;
 pub mod atomic;
 pub mod audit;
 pub mod authoring;
+pub mod bisect;
+pub mod boost;
+pub mod capture;
 pub mod certs;
 pub mod channel;
 pub mod cli;
 pub mod commands;
 pub mod completions;
 pub mod compliance;
+pub mod component;
 pub mod compose_policy;
 pub mod config;
 pub mod connect;
@@ -19,16 +23,20 @@ pub mod contracts;
 pub mod crash;
 pub mod cron;
 pub mod daemon;
+pub mod dashboards;
 pub mod db;
 pub mod dbmove;
 pub mod debugbridge;
+pub mod deps;
 pub mod detect;
 pub mod devcontainer;
 pub mod devserver;
 pub mod diagnostics;
 pub mod dns;
 pub mod doctor;
+pub mod dusk;
 pub mod editor;
+pub mod egress;
 pub mod elevate;
 pub mod engine;
 pub mod env_writer;
@@ -55,6 +63,7 @@ pub mod landing;
 pub mod leaks;
 pub mod licences;
 pub mod locale;
+pub mod lock;
 pub mod logging;
 pub mod mail;
 pub mod mailrelay;
@@ -64,6 +73,7 @@ pub mod mcp;
 pub mod menu;
 pub mod migrate;
 pub mod oauth;
+pub mod octane;
 pub mod overrides;
 pub mod paths;
 pub mod perf;
@@ -722,6 +732,29 @@ pub fn run() {
             commands::tooling_remove,
             commands::system_accent,
             commands::project_verify,
+            commands::project_lock,
+            commands::projects_build_all,
+            commands::capture_status,
+            commands::capture_arm,
+            commands::capture_disarm,
+            commands::project_components,
+            commands::deps_report,
+            commands::deps_advisories,
+            commands::octane_status,
+            commands::octane_auto_reload,
+            commands::octane_reload,
+            commands::dusk_plan,
+            commands::dusk_apply,
+            commands::dusk_trust,
+            commands::dashboards_report,
+            commands::worktree_passport_keys,
+            commands::boost_status,
+            commands::boost_register,
+            commands::egress_report,
+            commands::bisect_status,
+            commands::bisect_start,
+            commands::bisect_mark,
+            commands::bisect_reset,
             commands::leaks_scan,
             commands::env_untrack,
             commands::usage_report,

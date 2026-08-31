@@ -35,6 +35,15 @@
 //!   * registering the MCP server with an assistant, and unregistering it,
 //!     which edits a file belonging to another application and — with
 //!     `--allow-writes` — hands that assistant the ability to stop the stack.
+//!   * registering a project's own MCP server into that project's client
+//!     configuration, which edits a file the repository usually commits and
+//!     hands an assistant a command that runs inside a container;
+//!   * generating a worktree's own Passport signing keys, which mints the
+//!     credentials that branch's tokens are signed with;
+//!   * declaring a browser container for Dusk, which edits the project's
+//!     manifest and writes an environment file into it;
+//!   * teaching that container to trust this machine's CA, which runs a
+//!     command inside somebody else's image as root;
 //!   * writing the AI rules into a project or a home directory, which puts text
 //!     into a file the user owns — one that is usually committed, and that
 //!     every future session of that assistant reads as instructions.
@@ -50,6 +59,16 @@
 //!     index and its `.gitignore` — and is done in answer to a credential
 //!     having been committed, which is exactly the kind of act somebody has to
 //!     be able to date afterwards.
+//!   * arming a capture window, which is a decision to write a project's
+//!     request cookies and bodies — session tokens and form input — to disk so
+//!     that a POST can be replayed. It is the sharpest entry in this list,
+//!     because what the permission produces **is** the credential; the entry
+//!     carries the project and the length and never a captured value.
+//!   * moving a project's checkout to bisect it, which detaches HEAD and walks
+//!     the working tree through other people's commits. It is reversible —
+//!     `git bisect reset` is git's own compensation — and "my files are not
+//!     what they were" is still the loudest question a developer can have about
+//!     their own machine, so the answer has to be somewhere.
 //!
 //! Starting a container is not here, and neither is reading anything. An audit
 //! trail that records routine traffic is one nobody reads, and a trail nobody

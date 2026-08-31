@@ -129,6 +129,20 @@ pub enum Needs {
     BinRails,
     /// `Gemfile` — any Ruby project, which is all `bundle install` needs.
     Gemfile,
+    /// `vendor/bin/pint` — Pint installed, not merely Laravel present.
+    ///
+    /// The three below are markers for a *package* rather than for a framework,
+    /// and that is the same rule the rest of this table follows rather than an
+    /// exception to it: the rule is that a row is offered only when the file it
+    /// needs is there. `artisan` would have been the lazy marker and it is the
+    /// wrong one — every Laravel project has `artisan` and most of them do not
+    /// have Wayfinder, so the button would produce `Command "wayfinder:generate"
+    /// is not defined` in an operation console.
+    Pint,
+    /// `vendor/laravel/wayfinder` — the package, in the tree it installs into.
+    Wayfinder,
+    /// `vendor/laravel/boost`.
+    Boost,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -138,6 +152,19 @@ pub struct Spec {
     pub display: &'static str,
     /// argv, run inside the container. Never a shell string.
     pub argv: &'static [&'static str],
+    /// A command that has to run **before** [`Spec::argv`], or empty.
+    ///
+    /// Two argv arrays rather than one shell line, because "never a shell
+    /// string" is a rule and not a habit — `sh -c "a && b"` is a string a
+    /// repository could one day supply, and the whole containment of this
+    /// catalogue rests on the frontend sending an id.
+    ///
+    /// It exists for exactly one row. `wayfinder:generate` reads the route
+    /// list, and a *cached* route list makes it generate against yesterday's
+    /// routes — Laravel's own documentation writes that down as a trap. A
+    /// catalogue row that reproduced the trap would be worse than no row: the
+    /// output is wrong rather than absent, and nothing says so.
+    pub first: &'static [&'static str],
     pub needs: Needs,
     /// Interactive commands want a TTY and a human at it.
     pub interactive: bool,
@@ -171,6 +198,7 @@ pub const CATALOG: &[Spec] = &[
         id: "tinker",
         display: "php artisan tinker",
         argv: &["php", "artisan", "tinker"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: true,
         about: "A REPL with the application booted.",
@@ -179,6 +207,7 @@ pub const CATALOG: &[Spec] = &[
         id: "migrate",
         display: "php artisan migrate",
         argv: &["php", "artisan", "migrate", "--force"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: false,
         // `--force` is not "do it anyway": Laravel refuses to migrate
@@ -191,6 +220,7 @@ pub const CATALOG: &[Spec] = &[
         id: "migrate-status",
         display: "php artisan migrate:status",
         argv: &["php", "artisan", "migrate:status"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: false,
         about: "Which migrations have run.",
@@ -199,6 +229,7 @@ pub const CATALOG: &[Spec] = &[
         id: "optimize-clear",
         display: "php artisan optimize:clear",
         argv: &["php", "artisan", "optimize:clear"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: false,
         // One command instead of four: it clears config, route, view and event
@@ -210,6 +241,7 @@ pub const CATALOG: &[Spec] = &[
         id: "route-list",
         display: "php artisan route:list",
         argv: &["php", "artisan", "route:list"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: false,
         about: "Every registered route.",
@@ -218,6 +250,7 @@ pub const CATALOG: &[Spec] = &[
         id: "queue-restart",
         display: "php artisan queue:restart",
         argv: &["php", "artisan", "queue:restart"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: false,
         // Workers hold the old code in memory until they are told to stop.
@@ -229,14 +262,77 @@ pub const CATALOG: &[Spec] = &[
         id: "storage-link",
         display: "php artisan storage:link",
         argv: &["php", "artisan", "storage:link"],
+        first: &[],
         needs: Needs::Artisan,
         interactive: false,
         about: "Create the public/storage symlink.",
+    },
+    // ---- the four this catalogue had no *check* in it -------------------
+    //
+    // Every row above runs something and prints something. Not one of them
+    // answers a yes/no question, and `cli.rs` has had `stackvo artisan test`
+    // — preserving the exit code — with no counterpart on screen. A button and
+    // an exit code is the whole of what these four add; this is not turning the
+    // application into a test runner.
+    //
+    // **`pennant:purge` is deliberately not here.** It deletes stored feature
+    // flag values, and a one-click destructive button in a catalogue whose
+    // security model is "the frontend only sends an id" is the wrong shape. Its
+    // place is behind a confirmation like `containers_stop_all`'s, or nowhere.
+    Spec {
+        id: "pint",
+        display: "vendor/bin/pint --test",
+        argv: &["vendor/bin/pint", "--test"],
+        first: &[],
+        needs: Needs::Pint,
+        interactive: false,
+        // `--test` and not the bare command: the bare one REWRITES the tree,
+        // and a formatter that rewrites files behind a button is a diff
+        // somebody did not ask for. A non-zero exit code is the answer.
+        about: "Is this branch's formatting clean? Reports; changes nothing.",
+    },
+    Spec {
+        id: "test",
+        display: "php artisan test",
+        argv: &["php", "artisan", "test"],
+        first: &[],
+        needs: Needs::Artisan,
+        interactive: false,
+        // Through artisan rather than naming Pest or PHPUnit: `artisan test`
+        // runs whichever the project has, and picking one here would be this
+        // app deciding something about somebody else's suite.
+        about: "Run the test suite — Pest or PHPUnit, whichever this project has.",
+    },
+    Spec {
+        id: "wayfinder",
+        display: "php artisan wayfinder:generate",
+        argv: &["php", "artisan", "wayfinder:generate"],
+        // The trap, from Laravel's own documentation: it reads the route list,
+        // and a cached one makes it generate against yesterday's routes. The
+        // output is then wrong rather than absent, which is the failure nothing
+        // reports.
+        first: &["php", "artisan", "route:clear"],
+        needs: Needs::Wayfinder,
+        interactive: false,
+        about: "Regenerate the typed route helpers. Clears the route cache first.",
+    },
+    Spec {
+        id: "boost-skill",
+        display: "php artisan boost:add-skill",
+        argv: &["php", "artisan", "boost:add-skill"],
+        first: &[],
+        needs: Needs::Boost,
+        interactive: true,
+        // Interactive because it asks which skill. A non-interactive run would
+        // sit at a prompt nobody can see, which is the failure `migrate`'s
+        // `--force` exists to avoid.
+        about: "Add a Boost skill to this project from skills.laravel.cloud.",
     },
     Spec {
         id: "composer-install",
         display: "composer install",
         argv: &["composer", "install", "--no-interaction"],
+        first: &[],
         needs: Needs::Composer,
         interactive: false,
         about: "Install PHP dependencies from the lock file.",
@@ -245,6 +341,7 @@ pub const CATALOG: &[Spec] = &[
         id: "composer-dump",
         display: "composer dump-autoload",
         argv: &["composer", "dump-autoload", "--no-interaction"],
+        first: &[],
         needs: Needs::Composer,
         interactive: false,
         about: "Rebuild the autoloader after adding a class.",
@@ -253,6 +350,7 @@ pub const CATALOG: &[Spec] = &[
         id: "npm-install",
         display: "npm install",
         argv: &["npm", "install"],
+        first: &[],
         needs: Needs::PackageJson,
         interactive: false,
         about: "Install JavaScript dependencies.",
@@ -261,6 +359,7 @@ pub const CATALOG: &[Spec] = &[
         id: "npm-build",
         display: "npm run build",
         argv: &["npm", "run", "build"],
+        first: &[],
         needs: Needs::PackageJson,
         interactive: false,
         about: "Build front-end assets.",
@@ -269,6 +368,7 @@ pub const CATALOG: &[Spec] = &[
         id: "wp-shell",
         display: "wp shell",
         argv: &["wp", "shell", "--allow-root"],
+        first: &[],
         needs: Needs::WpConfig,
         interactive: true,
         about: "A REPL with WordPress loaded.",
@@ -277,6 +377,7 @@ pub const CATALOG: &[Spec] = &[
         id: "wp-plugin-list",
         display: "wp plugin list",
         argv: &["wp", "plugin", "list", "--allow-root"],
+        first: &[],
         needs: Needs::WpConfig,
         interactive: false,
         about: "Installed plugins and their status.",
@@ -293,6 +394,7 @@ pub const CATALOG: &[Spec] = &[
         id: "symfony-cache-clear",
         display: "php bin/console cache:clear",
         argv: &["php", "bin/console", "cache:clear", "--no-interaction"],
+        first: &[],
         needs: Needs::BinConsole,
         interactive: false,
         // Symfony's cache holds the compiled container, and a service added to
@@ -304,6 +406,7 @@ pub const CATALOG: &[Spec] = &[
         id: "symfony-router",
         display: "php bin/console debug:router",
         argv: &["php", "bin/console", "debug:router"],
+        first: &[],
         needs: Needs::BinConsole,
         interactive: false,
         about: "Every registered route.",
@@ -318,6 +421,7 @@ pub const CATALOG: &[Spec] = &[
             "--no-interaction",
             "--allow-no-migration",
         ],
+        first: &[],
         needs: Needs::BinConsole,
         interactive: false,
         // `--allow-no-migration` because Doctrine exits non-zero when there is
@@ -329,6 +433,7 @@ pub const CATALOG: &[Spec] = &[
         id: "symfony-migrate-status",
         display: "php bin/console doctrine:migrations:status",
         argv: &["php", "bin/console", "doctrine:migrations:status"],
+        first: &[],
         needs: Needs::BinConsole,
         interactive: false,
         about: "Which Doctrine migrations have run.",
@@ -338,6 +443,7 @@ pub const CATALOG: &[Spec] = &[
         id: "django-migrate",
         display: "python manage.py migrate",
         argv: &["python", "manage.py", "migrate", "--noinput"],
+        first: &[],
         needs: Needs::ManagePy,
         interactive: false,
         about: "Apply pending migrations.",
@@ -346,6 +452,7 @@ pub const CATALOG: &[Spec] = &[
         id: "django-migrate-status",
         display: "python manage.py showmigrations",
         argv: &["python", "manage.py", "showmigrations"],
+        first: &[],
         needs: Needs::ManagePy,
         interactive: false,
         about: "Which migrations have run.",
@@ -354,6 +461,7 @@ pub const CATALOG: &[Spec] = &[
         id: "django-collectstatic",
         display: "python manage.py collectstatic",
         argv: &["python", "manage.py", "collectstatic", "--noinput"],
+        first: &[],
         needs: Needs::ManagePy,
         interactive: false,
         // `--noinput` answers the "this will overwrite existing files" prompt,
@@ -364,6 +472,7 @@ pub const CATALOG: &[Spec] = &[
         id: "django-shell",
         display: "python manage.py shell",
         argv: &["python", "manage.py", "shell"],
+        first: &[],
         needs: Needs::ManagePy,
         interactive: true,
         about: "A REPL with the application booted.",
@@ -379,6 +488,7 @@ pub const CATALOG: &[Spec] = &[
         id: "rails-migrate",
         display: "bundle exec rails db:migrate",
         argv: &["bundle", "exec", "rails", "db:migrate"],
+        first: &[],
         needs: Needs::BinRails,
         interactive: false,
         about: "Run pending migrations.",
@@ -387,6 +497,7 @@ pub const CATALOG: &[Spec] = &[
         id: "rails-migrate-status",
         display: "bundle exec rails db:migrate:status",
         argv: &["bundle", "exec", "rails", "db:migrate:status"],
+        first: &[],
         needs: Needs::BinRails,
         interactive: false,
         about: "Which migrations have run.",
@@ -395,6 +506,7 @@ pub const CATALOG: &[Spec] = &[
         id: "rails-routes",
         display: "bundle exec rails routes",
         argv: &["bundle", "exec", "rails", "routes"],
+        first: &[],
         needs: Needs::BinRails,
         interactive: false,
         about: "Every registered route.",
@@ -403,6 +515,7 @@ pub const CATALOG: &[Spec] = &[
         id: "rails-console",
         display: "bundle exec rails console",
         argv: &["bundle", "exec", "rails", "console"],
+        first: &[],
         needs: Needs::BinRails,
         interactive: true,
         about: "A REPL with the application booted.",
@@ -411,6 +524,7 @@ pub const CATALOG: &[Spec] = &[
         id: "bundle-install",
         display: "bundle install",
         argv: &["bundle", "install"],
+        first: &[],
         needs: Needs::Gemfile,
         interactive: false,
         // The one Ruby row that asks for a `Gemfile` and no more: installing
@@ -436,6 +550,23 @@ pub struct QuickCommand {
     /// application shipped, and the person deciding whether to press it is
     /// entitled to know which they are looking at.
     pub declared: bool,
+    /// The service instance this row runs in, when it is not the project.
+    ///
+    /// `None` for every row above: those run in the project's own container,
+    /// which is what "quick command" has always meant. `Some` marks a row a
+    /// **package** brought — `redis-cli` from the redis package — and it runs
+    /// in that instance's container and nowhere else. Named rather than
+    /// implied, because "this runs somewhere other than your project" is
+    /// exactly the kind of thing a person pressing a button is entitled to
+    /// know.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instance: Option<String>,
+    /// The package's own sentence is in the package's own language.
+    ///
+    /// `market.rs` already treats a package description that way and the pane
+    /// already marks such text `lang=""`. A row whose `about` came out of a
+    /// registry must not claim this interface's language.
+    pub foreign_about: bool,
 }
 
 /// A command a project declared in its own `stackvo.json`.
@@ -569,6 +700,20 @@ pub struct Resolved {
     pub id: String,
     pub display: String,
     pub argv: Vec<String>,
+    /// The container this runs in, when it is not the project's.
+    ///
+    /// `None` everywhere except a package's own command — see
+    /// [`QuickCommand::instance`]. It is **derived from the instance** and never
+    /// read out of a package, so a package cannot name somebody else's
+    /// container any more than it can name a host port.
+    pub container: Option<String>,
+    /// What has to run before `argv`, or empty. See [`Spec::first`].
+    ///
+    /// Always empty for a declared command. A project that wants two steps
+    /// declares two commands, or one that does both — this field is a claim
+    /// this repository makes about somebody else's framework, and a repository
+    /// making claims about itself has the `commands` block for that.
+    pub first: Vec<String>,
     pub interactive: bool,
     pub declared: bool,
 }
@@ -579,6 +724,8 @@ impl From<&'static Spec> for Resolved {
             id: spec.id.to_string(),
             display: spec.display.to_string(),
             argv: spec.argv.iter().map(|s| s.to_string()).collect(),
+            container: None,
+            first: spec.first.iter().map(|s| s.to_string()).collect(),
             interactive: spec.interactive,
             declared: false,
         }
@@ -759,6 +906,9 @@ impl Needs {
             Needs::ManagePy => "manage.py",
             Needs::BinRails => "bin/rails",
             Needs::Gemfile => "Gemfile",
+            Needs::Pint => "vendor/bin/pint",
+            Needs::Wayfinder => "vendor/laravel/wayfinder",
+            Needs::Boost => "vendor/laravel/boost",
         }
     }
 
@@ -772,6 +922,9 @@ impl Needs {
             Needs::ManagePy => print.manage_py,
             Needs::BinRails => print.bin_rails,
             Needs::Gemfile => print.gemfile,
+            Needs::Pint => print.pint,
+            Needs::Wayfinder => print.wayfinder,
+            Needs::Boost => print.boost,
         }
     }
 }
@@ -794,6 +947,8 @@ pub fn available(print: &crate::detect::Fingerprint) -> Vec<QuickCommand> {
             interactive: spec.interactive,
             because: spec.needs.marker().to_string(),
             declared: false,
+            instance: None,
+            foreign_about: false,
         })
         .collect()
 }
@@ -818,6 +973,8 @@ pub fn offered(print: &crate::detect::Fingerprint, declared: &Declared) -> Vec<Q
         interactive: command.interactive,
         because: command.source.file().to_string(),
         declared: true,
+        instance: None,
+        foreign_about: false,
     }));
     out
 }
@@ -851,10 +1008,149 @@ pub fn for_project(root: &Path, name: &str) -> Result<Vec<QuickCommand>> {
     if !dir.is_dir() {
         return Err(Error::not_found(format!("project {name}")));
     }
-    Ok(offered(
-        &crate::detect::fingerprint(&dir),
-        &declared_for(root, name),
-    ))
+    let mut out = offered(&crate::detect::fingerprint(&dir), &declared_for(root, name));
+    // Last, after the project's own. A package's rows serve every project on
+    // the machine and run somewhere else, so they belong below the ones that
+    // are about this project — the same ordering argument `offered` makes for
+    // declared commands, one layer further out.
+    out.extend(from_packages(root));
+    Ok(out)
+}
+
+// ------------------------------------------------- what a package brought
+
+/// The commands the **installed and enabled** service instances bring.
+///
+/// ## Why this is a third layer and not a third entry in the second
+///
+/// The two layers above are about a *project*: what its files support, and what
+/// its repository declared. This one is about the machine — a package installed
+/// once serves every project — and it targets a different container. Folding it
+/// into `Declared` would have meant one list whose rows run in two places, and
+/// "where does this run" is not a detail to leave to a field nobody reads.
+///
+/// ## Every rule the chain already had, unchanged
+///
+/// * **Read through [`crate::pkg::Tree::load`]**, which verifies every byte
+///   against the manifest's hashes before this sees a single word of it. A
+///   package whose files changed under it yields no commands rather than
+///   commands somebody edited.
+/// * **Enabled instances only.** A command against a container that is not
+///   supposed to be running is a button whose failure is `No such container`,
+///   which reads as a broken app.
+/// * **The container is derived, never declared.** `stackvo-<instance id>`,
+///   from [`crate::instances::Instance::container`] — so a package cannot name
+///   somebody else's container any more than it can name a host port.
+/// * **The id is prefixed with the instance.** `redis-7-2:redis-cli`, because
+///   two versions of one service are two instances and both may be installed;
+///   an unprefixed id would resolve to whichever was listed first.
+///
+/// A package that will not load is skipped rather than fatal, on
+/// [`machine_wide`]'s reasoning: losing every command on the machine to one
+/// bad package would be the wrong trade for a feature about convenience.
+pub fn from_packages(root: &Path) -> Vec<QuickCommand> {
+    let Ok(table) = crate::instances::Table::load(root) else {
+        return Vec::new();
+    };
+    let Ok(tree) = crate::market::catalogue(root) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for instance in table.instances.iter().filter(|i| i.enabled) {
+        let Ok(manifest) = tree.load(&instance.service, &instance.version) else {
+            continue;
+        };
+        for command in &manifest.commands {
+            out.push(QuickCommand {
+                id: package_id(&instance.id, &command.id),
+                display: command.exec.join(" "),
+                about: command.about.clone(),
+                interactive: command.interactive,
+                because: format!("{}@{}", manifest.service, manifest.version),
+                // Not the project's, and this flag is what the pane groups by.
+                declared: false,
+                instance: Some(instance.id.clone()),
+                foreign_about: true,
+            });
+        }
+    }
+    out
+}
+
+/// `redis-7-2:redis-cli` — an instance and a command, in the one spelling both
+/// halves of the boundary use.
+pub fn package_id(instance: &str, command: &str) -> String {
+    format!("{instance}:{command}")
+}
+
+/// The two halves back, if this is a package command's id at all.
+///
+/// `rsplit_once` rather than `split_once`: an instance id may contain no colon
+/// today, and reading from the right means a command id gaining one tomorrow
+/// does not silently re-point every row at a different instance.
+pub fn parse_package_id(id: &str) -> Option<(&str, &str)> {
+    let (instance, command) = id.rsplit_once(':')?;
+    (!instance.is_empty() && !command.is_empty()).then_some((instance, command))
+}
+
+/// Resolve a package command's id into something `docker exec` can be given.
+///
+/// Refuses in exactly the cases the offer would not have listed: an instance
+/// that is not in the table, one that is switched off, a package whose bytes no
+/// longer match its manifest, and an id that package does not declare. Each is
+/// its own sentence, because each has a different repair.
+pub fn resolve_package(root: &Path, id: &str) -> Result<Resolved> {
+    let Some((instance_id, command_id)) = parse_package_id(id) else {
+        return Err(Error::new(
+            Code::NotFound,
+            format!("\"{id}\" is not a package command"),
+        ));
+    };
+
+    let table = crate::instances::Table::load(root)?;
+    let instance = table
+        .instances
+        .iter()
+        .find(|i| i.id == instance_id)
+        .ok_or_else(|| Error::not_found(format!("instance {instance_id}")))?;
+
+    if !instance.enabled {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("{instance_id} is switched off"),
+        ));
+    }
+
+    // Through the verifying reader, and on every run rather than only at
+    // install: the point of writing a hash down is to catch the change nobody
+    // announced.
+    let manifest = crate::market::catalogue(root)?.load(&instance.service, &instance.version)?;
+    let command = manifest
+        .commands
+        .iter()
+        .find(|c| c.id == command_id)
+        .ok_or_else(|| {
+            Error::new(
+                Code::NotFound,
+                format!(
+                    "{}@{} declares no command {command_id:?}",
+                    manifest.service, manifest.version
+                ),
+            )
+            .with_hint(crate::hints::QUICK_COMMANDS_ARE_FIXED)
+        })?;
+
+    Ok(Resolved {
+        id: id.to_string(),
+        display: command.exec.join(" "),
+        argv: command.exec.clone(),
+        // Derived here, from the instance — never read out of the package.
+        container: Some(instance.container()),
+        first: Vec::new(),
+        interactive: command.interactive,
+        declared: false,
+    })
 }
 
 /// The machine-wide commands, and what the file got wrong.
@@ -942,6 +1238,12 @@ pub fn declared_for(root: &Path, name: &str) -> Declared {
 /// file** declared — and this function is the only place either becomes an
 /// argv.
 pub fn resolve(root: &Path, project: &str, id: &str) -> Result<Resolved> {
+    // A package command's id carries an instance, so it can never collide with
+    // a catalogue id or a declared one — and it is tried last, so a project
+    // cannot shadow one by declaring the same string.
+    if parse_package_id(id).is_some() {
+        return resolve_package(root, id);
+    }
     resolve_with(&declared_for(root, project), id)
 }
 
@@ -960,6 +1262,9 @@ pub fn resolve_with(declared: &Declared, id: &str) -> Result<Resolved> {
             id: id.to_string(),
             display: command.argv.join(" "),
             argv: command.argv.clone(),
+            container: None,
+            // Never for a declared command — see [`Resolved::first`].
+            first: Vec::new(),
             interactive: command.interactive,
             declared: true,
         });
@@ -1551,5 +1856,320 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), total, "duplicate command id");
+    }
+
+    /// The four rows this catalogue had no *check* in it, and the marker each
+    /// one is offered on.
+    ///
+    /// `artisan` would have been the lazy marker for three of them and it is
+    /// the wrong one: every Laravel project has `artisan` and most have none of
+    /// these packages, so the button would produce `Command … is not defined`
+    /// in an operation console — which reads as a broken app rather than as a
+    /// package nobody installed.
+    #[test]
+    fn a_check_is_offered_on_the_package_that_provides_it_and_not_on_artisan() {
+        let laravel = crate::detect::Fingerprint {
+            artisan: true,
+            composer_json: true,
+            ..Default::default()
+        };
+        let ids: Vec<String> = available(&laravel).into_iter().map(|c| c.id).collect();
+
+        // `artisan test` is artisan's own command and needs nothing else.
+        assert!(ids.contains(&"test".to_string()));
+        // The other three are not offered on artisan alone.
+        for id in ["pint", "wayfinder", "boost-skill"] {
+            assert!(!ids.contains(&id.to_string()), "{id}");
+        }
+
+        let with_packages = crate::detect::Fingerprint {
+            pint: true,
+            wayfinder: true,
+            boost: true,
+            ..laravel
+        };
+        let ids: Vec<String> = available(&with_packages)
+            .into_iter()
+            .map(|c| c.id)
+            .collect();
+        for id in ["pint", "wayfinder", "boost-skill"] {
+            assert!(ids.contains(&id.to_string()), "{id}");
+        }
+    }
+
+    /// Pint is offered in the shape that reports rather than the one that
+    /// rewrites, and Wayfinder carries the step Laravel's own documentation
+    /// names as a trap.
+    #[test]
+    fn the_checking_rows_report_and_the_generating_row_clears_the_route_cache() {
+        let pint = find("pint").expect("pint is in the catalogue");
+        // `--test` and not the bare command: the bare one rewrites the tree,
+        // and a formatter that rewrites files behind a button is a diff
+        // somebody did not ask for.
+        assert!(pint.argv.contains(&"--test"));
+        assert!(pint.first.is_empty());
+
+        let wayfinder = find("wayfinder").expect("wayfinder is in the catalogue");
+        assert_eq!(wayfinder.first, ["php", "artisan", "route:clear"]);
+        assert!(wayfinder.argv.contains(&"wayfinder:generate"));
+
+        // Every other row runs one command, so the sequencing path is reached
+        // by exactly the row that documents why it exists.
+        assert_eq!(
+            CATALOG.iter().filter(|s| !s.first.is_empty()).count(),
+            1,
+            "a second row with a pre-step needs its own paragraph"
+        );
+    }
+
+    /// `pennant:purge` deletes stored feature flag values, and a one-click
+    /// destructive button in a catalogue whose security model is "the frontend
+    /// only sends an id" is the wrong shape.
+    #[test]
+    fn the_destructive_ecosystem_command_stays_out() {
+        for forbidden in ["pennant:purge", "migrate:fresh", "db:wipe"] {
+            assert!(
+                !CATALOG.iter().any(|spec| spec.argv.contains(&forbidden)),
+                "{forbidden} is in the catalogue"
+            );
+        }
+    }
+
+    /// A declared command never carries a pre-step. It is a claim this
+    /// repository makes about somebody else's framework, and a project making
+    /// claims about itself has the `commands` block for that.
+    #[test]
+    fn a_declared_command_has_no_pre_step() {
+        let declared = crate::manifest::normalize(
+            &serde_json::json!({
+                "name": "shop",
+                "runtime": "php",
+                "commands": { "mine": { "exec": ["php", "artisan", "wayfinder:generate"] } }
+            }),
+            "",
+            "shop",
+        )
+        .commands;
+
+        let resolved = resolve_with(&declared, "mine").expect("declared commands resolve");
+        assert!(resolved.first.is_empty());
+        assert!(resolved.declared);
+    }
+
+    /// A package command's id carries the instance, so two versions of one
+    /// service are two rows rather than one collision.
+    #[test]
+    fn a_package_commands_id_names_the_instance_it_runs_in() {
+        assert_eq!(package_id("redis-7-2", "redis-cli"), "redis-7-2:redis-cli");
+        assert_eq!(
+            parse_package_id("redis-7-2:redis-cli"),
+            Some(("redis-7-2", "redis-cli"))
+        );
+
+        // Nothing without a colon is one, and neither half may be empty.
+        assert_eq!(parse_package_id("migrate"), None);
+        assert_eq!(parse_package_id(":redis-cli"), None);
+        assert_eq!(parse_package_id("redis-7-2:"), None);
+
+        // Read from the RIGHT, so a command id that grows a colon does not
+        // silently re-point the row at a different instance.
+        assert_eq!(
+            parse_package_id("redis-7-2:a:b"),
+            Some(("redis-7-2:a", "b"))
+        );
+    }
+
+    /// The package layer is a **third** layer, and it does not disturb the two
+    /// above it: a project with no packages installed gets exactly what it got
+    /// before.
+    #[test]
+    fn no_packages_means_the_offer_is_what_it_always_was() {
+        let dir = std::env::temp_dir().join(format!("stackvo-qc-pkg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        assert!(from_packages(&dir).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A workspace with a real package and a real instance table, read off
+    /// disk.
+    ///
+    /// The lesson this file already learned once, applied to the layer above
+    /// it: the machine-wide half's whole failure mode was *"the layers were
+    /// never joined up"*, and six tests that built both halves by hand stayed
+    /// green when the join was deleted. This one writes the files and asks the
+    /// same function the pane asks.
+    fn workspace_with_a_package(commands: &str, enabled: bool) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "stackvo-qc-package-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let version_dir = root.join("market/packages/datastore/redis/versions/7.2");
+        std::fs::create_dir_all(&version_dir).unwrap();
+        std::fs::write(
+            root.join("market/packages/datastore/redis/package.json"),
+            r#"{ "apiVersion": "stackvo.dev/package/v1", "service": "redis",
+                 "category": "datastore" }"#,
+        )
+        .unwrap();
+
+        // A real compose fragment with a real hash over it: `Tree::load`
+        // verifies before it reads, and a fixture that skipped that would be
+        // testing a path production never takes.
+        let compose = b"services: {}\n";
+        std::fs::write(version_dir.join("compose.yml"), compose).unwrap();
+        std::fs::write(
+            version_dir.join("manifest.json"),
+            format!(
+                r#"{{
+                  "apiVersion": "stackvo.dev/package/v1",
+                  "service": "redis", "version": "7.2",
+                  "image": {{ "repository": "redis", "tag": "7.2" }},
+                  "instancing": {{ "multiple": false }},
+                  "commands": {commands},
+                  "compose": {{ "file": "compose.yml", "sha256": "{}" }},
+                  "support": {{ "status": "supported" }}
+                }}"#,
+                crate::pkg::sha256_hex(compose)
+            ),
+        )
+        .unwrap();
+
+        std::fs::create_dir_all(root.join("services")).unwrap();
+        std::fs::write(
+            crate::instances::path(&root),
+            format!(
+                r#"{{ "schemaVersion": 1, "instances": [
+                     {{ "id": "redis-7-2", "service": "redis", "version": "7.2",
+                        "package": {{ "source": "official", "sha256": "",
+                                      "installedAt": "2026-01-01T00:00:00Z" }},
+                        "enabled": {enabled}, "primary": true }}
+                   ] }}"#
+            ),
+        )
+        .unwrap();
+        root
+    }
+
+    #[test]
+    fn a_packages_command_reaches_the_offer_and_runs_in_that_instances_container() {
+        let root = workspace_with_a_package(
+            r#"[{ "id": "redis-cli", "exec": ["redis-cli"], "about": "A Redis shell.",
+                  "interactive": true }]"#,
+            true,
+        );
+
+        let offered = from_packages(&root);
+        assert_eq!(offered.len(), 1, "{offered:?}");
+        let row = &offered[0];
+        assert_eq!(row.id, "redis-7-2:redis-cli");
+        assert_eq!(row.display, "redis-cli");
+        assert_eq!(row.instance.as_deref(), Some("redis-7-2"));
+        // The package's own sentence, in the package's own language.
+        assert!(row.foreign_about);
+        assert_eq!(row.because, "redis@7.2");
+
+        // And it resolves to that instance's container — derived here, never
+        // read out of the package.
+        let resolved = resolve_package(&root, "redis-7-2:redis-cli").unwrap();
+        assert_eq!(resolved.container.as_deref(), Some("stackvo-redis-7-2"));
+        assert_eq!(resolved.argv, ["redis-cli"]);
+        assert!(resolved.interactive);
+
+        // An id that package does not declare is refused rather than run.
+        assert!(resolve_package(&root, "redis-7-2:rm").is_err());
+        assert!(resolve_package(&root, "redis-9-9:redis-cli").is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A switched-off instance offers nothing, and refuses by name if asked
+    /// anyway — a command against a container that is not supposed to be
+    /// running is a button whose failure is `No such container`.
+    #[test]
+    fn a_switched_off_instance_brings_no_commands() {
+        let root =
+            workspace_with_a_package(r#"[{ "id": "redis-cli", "exec": ["redis-cli"] }]"#, false);
+
+        assert!(from_packages(&root).is_empty());
+        let refusal = resolve_package(&root, "redis-7-2:redis-cli").unwrap_err();
+        assert!(refusal.message.contains("switched off"), "{refusal:?}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The chain, at the last link: a package whose bytes no longer match its
+    /// manifest yields no commands rather than commands somebody edited.
+    #[test]
+    fn a_package_whose_files_changed_under_it_brings_nothing() {
+        let root =
+            workspace_with_a_package(r#"[{ "id": "redis-cli", "exec": ["redis-cli"] }]"#, true);
+        assert_eq!(from_packages(&root).len(), 1);
+
+        std::fs::write(
+            root.join("market/packages/datastore/redis/versions/7.2/compose.yml"),
+            "services: { evil: {} }\n",
+        )
+        .unwrap();
+
+        assert!(
+            from_packages(&root).is_empty(),
+            "an unverified package must not offer commands"
+        );
+        assert!(resolve_package(&root, "redis-7-2:redis-cli").is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A package manifest's commands are held to the same rules as everything
+    /// else it declares — and the argv rule matters more here, because this
+    /// text arrived over a network.
+    #[test]
+    fn a_package_command_is_refused_when_it_is_not_one() {
+        let base = serde_json::json!({
+            "apiVersion": "stackvo.dev/package/v1",
+            "service": "redis",
+            "version": "7.2",
+            "image": { "repository": "redis", "tag": "7.2" },
+            "instancing": { "multiple": false },
+            "compose": { "file": "compose.yml", "sha256": "a".repeat(64) },
+            "support": { "status": "supported" }
+        });
+
+        let with = |commands: serde_json::Value| {
+            let mut json = base.clone();
+            json["commands"] = commands;
+            crate::pkg::parse(&json.to_string())
+        };
+
+        // The shape that is right.
+        with(serde_json::json!([
+            { "id": "redis-cli", "exec": ["redis-cli"], "interactive": true }
+        ]))
+        .expect("a well-formed package command is accepted");
+
+        // An id that is not an id — the only thing a caller ever sends.
+        assert!(with(serde_json::json!([{ "id": "redis cli", "exec": ["x"] }])).is_err());
+        // A row that resolves to `docker exec <container>` and no argument.
+        assert!(with(serde_json::json!([{ "id": "empty", "exec": [] }])).is_err());
+        assert!(with(serde_json::json!([{ "id": "blank", "exec": ["  "] }])).is_err());
+        // Two rows under one id: one of them would be unreachable.
+        assert!(with(serde_json::json!([
+            { "id": "cli", "exec": ["a"] },
+            { "id": "cli", "exec": ["b"] }
+        ]))
+        .is_err());
+
+        // A shell metacharacter is an ARGUMENT and not a second command: there
+        // is no shell, and refusing one here would break
+        // `redis-cli --pattern 'a*'` for a rule that only reads as security.
+        assert!(with(serde_json::json!([
+            { "id": "scan", "exec": ["redis-cli", "--scan", "--pattern", "a*; rm -rf /"] }
+        ]))
+        .is_ok());
     }
 }

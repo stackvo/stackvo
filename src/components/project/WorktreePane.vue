@@ -5,6 +5,7 @@ import { useWorktrees } from '@/composables/useWorktrees';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 import { useCopyTick } from '@/composables/useCopyTick';
+import { api } from '@/lib/ipc';
 
 /**
  * N — a branch with an environment of its own.
@@ -37,6 +38,32 @@ const emit = defineEmits(['changed', 'removed']);
 
 const { t } = useI18n();
 const { copied, copy } = useCopyTick();
+
+/**
+ * F-3 — what a branch's own hostname breaks.
+ *
+ * Sanctum ties a session to a list of hostnames and Passport keeps its signing
+ * key in a gitignored file, so a branch environment signs people out with a 419
+ * and answers token requests with a stack trace — and nothing said why. The
+ * backend reports both; the only button here is the one that cannot be a
+ * variable, because a missing key is a file.
+ */
+const keying = ref(false);
+const keyed = ref(null);
+
+async function passportKeys() {
+  keying.value = true;
+  keyed.value = null;
+  try {
+    await api.worktreePassportKeys(props.name);
+    keyed.value = true;
+    await load();
+  } catch (e) {
+    error.value = e;
+  } finally {
+    keying.value = false;
+  }
+}
 
 const {
   support,
@@ -318,6 +345,66 @@ watch(
           <template v-if="support?.expired"> — {{ t('worktree.expired') }}</template>
         </span>
       </div>
+
+      <!-- F-3. What this branch's own hostname breaks. Only drawn where the
+           project actually has the package: a note about Sanctum on a project
+           that does not use it is noise somebody learns to scroll past. -->
+      <template v-if="support?.auth?.sanctum || support?.auth?.passport">
+        <v-divider class="my-3" />
+        <div class="section-head mb-2">
+          <v-icon size="16" class="mr-2">mdi-shield-account-outline</v-icon>
+          {{ t('worktree.auth.title') }}
+        </div>
+
+        <template v-if="support.auth.sanctum">
+          <!-- Both values, or the sentence saying why neither was needed. The
+               second is the more common answer and it is the one that stops a
+               reader looking for a setting that is not there. -->
+          <p
+            v-if="support.auth.sessionDomain || support.auth.statefulDomains"
+            class="text-caption text-medium-emphasis mb-1"
+            data-test="wt-sanctum-set"
+          >
+            {{ t('worktree.auth.sanctumSet') }}
+            <template v-if="support.auth.sessionDomain">
+              <br /><code>SESSION_DOMAIN={{ support.auth.sessionDomain }}</code>
+            </template>
+            <template v-if="support.auth.statefulDomains">
+              <br /><code>SANCTUM_STATEFUL_DOMAINS={{ support.auth.statefulDomains }}</code>
+            </template>
+          </p>
+          <p v-else class="text-caption text-medium-emphasis mb-1" data-test="wt-sanctum-default">
+            {{ t('worktree.auth.sanctumDefault') }}
+          </p>
+        </template>
+
+        <template v-if="support.auth.passport">
+          <p
+            v-if="support.auth.passportKeysMissing"
+            class="text-caption text-medium-emphasis mb-2"
+            data-test="wt-passport-missing"
+          >
+            {{ t('worktree.auth.passportMissing') }}
+          </p>
+          <p v-else class="text-caption text-medium-emphasis mb-2" data-test="wt-passport-present">
+            {{ t('worktree.auth.passportPresent') }}
+          </p>
+          <v-btn
+            v-if="support.auth.passportKeysMissing"
+            size="small"
+            variant="tonal"
+            prepend-icon="mdi-key-variant"
+            :loading="keying"
+            data-test="wt-passport-keys"
+            @click="passportKeys"
+          >
+            {{ t('worktree.auth.passportGenerate') }}
+          </v-btn>
+          <p v-if="keyed" class="text-caption text-success mt-2">
+            {{ t('worktree.auth.passportDone') }}
+          </p>
+        </template>
+      </template>
 
       <v-divider class="my-3" />
 

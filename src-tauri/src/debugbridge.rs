@@ -119,6 +119,20 @@ use std::path::{Path, PathBuf};
 /// Where the read-only half is mounted: the bridge and the sentinel.
 pub const CONF_DIR: &str = "/usr/local/etc/stackvo";
 
+/// The file the bridge appends a captured session to, beside the events.
+///
+/// Named here rather than in [`crate::capture`] because the bridge is what
+/// writes it: the reader points at this, so the two cannot come to disagree
+/// about a filename that only exists inside a container.
+pub const SESSIONS_FILE: &str = "sessions.jsonl";
+
+/// What one captured body may weigh before the bridge drops it.
+///
+/// Dropped rather than truncated, and the PHP says why: half a body is not a
+/// request, and replaying one would answer with something that looks like a
+/// replay and is not.
+pub const MAX_BODY: usize = 64 * 1024;
+
 /// Where the writable half is mounted. Deliberately *not* nested inside
 /// [`CONF_DIR`]: a bind mount inside another bind mount is ordering-sensitive
 /// on some engines, and there is nothing to gain by finding out which.
@@ -463,6 +477,60 @@ if (!function_exists('__stackvo_finish')) {{
         ]);
 
         __stackvo_emit('request', $payload);
+        __stackvo_session();
+    }}
+
+    /**
+     * The cookies and body this request actually carried.
+     *
+     * Written to a file of its own rather than into the event stream, and
+     * behind a SECOND flag rather than the one that turns the bridge on. Both
+     * are deliberate. A separate file is one thing to delete when the window
+     * closes; a separate flag is what makes "show me my dumps" and "record my
+     * session token" two different permissions instead of one.
+     *
+     * Nothing here runs without `capture.flag`, which only ever exists while a
+     * window this app opened is open, and which that window's expiry removes.
+     */
+    function __stackvo_session(): void
+    {{
+        if (PHP_SAPI === 'cli' || !@is_file('{CONF_DIR}/capture.flag')) {{
+            return;
+        }}
+        if (!isset($_SERVER['REQUEST_URI'])) {{
+            return;
+        }}
+
+        // `php://input` is empty once a framework has read it, and on a
+        // POST with a form encoding PHP has already consumed it into $_POST.
+        // Both paths are taken, in that order, because the raw body is the
+        // one that replays byte for byte and the rebuilt one is better than
+        // nothing.
+        $body = @file_get_contents('php://input');
+        if (($body === false || $body === '') && !empty($_POST)) {{
+            $body = http_build_query($_POST);
+        }}
+        if (is_string($body) && strlen($body) > {MAX_BODY}) {{
+            // Dropped rather than truncated. Half a body is not a request, and
+            // sending one would be answering with something that looks like a
+            // replay and is not.
+            $body = null;
+        }}
+
+        $session = [
+            'at' => microtime(true),
+            'request' => trim(($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . $_SERVER['REQUEST_URI']),
+            'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+            'cookie' => $_SERVER['HTTP_COOKIE'] ?? null,
+            'body' => ($body === false || $body === '') ? null : $body,
+            'contentType' => $_SERVER['CONTENT_TYPE'] ?? null,
+        ];
+
+        $line = @json_encode($session, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($line === false) {{
+            return;
+        }}
+        @file_put_contents('{EVENTS_DIR}/{SESSIONS_FILE}', $line . "\n", FILE_APPEND | LOCK_EX);
     }}
 
     // Registered at prepend time, which puts it FIRST on the shutdown stack —

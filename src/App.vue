@@ -11,13 +11,14 @@ import { useInventoryStore } from '@/stores/inventory';
 import { useOperationsStore } from '@/stores/operations';
 import { useAppearanceStore } from '@/stores/appearance';
 import { setLocale } from '@/i18n';
-import { api } from '@/lib/ipc';
+import { api, asList } from '@/lib/ipc';
 import { listenAll, REFRESH_TRIGGERS } from '@/lib/events';
 import { runtimeLook } from '@/lib/manifest';
 import OperationConsole from '@/components/OperationConsole.vue';
 import { toasts } from '@/lib/toast';
 import { notify } from '@/lib/notify';
 import ErrorAlert from '@/components/ErrorAlert.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import RequirementsGate from '@/components/RequirementsGate.vue';
 import BootstrapGate from '@/components/BootstrapGate.vue';
 import WelcomeTour from '@/components/WelcomeTour.vue';
@@ -293,6 +294,43 @@ function toggleTheme() {
    while all three stay disabled. */
 const stackActionKey = ref(null);
 
+/**
+ * The four stack actions ask before they run.
+ *
+ * All four, not the slowest one. The instinct was to guard only the rebuild
+ * because it takes minutes — but stopping every container takes every site on
+ * the machine down *now*, and starting them again is a different act rather
+ * than an undo. Guarding the slow one and not the abrupt one would have put the
+ * dialog in front of the wrong button.
+ *
+ * One `pending` rather than a flag per button: what is being confirmed is a
+ * function and a sentence, and four booleans would be four ways for two of them
+ * to be true at once.
+ */
+const pending = ref(null);
+
+function ask(key, message, color, run) {
+  // The dialog's button says the verb it is confirming rather than "OK" — the
+  // same string the toolbar button carries, which is what makes the second
+  // press read as the same act as the first. Worked out here rather than in
+  // the template: a nested ternary in markup is a thing nobody reads twice.
+  pending.value = { key, message, color, run, verb: t(`quickActions.${VERB[key]}`) };
+}
+
+/** Which of the toolbar's own labels each act is confirmed with. */
+const VERB = {
+  start: 'startAll',
+  stop: 'stopAll',
+  restart: 'restart',
+  rebuild: 'rebuildAll',
+};
+
+function runPending() {
+  const act = pending.value;
+  pending.value = null;
+  if (act) stackAction(act.run, act.key);
+}
+
 async function stackAction(fn, key = null) {
   stackError.value = null;
   commandLoading.value = true;
@@ -305,6 +343,26 @@ async function stackAction(fn, key = null) {
     commandLoading.value = false;
     stackActionKey.value = null;
   }
+}
+
+/**
+ * Rebuild every project's image.
+ *
+ * Behind the same confirmation as the three beside it — see [`ask`]. The
+ * measurement that put it there is the one that first argued against it: a
+ * rebuild is the *slowest* of the four and stopping is the *most abrupt*, and a
+ * dialog on only one of them would have been on the wrong one. So all four ask.
+ *
+ * A project that failed to build is named on screen afterwards. The console has
+ * the output either way, but "which of my twenty" is the question that output
+ * does not answer without scrolling.
+ */
+const rebuiltFailures = ref([]);
+
+async function rebuildAll() {
+  rebuiltFailures.value = [];
+  const result = await api.projectsBuildAll();
+  rebuiltFailures.value = asList(result?.failed);
 }
 
 /** The terminal chosen in Settings, on this project's container. */
@@ -599,7 +657,9 @@ onUnmounted(() => {
           :aria-label="t('quickActions.startAll')"
           :disabled="commandLoading || !app.engineUp"
           :loading="stackActionKey === 'start'"
-          @click="stackAction(() => api.containersStartAll(), 'start')"
+          @click="
+            ask('start', t('quickActions.confirmStart'), 'success', () => api.containersStartAll())
+          "
         >
           <v-icon>mdi-play-circle-outline</v-icon>
           <v-tooltip activator="parent" location="bottom">
@@ -615,7 +675,9 @@ onUnmounted(() => {
           :aria-label="t('quickActions.stopAll')"
           :disabled="commandLoading || !app.engineUp"
           :loading="stackActionKey === 'stop'"
-          @click="stackAction(() => api.containersStopAll(), 'stop')"
+          @click="
+            ask('stop', t('quickActions.confirmStop'), 'error', () => api.containersStopAll())
+          "
         >
           <v-icon>mdi-stop-circle-outline</v-icon>
           <v-tooltip activator="parent" location="bottom">
@@ -630,11 +692,38 @@ onUnmounted(() => {
           :aria-label="t('quickActions.restart')"
           :disabled="commandLoading || !app.engineUp"
           :loading="stackActionKey === 'restart'"
-          @click="stackAction(() => api.containersRestartAll(), 'restart')"
+          @click="
+            ask('restart', t('quickActions.confirmRestart'), 'warning', () =>
+              api.containersRestartAll()
+            )
+          "
         >
           <v-icon>mdi-restart</v-icon>
           <v-tooltip activator="parent" location="bottom">
             {{ t('quickActions.restart') }}
+          </v-tooltip>
+        </v-btn>
+        <!-- The fourth stack action, and the one that changes an image rather
+             than a container. Last of the four because it is the slowest and
+             the least reversible-looking: restart takes seconds, this takes as
+             long as the builds do. The result names any project that failed
+             rather than counting them — the console has the output, this has
+             the list. -->
+        <v-btn
+          icon
+          variant="elevated"
+          elevation="0"
+          color="info"
+          class="ml-2"
+          :aria-label="t('quickActions.rebuildAll')"
+          :disabled="commandLoading || !app.engineUp"
+          :loading="stackActionKey === 'rebuild'"
+          data-test="rebuild-all"
+          @click="ask('rebuild', t('quickActions.confirmRebuild'), 'info', rebuildAll)"
+        >
+          <v-icon>mdi-hammer-wrench</v-icon>
+          <v-tooltip activator="parent" location="bottom">
+            {{ t('quickActions.rebuildAll') }}
           </v-tooltip>
         </v-btn>
 
@@ -1159,6 +1248,39 @@ onUnmounted(() => {
     </v-snackbar>
 
     <!-- Global overlays --------------------------------------------------- -->
+    <!-- One dialog for all four stack actions. The sentence it shows is the
+         caller's, because "are you sure?" is a question nobody can answer —
+         it does not say what about. -->
+    <ConfirmDialog
+      :model-value="!!pending"
+      :title="t('quickActions.confirmTitle')"
+      :message="pending?.message ?? ''"
+      :confirm-text="pending?.verb ?? ''"
+      :color="pending?.color ?? 'primary'"
+      @update:model-value="(v) => v || (pending = null)"
+      @confirm="runPending"
+    />
+
+    <!-- Named rather than counted, and on screen rather than only in the
+         console: "two failed" sends somebody to look at twenty projects. -->
+    <v-snackbar
+      :model-value="rebuiltFailures.length > 0"
+      color="transparent"
+      location="bottom"
+      timeout="12000"
+      @update:model-value="(v) => v || (rebuiltFailures = [])"
+    >
+      <v-alert
+        type="warning"
+        variant="elevated"
+        closable
+        data-test="rebuild-failed"
+        @click:close="rebuiltFailures = []"
+      >
+        {{ t('quickActions.rebuildFailed', { names: rebuiltFailures.join(', ') }) }}
+      </v-alert>
+    </v-snackbar>
+
     <v-snackbar :model-value="!!stackError" color="transparent" location="bottom" timeout="8000">
       <ErrorAlert :error="stackError" type="error" closable @close="stackError = null" />
     </v-snackbar>

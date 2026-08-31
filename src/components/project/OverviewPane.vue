@@ -78,8 +78,44 @@ watch(
   () => {
     verification.value = null;
     verifyError.value = null;
+    locked.value = null;
+    lockError.value = null;
   }
 );
+
+/**
+ * Write down what this project is actually running against.
+ *
+ * Beside the verify button because the two are one loop: verify asks whether
+ * this machine matches, and until something wrote a lock the answer could not
+ * be stronger than "a redis is installed". A press here is what makes the next
+ * verify — on this machine or on somebody else's — able to say which redis.
+ *
+ * Never automatic. A lock the app refreshed on its own would record whatever
+ * the machine drifted to, so it would always agree with the machine and could
+ * never disagree with it.
+ */
+const locking = ref(false);
+const locked = ref(null);
+const lockError = ref(null);
+
+async function lock() {
+  locking.value = true;
+  lockError.value = null;
+  try {
+    locked.value = await api.projectLock(props.project.name);
+    // Re-asked immediately, because the answer has changed: every declared
+    // service the lock now names is checked against a version rather than
+    // against presence. Showing the old verification beside a new lock would be
+    // showing two answers to one question.
+    if (verification.value) await verify();
+  } catch (e) {
+    locked.value = null;
+    lockError.value = e;
+  } finally {
+    locking.value = false;
+  }
+}
 
 const CHECK_STATE = { ok: 'success', missing: 'error', different: 'warning', unknown: 'info' };
 const CHECK_ICON = {
@@ -293,16 +329,60 @@ const CHECK_ICON = {
       {{ t('verify.title') }}
     </div>
     <p class="text-caption text-medium-emphasis mb-2">{{ t('verify.explain') }}</p>
-    <v-btn
-      size="small"
+    <div class="d-flex ga-2 flex-wrap">
+      <v-btn
+        size="small"
+        variant="tonal"
+        prepend-icon="mdi-clipboard-check-outline"
+        :loading="verifying"
+        :disabled="!project"
+        @click="verify"
+      >
+        {{ t('verify.run') }}
+      </v-btn>
+      <!-- The write half, and it says so: this one puts a file in the
+           repository, which is not what the button beside it does. -->
+      <v-btn
+        size="small"
+        variant="tonal"
+        prepend-icon="mdi-lock-outline"
+        :loading="locking"
+        :disabled="!project"
+        data-test="lock"
+        @click="lock"
+      >
+        {{ t('verify.lock') }}
+      </v-btn>
+    </div>
+    <p class="text-caption text-medium-emphasis mt-2">{{ t('verify.lockExplain') }}</p>
+
+    <v-alert
+      v-if="lockError"
+      type="error"
       variant="tonal"
-      prepend-icon="mdi-clipboard-check-outline"
-      :loading="verifying"
-      :disabled="!project"
-      @click="verify"
+      density="compact"
+      class="mt-3 text-caption"
     >
-      {{ t('verify.run') }}
-    </v-btn>
+      {{ lockError.message }}
+    </v-alert>
+
+    <v-alert
+      v-if="locked"
+      type="success"
+      variant="tonal"
+      density="compact"
+      class="mt-3 text-caption"
+      data-test="locked"
+    >
+      {{ t('verify.locked', { count: locked.locked.length }) }}
+      <!-- What it could not lock, named with the reason. A lock file that
+           quietly covers three of five services is one somebody believes
+           covers five. -->
+      <div v-for="row in locked.skipped" :key="row.service" class="mt-1">
+        {{ t(`verify.skipped.${row.reason}`, { service: row.service }) }}
+      </div>
+      <div class="mt-1 font-monospace">{{ locked.path }}</div>
+    </v-alert>
 
     <v-alert
       v-if="verifyError"

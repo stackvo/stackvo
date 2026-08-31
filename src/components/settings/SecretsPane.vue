@@ -38,6 +38,21 @@ const loading = ref(false);
 const scan = ref(null);
 const scanning = ref(false);
 const scanError = ref(null);
+
+/**
+ * Whether anything found is a **model provider's** key.
+ *
+ * Not a severity — every finding here is a credential and none is more of one
+ * than the others. What these three share is a second question, and it is one
+ * this app already answers from Docker rather than by inference: an application
+ * that sends every request to an outside model is one where *"which of my
+ * containers can reach the internet at all"* stops being theoretical. The
+ * sentence points at the egress card that answers it.
+ */
+const MODEL_PROVIDER_RULES = ['openaiKey', 'googleApiKey', 'anthropicKey'];
+const modelKeyFound = computed(() =>
+  (scan.value?.findings ?? []).some((finding) => MODEL_PROVIDER_RULES.includes(finding.rule))
+);
 const projects = ref([]);
 /** `null` scans only this machine's `.env`; a project adds its repository. */
 const project = ref(null);
@@ -289,7 +304,25 @@ onMounted(load);
         {{ t('leaks.none', { scanned: scan.scanned }) }}
       </v-alert>
 
-      <v-list v-else density="compact" class="bg-transparent pa-0 mt-2">
+      <!-- The sentence beside a model provider's key. It adds no finding and
+           changes no severity: it names the question that follows from having
+           one, and the card that already answers it. -->
+      <v-alert
+        v-if="modelKeyFound"
+        type="info"
+        variant="tonal"
+        density="compact"
+        class="mt-3 text-caption"
+        data-test="leak-model-egress"
+      >
+        {{ t('leaks.modelKeyEgress') }}
+      </v-alert>
+
+      <v-list
+        v-if="scan.findings.length || scan.envTracked"
+        density="compact"
+        class="bg-transparent pa-0 mt-2"
+      >
         <v-list-item
           v-for="(finding, i) in scan.findings"
           :key="`${finding.subject}-${i}`"
