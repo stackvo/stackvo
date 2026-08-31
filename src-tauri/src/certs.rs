@@ -746,7 +746,7 @@ pub fn project_domains(root: &Path) -> Vec<String> {
             continue;
         }
         if let Ok(manifest) = crate::manifest::read(&manifest_path, name) {
-            if let Some(domain) = manifest.domain {
+            if let Some(domain) = manifest.domain.clone() {
                 out.push(domain);
             }
             // Extra hostnames are certificate subjects on exactly the same
@@ -755,7 +755,7 @@ pub fn project_domains(root: &Path) -> Vec<String> {
             // multi-tenant project would meet one on every tenant. Wildcards
             // come through as they are written: `required_domains` keeps them
             // and mkcert issues `*.shop.loc` as a SAN.
-            out.extend(manifest.aliases);
+            out.extend(manifest.extra_hostnames());
 
             // The LAN name is a subject on the same terms, and it is the one
             // that matters most: the device meeting this certificate has never

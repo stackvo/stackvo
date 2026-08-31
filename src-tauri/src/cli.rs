@@ -107,6 +107,7 @@ pub enum Action {
     Status,
     Doctor,
     Verify,
+    Lock,
     Projects,
     Project,
     Services,
@@ -458,6 +459,19 @@ pub const COMMANDS: &[Command] = &[
         flags: &[],
         summary: "Whether this machine matches what the repository declares the project \
                   needs — and which line does not.",
+    },
+    Command {
+        name: "lock",
+        action: Action::Lock,
+        backing: Backing::Contract("project_lock"),
+        writes: true,
+        args: "<project>",
+        arity: (1, 1),
+        prefix: &[],
+        flags: &[],
+        summary: "Write stackvo.lock: the service versions and package digests this \
+                  project is currently running against, so `verify` can hold another \
+                  machine to them.",
     },
     Command {
         name: "projects",
@@ -2091,6 +2105,16 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
                 .map(|(id, _)| id)
                 .collect();
 
+            let lock = crate::lock::read(std::path::Path::new(&project.path))?;
+
+            // The Laravel half of the same question, read from the project's
+            // own `composer.json`. Absent for a project that has none, which is
+            // most of them — a Go project has no opinion about PHP.
+            let platform =
+                std::fs::read_to_string(std::path::Path::new(&project.path).join("composer.json"))
+                    .ok()
+                    .map(|text| crate::verify::platform_of(&text));
+
             value(json!(crate::verify::verify(
                 &crate::verify::Declared {
                     name: &project.name,
@@ -2099,10 +2123,41 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
                     built: project.built,
                     generated_stale: project.generated_stale,
                     domain_configured: project.domain_configured,
+                    lock: lock.as_ref(),
+                    platform: platform.as_ref(),
                 },
                 &crate::instances::Table::load(&root).unwrap_or_default(),
                 &catalogue,
             )))
+        }
+
+        // The write half. Deliberately here rather than folded into `verify`
+        // with a `--write` flag: reading and writing a lock are different acts
+        // and a flag that turns a read-only verb into a writing one is how a
+        // script ends up locking a machine it only meant to check.
+        Action::Lock => {
+            let name = &parsed.args[0];
+            let dir = crate::workspace::require_projects_root(&root)?.join(name);
+            let manifest = crate::manifest::read(&dir.join("stackvo.json"), name)?;
+            if !manifest.valid {
+                return Err(Error::new(
+                    crate::error::Code::InvalidManifest,
+                    format!("{name}'s stackvo.json does not validate; fix it before locking"),
+                ));
+            }
+
+            let (lock, skipped) = crate::lock::resolve(
+                &manifest.services,
+                &crate::instances::Table::load(&root).unwrap_or_default(),
+                crate::snapshot::now_rfc3339(),
+            );
+            let path = crate::lock::write(&dir, &lock)?;
+
+            value(json!({
+                "path": path.display().to_string(),
+                "locked": lock.services,
+                "skipped": skipped,
+            }))
         }
 
         Action::Projects => value(json!(crate::commands::list_projects(&root).await?)),
@@ -2730,6 +2785,7 @@ pub fn render(action: Action, value: &Value, style: &Style) -> String {
         Action::Status => render_status(value, style),
         Action::Doctor => render_doctor(value, style),
         Action::Verify => render_verify(value, style),
+        Action::Lock => render_lock(value, style),
         Action::Projects => render_projects(value, style),
         Action::Project => render_project(value, style),
         Action::Services => render_services(value, style),
@@ -3062,6 +3118,70 @@ fn render_status(value: &Value, style: &Style) -> String {
 /// reports findings. A verifier that printed nothing when everything matched
 /// would leave somebody unable to tell "it checked and I am fine" from "it did
 /// not check", and the whole point of running it is the first sentence.
+/// What was locked, and what could not be.
+///
+/// The second half is not a footnote. A lock file that quietly covers three of
+/// a project's five services is one somebody believes covers five, so the
+/// services it skipped are printed with the reason — which is also the repair.
+fn render_lock(value: &Value, style: &Style) -> String {
+    let locked = value
+        .get("locked")
+        .and_then(Value::as_array)
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
+
+    let rows: Vec<Vec<String>> = locked
+        .iter()
+        .map(|l| {
+            vec![
+                l.get("service")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?")
+                    .to_string(),
+                l.get("version")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?")
+                    .to_string(),
+                l.get("source")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                l.get("sha256")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .chars()
+                    .take(12)
+                    .collect(),
+            ]
+        })
+        .collect();
+
+    let mut out = table(&["service", "version", "source", "package"], &rows, style);
+
+    for skipped in value
+        .get("skipped")
+        .and_then(Value::as_array)
+        .map(|a| a.as_slice())
+        .unwrap_or(&[])
+    {
+        let service = skipped
+            .get("service")
+            .and_then(Value::as_str)
+            .unwrap_or("?");
+        out.push_str(
+            &style.warn(&match skipped.get("reason").and_then(Value::as_str) {
+                Some("off") => format!("\n{service} is installed and switched off — not locked."),
+                _ => format!("\n{service} is not installed here — not locked."),
+            }),
+        );
+    }
+
+    if let Some(path) = value.get("path").and_then(Value::as_str) {
+        out.push_str(&format!("\n\n{path}\n"));
+    }
+    out
+}
+
 fn render_verify(value: &Value, style: &Style) -> String {
     let checks = value
         .get("checks")

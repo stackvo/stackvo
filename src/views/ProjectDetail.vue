@@ -24,6 +24,13 @@ import LocalOverridePane from '@/components/project/LocalOverridePane.vue';
 import HooksPane from '@/components/project/HooksPane.vue';
 import SidecarsPane from '@/components/project/SidecarsPane.vue';
 import WorktreePane from '@/components/project/WorktreePane.vue';
+import BisectPane from '@/components/project/BisectPane.vue';
+import DependenciesPane from '@/components/project/DependenciesPane.vue';
+import BoostPane from '@/components/project/BoostPane.vue';
+import DashboardsPane from '@/components/project/DashboardsPane.vue';
+import DuskPane from '@/components/project/DuskPane.vue';
+import OctanePane from '@/components/project/OctanePane.vue';
+import ComponentsPane from '@/components/project/ComponentsPane.vue';
 import RequirementsPane from '@/components/project/RequirementsPane.vue';
 import OverviewPane from '@/components/project/OverviewPane.vue';
 import ProfilerPane from '@/components/project/ProfilerPane.vue';
@@ -644,8 +651,13 @@ onUnmounted(() => {
           <template v-for="(command, i) in quickCommands" :key="command.id">
             <v-divider v-if="i && command.because !== quickCommands[i - 1].because" class="my-1" />
 
+            <!-- The project's own rows need the project up; a package's row
+                 needs its own instance up, which this page does not know about
+                 — so it is not disabled here and the backend refuses by name
+                 instead. Disabling it on the project's state would grey out a
+                 working button for a reason that is not true. -->
             <v-list-item
-              :disabled="!running || !!quickCommandBusy"
+              :disabled="(!running && !command.instance) || !!quickCommandBusy"
               @click="runQuickCommand(command)"
             >
               <template #prepend>
@@ -656,7 +668,13 @@ onUnmounted(() => {
                 />
               </template>
               <v-list-item-title class="mono">{{ command.display }}</v-list-item-title>
-              <v-list-item-subtitle>{{ quickCommandAbout(command) }}</v-list-item-subtitle>
+              <!-- A package's sentence is the package author's, in the language
+                   they wrote it — `lang=""` for the same reason a package
+                   description carries one. Everything else here is this
+                   application's own text and is translated. -->
+              <v-list-item-subtitle :lang="command.foreignAbout ? '' : undefined">
+                {{ quickCommandAbout(command) }}
+              </v-list-item-subtitle>
               <v-list-item-subtitle class="text-disabled">
                 {{ t('quickCmd.because', { file: command.because }) }}
               </v-list-item-subtitle>
@@ -674,6 +692,19 @@ onUnmounted(() => {
                   class="mr-2"
                 >
                   {{ t('quickCmd.declared') }}
+                </v-chip>
+                <!-- Where it runs, and it is not this project. A package's
+                     command runs inside that service instance's own container,
+                     so "this does not touch your project" is exactly the kind
+                     of thing somebody about to press it should be told. -->
+                <v-chip
+                  v-if="command.instance"
+                  size="x-small"
+                  variant="tonal"
+                  color="secondary"
+                  class="mr-2"
+                >
+                  {{ t('quickCmd.inInstance', { instance: command.instance }) }}
                 </v-chip>
                 <!-- Said on the row, not discovered by pressing it: one of these
                    opens a terminal window and the other prints into the
@@ -900,6 +931,60 @@ onUnmounted(() => {
           <WhySlowPane :name="name" :runtime="project?.runtime" />
         </template>
 
+        <!-- DEPENDENCIES (Z-1) --------------------------------------------- -->
+        <!-- Beside the manifests rather than in the debug section: what a
+             project depends on is part of what it *is*, and the card is read
+             when somebody is deciding what to upgrade rather than when
+             something is broken. -->
+        <template v-if="shows('configuration')">
+          <DependenciesPane :name="name" />
+        </template>
+
+        <!-- OCTANE RELOAD (F-5) -------------------------------------------- -->
+        <!-- In the runtime section, next to the dev server: both answer the
+             same question — "I saved a file and the site did not change" —
+             and the two answers are different for different reasons. -->
+        <template v-if="shows('runtime')">
+          <OctanePane :name="name" />
+        </template>
+
+        <!-- DUSK (F-4) ----------------------------------------------------- -->
+        <!-- In the debug section rather than beside the workers: what this card
+             sets up is a diagnosis tool, and the half that actually breaks —
+             a browser that will not accept this machine's certificate — is the
+             same kind of question the other cards here answer. -->
+        <template v-if="shows('debug')">
+          <DuskPane :name="name" />
+        </template>
+
+        <!-- TELESCOPE / HORIZON / PULSE (F-2) ------------------------------ -->
+        <!-- In the runtime section, beside the workers: two of the three
+             preconditions this reports ARE workers, and the third is a
+             scheduled job. A card that tells you Horizon is empty because its
+             sidecar is down belongs next to the row that starts it. -->
+        <template v-if="shows('runtime')">
+          <DashboardsPane :name="name" />
+        </template>
+
+        <!-- BOOST / laravel-mcp (F-1) -------------------------------------- -->
+        <!-- Beside the dependency card rather than in the debug section: what
+             an assistant can ask this project is part of how the project is
+             set up, and the break it reports — `boost:install` registering a
+             php that is not on this machine — is a configuration fault, not a
+             symptom. -->
+        <template v-if="shows('configuration')">
+          <BoostPane :name="name" />
+        </template>
+
+        <!-- BISECT (K-6) --------------------------------------------------- -->
+        <!-- In the debug section rather than beside the worktree pane, because
+             a bisect is a diagnosis and not a configuration: the question it
+             answers is "which commit did this", and the pane's own half of the
+             answer is what environment that commit expected. -->
+        <template v-if="shows('debug')">
+          <BisectPane :name="name" :has-git="!!project?.git" />
+        </template>
+
         <!-- XDEBUG --------------------------------------------------------- -->
         <!-- Three layers reported separately. Collapsing them into one "on"
              would put a switch in the UI that reads as done while nothing has
@@ -1103,6 +1188,10 @@ onUnmounted(() => {
           <!-- Beside the hooks, because they are the other half of the same
                question: what did this repository bring with it besides code. -->
           <SidecarsPane :name="name" />
+          <!-- And beside the sidecars, because it is the third answer to that
+               question and the only one that is the repository's *own* code:
+               another directory, another runtime, another hostname. -->
+          <ComponentsPane :name="name" />
         </template>
 
         <!-- WORKTREES (N) ------------------------------------------------- -->

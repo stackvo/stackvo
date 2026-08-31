@@ -324,6 +324,17 @@ pub struct Manifest {
         serialize_with = "crate::provider::as_declared_map"
     )]
     pub providers: Vec<crate::provider::Provider>,
+    /// Other directories of this repository, each with its own runtime.
+    ///
+    /// The third of three declarations that put a container beside the project,
+    /// and the distinctions are the design — [`crate::component`] carries the
+    /// table. A `services` entry is a shared need; a `sidecar` is somebody
+    /// else's image; a component is **this repository's own code**, built here
+    /// and routed at its own hostname.
+    ///
+    /// Empty on every project that existed before the field, which is why
+    /// nothing downstream changes for one.
+    pub components: crate::component::Declared,
 
     /// Which fields this machine's `stackvo.local.json` supplied, dotted.
     ///
@@ -333,6 +344,29 @@ pub struct Manifest {
     /// cannot be saved into the file the team shares. See [`read_effective`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local: Vec<String>,
+}
+
+impl Manifest {
+    /// Every hostname this project answers on besides [`Self::domain`].
+    ///
+    /// The aliases, then whatever the components asked for. Both are names a
+    /// browser reaches and both therefore need a `/etc/hosts` entry and a
+    /// certificate subject — but they are **not** the same thing, and merging
+    /// them into `aliases` would be a bug rather than a simplification: an
+    /// alias is another name for *this project's container* and goes into its
+    /// Traefik rule, while a component domain names a **different** container.
+    /// A component hostname in the project's own rule would route `api.shop.loc`
+    /// to the PHP app.
+    ///
+    /// So the two stay apart in the manifest and meet here, in the one shape
+    /// every hostname consumer already wanted: "the names besides the main one".
+    pub fn extra_hostnames(&self) -> Vec<String> {
+        self.aliases
+            .iter()
+            .cloned()
+            .chain(self.components.domains())
+            .collect()
+    }
 }
 
 impl Manifest {
@@ -660,6 +694,35 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
+    // ---- declared components ----------------------------------------
+    //
+    // Warnings rather than errors, like the sidecars above: a project with one
+    // unreadable component still has a runtime and a domain, and refusing to
+    // open it would lose the nine parts that are fine to report the tenth.
+    let (components, component_problems) = crate::component::parse(json);
+    for problem in component_problems {
+        warnings.push(Finding {
+            code: "COMPONENT".into(),
+            path: problem.path,
+            message: problem.message,
+        });
+    }
+
+    // One namespace on the machine, so one name-maker and one check. A
+    // component and a sidecar sharing an id would be two declarations
+    // producing one container, with whichever compose wrote last winning.
+    for (id, _) in components.iter() {
+        if sidecars.get(id).is_some() {
+            warnings.push(Finding {
+                code: "COMPONENT".into(),
+                path: format!("components.{id}"),
+                message: format!(
+                    "`{id}` is also a sidecar. Both become the container                      stackvo-<project>-{id}, so one of them has to be renamed"
+                ),
+            });
+        }
+    }
+
     // ---- declared providers -----------------------------------------
     //
     // Warnings, like the three blocks above and for the same reason: a project
@@ -693,6 +756,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         schedule,
         commands,
         sidecars,
+        components,
         providers,
         valid: errors.is_empty(),
         errors,
@@ -2080,6 +2144,37 @@ pub fn to_json(manifest: &Manifest) -> String {
         lines.push(format!("  \"sidecars\": {{\n{}\n  }}", items.join(",\n")));
     }
 
+    // And a fourth time, for the fourth declaration. A project losing the Go
+    // API it declared is the same class of loss as one losing its sidecar —
+    // and worse, because a component is a directory of code that stops being
+    // built rather than a container that stops starting.
+    if !manifest.components.is_empty() {
+        let items: Vec<String> = manifest
+            .components
+            .iter()
+            .map(|(id, component)| {
+                let mut fields = vec![
+                    format!("\"runtime\": {}", quote(&component.runtime)),
+                    format!("\"path\": {}", quote(&component.path)),
+                    format!("\"version\": {}", quote(&component.version)),
+                    format!("\"start\": {}", quote(&component.start)),
+                    format!("\"port\": {}", component.port),
+                ];
+                if let Some(domain) = &component.domain {
+                    fields.push(format!("\"domain\": {}", quote(domain)));
+                }
+                if let Some(install) = &component.install {
+                    fields.push(format!("\"install\": {}", quote(install)));
+                }
+                if let Some(build) = &component.build {
+                    fields.push(format!("\"build\": {}", quote(build)));
+                }
+                format!("    {}: {{ {} }}", quote(id), fields.join(", "))
+            })
+            .collect();
+        lines.push(format!("  \"components\": {{\n{}\n  }}", items.join(",\n")));
+    }
+
     // And here for the fourth time for the reason the three blocks above
     // give: this text is what `project_manifest_write` saves on every form
     // submission, so a field the serialiser does not know about is one that
@@ -2290,6 +2385,7 @@ mod write_tests {
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            components: Default::default(),
             providers: Vec::new(),
             local: Vec::new(),
         }
@@ -2618,6 +2714,7 @@ mod write_tests {
             schedule: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
+            components: Default::default(),
             providers: Vec::new(),
             local: Vec::new(),
         };

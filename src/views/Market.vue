@@ -211,6 +211,16 @@ function countFacts(item) {
     return facts;
   }
 
+  // The package's own sentence, first and set apart. It used to be a second
+  // line under the name, which made every row a different height and gave a
+  // quarter-width column a hyphenated service name. It is a *fact about the
+  // service* like the four below it, so it belongs in the one place the row
+  // already keeps those — rather than in a tooltip of its own on the name,
+  // which no keyboard reaches and no touch opens.
+  const summary = item.kind === 'service' ? summaryOf(item.entry) : null;
+  if (summary) {
+    facts.push({ icon: 'mdi-text-short', text: summary, lead: true });
+  }
   facts.push({
     icon: 'mdi-tag-outline',
     text: t('marketView.versionCount', { n: item.entry.versions.length }),
@@ -856,19 +866,6 @@ function supportLabel(version) {
                   </template>
                   <span v-else>{{ item.title }}</span>
 
-                  <!-- The package's own sentence about why you would install
-                       it here. It has been crossing the boundary since the
-                       catalogue was ported and had nowhere to land. Under the
-                       name rather than beside it: the column is a quarter of
-                       the window and a name plus a sentence on one line is a
-                       hyphenated name. -->
-                  <div
-                    v-if="item.kind === 'service' && summaryOf(item.entry)"
-                    class="text-caption text-medium-emphasis summary"
-                  >
-                    {{ summaryOf(item.entry) }}
-                  </div>
-
                   <!-- Beside the name it counts, not at the far end of the row.
                      In the append slot it sat against the right edge with the
                      whole width between it and the thing it was counting, and
@@ -888,10 +885,25 @@ function supportLabel(version) {
                     <!-- One fact per line. The `aria-label` above carries the
                          same facts joined into one string, because a screen
                          reader is read a name and not a layout. -->
-                    <v-tooltip activator="parent" location="top">
-                      <div v-for="fact in countFacts(item)" :key="fact.text" class="tip-line">
-                        <v-icon size="x-small">{{ fact.icon }}</v-icon>
-                        <span>{{ fact.text }}</span>
+                    <v-tooltip activator="parent" location="top" max-width="360">
+                      <!-- The sentence reads as prose and the counts read as a
+                           list, so they are not drawn the same. `lang=""` on
+                           the sentence: it is the package's own text in
+                           whichever language it was published in, and claiming
+                           this interface's language for it would be a guess
+                           stated as a fact — the rule `SidecarsPane` follows
+                           for the same kind of string. -->
+                      <div
+                        v-for="fact in countFacts(item)"
+                        :key="fact.text"
+                        :class="fact.lead ? 'tip-lead' : 'tip-line'"
+                        :lang="fact.lead ? '' : undefined"
+                      >
+                        <template v-if="fact.lead">{{ fact.text }}</template>
+                        <template v-else>
+                          <v-icon size="x-small">{{ fact.icon }}</v-icon>
+                          <span>{{ fact.text }}</span>
+                        </template>
                       </div>
                     </v-tooltip>
                   </v-btn>
@@ -1370,6 +1382,17 @@ function supportLabel(version) {
   flex: 0 0 auto;
 }
 
+/* The package's own sentence, above the counts and set apart from them. No
+   glyph and no clamp: it is prose rather than a labelled fact, and the tooltip
+   is where the whole of it can finally be read — the line it replaced was
+   clamped to two because the column was a quarter of the window. */
+.tip-lead {
+  line-height: 1.4;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgb(255 255 255 / 20%);
+}
+
 /* Takes the room the card has and scrolls inside it, rather than letting the
    flex column distribute a fixed height across children that each wanted more.
    `min-height: 0` is the half that is easy to leave out and is the half that
@@ -1527,18 +1550,6 @@ function supportLabel(version) {
    second one away. */
 .catalogue-tree :deep(.v-list-item-title) {
   white-space: normal;
-}
-
-/* The package's own sentence, under the name. Two lines and then an ellipsis:
-   the summary is a hint about why you would install this, and a paragraph of it
-   in a quarter-width column would push the versions below off the pane. */
-.summary {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.3;
 }
 
 /* The count sits at the end of a row that already carries a name and a chip,

@@ -174,6 +174,42 @@ const clauses = computed(() =>
  */
 const labelKey = (id) => `settings.compliance.clause.${id.replace(/\./g, '_')}`;
 
+/**
+ * What can leave this machine, as far as Docker can say.
+ *
+ * Beside the images card because the two are halves of one question: that one
+ * answers what this machine *pulls* and from where, and this answers what its
+ * containers *can reach* — and, for anybody who set a registry mirror, which
+ * containers did not come through it.
+ *
+ * Asked rather than loaded with the pane. It inspects every container and reads
+ * a stats sample per running one; cheap when somebody presses a button, rude on
+ * a timer.
+ */
+const egress = ref(null);
+const egressing = ref(false);
+const egressError = ref(null);
+
+async function loadEgress() {
+  egressing.value = true;
+  egressError.value = null;
+  try {
+    egress.value = await api.egressReport();
+  } catch (e) {
+    egress.value = null;
+    egressError.value = e;
+  } finally {
+    egressing.value = false;
+  }
+}
+
+const REACH_COLOUR = { outside: 'warning', contained: 'success', unknown: 'surface-variant' };
+
+// Bytes are shown at all only because "this container has sent nothing" is
+// worth being sure of. The unit is deliberately coarse: a precise number would
+// invite reading it as a measurement of internet traffic, which it is not.
+const outgoing = (n) => (n > 0 ? bytes(n) : '—');
+
 onMounted(async () => {
   logs.value = await api.logsInfo().catch(() => null);
   const policy = await api.policyStatus().catch(() => null);
@@ -371,6 +407,96 @@ onMounted(async () => {
     <p class="text-caption text-medium-emphasis mt-3">
       {{ t('settings.images.hint') }}
     </p>
+  </SettingsGroup>
+
+  <!-- ---- what can leave this machine -------------------------------- -->
+  <!-- The other half of the images card above: that one says what this machine
+       pulls and from where, this one says what its containers can reach. -->
+  <SettingsGroup
+    help="settings-diagnostics-egress"
+    icon="mdi-lan-disconnect"
+    :title="t('settings.egress.title')"
+    :description="t('settings.egress.desc')"
+  >
+    <v-btn
+      size="small"
+      variant="tonal"
+      prepend-icon="mdi-lan-disconnect"
+      :loading="egressing"
+      data-test="egress-run"
+      @click="loadEgress"
+    >
+      {{ t('settings.egress.run') }}
+    </v-btn>
+
+    <ErrorAlert v-if="egressError" :error="egressError" class="mt-3" />
+
+    <template v-if="egress">
+      <!-- The line the person who set a mirror actually reads: on a machine
+           where it holds, this list is one entry long. -->
+      <div class="text-caption text-medium-emphasis mt-3 mb-2">
+        {{
+          t('settings.egress.summary', {
+            registries: egress.registries.join(', '),
+            contained: egress.contained,
+            total: egress.rows.length,
+          })
+        }}
+      </div>
+
+      <v-alert
+        v-if="egress.registryPrefix"
+        type="info"
+        variant="tonal"
+        density="compact"
+        class="mb-3 text-caption"
+      >
+        {{ t('settings.egress.mirror', { prefix: egress.registryPrefix }) }}
+      </v-alert>
+
+      <v-table density="compact" class="text-caption">
+        <thead>
+          <tr>
+            <th>{{ t('settings.egress.container') }}</th>
+            <th>{{ t('settings.egress.registry') }}</th>
+            <th>{{ t('settings.egress.reach') }}</th>
+            <th class="text-right">{{ t('settings.egress.sent') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in egress.rows" :key="row.container" data-test="egress-row">
+            <td>
+              <div>{{ row.container }}</div>
+              <code class="text-caption text-medium-emphasis">{{ row.image }}</code>
+            </td>
+            <td>
+              {{ row.registry }}
+              <!-- Only ever shown when a mirror is in force. Without one there
+                   is no rule to have bypassed. -->
+              <v-chip
+                v-if="egress.registryPrefix && !row.mirrored"
+                size="x-small"
+                color="warning"
+                label
+                class="ml-1"
+              >
+                {{ t('settings.egress.bypassed') }}
+              </v-chip>
+            </td>
+            <td>
+              <v-chip size="x-small" label :color="REACH_COLOUR[row.reach]">
+                {{ t(`settings.egress.reachState.${row.reach}`) }}
+              </v-chip>
+            </td>
+            <td class="text-right">{{ outgoing(row.sent) }}</td>
+          </tr>
+        </tbody>
+      </v-table>
+    </template>
+
+    <!-- Said out loud rather than left as a gap, so nobody reads this table as
+         a list of everywhere their containers have been. -->
+    <p class="text-caption text-medium-emphasis mt-3">{{ t('settings.egress.noDestinations') }}</p>
   </SettingsGroup>
 
   <!-- ---- is the policy actually holding? ---------------------------- -->

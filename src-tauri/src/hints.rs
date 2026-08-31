@@ -268,6 +268,9 @@ hints! {
     SPX_NEEDS_THE_LOCAL_CA = "spxNeedsTheLocalCa",
         "The site is served over HTTPS with the certificate authority this workspace generated, \
          and the app has to read it to verify one. Settings has a certificates section for it.";
+    CAPTURE_NEEDS_THE_BRIDGE = "captureNeedsTheBridge",
+        "The debug bridge is what records a session, so it has to be on before a capture window \
+         can be armed. Switch it on in this project's debug pane, then arm the window.";
     SPX_RECORD_NEEDS_THE_SITE = "spxRecordNeedsTheSite",
         "The site did not answer. Start the project and open it in a browser once before \
          recording a request against it.";

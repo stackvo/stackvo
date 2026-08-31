@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 160 named types, 318 wrappers, 6 field(s) the
+ * Measured at generation: 161 named types, 341 wrappers, 8 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -1766,8 +1766,20 @@ export interface QuickCommand {
     about: string;
     /** bool */
     interactive: boolean;
-    /** string (the marker file) */
+    /**
+     * string (the marker file, the declaring file, or `<service>@<version>` for a package's own)
+     */
     because: string;
+    /** bool — the project's own stackvo.json declared it, rather than this app shipping it */
+    declared: boolean;
+    /**
+     * string? — the SERVICE INSTANCE this row runs in. Absent for every other row, which run in the project's own container. Present means a PACKAGE brought this command and it runs in that instance's container and nowhere else
+     */
+    instance?: string;
+    /**
+     * bool — `about` is the package author's sentence in the language they wrote it, so the window marks it lang="" rather than claiming its own language for it
+     */
+    foreignAbout: boolean;
 }
 
 export interface RecipeCard {
@@ -2494,6 +2506,31 @@ export interface XdebugStatus {
     overlayPath: string;
 }
 
+export interface DeclaredComponent {
+    /** string — lower-case letters, digits and dashes; it becomes part of a container name */
+    id: string;
+    /** string — node, or one of the six LANG_RUNTIMES. php is refused BY NAME with the reason */
+    runtime: string;
+    /** string — the directory in this repository it is built from, always inside the project */
+    path: string;
+    /**
+     * string|null — the hostname it answers on; null for a part not meant to be reached from outside
+     */
+    domain: string | null;
+    /** string */
+    version: string;
+    /** string|null */
+    install: string | null;
+    /** string|null */
+    build: string | null;
+    /** string — the command its container runs */
+    start: string;
+    /** number — the port it listens on INSIDE its own container; there is no host port */
+    port: number;
+    /** string — stackvo-<project>-<id>, what the project’s other containers connect to */
+    container: string;
+}
+
 export interface StackvoApi {
   /**
    * The web UI never needed this — it ran inside the StackVo repo, so its root was `/app` by mount. A desktop app has to be told, or work it out. Returns the resolved root plus how it was resolved, so the UI can show the user which checkout it is driving.
@@ -2891,7 +2928,19 @@ export interface StackvoApi {
   /**
    * The commonest loop in performance work takes four steps today: change the code, open the site, find the page, come back and hunt for the new recording among twenty. explain.rs opens by saying no new measurement is needed and it is right about this too — the recording that names a request, the sender that can issue one with the profiler on, and the observation window a query log is joined against all exist. What was missing was the act.
    */
-  requestReplay(name: string, key: string): Promise<Record<string, unknown>>;
+  requestReplay(name: string, key: string, snapshot?: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /**
+   * explain::replayable refuses a POST BY NAME with the reason: only the request line was recorded — not its body, its headers or its session — and a POST replayed without them is a different request, usually answered with a redirect or a 419 rather than the page. That refusal was not a gap in the code, it was what the code knew. But K-4's own example sentence is the one that needs the other half: "this bug only happened in that basket". A basket is a session, and replaying it means recording the request's cookies and body — which means writing somebody's session token and their form input to disk. So the feature is THE ASKING, not the storing.
+   */
+  captureStatus(name: string): Promise<Record<string, unknown>>;
+  /**
+   * explain::replayable refuses a POST BY NAME with the reason: only the request line was recorded — not its body, its headers or its session — and a POST replayed without them is a different request, usually answered with a redirect or a 419 rather than the page. That refusal was not a gap in the code, it was what the code knew. But K-4's own example sentence is the one that needs the other half: "this bug only happened in that basket". A basket is a session, and replaying it means recording the request's cookies and body — which means writing somebody's session token and their form input to disk. So the feature is THE ASKING, not the storing.
+   */
+  captureArm(name: string, minutes: number): Promise<Record<string, unknown>>;
+  /**
+   * explain::replayable refuses a POST BY NAME with the reason: only the request line was recorded — not its body, its headers or its session — and a POST replayed without them is a different request, usually answered with a redirect or a 419 rather than the page. That refusal was not a gap in the code, it was what the code knew. But K-4's own example sentence is the one that needs the other half: "this bug only happened in that basket". A basket is a session, and replaying it means recording the request's cookies and body — which means writing somebody's session token and their form input to disk. So the feature is THE ASKING, not the storing.
+   */
+  captureDisarm(name: string): Promise<Record<string, unknown>>;
   /**
    * The slow thing is often not a page. A queue worker, a migration or a test suite is where minutes go, and none of them can be profiled from a browser.
    */
@@ -3064,6 +3113,10 @@ export interface StackvoApi {
    * N. Everything a project can say about worktrees before a dialog opens: whether git is here, whether the directory is a repository, which branches exist and which of them are already checked out somewhere, which database instances a branch could be given a database on, and the worktrees this project already has. One call rather than five, because the answer decides whether the button is even drawn.
    */
   worktreeSupport(name: string): Promise<WorktreeSupport>;
+  /**
+   * Passport signs tokens with storage/oauth-private.key and that file is in .gitignore, so a fresh worktree does not have one and every token request comes back as a stack trace about a missing file.
+   */
+  worktreePassportKeys(name: string): Promise<string>;
   /**
    * Every worktree in the workspace, so the projects list can say `branch of shop` on a row instead of showing two unrelated siblings. Asking per project would be one command per row.
    */
@@ -3278,6 +3331,10 @@ export interface StackvoApi {
    */
   projectSidecars(name: string): Promise<DeclaredSidecar[]>;
   /**
+   * ServBay and FlyEnv both run many languages and in both the unit is a SITE: one directory, one runtime, one hostname. A repository holding api/ in Go, web/ in Next.js and worker/ in Python is three sites there — three entries to create, three to start, three to remember are related — and nothing in the tool knows they are one thing. Nothing in this category treats a monorepo as a single subject, and a local binary cannot: a directory has one runtime because the binary serving it has one. Every piece of the other answer was already here — eight runtimes, a Dockerfile renderer for each, Traefik routers generated per hostname — and what was missing was a manifest that could say so.
+   */
+  projectComponents(name: string): Promise<DeclaredComponent[]>;
+  /**
    * Approves this project's HOST commands exactly as they are now. The digest is sent back rather than recomputed server-side, and that round trip is the point: it is a receipt for the list the person actually read. MUST refuse when the manifest changed between the screen being drawn and the button being pressed — that refusal is what makes this consent rather than a checkbox. Container steps are never gated: the container already runs the repository's code.
    */
   projectHooksApprove(name: string, digest: string): Promise<HookPlan[]>;
@@ -3342,6 +3399,54 @@ export interface StackvoApi {
    * policy_status answers what the administrator's file SAYS. Nothing answered whether any of it is in force on this machine, which is the question the person who deployed the file has. The two come apart for one reason and it is not misconduct: a policy arrives on a machine that was already set up. The registry mirror rewrites references as files are GENERATED, so a project nobody regenerated since Tuesday still pulls from Docker Hub. allowedPackages is checked as something is INSTALLED, so a service installed last month stays installed when the list that would have refused it lands today. requireSignature decides what the NEXT refresh accepts and says nothing about the index already cached.
    */
   policyCompliance(): Promise<Record<string, unknown>>;
+  /**
+   * An administrator who pointed every pull at the organisation's mirror with policy.registryPrefix has a follow-up — WHO BYPASSED IT — and the same person wants to know which containers on this laptop can reach the internet at all. Neither question had an answer here and neither has one anywhere else in this category: a local binary has no containers, so it has no network namespaces to separate one program's traffic from another's.
+   */
+  egressReport(): Promise<Record<string, unknown>>;
+  /**
+   * pkg.rs verifies every file of every service package against a manifest digest before it runs, refuses a moving tag, and checks a signature over the index it came from. Meanwhile the project sitting beside it pulls four hundred libraries out of composer.lock and package-lock.json and nothing in this application has ever looked at them — which is the wrong way round: the service packages are a catalogue this project publishes and can vouch for, and the dependencies are somebody else's code, in far greater quantity, running with the developer's own permissions. No competitor looks at a project's dependencies at all.
+   */
+  depsReport(name: string): Promise<Record<string, unknown>>;
+  /**
+   * pkg.rs verifies every file of every service package against a manifest digest before it runs, refuses a moving tag, and checks a signature over the index it came from. Meanwhile the project sitting beside it pulls four hundred libraries out of composer.lock and package-lock.json and nothing in this application has ever looked at them — which is the wrong way round: the service packages are a catalogue this project publishes and can vouch for, and the dependencies are somebody else's code, in far greater quantity, running with the developer's own permissions. No competitor looks at a project's dependencies at all.
+   */
+  depsAdvisories(name: string): Promise<Record<string, unknown>>;
+  /**
+   * Octane boots the application ONCE and keeps it in memory, so an edited file changes nothing — a route added to routes/web.php does not exist until the workers are replaced, and the developer reloads the page, sees a 404, and goes looking for the mistake in their own code. generator.rs has written octane:start entry points all along; this is the consequence nobody said.
+   */
+  octaneStatus(name: string): Promise<Record<string, unknown>>;
+  /**
+   * Laravel's own answer is `octane:start --watch`, and its price is installing Node and chokidar INTO THE IMAGE — a second file watcher, inside a container, polling a bind mount this application is already watching. Attaching the reload to the watcher that is already running adds nothing to the image, which makes it strictly better than the documented route rather than merely different.
+   */
+  octaneAutoReload(name: string, enabled: boolean): Promise<unknown>;
+  /**
+   * The one action that makes an edited file real under Octane, without adding a file watcher to the image.
+   */
+  octaneReload(name: string): Promise<string>;
+  /**
+   * The mechanism was already here — imports.rs recognises Sail's `selenium` service by name and the manifest has supported sidecars since W-01. What is missing is the half no docker-compose.yml fixes: Dusk drives a browser and that browser has to open https://<domain> from inside a container that does not know this machine's certificate authority. A test that falls over on a certificate warning is a failure that reads as an application bug, and the developer goes looking in their own code.
+   */
+  duskPlan(name: string): Promise<Record<string, unknown>>;
+  /**
+   * Declaring the browser container and writing Dusk's environment file, so that `stackvo artisan dusk` has something to talk to.
+   */
+  duskApply(name: string): Promise<unknown>;
+  /**
+   * The browser is in a container that does not know this machine's CA, and a Dusk test that dies on a certificate warning reads as an application bug rather than as a missing certificate.
+   */
+  duskTrust(name: string): Promise<Record<string, unknown>[]>;
+  /**
+   * Telescope, Horizon and Pulse all ship a web dashboard, all three open in `local` with no authentication, and this app already serves the project on its own domain over a certificate the browser trusts — so https://shop.loc/horizon works TODAY and nothing anywhere says it exists. A link would have been the cheap half and not the useful one: each of the three goes quietly empty for a reason the developer cannot see, and every container is green while it happens.
+   */
+  dashboardsReport(name: string): Promise<Record<string, unknown>>;
+  /**
+   * `php artisan boost:install` writes a `.mcp.json` into the project holding `php artisan boost:mcp` — a command line that assumes a php on the HOST. There is none here and there will not be one: tooling.rs records that as a decision (a version is a property of a project, not of a directory a shim guessed). So Laravel's own installer leaves a configuration that cannot start, and the person who notices sees the failure in their assistant rather than in the tool that wrote it. No competitor can fix this, because in no competitor is the server inside an image.
+   */
+  boostStatus(name: string): Promise<Record<string, unknown>>;
+  /**
+   * The registration that boost:install writes cannot start here, and the line that can is the passage into the container this application already owns: `docker exec -i stackvo-<project> php artisan boost:mcp`.
+   */
+  boostRegister(name: string, file: 'mcp' | 'cursor' | 'vscode', server: string): Promise<string>;
   /**
    * The Settings pane has to draw a row per credential saying where it lives, and it has to know before it offers a Move button whether this machine has a keystore at all — a headless Linux box with no Secret Service is a real machine somebody runs this on.
    */
@@ -3424,6 +3529,26 @@ export interface StackvoApi {
    */
   projectVerify(name: string): Promise<Record<string, unknown>>;
   /**
+   * stackvo.json declares what a project needs AROUND it — "services": ["redis", "mysql"] — and names no versions, which is right: a repository should not have to guess what the person cloning it will have installed. verify.rs wrote the cost of that down in as many words: two machines can both satisfy `redis` while running 7.0 and 7.2, so a version the declaration does not pin was reported as ok with the version found beside it rather than called a match nothing checked. This is the file that closes it — the same division every ecosystem settled on, the manifest is intent and the lock is fact, and both belong in the repository because the second is what makes the first reproducible.
+   */
+  projectLock(name: string): Promise<Record<string, unknown>>;
+  /**
+   * git bisect moves the code and nothing else. Three months ago the project declared PHP 8.3 and locked redis at 7.0; this machine runs 8.4 and 7.2 — so every step through that range runs OLD CODE AGAINST A NEW ENVIRONMENT and the commit the search finally accuses may be innocent. Nothing in this category does anything about that because nothing in this category knows what environment a commit wanted. This app does: stackvo.json has always travelled with the repository and, since project_lock, stackvo.lock does too — and both are readable AT A REVISION without touching the working tree.
+   */
+  bisectStatus(name: string): Promise<Record<string, unknown>>;
+  /**
+   * git bisect moves the code and nothing else. Three months ago the project declared PHP 8.3 and locked redis at 7.0; this machine runs 8.4 and 7.2 — so every step through that range runs OLD CODE AGAINST A NEW ENVIRONMENT and the commit the search finally accuses may be innocent. Nothing in this category does anything about that because nothing in this category knows what environment a commit wanted. This app does: stackvo.json has always travelled with the repository and, since project_lock, stackvo.lock does too — and both are readable AT A REVISION without touching the working tree.
+   */
+  bisectStart(name: string, bad: string, good: string): Promise<Record<string, unknown>>;
+  /**
+   * git bisect moves the code and nothing else. Three months ago the project declared PHP 8.3 and locked redis at 7.0; this machine runs 8.4 and 7.2 — so every step through that range runs OLD CODE AGAINST A NEW ENVIRONMENT and the commit the search finally accuses may be innocent. Nothing in this category does anything about that because nothing in this category knows what environment a commit wanted. This app does: stackvo.json has always travelled with the repository and, since project_lock, stackvo.lock does too — and both are readable AT A REVISION without touching the working tree.
+   */
+  bisectMark(name: string, verdict: 'bad' | 'good' | 'skip'): Promise<Record<string, unknown>>;
+  /**
+   * git bisect moves the code and nothing else. Three months ago the project declared PHP 8.3 and locked redis at 7.0; this machine runs 8.4 and 7.2 — so every step through that range runs OLD CODE AGAINST A NEW ENVIRONMENT and the commit the search finally accuses may be innocent. Nothing in this category does anything about that because nothing in this category knows what environment a commit wanted. This app does: stackvo.json has always travelled with the repository and, since project_lock, stackvo.lock does too — and both are readable AT A REVISION without touching the working tree.
+   */
+  bisectReset(name: string): Promise<void>;
+  /**
    * The window and the tray have to open in the same language, and neither could read the machine's on its own. The tray fell back to $LANG, which a Finder-launched app does not have; the window fell back to navigator.language, which in a WKWebView answers from the bundle's localised resources — this app ships none. Both defaulted to English on a Turkish machine.
    */
   localeGet(): Promise<'en' | 'tr'>;
@@ -3446,6 +3571,10 @@ export interface StackvoApi {
   containersStartAll(): Promise<OperationId>;
   containersStopAll(): Promise<OperationId>;
   containersRestartAll(): Promise<OperationId>;
+  /**
+   * The app bar carries start-all, stop-all and restart-all, and rebuilding had no stack-wide half at all — project_build is per project. Changing a PHP version, a base image or a generator template is a change to EVERY project's Dockerfile, and doing that twenty times by hand is the loop this closes.
+   */
+  projectsBuildAll(noCache?: boolean): Promise<Record<string, unknown>>;
   composeUpProject(name: string): Promise<OperationId>;
   /** Same reason as compose_down. */
   composeRestart(): Promise<OperationId>;

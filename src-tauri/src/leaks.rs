@@ -174,7 +174,35 @@ pub const RULES: &[Rule] = &[
         min_tail: 20,
         tail: Charset::Token,
     },
+    // The third of the three, and until now the only common provider this
+    // table could not see. `laravel/ai` puts one of these three in the `.env`
+    // of every application that installs it, and OpenAI's and Google's were
+    // already here.
+    Rule {
+        id: "anthropicKey",
+        prefix: "sk-ant-",
+        min_tail: 20,
+        tail: Charset::Token,
+    },
 ];
+
+/// The rules whose key is a **model provider's**.
+///
+/// Not a severity — every rule in this table is a credential and none of them
+/// is more of one than the others. What these three share is a *second*
+/// question, and it is one this application can already answer: an application
+/// that sends every request to an outside model is one where "which of my
+/// containers can reach the internet at all" stops being a theoretical
+/// question. [`crate::egress`] asks Docker that rather than inferring it.
+///
+/// So this constant exists to put one sentence next to a finding. Nothing here
+/// changes what is scanned or what is reported.
+pub const MODEL_PROVIDER_RULES: [&str; 3] = ["openaiKey", "googleApiKey", "anthropicKey"];
+
+/// Is this finding a model provider's key?
+pub fn is_model_provider(rule: &str) -> bool {
+    MODEL_PROVIDER_RULES.contains(&rule)
+}
 
 /// The `-----BEGIN ` shapes that are actually a key, so a certificate and a
 /// commit signature do not become findings.
@@ -926,5 +954,43 @@ mod tests {
         assert!(scan_file(&binary, "logo.png").is_none());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The pattern this table was missing, and the two it already had.
+    ///
+    /// `laravel/ai` puts one of these three in the `.env` of every application
+    /// that installs it, and Anthropic's was the only common provider this
+    /// scanner could not see.
+    #[test]
+    fn the_three_model_providers_are_all_recognised() {
+        for (line, expected) in [
+            (
+                "ANTHROPIC_API_KEY=sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "anthropicKey",
+            ),
+            (
+                "OPENAI_API_KEY=sk-proj-BBBBBBBBBBBBBBBBBBBBBBBBBB",
+                "openaiKey",
+            ),
+            (
+                "GOOGLE_API_KEY=AIzaCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+                "googleApiKey",
+            ),
+        ] {
+            assert_eq!(matches(line), Some(expected), "{line}");
+            // All three are the kind of finding that has a second question
+            // beside it — which of these containers can reach the internet.
+            assert!(is_model_provider(expected));
+        }
+
+        assert!(!is_model_provider("awsAccessKey"));
+        assert!(!is_model_provider("privateKey"));
+    }
+
+    /// The prefix is the evidence, and a tail too short to be a key is not one.
+    #[test]
+    fn a_placeholder_that_merely_starts_with_the_prefix_is_not_a_finding() {
+        assert_eq!(matches("ANTHROPIC_API_KEY=sk-ant-"), None);
+        assert_eq!(matches("ANTHROPIC_API_KEY=sk-ant-your-key-here"), None);
     }
 }

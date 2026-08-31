@@ -21,6 +21,12 @@ Yukarıdaki liste, `.env` içinde bir kimlik bilgisi olduğunu **bildikten sonra
 
 **Değerin** şekline bakar, yalnız anahtarın adına değil. Maskeleme adları sonekle eşler (`PASSWORD`, `TOKEN`, `KEY`); bu maskeleme için doğrudur ve burada yetmez: `MY_FAVOURITE_THING` adlı bir değişken de pekâlâ bir AWS anahtarı tutabilir. Bu yüzden her kural, sahibinin yayımladığı bir şekildir — `AKIA…`, `ghp_…`, `xoxb-…`, `sk_live_…`, bir PEM özel anahtar başlığı — ve ad kuralı ikinci, bağımsız bir ağ olarak korunur.
 
+### Model sağlayıcı anahtarları, ve ardından gelen soru
+
+Şekillerden üçü model sağlayıcılarının: OpenAI'nin `sk-proj-…`'i, Google'ın `AIza…`'sı ve Anthropic'in `sk-ant-…`'ı. `laravel/ai` kuran her uygulama bu üçünden birini `.env`'ine yazıyor, ve bu tarayıcının göremediği son yaygın sağlayıcı Anthropic'inkiydi.
+
+Bunlar ötekilerden *daha kötü* bir bulgu değil; buradaki her kural bir kimlik bilgisiyle eşleşiyor. Farklı olan şey, birine sahip olmanın uygulama hakkında bir şey söylemesi: **yaptığı her isteği** bu makinenin dışındaki bir servise gönderiyor. O yüzden tarama yanına tek bir cümle koyuyor ve ardından gelen soruyu zaten cevaplayan kartı gösteriyor — **Ayarlar → Tanılama → Bu makineden ne çıkabilir**; o kart hangi konteynerin internete ulaşabildiğini çıkarımla değil Docker'a sorarak söylüyor.
+
 "Uzun ve rastgele görünen dize" kuralı **bilerek yoktur**. Öyle bir kural küçültülmüş JavaScript'te, bir kilit dosyasındaki özette ve base64 bir görselde ateşlenir; insanların görmezden gelmeyi öğrendiği bir tarayıcı, hiç tarayıcı olmamasından kötüdür — bir kaçırma bir bulguya, bir yanlış pozitif ise özelliğin tamamına mal olur.
 
 | Neye bakar | Neden |

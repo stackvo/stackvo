@@ -80,11 +80,33 @@ function mdiWoff2Only() {
  * Which icons count as used is `tools/mdi-icons.mjs`, not a scan written here:
  * the built stylesheet is held against the same list after the build, and the
  * list is held against the icon set by a test. Three readers, one answer.
+ *
+ * ## `apply: 'build'`, and it is a bug fix rather than an optimisation
+ *
+ * This used to run in dev as well, and it produced a failure with no symptom
+ * anybody could act on: **an icon added while the dev server was running never
+ * appeared.** The scan happens inside `transform`, so it reads the source trees
+ * once — the first time Vite asks for this stylesheet — and Vite then caches
+ * the result. Adding `mdi-source-branch-check` to a new pane changes a `.vue`
+ * file, and nothing in the module graph connects a `.vue` file to
+ * `materialdesignicons.css`, so the cached stylesheet is served unchanged for
+ * the rest of the session. The pane draws a blank square, the name is a real
+ * icon, the scan does collect it, and every check anybody would run says the
+ * icon is fine — because it is.
+ *
+ * Subsetting exists to shrink the **shipped** bundle. In dev, bundle size is
+ * not a thing anybody is measuring and correctness is, so the whole stylesheet
+ * is served and the trap goes with it. Nothing is lost by the change: an icon
+ * name that is not an icon is caught by `tests/mdi-icons.spec.js`, which holds
+ * every name against the icon set, and a rule wrongly stripped is caught by
+ * `tools/check-bundle.mjs` after the build — two gates that fail loudly, where
+ * the dev-server square failed silently.
  */
 function mdiUsedIconsOnly() {
   return {
     name: 'mdi-used-icons-only',
     enforce: 'pre',
+    apply: 'build',
     transform(code, id) {
       if (!id.includes('materialdesignicons.css')) return null;
 

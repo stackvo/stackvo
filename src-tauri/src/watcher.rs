@@ -105,6 +105,24 @@ fn folders_in(projects: &Path) -> HashSet<String> {
         .collect()
 }
 
+/// The project a changed path is inside, and the path within it.
+///
+/// The third reader on this stream, and the shape is a third one again:
+/// [`project_for`] wants one exact file, [`folder_for`] wants the first
+/// component of anything at all, and this wants **both halves** — because the
+/// question it serves is "did the application change", which needs the project
+/// to act on and the relative path to decide with.
+fn project_and_relative(projects: &Path, changed: &Path) -> Option<(String, PathBuf)> {
+    let relative = changed.strip_prefix(projects).ok()?;
+    let mut parts = relative.components();
+    let name = parts.next()?.as_os_str().to_str()?.to_string();
+    if name.starts_with('.') {
+        return None;
+    }
+    let inner: PathBuf = parts.collect();
+    (!inner.as_os_str().is_empty()).then_some((name, inner))
+}
+
 /// Which top-level folder under `projects/` a changed path is inside.
 ///
 /// Deliberately the opposite shape to [`project_for`]: that one wants one exact
@@ -156,6 +174,11 @@ pub fn start(app: AppHandle, root: PathBuf) -> notify::Result<notify::Recommende
 
     std::thread::spawn(move || {
         let mut last: Vec<(String, Instant)> = Vec::new();
+        // The Octane reload's own debounce, kept apart from the one above. That
+        // one is answering "did the editor write this file three times"; this
+        // one is answering "has the developer stopped changing things", and a
+        // `composer install` makes the difference four thousand events wide.
+        let mut reloaded: Vec<(String, Instant)> = Vec::new();
 
         for event in rx {
             // A folder that goes away is forgotten, so cloning over the same
@@ -191,6 +214,23 @@ pub fn start(app: AppHandle, root: PathBuf) -> notify::Result<notify::Recommende
                                 "path": watched.join(&folder).display().to_string(),
                             }),
                         );
+                    }
+                }
+
+                // Octane holds the application in memory, so an edited file
+                // changes nothing until the workers are replaced. Done here
+                // rather than in the window, because a reload that only
+                // happened while a pane was open would be a feature that works
+                // when somebody is watching it.
+                if let Some((project, relative)) = project_and_relative(&watched, path) {
+                    if crate::octane::is_application_change(&relative) {
+                        let now = Instant::now();
+                        reloaded
+                            .retain(|(_, at)| now.duration_since(*at) < crate::octane::DEBOUNCE);
+                        if !reloaded.iter().any(|(p, _)| p == &project) {
+                            reloaded.push((project.clone(), now));
+                            crate::octane::reload_if_enabled(&app, project);
+                        }
                     }
                 }
 
