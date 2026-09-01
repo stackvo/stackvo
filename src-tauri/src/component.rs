@@ -2,6 +2,10 @@
 //!
 //! ## The unit every competitor picked, and what it costs
 //!
+//! **Measured August 2026**, and the date is here because the claim below is
+//! about somebody else's product. An undated comparison does not age — it goes
+//! quietly wrong, and the reader has no way to tell which.
+//!
 //! ServBay and FlyEnv both run many languages, and in both of them the unit is
 //! a **site**: one directory, one runtime, one hostname. A repository holding
 //! `api/` in Go, `web/` in Next.js and `worker/` in Python is three sites there
@@ -349,7 +353,16 @@ pub fn parse(json: &serde_json::Value) -> (Declared, Vec<crate::hooks::Problem>)
         // Falls back to what the runtime already defaults to, so a component
         // that names only a runtime and a path is a complete declaration. The
         // defaults live in `manifest` and are not copied here.
-        let defaults = crate::manifest::lang_defaults(runtime);
+        //
+        // Node needs its own call because it is not in `LANG_RUNTIMES` — it is
+        // accepted a few lines above by name, and `lang_defaults` returning
+        // `None` for it made a node component the one kind that had to spell
+        // `version` out. See `manifest::node_defaults`.
+        let defaults = if runtime == "node" {
+            Some(crate::manifest::node_defaults())
+        } else {
+            crate::manifest::lang_defaults(runtime)
+        };
         let version = object
             .get("version")
             .and_then(|v| v.as_str())

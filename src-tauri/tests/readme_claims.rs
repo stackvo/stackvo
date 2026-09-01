@@ -147,15 +147,60 @@ mod scan {
     }
 }
 
-fn readme() -> String {
-    // `CARGO_MANIFEST_DIR` is `src-tauri`; the README is one level up. Read
+fn at_root(name: &str) -> String {
+    // `CARGO_MANIFEST_DIR` is `src-tauri`; the READMEs are one level up. Read
     // rather than `include_str!` so a failure says "the README moved" instead of
     // failing to compile.
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("a repository root above src-tauri")
-        .join("README.md");
+        .join(name);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+}
+
+fn readme() -> String {
+    at_root("README.md")
+}
+
+/// The Turkish README, held to the same standard as the English one.
+///
+/// It was written and then measured by nothing, which is a worse state than not
+/// having it: an unchecked translation does not stay a translation. It drifts
+/// one number at a time, and the drift is invisible precisely because the file
+/// nobody re-reads is the one in the language the maintainer does not check
+/// against the code. Six months of that and the two files describe different
+/// products, with no test between them.
+///
+/// What is asserted on this side is **the measured facts, not the prose**. A
+/// count and a tool name survive translation unchanged, so `38 aracın 12` and
+/// `` `stack_down` `` are as checkable here as their English forms — and they
+/// are the half a reader acts on. The sentences around them are review's
+/// problem in both languages.
+fn readme_tr() -> String {
+    at_root("README_TR.md")
+}
+
+/// A count as the Turkish word the prose spells it with.
+///
+/// The English tests below hold `"seven IPC commands"` against a measured 7, so
+/// the count and the word cannot part company. This is the same lock for the
+/// other file: derived from the measurement rather than written down, so a
+/// seventh release command becoming an eighth breaks **both** READMEs instead
+/// of only the one somebody thought to update.
+fn turkish_numeral(n: usize) -> &'static str {
+    match n {
+        1 => "bir",
+        2 => "iki",
+        3 => "üç",
+        4 => "dört",
+        5 => "beş",
+        6 => "altı",
+        7 => "yedi",
+        8 => "sekiz",
+        9 => "dokuz",
+        10 => "on",
+        _ => panic!("no Turkish numeral for {n} — add it, or the claim has outgrown a word"),
+    }
 }
 
 /// Every `commands::<name>,` in `lib.rs`'s `generate_handler!` list.
@@ -239,6 +284,15 @@ fn the_readme_states_the_real_app_handle_count() {
         readme().contains(&claim),
         "the README should say {claim:?} — it is now the measured number"
     );
+
+    // Turkish puts the total first and suffixes the second number, so the
+    // assertion stops before the suffix: "344 komutun 69'u". The two digits and
+    // their order are the fact; the apostrophe that follows is grammar.
+    let claim_tr = format!("{total} komutun {with_handle}");
+    assert!(
+        readme_tr().contains(&claim_tr),
+        "README_TR.md should say {claim_tr:?} — the English one already does"
+    );
 }
 
 /// The claim that mattered: what `--allow-writes` actually hands over.
@@ -260,9 +314,18 @@ fn the_readme_states_every_tool_allow_writes_unlocks() {
     );
     assert!(readme.contains(&claim), "the README should say {claim:?}");
 
+    let readme_tr = readme_tr();
+    let claim_tr = format!("{} aracın {}", mcp::TOOLS.len(), writers.len());
+    assert!(
+        readme_tr.contains(&claim_tr),
+        "README_TR.md should say {claim_tr:?}"
+    );
+
     // Naming them is the part that has security value. A count alone would have
     // gone from "two" to "seven" and still not told anyone that `stack_down` is
-    // in the set.
+    // in the set — and that is exactly as true of the reader who opens the
+    // Turkish file, which is why both are held to it. A tool name does not
+    // translate, so this costs the translation nothing.
     for tool in writers {
         // The README drops the `stackvo_` prefix every tool carries, because the
         // prose is already about StackVo's tools.
@@ -270,6 +333,10 @@ fn the_readme_states_every_tool_allow_writes_unlocks() {
         assert!(
             readme.contains(&format!("`{short}`")),
             "`{short}` is unlocked by --allow-writes but the README does not name it"
+        );
+        assert!(
+            readme_tr.contains(&format!("`{short}`")),
+            "`{short}` is unlocked by --allow-writes but README_TR.md does not name it"
         );
     }
 }
@@ -314,6 +381,32 @@ fn the_readme_names_the_tools_a_project_scope_leaves() {
     assert!(
         readme.contains("--project=shop") && readme.contains("--for=30m"),
         "the README stopped showing how to write a bounded grant"
+    );
+
+    // The same list on the Turkish side, read the same way. Its marker is the
+    // Turkish sentence rather than a translation of the English one, because
+    // the list is what is being checked and the sentence around it is not.
+    let readme_tr = readme_tr();
+    let marker_tr = "sınırlayabildikleri kalır — ";
+    let start_tr = readme_tr
+        .find(marker_tr)
+        .expect("README_TR.md explains what a project scope leaves")
+        + marker_tr.len();
+    let listed_tr: Vec<&str> = readme_tr[start_tr..]
+        .split(" — ")
+        .next()
+        .expect("the list ends with a dash")
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .collect();
+    assert_eq!(
+        listed_tr, scopable,
+        "README_TR.md's list of what a project scope leaves is not the code's"
+    );
+    assert!(
+        readme_tr.contains("--project=shop") && readme_tr.contains("--for=30m"),
+        "README_TR.md stopped showing how to write a bounded grant"
     );
 }
 
@@ -389,6 +482,16 @@ fn the_readme_names_the_generator_default_the_enum_actually_carries() {
         readme.contains("**The default**, and the only writer."),
         "the README no longer says which mode writes; `rust` is the one that does"
     );
+
+    let readme_tr = readme_tr();
+    assert!(
+        !readme_tr.contains("Bash her kipte çalışır"),
+        "README_TR.md says Bash runs in every mode; `GeneratorEngine::Bash` returns Unsupported"
+    );
+    assert!(
+        readme_tr.contains("**Varsayılan**, ve yazan tek kip."),
+        "README_TR.md no longer says which mode writes; `rust` is the one that does"
+    );
 }
 
 /// The README's Windows paragraph, against the CI matrix.
@@ -430,6 +533,7 @@ fn the_readme_does_not_deny_a_windows_build_the_matrix_performs() {
 #[test]
 fn the_readme_counts_the_surfaces_it_advertises() {
     let readme = readme();
+    let readme_tr = readme_tr();
     let commands = include_str!("../src/commands.rs");
 
     let count = |prefix: &str| {
@@ -452,6 +556,11 @@ fn the_readme_counts_the_surfaces_it_advertises() {
         readme.contains("seven IPC commands"),
         "the README no longer says how many release commands there are"
     );
+    let claim_tr = format!("{} IPC komutu", turkish_numeral(release));
+    assert!(
+        readme_tr.contains(&claim_tr),
+        "README_TR.md should say {claim_tr:?}"
+    );
 
     // Seven since `worktree_passport_keys`: a branch with a hostname of its own
     // is a branch Passport has no signing key for, and generating one is a
@@ -464,6 +573,11 @@ fn the_readme_counts_the_surfaces_it_advertises() {
     assert!(
         readme.contains("seven commands"),
         "the README no longer says how many worktree commands there are"
+    );
+    let claim_tr = format!("`worktree.rs` ve {} komut", turkish_numeral(worktree));
+    assert!(
+        readme_tr.contains(&claim_tr),
+        "README_TR.md should say {claim_tr:?}"
     );
 
     // `imports::ALL` is the declared list; its length is the number a reader is
@@ -478,6 +592,12 @@ fn the_readme_counts_the_surfaces_it_advertises() {
     assert!(
         readme.contains("imports from **seven** other local environments"),
         "the README no longer states the import count"
+    );
+    let n: usize = declared.parse().expect("imports::ALL's length is a number");
+    let claim_tr = format!("**{}** yerel ortamdan içe aktarma", turkish_numeral(n));
+    assert!(
+        readme_tr.contains(&claim_tr),
+        "README_TR.md should say {claim_tr:?}"
     );
 }
 
