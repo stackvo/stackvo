@@ -11,7 +11,18 @@
 use serde::Serialize;
 
 /// Error codes are a closed set — see `contracts/ipc.json` → `errors.codes`.
+///
+/// `rename_all` is load-bearing rather than tidy. [`Error`]'s own `Serialize`
+/// below writes the code through [`Code::as_str`], so every IPC failure already
+/// carried the contract's spelling; a bare `json!(code)` did not, and derived
+/// `"Forbidden"` where the contract says `FORBIDDEN`. That is not cosmetic:
+/// `mcp::outcome_for` reads the code back out of the body it wrote to tell a
+/// refusal from a failure, and against a PascalCase code it matched neither
+/// arm — so an administrator's policy refusing an MCP tool was recorded in the
+/// audit trail as if the tool had crashed. Naming the case here fixes it for
+/// every caller instead of for the one that was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Code {
     EngineUnreachable,
     NotFound,
