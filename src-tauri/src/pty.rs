@@ -561,6 +561,29 @@ mod tests {
         assert!(validate(&ok).is_ok());
     }
 
+    /// The argument vector, and only that.
+    ///
+    /// `format!("{cmd:?}")` was the obvious way to read a `CommandBuilder` and
+    /// it is the wrong one: `CommandBuilder::new` calls `get_base_env()`, which
+    /// captures **the whole process environment**, and the `Debug` impl is
+    /// derived — so the rendered string is every variable on the machine with
+    /// the command somewhere inside it. An assertion over that text is an
+    /// assertion about whoever's shell happens to be running the suite.
+    ///
+    /// It was not theoretical. `host_target_is_a_plain_shell` asserted the
+    /// rendering does not contain "docker", passed under `cargo test`, and
+    /// failed under `cargo llvm-cov` in the same run of the same script —
+    /// because the two are invoked with different environments and one of them
+    /// had the word in it somewhere. Any variable does it: an unrelated
+    /// `SOME_VAR=/opt/docker/bin` reproduces the failure exactly.
+    fn argv(cmd: &CommandBuilder) -> String {
+        cmd.get_argv()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     #[test]
     fn container_command_falls_back_to_sh() {
         // Several StackVo service images are alpine-based and have no bash;
@@ -570,8 +593,8 @@ mod tests {
             shell: None,
         })
         .unwrap();
-        let rendered = format!("{cmd:?}");
-        assert!(rendered.contains("stackvo-redis"));
+        let rendered = argv(&cmd);
+        assert!(rendered.contains("stackvo-redis"), "in: {rendered}");
         assert!(rendered.contains("exec sh"), "no fallback in: {rendered}");
     }
 
@@ -581,10 +604,18 @@ mod tests {
             cwd: Some("/tmp".into()),
         })
         .unwrap();
-        let rendered = format!("{cmd:?}");
+        let rendered = argv(&cmd);
         assert!(
             !rendered.contains("docker"),
-            "host shells must not go through docker"
+            "host shells must not go through docker: {rendered}"
+        );
+        // The positive half, which the negative one alone does not give: a
+        // command that is empty also contains no "docker".
+        assert!(!rendered.is_empty(), "no shell was chosen at all");
+        assert_eq!(
+            cmd.get_cwd().map(|c| c.to_string_lossy().into_owned()),
+            Some("/tmp".to_string()),
+            "the working directory the caller asked for was dropped"
         );
     }
 

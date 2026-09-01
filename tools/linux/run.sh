@@ -17,9 +17,36 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 image=stackvo-linux
 
-if ! docker image inspect "$image" >/dev/null 2>&1; then
-  echo "building $image (once) ..."
-  docker build -t "$image" "$repo/tools/linux"
+# Rebuilt when the Dockerfile changes, and not only when the image is absent.
+#
+# `docker image inspect` alone was the test, and it answers "is there an image
+# called this" rather than "is it this file's image". So every layer added after
+# somebody's first build was invisible to them: the machine that found this had
+# an image from the 25th and a Dockerfile from the 27th, and the two days in
+# between were `xdg-utils`, `file`, `wine` and the ARM Windows target — which is
+# to say, exactly the packages three of the modes below exist to use.
+#
+# What that produced was worse than an old image. `--bundle` failed on
+# `xdg-open binary not found` and `--windows-test` on `can't find crate for
+# core`, and both of those read as a broken build rather than as a stale
+# container. The Dockerfile beside this file had already been taught both
+# lessons, in comments, at length; the image just was not carrying them.
+#
+# The digest is a label rather than a file beside the image, so it travels with
+# the thing it describes and cannot be left behind by a `docker rmi`.
+dockerfile_digest="$(shasum -a 256 "$repo/tools/linux/Dockerfile" | cut -d' ' -f1)"
+built_from="$(docker image inspect "$image" \
+  --format '{{index .Config.Labels "stackvo.dockerfile"}}' 2>/dev/null || true)"
+
+if [ "$built_from" != "$dockerfile_digest" ]; then
+  if [ -n "$built_from" ]; then
+    echo "$image was built from a different Dockerfile — rebuilding ..."
+  else
+    echo "building $image (once) ..."
+  fi
+  docker build -t "$image" \
+    --label "stackvo.dockerfile=$dockerfile_digest" \
+    "$repo/tools/linux"
 fi
 
 docker volume create stackvo-cargo >/dev/null

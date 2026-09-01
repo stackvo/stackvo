@@ -556,9 +556,7 @@ mod tests {
 
         // Backdated by hand, which is the only way to reach the branch without
         // a clock this test would then depend on.
-        let stale = format!(
-            "{{\"windows\":[{{\"project\":\"shop\",\"expires\":\"2000-01-01T00:00:00Z\"}}]}}"
-        );
+        let stale = r#"{"windows":[{"project":"shop","expires":"2000-01-01T00:00:00Z"}]}"#;
         std::fs::write(path(&root), stale).unwrap();
         std::fs::create_dir_all(sessions_path(&root, "shop").parent().unwrap()).unwrap();
         std::fs::write(sessions_path(&root, "shop"), "{}\n").unwrap();

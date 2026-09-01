@@ -128,3 +128,55 @@ if (typeof SVGElement !== 'undefined' && !SVGElement.prototype.getTotalLength) {
 if (typeof globalThis.Element !== 'undefined' && !globalThis.Element.prototype.scrollIntoView) {
   globalThis.Element.prototype.scrollIntoView = function () {};
 }
+
+// The Tauri IPC bridge, which the webview injects and jsdom cannot.
+//
+// This is the same class as the stubs above and it took three unhandled
+// rejections to be recognised as one. `LogView` and `OctanePane` call `listen`
+// straight from `@tauri-apps/api/event` rather than through `@/lib/events`, and
+// that function reaches `window.__TAURI_INTERNALS__.transformCallback`. Every
+// spec mocks `@/lib/events`, so nothing intercepted them — and `@/lib/events`
+// does not even export `listen`, which means those `vi.doMock` entries were
+// stubbing a name the real module never had.
+//
+// The failure shape is what makes it worth stubbing globally rather than
+// per-spec: the component's `listen(...).then(...)` rejects **after** the
+// assertions have passed, so the run prints "1437 passed" and exits 1. Locally
+// it is worse than that — the rejection races the process exit, so the same
+// tree exits 0 on one run and 1 on the next, and CI is the only place it is
+// reliable. A gate that is right two times in three teaches people to re-run it.
+//
+// Inert, on the same reasoning as everything above: `invoke` resolves `null`,
+// which is what `tests/e2e/stage.js` already treats as a legal reply over this
+// boundary. Nothing here fakes an event ever arriving — a test that needs one
+// dispatches it itself.
+if (!globalThis.__TAURI_INTERNALS__) {
+  let nextCallbackId = 1;
+  globalThis.__TAURI_INTERNALS__ = {
+    transformCallback(callback, once = false) {
+      const id = nextCallbackId++;
+      Object.defineProperty(globalThis, `_${id}`, {
+        value: (result) => {
+          if (once) Reflect.deleteProperty(globalThis, `_${id}`);
+          return typeof callback === 'function' ? callback(result) : undefined;
+        },
+        writable: false,
+        configurable: true,
+      });
+      return id;
+    },
+    invoke: async () => null,
+    convertFileSrc: (path) => path,
+  };
+}
+
+// The event plugin keeps its own global, and the unlisten path is the only
+// thing that reads it: `_unlisten` calls `unregisterListener` on it BEFORE it
+// invokes, so stubbing the bridge above without this one moves the failure from
+// `listen` to the teardown every component runs in `onBeforeUnmount` — which is
+// after the test body, where an unhandled rejection is furthest from its cause.
+if (!globalThis.__TAURI_EVENT_PLUGIN_INTERNALS__) {
+  globalThis.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener: () => {},
+  };
+}

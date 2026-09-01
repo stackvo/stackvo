@@ -1,0 +1,79 @@
+name: Dependency review
+#
+# Dependabot tells you about a vulnerable dependency you already have. This
+# stops one arriving.
+#
+# The two are often read as the same feature and they are not, and the gap
+# between them is the whole reason this file exists. Dependabot watches the
+# lockfiles on `main` and opens a pull request some time after an advisory is
+# published — a repair, after the fact, on a schedule. This runs on the pull
+# request that would introduce the dependency, reads the diff of the manifests
+# and lockfiles, and fails the check before it can be merged. "We find out next
+# week" and "it cannot reach `main`" are different guarantees, and only the
+# second one is a gate.
+#
+# It also reads licences, which nothing else here does for npm. `cargo deny`
+# carries a licence policy for the Rust half; the JavaScript half had none, so
+# a copyleft transitive dependency could arrive in a lockfile bump and nobody
+# would be told. NOTICE.md is generated from what is installed — it would have
+# recorded the licence faithfully and changed nothing about the problem.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # For `comment-summary-in-pr` below. Nothing else in this file writes.
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          # `moderate` rather than `low`: this is a desktop application talking
+          # to a local Docker daemon, and a low-severity advisory on a
+          # build-time dependency is not a reason to block a merge. Those are
+          # still reported in the summary, just not as a failure.
+          fail-on-severity: moderate
+
+          # `deny.toml`'s `[licenses] allow` list, plus the three that only the
+          # npm side has. Kept as one list rather than two policies so that
+          # "what may enter this repository" has a single answer — but the npm
+          # additions are named individually rather than folded in silently,
+          # because each is a decision:
+          #
+          #   BlueOak-1.0.0  five packages in the npm tree (the `jackspeak` and
+          #                  `path-scurry` family). Permissive, OSI-approved,
+          #                  and written to be readable — it just postdates
+          #                  most allow-lists.
+          #   MIT-0          MIT with the attribution clause removed. Strictly
+          #                  more permissive than MIT, which is already here.
+          #   Python-2.0     `argparse`. Permissive; the clause people avoid it
+          #                  for is GPLv2 compatibility, and nothing here is
+          #                  GPL.
+          #
+          # Anything outside this list fails the check rather than being
+          # recorded, which is the difference between a policy and a note.
+          allow-licenses: >-
+            MIT, MIT-0, Apache-2.0, Apache-2.0 WITH LLVM-exception,
+            BSD-2-Clause, BSD-3-Clause, ISC, Unicode-3.0, Zlib, MPL-2.0,
+            CC0-1.0, BSL-1.0, Unlicense, CDLA-Permissive-2.0,
+            BlueOak-1.0.0, Python-2.0
+
+          # The findings in the pull request, rather than in a log nobody opens.
+          comment-summary-in-pr: on-failure
