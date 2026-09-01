@@ -52,7 +52,17 @@ fn read(relative: &str) -> String {
 /// adding a fourth is a decision somebody writes down — which is what happened
 /// with the second and third: `spx.rs` was written, this test failed, and the
 /// reason had to be typed out before it passed. `tooling.rs` went the same way.
-const OTHER_REPOSITORIES: [(&str, &str); 3] = [
+const OTHER_REPOSITORIES: [(&str, &str); 4] = [
+    (
+        "roadrunner-server/roadrunner",
+        "RoadRunner's own install script, curled inside the Dockerfile `generator.rs` writes \
+         for a Laravel Octane project — see `roadrunner_postamble`. Unlike mkcert below this \
+         one is NOT pinned: it is fetched from `master` and resolves the right build for the \
+         image's architecture, which a hardcoded release asset does not. That is a real \
+         difference in kind and it is recorded here rather than smoothed over — the address \
+         moving would change what is installed, not refuse to install. It is bounded by \
+         where it runs: a generated image, built from a manifest that asked for RoadRunner",
+    ),
     (
         "stackvo/stackvo-service-packages",
         "the service catalogue, released separately from the app — market.rs suggests it as \

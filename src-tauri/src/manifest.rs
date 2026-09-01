@@ -233,6 +233,30 @@ pub fn lang_defaults(runtime: &str) -> Option<LangConfig> {
     }
 }
 
+/// What node falls back to, in the shape [`lang_defaults`] returns.
+///
+/// Node is not in [`LANG_RUNTIMES`] and cannot be: a project's node block is
+/// [`NodeConfig`], which carries `package_manager` and the Corepack line that
+/// depends on it, and [`read_node`] is a different reader for that reason. But
+/// a **component** has no package manager — it is one directory with a runtime
+/// and a start command — so at that boundary node is exactly a [`LangConfig`],
+/// and [`component`](crate::component) was left unable to ask for it.
+///
+/// The values mirror [`read_node`]'s own fallbacks rather than restating them:
+/// `npm install`, `npm start`, 3000. The version comes from the settings table
+/// under `SUPPORTED_LANGUAGES_NODEJS_DEFAULT` — spelled `NODEJS` where every
+/// other runtime's key is its own name, which is the whole reason
+/// [`settings_version`] cannot reach it and this function exists.
+pub fn node_defaults() -> LangConfig {
+    LangConfig {
+        version: settings_version("nodejs"),
+        install: Some("npm install".into()),
+        build: None,
+        start: "npm start".into(),
+        port: 3000,
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
