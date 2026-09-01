@@ -267,3 +267,75 @@ fn no_fifth_command_has_quietly_become_desktop_only() {
          needs a window."
     );
 }
+
+/// The CSP and the i18n bundle have to agree, and for a long time they did not.
+///
+/// `tauri.conf.json` declares `default-src 'self'` and names no `script-src`,
+/// so the webview refuses `new Function`. vue-i18n's **full** build compiles a
+/// message by calling exactly that, on the first `t()` — which happens while
+/// `App.vue` renders. The throw reached `main.js`'s error handler, the root
+/// rendered a comment node, and the packaged application opened a window with
+/// nothing in it.
+///
+/// ## Why this is a source test rather than a build one
+///
+/// Nothing cheap could see it. `vite preview` serves over http and applies no
+/// CSP, so the Playwright suite renders that bundle nineteen times out of
+/// nineteen and `npm run screenshots` photographs a working application. The
+/// only surface that enforces the policy is the real webview, so the only
+/// failing test was `tests/driver/`, which needs Linux, a container and twenty
+/// minutes — and it could only say *"the app root never rendered any
+/// children"*.
+///
+/// So this holds the two files against each other instead. It is a weaker
+/// claim than "the bundle contains no `eval`" and it is the one that can be
+/// made in milliseconds, from a fresh clone, with nothing built.
+#[test]
+fn a_csp_that_forbids_eval_is_matched_by_an_i18n_build_that_needs_none() {
+    let conf = read(&repo_root().join("src-tauri/tauri.conf.json"));
+    let csp: String = serde_json::from_str::<serde_json::Value>(&conf)
+        .expect("tauri.conf.json is JSON")
+        .pointer("/app/security/csp")
+        .and_then(|v| v.as_str())
+        .expect("tauri.conf.json declares a CSP")
+        .to_string();
+
+    // `script-src` when it is named, otherwise whatever `default-src` says —
+    // which is the fallback the CSP specification defines and the reason a
+    // policy with no `script-src` still governs scripts.
+    let directive = csp
+        .split(';')
+        .map(str::trim)
+        .find(|d| d.starts_with("script-src"))
+        .or_else(|| {
+            csp.split(';')
+                .map(str::trim)
+                .find(|d| d.starts_with("default-src"))
+        })
+        .expect("the CSP governs scripts one way or the other");
+
+    if directive.contains("'unsafe-eval'") {
+        // Then there is nothing to hold together, and saying so beats a test
+        // that quietly checks nothing after somebody widens the policy.
+        return;
+    }
+
+    let vite = read(&repo_root().join("vite.config.js"));
+    assert!(
+        vite.contains("'vue-i18n': 'vue-i18n/dist/vue-i18n.runtime"),
+        "the CSP forbids eval ({directive:?}) and vue-i18n is not aliased to its \
+         runtime build, so the full build's `compileToFunction` will call \
+         `new Function` on the first translation and the window will render empty"
+    );
+    assert!(
+        vite.contains("__INTLIFY_JIT_COMPILATION__: true"),
+        "vue-i18n is aliased to the runtime build, whose message compiler is \
+         switched on by `__INTLIFY_JIT_COMPILATION__` — undefined, it compiles \
+         nothing and every translation renders as its own key"
+    );
+    assert!(
+        vite.contains("__INTLIFY_DROP_MESSAGE_COMPILER__: false"),
+        "the messages in src/i18n/locales/ are plain objects compiled at \
+         runtime, so the compiler cannot be dropped"
+    );
+}

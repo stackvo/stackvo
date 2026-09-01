@@ -1,10 +1,14 @@
 # Three ecosystems ship in this repository and none of them was watched.
 #
 # `npm audit` is clean and `cargo deny` runs in CI, so this is not about
-# vulnerabilities — it is about distance. Seven npm packages are a major version
-# behind and the gap widens every month a nobody looks, which makes the eventual
-# migration more expensive rather than more urgent. A pull request per bump is
-# the cheapest way to keep that visible.
+# vulnerabilities — it is about distance. Ten npm packages are a major version
+# behind, which is eight migrations once the pairs that move together are
+# counted once (eslint with `@eslint/js`, vitest with its coverage provider):
+# vuetify 3→4, pinia 2→4, vite 7→8, vitest 3→4, eslint 9→10, jsdom 26→30,
+# vue-i18n 9→11, vue-router 4→5. It was seven when this file was written and
+# the gap widens every month nobody looks, which makes the eventual migration
+# more expensive rather than more urgent. A pull request per bump is the
+# cheapest way to keep that visible.
 #
 # Grouped, and weekly rather than daily. An ungrouped daily Dependabot on three
 # ecosystems is a repository nobody reads the notifications for, which is the
@@ -19,9 +23,22 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    # Ten rather than five, and the reason is the change below. With majors
+    # flowing again there are eight of them waiting on the npm side alone; a
+    # limit of five would let two grouped patch pull requests hide the
+    # migrations behind them, which is the opposite of what raising majors
+    # separately is for.
+    open-pull-requests-limit: 10
     groups:
       vue:
+        # Minors and patches only. This is what "left out of the groups" means
+        # mechanically, and it is the half that used to be missing: the comment
+        # below said majors are raised on their own, and an `ignore` block at
+        # the bottom of this ecosystem silenced every one of them. The file
+        # said two things and did the stricter one, so the seven — now eight —
+        # major upgrades this repository is behind were never going to arrive
+        # from Dependabot at all.
+        update-types: [minor, patch]
         patterns:
           - vue
           - vue-*
@@ -29,6 +46,7 @@ updates:
           - pinia
           - '@vitejs/*'
       tooling:
+        update-types: [minor, patch]
         patterns:
           - vite
           - vitest
@@ -37,13 +55,10 @@ updates:
           - '@eslint/*'
           - prettier
           - jsdom
-    # Majors are deliberately left out of the groups above and raised on their
-    # own: Vuetify 4 and Pinia 4 are migrations rather than bumps, and a grouped
-    # pull request that mixes one with six patch updates is one nobody can
-    # review or revert cleanly.
-    ignore:
-      - dependency-name: '*'
-        update-types: [version-update:semver-major]
+    # Majors are left out of the groups above — see `update-types` on each —
+    # and arrive on their own: Vuetify 4 and Pinia 4 are migrations rather than
+    # bumps, and a grouped pull request that mixes one with six patch updates
+    # is one nobody can review or revert cleanly.
 
   - package-ecosystem: cargo
     directory: /src-tauri
@@ -53,12 +68,10 @@ updates:
     open-pull-requests-limit: 5
     groups:
       tauri:
+        update-types: [minor, patch]
         patterns:
           - tauri
           - tauri-*
-    ignore:
-      - dependency-name: '*'
-        update-types: [version-update:semver-major]
 
   # The workflows themselves. An action pinned to a tag that stops being
   # maintained is the supply-chain hole nobody looks for, because it is not in

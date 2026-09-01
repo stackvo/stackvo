@@ -15,6 +15,29 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       include: ['src/**/*.spec.js', 'tests/**/*.spec.js'],
+
+      // Twenty seconds, and the number is measured rather than picked.
+      //
+      // Vitest defaults to five, and this suite mounts whole Vuetify pages
+      // into jsdom and then runs axe over them. On an idle Apple Silicon
+      // machine thirteen individual tests already take more than three seconds
+      // and three take more than five — `the requirements gate` pair at 5.5s
+      // and 6.2s, the screen-reader transcript at 17s. That is a suite sitting
+      // at 60-120% of its own limit on the fastest hardware it will ever see.
+      //
+      // What that costs is not a slow suite, it is a lying one. Under load —
+      // `tools/before-push.sh --all` with a container building beside it, or a
+      // GitHub runner, which is slower than this machine on every axis — two
+      // tests crossed the line and a third then failed on a spy the timed-out
+      // test had left behind. Three failures, one cause, none of them a defect
+      // in the code under test. A gate that goes red for reasons the diff
+      // cannot explain is one people re-run instead of read.
+      //
+      // Not removed, because a hung test still has to end: 20s is roughly
+      // three times the slowest honest test and still a third of what a
+      // deadlock would take to notice.
+      testTimeout: 20_000,
+      hookTimeout: 20_000,
       // Browser APIs jsdom lacks. Without them Vuetify throws inside `setup()`
       // and whole pages simply cannot be mounted — which is how `src/views/`
       // stayed at 0%. `tests/setup.js` explains what each stub does and does
