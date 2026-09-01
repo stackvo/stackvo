@@ -312,6 +312,16 @@ manifest'i değiştirirsiniz. **Ayarlar → Çalışma alanı → Üretici** pan
 diskteki üretilmiş dosyaların hâlâ üreticinin yazacağı şeyle aynı olup olmadığını
 söyler — elle düzenlenmiş bir dosyayı bu yakalar.
 
+Üretici Rust'tır ve artık hiçbir şeyin yanında koşmuyor: port, gerçek veriye
+karşı 28 fikstürün hepsinde bayt bayt eşitliğe ulaştı ve Bash motoru aynı
+değişiklikte emekliye ayrıldı. Yani üç değil, iki davranış var:
+
+| Kip | Davranış |
+|-----|----------|
+| `rust` | Üretir ve yazar. **Varsayılan**, ve yazan tek kip. |
+| `verify` | Yazmadan üretir, ve diskte olanla arasındaki farkı raporlar. |
+| `bash` | Emekli. Eski bir çağıranın ayrıştırma hatası yerine bir cümle alması için enum'da duruyor. |
+
 ### 4. Servisler ve paketler
 
 MySQL, Redis, Elasticsearch gibi servisler **paket kataloğundan** gelir. Katalog
@@ -417,6 +427,10 @@ Veritabanı gerçekten ayrıdır: o veritabanına özel bir kullanıcı ile aç�
 dal türediği veritabanına erişemez. İşiniz bitince aynı panelden tek düğmeyle
 silinir.
 
+Panelin arkasında `worktree.rs` ve yedi komut var; aynı komutlar CLI'dan ve MCP
+sunucusundan da çağrılabiliyor — bulutun "preview environment" diye sattığı şey,
+yerelde ve ücretsiz.
+
 ### Projeyi internete açmak
 
 **Proje → Paylaş** panelinden bir sağlayıcı seçip başlatın. Dokuz sağlayıcı
@@ -484,6 +498,10 @@ biçim yoktur.
 
 **Proje → Üretim imajı** paneli planı gösterir, imajı kurar, kaydeder ve bir
 kayıt defterine gönderir. Yerel geliştirme ortamı, dağıttığınız imajı da kurar.
+
+Arkasında `release.rs` ve yedi IPC komutu var — plan, kur, kaydet, yükle, reçete,
+gönderim planı, gönder — yani aynı adımlar yalnız bu panelden değil, CLI'dan ve
+bir asistandan da çağrılabiliyor.
 
 ### Devcontainer dışa aktarımı
 
@@ -582,6 +600,33 @@ boyunca"*.
 | **Projeyle sınırla** | Sunucu tek projeye bağlanır; hiçbir projenin sınırlayamadığı sekiz araç **hiç sunulmaz**. |
 | **Süre sınırı** | Yazma yarısı belirtilen süre sonunda kendiliğinden kapanır. |
 | **Tek tek araç seçimi** | Dördü de fazlaysa yalnızca adını verdiğiniz araçlar açılır. |
+
+**Bayrağı geçmeden önce bu listeyi okuyun.** 38 aracın 12'si bir şeyi değiştirir
+ve yalnızca **Yazmaya izin ver** ile görünür: `xdebug_set`,
+`certificates_reissue`, `project_start`, `project_stop`, `stack_up`,
+`stack_down`, `generate`, `project_restart`, `service_start`, `service_stop`,
+`service_restart`, `snapshot_take`. Bu, asistana yalnız Xdebug'ı açıp kapatma
+değil, **yığının tamamını durdurma** ve her projenin bağlı olduğu ortak bir
+servisi durdurma yetkisi verir. Her araç `readOnlyHint` / `destructiveHint` ile
+işaretlidir, yani istemci hiç görmediği bir araç için onay isteyebilir.
+
+**Ya da sınırlı: araç araç, proje proje.** Anahtarların CLI karşılığı var:
+`--project=shop` sunucuyu tek projeye bağlar, `--for=30m` yazma yarısını
+kendiliğinden kapatır. Proje sınırı altında yazan araçlardan geriye yalnızca
+bir projenin sınırlayabildikleri kalır — `xdebug_set`, `project_start`,
+`project_stop`, `project_restart` — hiçbir projenin sınırlamadıkları, `stack_down`
+dâhil, hiç sunulmaz. `stack_down`'ı yine de sunan bir sınır, uygulamadığı bir
+sınırı bildiriyor olurdu; bu hiç sınır olmamasından kötüdür. Okumaları da aynı
+ölçüde sınırlar: bir projeyi *adlandıran* hiçbir araç, kapsam dışındaki bir
+proje için cevap vermez. Bu bir bilgi yalıtımı değildir ve öyle anlatılmıyor —
+makine geneli araçlar cevap vermeye devam eder, çünkü onlar bir projeyle değil
+makineyle ilgilidir.
+
+**Sunulmayan:** değiştiren yüzeyin geri kalanı. 344 komutun 69'u bir `AppHandle`
+alır, çünkü ilerlemeyi Tauri'nin olay sistemi üzerinden bildirirler ve bir stdio
+alt süreci içine olay yayabileceği bir uygulamaya sahip değildir. Bunu ayırmak
+kendi başına bir yeniden yapılandırma; aksini iddia etmek `project_build`'i
+duyurup çağrıldığında düşmesine izin vermek olurdu.
 
 Sınırlar:
 

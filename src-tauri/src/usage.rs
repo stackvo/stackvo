@@ -486,8 +486,12 @@ mod tests {
         // The stack's own containers are named, not hidden: they are part of
         // what Docker costs here.
         assert_eq!(out.rows[2].kind, Kind::Stack);
-        assert!((out.cpu_seconds - 71.0).abs() < 1e-9);
-        assert!((out.gb_hours - 3.0).abs() < 1e-9);
+        // Both totals are every row, traefik included — the same claim the
+        // `Kind::Stack` assertion above makes, carried through to the numbers.
+        // Written as the fixture's own figures rather than as one constant, so
+        // that a changed row is read as a changed row.
+        assert!((out.cpu_seconds - (10.0 + 60.0 + 1.0)).abs() < 1e-9);
+        assert!((out.gb_hours - (3600.0 + 7200.0 + 60.0) / 3600.0).abs() < 1e-9);
     }
 
     #[test]

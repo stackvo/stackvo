@@ -310,6 +310,16 @@ never edited in place. So you change the manifest, not the output.
 what the renderer would write — which is how a hand-edited generated file is
 caught.
 
+The renderer is Rust, and it no longer runs alongside anything: the port reached
+byte-for-byte parity on all 28 fixtures against real data, and the Bash engine
+was retired in the same change. So there are two behaviours rather than three:
+
+| Mode | Behaviour |
+|------|-----------|
+| `rust` | Renders and writes. **The default**, and the only writer. |
+| `verify` | Renders without writing, and reports drift against what is already on disk. |
+| `bash` | Retired. Kept in the enum so an old caller gets a sentence rather than a parse error. |
+
 ### 4. Services and packages
 
 MySQL, Redis, Elasticsearch and friends come from a **package catalogue**, which
@@ -414,6 +424,10 @@ The database really is separate: the login granted on it reaches only that
 database, so the branch cannot read the one it was branched from. One button in
 the same pane removes the whole thing.
 
+Behind the pane it is `worktree.rs` and seven commands, reachable from the CLI
+and the MCP server too — this is the thing cloud "preview environments" sell,
+locally and free.
+
 ### Exposing a project publicly
 
 **Project → Share** — pick a provider and start. Nine are supported: Cloudflare
@@ -481,6 +495,10 @@ nowhere else**; there is no `host` form.
 **Project → Production image** shows the plan, builds the image, saves it and
 pushes it to a registry. Your local dev environment also builds the image you
 ship.
+
+It is `release.rs` and seven IPC commands — plan, build, save, load, recipe,
+push-plan, push — so the same steps are available from the CLI and to an
+assistant, not only from this pane.
 
 ### Devcontainer export
 
@@ -579,6 +597,33 @@ writes back the sentence your choice amounts to — *"this assistant may restart
 | **Bound to a project** | The server is bound to one project; the eight tools no project can bound are **not offered at all**. |
 | **Time limit** | The writing half ends by itself after the time you set. |
 | **Tool by tool** | When even those four are more than the job needs, only the tools you name are opened. |
+
+**Read that list before passing the flag.** 12 of the 38 tools change things and
+appear only with **Allow writes**: `xdebug_set`, `certificates_reissue`,
+`project_start`, `project_stop`, `stack_up`, `stack_down`, `generate`,
+`project_restart`, `service_start`, `service_stop`, `service_restart`,
+`snapshot_take`. That grants an assistant the ability to **stop the whole stack**
+and to stop a shared service every project depends on, not just to toggle
+Xdebug. Every tool is annotated `readOnlyHint` / `destructiveHint`, so a client
+can require confirmation for one it has never seen.
+
+**Or bounded, tool by tool and project by project.** The switches have a CLI
+spelling: `--project=shop` bounds the server to one project and `--for=30m` ends
+the writing half by itself. Under a project scope the twelve writing tools become
+the four a project can bound — `xdebug_set`, `project_start`, `project_stop`,
+`project_restart` — while the eight that no project bounds, `stack_down` among
+them, are not offered at all. A scope that still served `stack_down` would be
+reporting a limit it was not applying, which is worse than having no limit. It
+bounds the reads the same way: no tool that *names* a project answers for one
+outside the scope. It is not information isolation and is not described as one —
+the machine-wide instruments still answer, because they are about the machine
+rather than about a project.
+
+**Not exposed:** the rest of the mutating surface. 69 of the 344 commands take
+an `AppHandle` because they report progress through Tauri's event system, and a
+stdio subprocess has no app to emit into. Decoupling that is a refactor of its
+own; pretending otherwise would mean advertising `project_build` and having it
+fail when called.
 
 The limits:
 

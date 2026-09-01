@@ -126,8 +126,8 @@ export interface CertStatus {
     certPath?: string;
     /** string? */
     keyPath?: string;
-    /** string? */
-    notAfter?: string;
+    /** number? */
+    notAfter?: number;
     /** number? */
     daysRemaining?: number;
     /** bool */
@@ -138,8 +138,12 @@ export interface CertStatus {
     required: string[];
     /** string[] */
     missing: string[];
+    /** string[] */
+    rejected: string[];
     /** bool */
     stale: boolean;
+    /** string? */
+    error?: string;
     /** Array<{ id: 'system' | 'firefox', trusted?: bool, detail?: string }> */
     trust: Record<string, unknown>[];
 }
