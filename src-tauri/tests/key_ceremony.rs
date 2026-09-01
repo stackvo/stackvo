@@ -607,20 +607,58 @@ fn run_check(bash: &str, keydir: &Path) -> (Option<i32>, String) {
 
 /// bash, or a spoken skip.
 ///
-/// Windows is the platform where this is absent, and `foreign_import.rs` paid
-/// for the lesson that a silent skip is a test that has stopped existing: it
-/// measured a tree its own setup had not built and called the reader broken.
+/// `foreign_import.rs` paid for the lesson that a silent skip is a test that
+/// has stopped existing: it measured a tree its own setup had not built and
+/// called the reader broken. So a skip here is printed.
+///
+/// ## A bash that starts is not a bash that works
+///
+/// This used to accept any candidate whose `--version` **spawned**, and
+/// `output().is_ok()` is true for a process that ran and failed. On a GitHub
+/// `windows-latest` runner the first `bash.exe` on PATH is WSL's launcher: it
+/// spawns perfectly, writes *"Windows Subsystem for Linux has no installed
+/// distributions"* to stderr as UTF-16, and exits non-zero. So this function
+/// handed back a working bash, two tests ran `tools/keys.sh` through it, and
+/// what they reported was that the ceremony had stopped saying things — with
+/// the WSL notice, mojibaked, quoted underneath as the script's output.
+///
+/// Now the candidate has to succeed *and* say `bash` on stdout, which the WSL
+/// launcher does not: its message is stderr, and it is UTF-16, so it carries no
+/// ASCII `bash` either way.
+///
+/// Git Bash is looked for by path on Windows for the same reason the check was
+/// tightened rather than the tests being `cfg`'d off: it is installed on every
+/// GitHub Windows runner, and skipping a platform is how a test comes to be
+/// green on three machines and meaningless on the fourth.
 fn bash_or_skip(why: &str) -> Option<String> {
-    for candidate in ["bash", "/bin/bash", "/usr/bin/bash"] {
-        if std::process::Command::new(candidate)
+    const CANDIDATES: [&str; 5] = [
+        "bash",
+        "/bin/bash",
+        "/usr/bin/bash",
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ];
+
+    for candidate in CANDIDATES {
+        let Ok(out) = std::process::Command::new(candidate)
             .arg("--version")
             .output()
-            .is_ok()
-        {
-            return Some(candidate.to_string());
+        else {
+            continue;
+        };
+        if !out.status.success() {
+            continue;
         }
+        if !String::from_utf8_lossy(&out.stdout)
+            .to_ascii_lowercase()
+            .contains("bash")
+        {
+            continue;
+        }
+        return Some(candidate.to_string());
     }
-    eprintln!("SKIPPED: no bash on this machine — {why}");
+
+    eprintln!("SKIPPED: no working bash on this machine — {why}");
     None
 }
 

@@ -108,6 +108,13 @@ async function diagnosis() {
   out += await ask('stylesheets', '() => document.styleSheets.length');
   out += await ask('ipc bridge', '() => typeof window.__TAURI_INTERNALS__');
   out += await ask('body', '() => document.body && document.body.innerHTML.slice(0, 200)');
+  // The probe that was missing, and the one that would have answered this
+  // suite's only failure. `main.js` installs `app.config.errorHandler`, so a
+  // throw inside `App.vue`'s `setup()` never reaches `window.onerror` — it is
+  // printed to a console this process cannot read, and what is left on the page
+  // is an empty `#app`, which is what every other cause looks like too. The
+  // handler now keeps the last ten, and this reads them.
+  out += await ask('vue errors', '() => window.__STACKVO_ERRORS__ ?? "<not installed>"');
 
   const said = app.driverOutput?.() ?? '';
   if (said.trim()) out += `\n--- tauri-driver said ---\n${said}`;

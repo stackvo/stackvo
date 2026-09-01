@@ -169,7 +169,67 @@ export default defineConfig({
   ],
 
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+
+      /**
+       * vue-i18n's **runtime** build, and this one line is the difference
+       * between a window and a blank rectangle.
+       *
+       * The full build registers `compileToFunction`, which compiles a message
+       * string by calling `new Function`. `tauri.conf.json` declares
+       * `default-src 'self'` and names no `script-src`, so the webview refuses
+       * that call — and it refuses it on the FIRST `t()`, which happens while
+       * `App.vue` renders. `main.js` installs an `errorHandler`, so the throw
+       * became a console line, the root rendered a comment node, and the
+       * packaged application opened a window with nothing in it.
+       *
+       * Nothing caught it and nothing could. `vite preview` serves over http
+       * and applies no CSP, so the Playwright suite renders the same bundle
+       * perfectly nineteen times out of nineteen; `npm run screenshots` boots
+       * through the same stage and photographs a working app. The only surface
+       * that enforces the CSP is the real webview, which is exactly what
+       * `tests/driver/` drives — and its one failure said "the app root never
+       * rendered any children" and could not say why until the error handler
+       * was made to keep what it printed.
+       *
+       * The runtime build registers `compile` instead, which parses the
+       * message to an AST and walks it. Same syntax, same messages, no `eval`
+       * — see `@intlify/core-base`, where `new Function` appears once and only
+       * inside `compileToFunction`. The flags below are what that build reads;
+       * without them the alias would swap one broken bundle for another.
+       *
+       * The alternative was `'unsafe-eval'` in the CSP, which is not a fix. It
+       * would buy a rendering window by giving every script in the webview the
+       * ability to build code out of strings, to work around one library's
+       * choice of how to cache a format string.
+       */
+      'vue-i18n': 'vue-i18n/dist/vue-i18n.runtime.esm-bundler.js',
+    },
+  },
+
+  /**
+   * What the vue-i18n runtime build compiles itself against.
+   *
+   * These are its build-time flags, and they are not optional once the alias
+   * above is in place: the runtime bundle ships them unresolved, so an
+   * undefined `__INTLIFY_JIT_COMPILATION__` would leave the message compiler
+   * switched off and every translation would render as its own key.
+   */
+  define: {
+    // The whole point of the alias: compile messages to an AST at runtime
+    // rather than to a function through `new Function`.
+    __INTLIFY_JIT_COMPILATION__: true,
+    // Keep the compiler. Dropping it is for applications that pre-compile
+    // their messages at build time; these are plain objects in
+    // `src/i18n/locales/`, so the runtime has to be able to read them.
+    __INTLIFY_DROP_MESSAGE_COMPILER__: false,
+    // `createI18n({ legacy: false })` — the Options API surface is not used.
+    __VUE_I18N_LEGACY_API__: false,
+    // `app.use(i18n)` still installs the plugin; nothing in `src/` calls the
+    // global `$t`, but Vuetify's adapter expects a full installation.
+    __VUE_I18N_FULL_INSTALL__: true,
+    __INTLIFY_PROD_DEVTOOLS__: false,
   },
 
   /**

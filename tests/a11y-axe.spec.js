@@ -769,6 +769,16 @@ describe('axe over the extracted project panes', () => {
         spxDelete: vi.fn(),
         spxClear: vi.fn(),
         openInBrowser: vi.fn(),
+        // Not spx at all, and that is the point: the pane binds a report to the
+        // snapshot it ran against, so it asks for both. This mock listed the
+        // spx calls and nothing else, so both landed on `undefined` — which is
+        // not a failing test, because the pane catches. It is an unhandled
+        // rejection after the assertion has already passed, and vitest exits
+        // non-zero on it while printing "1437 passed". That is the worst shape
+        // a gate can have, and it is why they are named here rather than the
+        // mock being widened to a Proxy that answers everything.
+        dbSnapshots: async () => [],
+        captureStatus: async () => null,
       },
     }));
 

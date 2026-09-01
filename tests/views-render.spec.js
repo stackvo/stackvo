@@ -374,7 +374,17 @@ describe('the project page', () => {
     // entries whose label is not `projectDetail[key]`.
     jobs: () => en.scheduler.title,
     shell: () => en.terminal.explain,
-    logs: () => en.logs.sources,
+    // `logs.sources` is not a key and never was, so this entry read `undefined`
+    // for as long as it has existed — and passed, which is the part worth
+    // writing down. `toContain(undefined)` is `String.includes(undefined)`,
+    // which matches the literal text "undefined"; the pane was rendering one,
+    // because `LogView` calls `listen` straight from `@tauri-apps/api/event`
+    // and jsdom has no Tauri bridge for it to reach. So a broken render was
+    // what made the assertion true, and stubbing the bridge in `tests/setup.js`
+    // is what turned it red. `logs.explain` is `LogsPane`'s own description,
+    // rendered unconditionally and used nowhere else — `logs.title` would not
+    // do, because the rail item beside it carries the same key.
+    logs: () => en.logs.explain,
     debug: () => en.profiler.title,
     runtime: () => en.phpIni.title,
     release: () => en.release.excluded,

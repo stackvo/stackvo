@@ -1,0 +1,132 @@
+name: Code scanning
+#
+# The half of the Security tab that was empty.
+#
+# `cargo deny` and `npm audit` already run in `ci.yml`, and both read the same
+# thing: the dependency list, against a database of known-vulnerable versions.
+# Neither of them has ever read a line of this repository's own code. So a
+# `child_process` call assembled from a string, a path joined out of user input,
+# a comparison that leaks a token by timing — none of those has a gate, and the
+# repository's code-scanning alerts were empty not because there was nothing to
+# find but because nothing was looking.
+#
+# Two extractors, because no single one covers this tree:
+#
+#   * CodeQL takes the JavaScript and Vue half directly. It needs no build step
+#     for it, which is why this is cheap enough to run on every pull request.
+#   * Rust goes through clippy, whose findings become SARIF and land in the
+#     same tab. `ci.yml` already runs clippy as a pass/fail gate and that stays
+#     — this is the same tool answering a different question: not "is this
+#     branch allowed to merge" but "what is outstanding, where, and since when".
+#
+# The two jobs are independent on purpose. Rust's takes minutes and JavaScript's
+# does not, and pairing them would mean the fast half waits on the slow one for
+# no reason either of them cares about.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, and off the hour for the reason `nightly.yml` gives. A scheduled
+    # run is not redundant with the push trigger: CodeQL's queries are updated
+    # upstream, so the same unchanged tree can grow a finding without anybody
+    # touching it.
+    - cron: '41 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: CodeQL (javascript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # The one permission this whole file exists to use: without it the
+      # analysis runs and its results are thrown away.
+      security-events: write
+      # CodeQL reads the workflow run's own metadata to attribute results to a
+      # ref and a commit.
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        with:
+          languages: javascript-typescript
+          # `security-and-quality` over the default `security-extended`: this is
+          # an application rather than a library, and the quality queries are
+          # the ones that find the dead branch and the unreachable catch.
+          queries: security-and-quality
+
+      # No build. JavaScript is extracted from the source as it sits, which is
+      # why there is no `autobuild` step here and why this job is minutes rather
+      # than tens of them.
+      - name: Analyse
+        uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        with:
+          category: /language:javascript-typescript
+
+  rust:
+    name: clippy (sarif)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          components: clippy
+
+      # The same list `ci.yml` installs, and for the same reason: without the
+      # webkit and gtk headers this does not get far enough to lint anything.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri
+
+      # `taiki-e/install-action` carries neither of these, so they are built.
+      # `--locked` keeps that build reproducible, and the cache above means it
+      # is paid once rather than every run.
+      - name: Install the SARIF converters
+        run: cargo install --locked clippy-sarif sarif-fmt
+
+      # `continue-on-error` because this job REPORTS rather than gates. A clippy
+      # warning failing this workflow would be `ci.yml`'s job done twice, and
+      # worse: the upload below would never run, so the finding that caused the
+      # failure would be the one finding nobody could see.
+      - name: Run clippy
+        working-directory: src-tauri
+        continue-on-error: true
+        run: |
+          cargo clippy --all-targets --all-features --message-format=json \
+            | clippy-sarif | tee ../clippy.sarif | sarif-fmt
+
+      - name: Upload to the Security tab
+        uses: github/codeql-action/upload-sarif@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        with:
+          sarif_file: clippy.sarif
+          category: clippy

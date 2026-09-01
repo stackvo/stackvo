@@ -1,0 +1,100 @@
+{
+  "_comment": [
+    "Branch protection for `main`, as a file.",
+    "",
+    "It lived in the repository settings, which is a page: a change there leaves",
+    "no diff, no review, no history and nobody to notice. CODEOWNERS already",
+    "says who owns what, but nothing said that a pull request is required at",
+    "all, which checks must be green, or whether `main` can be force-pushed — so",
+    "'is this branch protected' could only be answered by opening the settings,",
+    "and 'was it protected last month' could not be answered at all.",
+    "",
+    "HOW TO APPLY IT. GitHub does not read `.github/rulesets/`; being here",
+    "protects nothing. Import it once:",
+    "",
+    "  Settings -> Rules -> Rulesets -> New ruleset -> Import a ruleset",
+    "",
+    "or:  gh api repos/stackvo/stackvo/rulesets --method POST --input .github/rulesets/main.json",
+    "",
+    "From then on this file is what gets reviewed and the page is what gets",
+    "checked against it. Change both in the same pull request — a drift between",
+    "them is the invisible state this was written to replace.",
+    "",
+    "WHAT IS DELIBERATELY NOT HERE, because a rule that cannot be satisfied is a",
+    "rule that gets bypassed until it is switched off:",
+    "",
+    "  * `required_approving_review_count` is 0, not 1. This repository has one",
+    "    contributor. Requiring an approval would mean every pull request waits",
+    "    for a second person who does not exist, and the honest end of that is",
+    "    an admin merging past the rule every time. The gate that does work here",
+    "    is the checks below: a pull request is still required, and it still has",
+    "    to be green. Raise this to 1 the day there is a second maintainer.",
+    "",
+    "  * `required_linear_history` is absent. Half this history is merge commits",
+    "    (35 of 72) because pull requests are merged, not rebased. Turning it on",
+    "    would not tidy the past, it would reject the way the project actually",
+    "    works — and if that way should change, changing it is the decision, not",
+    "    this file.",
+    "",
+    "  * `required_signatures` is absent. Local commits here are unsigned today;",
+    "    GitHub signs its own merge commits, which is why `git log --show-signature`",
+    "    looks half-signed. Requiring signatures before setting up a signing key",
+    "    would lock the only maintainer out of their own repository. It is a",
+    "    worthwhile thing to turn on, and the order is: set up the key, verify a",
+    "    commit shows Verified, then add the rule here.",
+    "",
+    "`required_status_checks` names CI JOB NAMES, not workflows — the `name:`",
+    "fields in `ci.yml`, plus the two scanning jobs and the dependency review.",
+    "The three OS rows come from the matrix, so renaming a job or dropping a",
+    "matrix entry silently stops requiring it. That is the price of naming checks",
+    "at all, and it is a smaller price than requiring none."
+  ],
+
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
+
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "require_code_owner_review": false,
+        "dismiss_stale_reviews_on_push": true,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": true,
+        "allowed_merge_methods": ["merge", "squash", "rebase"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "ubuntu-latest" },
+          { "context": "macos-latest" },
+          { "context": "windows-latest" },
+          { "context": "driver" },
+          { "context": "coverage" },
+          { "context": "supply chain" },
+          { "context": "contracts" },
+          { "context": "CodeQL (javascript)" },
+          { "context": "clippy (sarif)" },
+          { "context": "review" }
+        ]
+      }
+    }
+  ],
+
+  "bypass_actors": []
+}

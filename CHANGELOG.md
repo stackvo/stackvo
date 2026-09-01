@@ -5,6 +5,17 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-09-01
+
+The first release with a changelog behind it. Everything below had been sitting
+under `Unreleased` since the repository started, which meant the file recorded
+the work honestly and dated none of it — a reader could not tell what shipped
+from what was merely written down. It is dated now, and what follows this
+heading is the engineering log; the short version a user reads is
+[`docs/RELEASE-NOTES-0.2.0.md`](docs/RELEASE-NOTES-0.2.0.md).
+
 ### Added
 
 - **The screenshots exist, and producing them is no longer somebody's afternoon.**

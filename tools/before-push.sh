@@ -84,6 +84,17 @@ if [ "$all" -eq 1 ]; then
   step "linux · probes"     tools/linux/run.sh
   step "linux · driver"     tools/linux/run.sh --driver
   step "windows · check"    tools/linux/run.sh --windows
+  # `--windows` type-checks; it does not RUN anything. That distinction cost a
+  # red `windows-latest` leg that this file had just called clean, and the three
+  # tests behind it had been failing for as long as the leg had: a unix-socket
+  # assertion that cannot hold where the daemon is a named pipe, and two that
+  # shelled out to a bash whose only presence on that runner is WSL's launcher —
+  # which starts, fails, and was accepted as a working shell.
+  #
+  # None of the three needed a Windows machine to find. `--windows-test` runs
+  # the suite under wine and has been in `tools/linux/run.sh` since it was
+  # written; the only reason it never ran is that nothing here asked for it.
+  step "windows · test"     tools/linux/run.sh --windows-test
   # The fourth thing CI asks that this file did not, and the most expensive one
   # to have learned elsewhere. `ci.yml` compiles and tests; `release.yml`
   # BUNDLES, and the bundler is a different program — it runs `linuxdeploy`, it
