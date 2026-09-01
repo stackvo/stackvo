@@ -1609,6 +1609,14 @@ mod tests {
     /// path lookup already worked and nothing below it had to change. Lerd
     /// sells its entire product on *"rootless Podman, zero daemon"*, and this
     /// application could not find one.
+    ///
+    /// Not on Windows, where there is no unix socket to look for at all — the
+    /// daemon is a named pipe and `well_known_sockets` returns early with it.
+    /// The gate is `cfg` rather than a runtime skip so the assertions below can
+    /// stay unconditional, and the Windows half is a test of its own directly
+    /// after this one rather than a hole: an unasserted platform is how this
+    /// test came to fail on a runner for a month while reading correctly here.
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn the_rootless_socket_is_looked_for_where_the_session_says_it_is() {
         // Read from `XDG_RUNTIME_DIR` rather than assembled from `/run/user/<uid>`:
@@ -1641,6 +1649,43 @@ mod tests {
         assert!(
             rootless < engine,
             "rootless is not searched first: {names:?}"
+        );
+
+        unsafe {
+            match previous {
+                Some(value) => std::env::set_var("XDG_RUNTIME_DIR", value),
+                None => std::env::remove_var("XDG_RUNTIME_DIR"),
+            }
+        }
+    }
+
+    /// And on Windows the list is the named pipe, alone.
+    ///
+    /// The other half of the test above, and the reason it is written out
+    /// rather than left implied: `well_known_sockets` returns early on Windows,
+    /// so every unix candidate below that early return is unreachable there. A
+    /// `XDG_RUNTIME_DIR` honoured on Windows would be a path that cannot exist,
+    /// and a `/var/run/docker.sock` in this list would be a candidate the
+    /// connector would try and fail on every single call.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_looks_for_the_named_pipe_and_nothing_else() {
+        // Set, and deliberately expected to be ignored: this is the variable
+        // the unix path reads, and Windows must not grow a unix candidate from
+        // it just because the variable happens to be defined.
+        let previous = std::env::var_os("XDG_RUNTIME_DIR");
+        // SAFETY: single-threaded test process; restored below.
+        unsafe { std::env::set_var("XDG_RUNTIME_DIR", "C:\\Temp") };
+
+        let names: Vec<String> = well_known_sockets()
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect();
+
+        assert_eq!(
+            names,
+            vec![crate::paths::WINDOWS_NAMED_PIPE.to_string()],
+            "the Windows candidate list is not the named pipe alone"
         );
 
         unsafe {

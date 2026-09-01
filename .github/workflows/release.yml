@@ -37,6 +37,23 @@ on:
 # and the private key plus its password in the repository secrets below. Without
 # both halves the build produces unsigned artifacts that the updater will refuse
 # — which is the correct failure, not a bug to work around.
+
+# The default for every job, so `preflight` stops inheriting whatever the
+# repository setting happens to be. `build` widens it to `contents: write` plus
+# the OIDC token, in the job itself and with its reasons written beside it —
+# which is the shape this file should have had all along: read by default, and
+# each widening visible where it is needed.
+permissions:
+  contents: read
+
+# Grouped but NOT cancelled, and the difference matters here in a way it does
+# not in CI. A cancelled CI run costs a re-run; a cancelled release run can
+# leave a draft holding four of six artifacts, which is indistinguishable at a
+# glance from a finished one. Two tags pushed together queue instead.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # Refuse to publish a release the updater could never accept. Without this the
   # pipeline succeeds, artifacts appear on the releases page, and the failure
@@ -45,7 +62,13 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Nothing here pushes; `tauri-action` is handed a token of its
+          # own. Leaving the default on writes that token into
+          # `.git/config`, where every later step — and every script they
+          # call — can read it.
+          persist-credentials: false
 
       # A rehearsal signs nothing, so a missing signing key is not a reason to
       # stop it. Said out loud rather than skipped silently: the whole point of
@@ -129,10 +152,17 @@ jobs:
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          # Nothing here pushes; `tauri-action` is handed a token of its
+          # own. Leaving the default on writes that token into
+          # `.git/config`, where every later step — and every script they
+          # call — can read it.
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       # The line above adds the target to **stable**, and nothing in this job
@@ -150,7 +180,7 @@ jobs:
         working-directory: src-tauri
         run: rustup target add ${{ matrix.target }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -184,7 +214,7 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
             librsvg2-dev patchelf libssl-dev libdbus-1-dev xdg-utils
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
           key: ${{ matrix.target }}
@@ -262,7 +292,7 @@ jobs:
         # `if: failure()` would skip the upload on exactly the run whose log is
         # hardest to reach.
         if: ${{ !cancelled() && steps.suite.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-${{ matrix.target }}
           path: test-${{ matrix.target }}.log
@@ -376,13 +406,13 @@ jobs:
 
       - name: Attach the SBOM to the release
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sbom
           path: sbom/
           if-no-files-found: error
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -491,7 +521,7 @@ jobs:
       # red tick from an upload with nothing to upload.
       - name: Keep the rehearsal bundles
         if: ${{ always() && inputs.rehearsal }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
@@ -560,7 +590,7 @@ jobs:
       # review trusts on an artifact that has none of the guarantees.
       - name: Attest what built these artifacts
         if: ${{ !inputs.rehearsal }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           # `artifactPaths` is a JSON array; the action takes a comma- or
           # newline-separated list.
@@ -580,7 +610,7 @@ jobs:
           done | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
 
       - name: Attach the checksums
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: checksums-${{ matrix.target }}
           path: checksums/

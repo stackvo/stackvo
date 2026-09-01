@@ -429,9 +429,8 @@ pub fn parse(json: &serde_json::Value) -> (Declared, Vec<crate::hooks::Problem>)
     let mut clashing = Vec::new();
     for (id, component) in out.iter() {
         if let Some(domain) = &component.domain {
-            match seen.insert(domain.as_str(), id.as_str()) {
-                Some(first) => clashing.push((domain.clone(), first.to_string(), id.clone())),
-                None => {}
+            if let Some(first) = seen.insert(domain.as_str(), id.as_str()) {
+                clashing.push((domain.clone(), first.to_string(), id.clone()));
             }
         }
     }
