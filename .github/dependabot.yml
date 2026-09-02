@@ -95,3 +95,17 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
+    groups:
+      # `init` and `analyze` are one action in two halves and they refuse to
+      # run at different majors: `Loaded a configuration file for version
+      # '4.37.9', but running version '3.37.9'`. Ungrouped, Dependabot raised
+      # one pull request each, and neither could pass — every run bumped one
+      # half and left the other behind. Merging one would not have helped; it
+      # would have broken code scanning on main until the second arrived.
+      #
+      # The npm side has had groups since this file was written, for the same
+      # reason and in gentler words: packages that move together are separate
+      # merge conflicts apart. This side had none.
+      codeql:
+        patterns:
+          - github/codeql-action*
