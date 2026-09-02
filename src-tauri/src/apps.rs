@@ -816,8 +816,22 @@ mod tests {
             if let Some(d) = defaults.first() {
                 assert!(d.available, "{} is the default but is not installed", d.id);
             } else {
+                // `Other…` is excluded, and that exclusion is the claim rather
+                // than an exemption from it. `offer` appends that row *after*
+                // `mark_default` has run — the ordering is the rule, so the
+                // automatic choice is always something this machine was found
+                // to have — and its `available: true` is not a claim that
+                // anything is installed; it is the one row whose target has not
+                // been typed yet.
+                //
+                // Counting it made this branch unsatisfiable. A machine with no
+                // terminal at all has no default and still has that row, so the
+                // assertion failed on precisely the state it exists to
+                // describe. It passed here for four months because every
+                // machine that ran it had a terminal; the first headless Linux
+                // runner found it in one second.
                 assert!(
-                    list.iter().all(|a| !a.available),
+                    list.iter().filter(|a| a.id != CUSTOM).all(|a| !a.available),
                     "a list with something installed must name a default"
                 );
             }

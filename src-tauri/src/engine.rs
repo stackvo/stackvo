@@ -228,16 +228,18 @@ pub fn connect() -> Result<Docker> {
     // for is a platform whose code is only read.
     #[cfg(windows)]
     {
-        return Docker::connect_with_named_pipe(&socket, 8, bollard::API_DEFAULT_VERSION).map_err(
-            |e| {
-                Error::new(
-                    Code::EngineUnreachable,
-                    format!("Cannot reach the Docker engine: {e}"),
-                )
-                .with_hint(crate::hints::START_DOCKER)
-                .with_details(serde_json::json!({ "socket": socket }))
-            },
-        );
+        // The block's value, not a `return`. On Windows the `cfg(not(windows))`
+        // block below is compiled out, so this one is the function's tail and
+        // `return` is the needless kind — which `-D warnings` refuses, on the
+        // one platform that compiles this line.
+        Docker::connect_with_named_pipe(&socket, 8, bollard::API_DEFAULT_VERSION).map_err(|e| {
+            Error::new(
+                Code::EngineUnreachable,
+                format!("Cannot reach the Docker engine: {e}"),
+            )
+            .with_hint(crate::hints::START_DOCKER)
+            .with_details(serde_json::json!({ "socket": socket }))
+        })
     }
 
     // A named pipe path on Unix is a configuration somebody carried over from a
