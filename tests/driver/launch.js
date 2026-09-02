@@ -31,11 +31,11 @@
 
 import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
-import { mkdtemp, rm, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, access, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Session } from './webdriver.js';
+import { Session, CLOSE_TIMEOUT_MS } from './webdriver.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, '..', '..');
@@ -185,19 +185,27 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
   });
 
   const root = await mkdtemp(join(tmpdir(), 'stackvo-driver-'));
+  const config = join(root, 'config');
+  await seedPreferences(config);
 
   const driver = spawn(
     'tauri-driver',
     ['--port', String(PORT), '--native-port', String(NATIVE_PORT)],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Its own process group, so teardown can take down everything the driver
+      // started rather than only the driver. `tauri-driver` spawns
+      // `WebKitWebDriver`, which in turn spawns the application: killing the
+      // pid alone leaves two processes holding the display, and the runner
+      // reports them at the end as orphans it had to terminate.
+      detached: process.platform !== 'win32',
       env: {
         ...process.env,
         // The application inherits these through the driver, which is what
         // keeps a run off the developer's real workspace. `STACKVO_ROOT` moves
         // the app root (`appdir.rs`) and `STACKVO_CONFIG_DIR` the settings.
         STACKVO_ROOT: join(root, 'app'),
-        STACKVO_CONFIG_DIR: join(root, 'config'),
+        STACKVO_CONFIG_DIR: config,
         // A policy file that does not exist reads as "no policy" rather than
         // as whatever this machine has under /Library or /etc. The policy layer
         // is not a security boundary; it is still an input, and an
@@ -207,12 +215,21 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
     }
   );
 
+  // The process must not be what keeps this one alive. A hook that times out —
+  // `before` has 120 seconds — leaves the driver running, and an `unref`ed
+  // child cannot hold the event loop open past the last test. `remember` below
+  // is what still takes it down.
+  driver.unref();
+  const forget = remember(driver);
+
   // Kept, not printed: `tauri-driver`'s own diagnostics are the only place a
   // "cannot find WebKitWebDriver" ends up, and a failed launch that reports
   // only "nothing listened on 4444" sends the reader to the wrong question.
   const noise = [];
   driver.stdout.on('data', (chunk) => noise.push(String(chunk)));
   driver.stderr.on('data', (chunk) => noise.push(String(chunk)));
+  driver.stdout.unref();
+  driver.stderr.unref();
   const died = new Promise((_, reject) => {
     driver.once('error', (error) =>
       reject(new Error(`tauri-driver would not start: ${error.message}`))
@@ -221,6 +238,12 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
       reject(new Error(`tauri-driver exited with ${code}\n${noise.join('')}`))
     );
   });
+  // The driver is *expected* to exit — `stop` kills it — and by then the two
+  // races below have long settled. Without this, that rejection is the last
+  // thing to happen in the process, and Node's default for an unhandled one is
+  // to end the process non-zero: a suite whose tests all passed, failing on the
+  // way out.
+  died.catch(() => {});
 
   let session;
   try {
@@ -231,17 +254,124 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
     // short enough that a hang is a failure rather than a job timeout.
     await session.timeouts({ script: 30_000, pageLoad: 30_000, implicit: 0 });
   } catch (error) {
-    driver.kill('SIGKILL');
+    await kill(driver);
+    forget();
     await rm(root, { recursive: true, force: true });
     error.message = `${error.message}${noise.length ? `\n--- tauri-driver said ---\n${noise.join('')}` : ''}`;
     throw error;
   }
 
   const stop = async () => {
-    await session.close().catch(() => {});
-    driver.kill();
+    // Bounded, and its failure is swallowed on purpose. `DELETE /session` asks
+    // the driver to close the window and the window is entitled to refuse —
+    // `lib.rs` calls `api.prevent_close()` on every path, and under the "ask"
+    // preference the close is handed to a dialog nobody is here to answer.
+    // Waiting on that answer is what hung this suite for 55 minutes.
+    // `seedPreferences` removes the reason; the timeout removes the class.
+    await session.close({ timeoutMs: CLOSE_TIMEOUT_MS }).catch(() => {});
+    await kill(driver);
+    forget();
     await rm(root, { recursive: true, force: true });
   };
 
   return { session, stop, root, driverOutput: () => noise.join('') };
+}
+
+/**
+ * Write the preferences a driven run needs before the application reads them.
+ *
+ * One key, and it is the one that decides whether this suite can end. Closing
+ * the window is `prevent_close()` on every path (`lib.rs`), and the default
+ * preference is `"ask"`: the close is forwarded to the front end as
+ * `app:close_requested`, a dialog opens, and the window stays open until
+ * somebody clicks. Under a driver nobody clicks — so `DELETE /session` never
+ * completes, the application never exits, and the runner ends up killing
+ * orphans.
+ *
+ * `"quit"` is the behaviour a driven run wants and the only one it can have:
+ * exit, and leave the containers — of which a CI runner has none — alone.
+ * `stopAndQuit` would ask Docker to stop a stack that was never started.
+ *
+ * `schemaVersion` is written because `preferences.json` carries one
+ * (`PREFS_SCHEMA_VERSION`), and a file without it is a file a later migration
+ * has to guess about. Its presence also stops `appdir::migrate_config` from
+ * looking at the real config directory: it never overwrites a preferences file
+ * that already exists.
+ */
+async function seedPreferences(configDir) {
+  await mkdir(configDir, { recursive: true });
+  await writeFile(
+    join(configDir, 'preferences.json'),
+    `${JSON.stringify({ schemaVersion: 1, closeBehaviour: 'quit' }, null, 2)}\n`,
+    'utf8'
+  );
+}
+
+/**
+ * End the driver and everything it started, without waiting forever for either.
+ *
+ * SIGTERM to the whole process group first, because the group is what has to
+ * go: `tauri-driver` → `WebKitWebDriver` → the application. Then SIGKILL, for
+ * the case where the polite signal reached a process that is already stuck in
+ * the close it refused to perform.
+ *
+ * Every kill is guarded. Between the check and the signal the group can be
+ * gone, and `ESRCH` from that race must not become the failure of a run whose
+ * tests all passed.
+ */
+async function kill(child, { graceMs = 2_000 } = {}) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  const ended = new Promise((done) => child.once('exit', done));
+  signal(child, 'SIGTERM');
+
+  const inTime = await Promise.race([
+    ended.then(() => true),
+    new Promise((done) => setTimeout(() => done(false), graceMs).unref()),
+  ]);
+  if (inTime) return;
+
+  signal(child, 'SIGKILL');
+  await Promise.race([ended, new Promise((done) => setTimeout(done, graceMs).unref())]);
+}
+
+/**
+ * Signal the child's process group where the platform has one, and the child
+ * itself where it does not.
+ *
+ * A negative pid is POSIX for "the group"; Windows has no equivalent and
+ * `detached` there means something else entirely, so it gets the plain kill.
+ */
+function signal(child, name) {
+  try {
+    if (process.platform === 'win32' || child.pid === undefined) {
+      child.kill(name);
+      return;
+    }
+    process.kill(-child.pid, name);
+  } catch {
+    // Already gone, or never in a group of its own. Either way there is
+    // nothing left to signal, and a second attempt on the pid covers the one
+    // case worth covering.
+    try {
+      child.kill(name);
+    } catch {
+      /* gone */
+    }
+  }
+}
+
+/**
+ * The last resort: kill the driver when this process exits, whatever the
+ * reason.
+ *
+ * `stop` is the path that runs when the suite behaves. This one is for when it
+ * does not — a `before` hook that times out, an assertion that throws before
+ * `after` is reached, a `SIGINT` from somebody watching the log. `exit`
+ * handlers must be synchronous, so this is a bare `process.kill` and no wait.
+ */
+function remember(child) {
+  const onExit = () => signal(child, 'SIGKILL');
+  process.once('exit', onExit);
+  return () => process.off('exit', onExit);
 }

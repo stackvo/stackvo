@@ -5,7 +5,53 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **The `driver` job passed its five tests and then hung for 55 minutes.** It
+  had to be cancelled by hand, and it would have run for six hours if nobody
+  had been watching: no job in `ci.yml` carried a `timeout-minutes`, so every
+  one of them ran under GitHub's default, which is not a limit so much as the
+  absence of one.
+
+  The hang was in teardown, and the log said nothing because there was nothing
+  to say — five `ok` lines, then no TAP summary at all. `after` calls
+  `session.close()`, which is `DELETE /session`; the driver answers that by
+  closing the window; and `lib.rs` answers a `CloseRequested` with
+  `api.prevent_close()` on **every** path. Under the default `closeBehaviour`
+  of `"ask"` the close is forwarded to the front end as `app:close_requested`,
+  a dialog opens, and it waits for a click. There is nobody at a driven run to
+  click it, so the application never exited, the driver never replied, and
+  `fetch` — which has no timeout of its own — waited for a response that was
+  never going to be written.
+
+  Three things were wrong and all three are fixed. The suite now writes
+  `closeBehaviour: "quit"` into the temporary config directory before the
+  application starts, so the close it is asked to perform is one it can
+  perform. Every WebDriver request has a deadline, and teardown has a shorter
+  one, because by then the answer changes nothing. And `stop` signals the
+  driver's whole **process group** — `tauri-driver` → `WebKitWebDriver` → the
+  application — rather than the one pid it spawned, which is why the runner
+  used to report six orphan processes it had to terminate on its way out.
+
+- **`STACKVO_CONFIG_DIR` did nothing.** `tests/driver/launch.js` set it, its
+  own comment said it moved the settings, and no line of Rust read the
+  variable: `appdir::config()` went to the OS config directory regardless. So
+  the driven application read and wrote the real `~/.config/stackvo` of
+  whatever machine it ran on — which is how it found `closeBehaviour: "ask"` in
+  the first place, and what made the isolation the suite claimed a claim only.
+  `config()` reads it now, the same seam `STACKVO_ROOT` and
+  `STACKVO_POLICY_FILE` already were, and `migrate_config` declines to run
+  under an override rather than moving a real preferences file into a directory
+  a test deletes.
+
+- **The driver suite ran twice per job, and a failure in it could not fail the
+  job.** Two steps ran the same five tests — one for the exit code, one for the
+  TAP — on the slowest job in CI. They are one step now, and it sets
+  `set -o pipefail`: the run is piped into `tee`, `bash -e` reports the status
+  of the last command in a pipeline, and `tee` succeeds whatever `node` did.
+  The check that follows reads the pass count as well as the skip count,
+  because a TAP stream with no summary is the signature of the hang above and
+  an exit code cannot tell it apart from a clean kill.
 
 ## [0.2.0] - 2026-09-01
 

@@ -46,9 +46,27 @@ before(
   { timeout: 120_000 }
 );
 
-after(async () => {
-  if (app) await app.stop();
-});
+/**
+ * Bounded, like the `before` above it.
+ *
+ * `after` is where this suite hung: five tests passed, teardown asked the
+ * driver to close a window that answers a close request with a dialog, and
+ * `fetch` waited for a response that was never going to be written. There was
+ * no TAP summary, no failure and no output — CI ran for 55 minutes and a person
+ * cancelled it.
+ *
+ * `launch` no longer waits like that, and this is the second line of the same
+ * defence: a teardown that overruns must end the run with a message rather than
+ * outlive it. Thirty seconds is above every budget inside `stop` — a
+ * ten-second session close and two two-second kills — so reaching it means
+ * something outside them is wrong.
+ */
+after(
+  async () => {
+    if (app) await app.stop();
+  },
+  { timeout: 30_000 }
+);
 
 /**
  * Poll an expression in the webview until it answers truthily.

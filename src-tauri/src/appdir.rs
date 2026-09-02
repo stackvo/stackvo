@@ -55,11 +55,32 @@ pub fn name() -> &'static str {
     }
 }
 
+/// The variable that moves the config directory somewhere a test can delete.
+///
+/// The same seam `STACKVO_ROOT` is for the app root and `STACKVO_POLICY_FILE`
+/// is for the policy file, and it was the one of the three that did not exist:
+/// `tests/driver/launch.js` set it, said in its own comment that it moved the
+/// settings, and the driven application read `~/.config/stackvo` anyway. A
+/// suite that believes it is isolated and is not is worse than one that never
+/// claimed to be — it writes the developer's real preferences, and it reads
+/// whatever they last chose.
+pub const CONFIG_OVERRIDE_VAR: &str = "STACKVO_CONFIG_DIR";
+
 /// Where `preferences.json` lives.
 ///
 /// macOS: `~/Library/Application Support/StackVo`, Windows: `%APPDATA%\StackVo`,
-/// Linux: `~/.config/stackvo`.
+/// Linux: `~/.config/stackvo`. [`CONFIG_OVERRIDE_VAR`] wins over all three.
+///
+/// The override is taken verbatim rather than canonicalised, unlike
+/// `workspace::app_root`: that path reaches generated compose files, where
+/// Docker resolves it against its own working directory, and this one is only
+/// ever opened by this process.
 pub fn config() -> Option<PathBuf> {
+    if let Ok(from_env) = std::env::var(CONFIG_OVERRIDE_VAR) {
+        if !from_env.trim().is_empty() {
+            return Some(PathBuf::from(from_env));
+        }
+    }
     Some(dirs::config_dir()?.join(name()))
 }
 
@@ -131,6 +152,14 @@ pub const LEGACY_DIR: &str = "dev.stackvo.desktop";
 /// start. Never overwrites — a preferences file at the new path means this
 /// already ran, or the user wrote one, and either way it wins.
 pub fn migrate_config() {
+    // Not when the directory was overridden. The old location is a fact about
+    // this machine's real config directory, and moving a file OUT of it into a
+    // temporary directory a test deletes afterwards would lose the preferences
+    // of whoever ran the test.
+    if std::env::var_os(CONFIG_OVERRIDE_VAR).is_some_and(|v| !v.is_empty()) {
+        return;
+    }
+
     let (Some(new_dir), Some(old_dir)) = (config(), dirs::config_dir().map(|d| d.join(LEGACY_DIR)))
     else {
         return;
@@ -180,6 +209,72 @@ fn move_preferences(new_dir: &std::path::Path, old_dir: &std::path::Path) {
 mod tests {
     use super::*;
 
+    /// `CONFIG_OVERRIDE_VAR` is process-wide, and `cargo test` runs these in
+    /// threads. Every test below either sets it or reads a `config()` the
+    /// setting would change, so they take turns — the alternative is a suite
+    /// that passes alone and fails in company, which is the kind of failure
+    /// that gets re-run rather than read.
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Take the lock, ignoring a previous test having panicked while holding it.
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Set the override for the duration of `body`, and put it back afterwards.
+    fn with_override<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
+        let previous = std::env::var_os(CONFIG_OVERRIDE_VAR);
+        // SAFETY: the whole module's tests are serialised on `SERIAL`, and the
+        // previous value is restored before this returns.
+        unsafe {
+            match value {
+                Some(v) => std::env::set_var(CONFIG_OVERRIDE_VAR, v),
+                None => std::env::remove_var(CONFIG_OVERRIDE_VAR),
+            }
+        }
+        let out = body();
+        unsafe {
+            match previous {
+                Some(v) => std::env::set_var(CONFIG_OVERRIDE_VAR, v),
+                None => std::env::remove_var(CONFIG_OVERRIDE_VAR),
+            }
+        }
+        out
+    }
+
+    /// The seam `tests/driver/launch.js` was already using before it existed.
+    ///
+    /// It set `STACKVO_CONFIG_DIR`, documented that the settings moved with it,
+    /// and nothing read the variable — so the driven application wrote the
+    /// preferences of whoever was running CI's image and read back whatever was
+    /// there. The suite could not decide what `closeBehaviour` was, which is the
+    /// preference that decides whether the window can be closed at all.
+    #[test]
+    fn the_config_directory_can_be_moved_by_the_environment() {
+        let _guard = serial();
+        let moved = with_override(Some("/tmp/stackvo-config-test"), config).expect("a directory");
+        assert_eq!(moved, PathBuf::from("/tmp/stackvo-config-test"));
+    }
+
+    /// An empty value is not a location.
+    ///
+    /// `env -u` is not what a shell script reaches for; `VAR=` is, and a run
+    /// that meant "leave it alone" must not end up writing preferences to the
+    /// process's working directory.
+    #[test]
+    fn an_empty_override_is_ignored() {
+        let _guard = serial();
+        let (empty, blank, absent) = (
+            with_override(Some(""), config),
+            with_override(Some("   "), config),
+            with_override(None, config),
+        );
+        assert_eq!(empty, absent);
+        assert_eq!(blank, absent);
+    }
+
     /// The name is ours to choose, so the one thing worth asserting is that it
     /// is not the identifier — which is what this rename existed to undo.
     #[test]
@@ -192,15 +287,21 @@ mod tests {
     /// to prevent.
     #[test]
     fn config_and_logs_agree_on_the_name() {
-        let config = config().expect("a config directory");
-        let logs = logs().expect("a log directory");
-        assert!(config.ends_with(name()));
-        assert!(
-            logs.components().any(|c| c.as_os_str() == name()),
-            "{} does not carry {}",
-            logs.display(),
-            name()
-        );
+        let _guard = serial();
+        // Explicitly without the override: this asserts the *derived* name, and
+        // a developer who happens to have `STACKVO_CONFIG_DIR` set in their
+        // shell would otherwise watch it fail for a reason that is not a fault.
+        with_override(None, || {
+            let config = config().expect("a config directory");
+            let logs = logs().expect("a log directory");
+            assert!(config.ends_with(name()));
+            assert!(
+                logs.components().any(|c| c.as_os_str() == name()),
+                "{} does not carry {}",
+                logs.display(),
+                name()
+            );
+        });
     }
 
     /// Logs sitting next to `preferences.json` would be swept up by anyone
@@ -225,15 +326,18 @@ mod tests {
     /// delete.
     #[test]
     fn neither_directory_is_inside_the_app_root() {
-        let app_root = crate::workspace::app_root();
-        for dir in [config().unwrap(), logs().unwrap()] {
-            assert!(
-                !dir.starts_with(&app_root),
-                "{} sits inside the app root {}",
-                dir.display(),
-                app_root.display()
-            );
-        }
+        let _guard = serial();
+        with_override(None, || {
+            let app_root = crate::workspace::app_root();
+            for dir in [config().unwrap(), logs().unwrap()] {
+                assert!(
+                    !dir.starts_with(&app_root),
+                    "{} sits inside the app root {}",
+                    dir.display(),
+                    app_root.display()
+                );
+            }
+        });
     }
 
     /// XDG puts logs in `XDG_STATE_HOME`, and this wrote to `XDG_DATA_HOME`
