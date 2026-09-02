@@ -675,8 +675,8 @@ Counted from 601 Rust crates and 43 npm packages.
 | --- | --- | --- |
 | @babel/helper-string-parser | 7.29.7 | MIT |
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
-| @babel/parser | 7.29.7 | MIT |
-| @babel/types | 7.29.7 | MIT |
+| @babel/parser | 7.29.8 | MIT |
+| @babel/types | 7.29.8 | MIT |
 | @intlify/core-base | 9.14.5 | MIT |
 | @intlify/message-compiler | 9.14.5 | MIT |
 | @intlify/shared | 9.14.5 | MIT |
@@ -690,16 +690,16 @@ Counted from 601 Rust crates and 43 npm packages.
 | @tauri-apps/plugin-opener | 2.5.4 | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-process | 2.3.1 | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-updater | 2.10.1 | MIT OR Apache-2.0 |
-| @vue/compiler-core | 3.5.40 | MIT |
-| @vue/compiler-dom | 3.5.40 | MIT |
-| @vue/compiler-sfc | 3.5.40 | MIT |
-| @vue/compiler-ssr | 3.5.40 | MIT |
+| @vue/compiler-core | 3.5.42 | MIT |
+| @vue/compiler-dom | 3.5.42 | MIT |
+| @vue/compiler-sfc | 3.5.42 | MIT |
+| @vue/compiler-ssr | 3.5.42 | MIT |
 | @vue/devtools-api | 6.6.4 | MIT |
-| @vue/reactivity | 3.5.40 | MIT |
-| @vue/runtime-core | 3.5.40 | MIT |
-| @vue/runtime-dom | 3.5.40 | MIT |
-| @vue/server-renderer | 3.5.40 | MIT |
-| @vue/shared | 3.5.40 | MIT |
+| @vue/reactivity | 3.5.42 | MIT |
+| @vue/runtime-core | 3.5.42 | MIT |
+| @vue/runtime-dom | 3.5.42 | MIT |
+| @vue/server-renderer | 3.5.42 | MIT |
+| @vue/shared | 3.5.42 | MIT |
 | @xterm/addon-fit | 0.11.0 | MIT |
 | @xterm/xterm | 6.0.0 | MIT |
 | csstype | 3.2.3 | MIT |
@@ -711,11 +711,11 @@ Counted from 601 Rust crates and 43 npm packages.
 | pinia | 2.3.1 | MIT |
 | postcss | 8.5.23 | MIT |
 | source-map-js | 1.2.1 | BSD-3-Clause |
-| vue | 3.5.40 | MIT |
+| vue | 3.5.42 | MIT |
 | vue-demi | 0.14.10 | MIT |
 | vue-i18n | 9.14.5 | MIT |
 | vue-router | 4.6.4 | MIT |
-| vuetify | 3.12.11 | MIT |
+| vuetify | 3.13.3 | MIT |
 
 ## Copyright holders
 
