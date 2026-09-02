@@ -651,12 +651,24 @@ fn ensure_output_dir(dir: &Path) {
         tracing::warn!(dir = %dir.display(), error = %e, "could not create the Xdebug output directory");
         return;
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o777));
-    }
+    widen_mode(dir);
 }
+
+/// A function rather than a `#[cfg(unix)]` block inside the caller.
+///
+/// As a block it disappears on Windows, which leaves the `return` above in tail
+/// position — a needless return, refused by `-D warnings` on the only platform
+/// that compiles it that way. A call is a statement everywhere, so the caller
+/// reads the same on every platform and the `cfg` lives where it is about
+/// something: the mode bits, which Windows does not have.
+#[cfg(unix)]
+fn widen_mode(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o777));
+}
+
+#[cfg(not(unix))]
+fn widen_mode(_dir: &Path) {}
 
 /// Re-render the overlay from the manifests, and report whether it now exists.
 ///
