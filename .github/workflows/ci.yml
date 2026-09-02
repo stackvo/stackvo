@@ -33,6 +33,13 @@ jobs:
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Every job in this file used to run under GitHub's default, which is six
+    # HOURS. That default is not a limit, it is the absence of one: when the
+    # driver suite hung after passing, the run sat there until a person noticed
+    # and cancelled it by hand. Each number below is roughly triple what its
+    # job takes with a cold cache — high enough that a slow runner is not a
+    # failure, low enough that a stuck one is.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -213,6 +220,9 @@ jobs:
   driver:
     name: driver
     runs-on: ubuntu-latest
+    # The longest job here, and most of it is `cargo install tauri-driver` plus
+    # a `tauri build` on a cold cache. The suite itself is under a minute.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -283,8 +293,28 @@ jobs:
       - name: Build the application the way it ships
         run: npx tauri build --debug --no-bundle
 
+      # One run, and it produces both things the job needs: the exit code, and
+      # the TAP the check below reads. It used to be two steps running the same
+      # five tests twice — the slowest job in CI paying for the same answer
+      # twice, and two chances for the hang described below to happen.
+      #
+      # `set -o pipefail`, because the run is piped. `bash -e` reports the
+      # status of the LAST command in a pipeline, which is `tee`, and `tee`
+      # succeeds whatever `node` did: without this line every failing driver
+      # test would have been reported green.
+      #
+      # `timeout-minutes` is the outer bound and not the mechanism. The suite
+      # once passed all five tests and then hung in teardown for 55 minutes
+      # until somebody cancelled the run — `DELETE /session` closes the window,
+      # `lib.rs` refuses every close, and nothing on either side had a deadline.
+      # `tests/driver/launch.js` now has those deadlines; this number is what
+      # keeps a future hang to ten minutes instead of GitHub's six-hour default.
       - name: Drive the application
-        run: xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:driver
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          xvfb-run -a --server-args="-screen 0 1280x820x24" \
+            node --test --test-reporter=tap tests/driver/boot.driver.js | tee driver.tap
 
       # A green `driver` job has to mean five tests RAN. `node:test` reads a
       # `null` skip value as a skip directive, so a throwing test came back
@@ -294,15 +324,24 @@ jobs:
       # `false` now and `driver-client.spec.js` holds it, but that is a check on
       # one function. This is a check on the OUTCOME, which is what the job is
       # actually promising: on Linux nothing here is allowed to be skipped.
+      #
+      # The pass count is read for a second reason: a TAP stream with no summary
+      # is a run that never finished. That is exactly what the hang looked like
+      # — five `ok` lines, no `# pass`, no `1..5` — and an exit code alone
+      # cannot tell it apart from a run that was killed cleanly.
       - name: The five tests ran, rather than being skipped
         run: |
-          xvfb-run -a --server-args="-screen 0 1280x820x24" \
-            node --test --test-reporter=tap tests/driver/boot.driver.js | tee driver.tap
           skipped=$(grep -c '# SKIP' driver.tap || true)
           if [ "$skipped" -ne 0 ]; then
             echo "::error::$skipped driver test(s) were skipped on Linux, where the suite is meant to run."
             exit 1
           fi
+          passed=$(sed -n 's/^# pass \([0-9]*\)$/\1/p' driver.tap | tail -n 1)
+          if [ "${passed:-0}" -lt 1 ]; then
+            echo "::error::the driver suite produced no TAP summary — it did not run to completion."
+            exit 1
+          fi
+          echo "driver: $passed test(s) passed, none skipped"
 
   # What is not tested.
   #
@@ -339,6 +378,7 @@ jobs:
   coverage:
     name: coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -460,6 +500,7 @@ jobs:
   supply-chain:
     name: supply chain
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -539,6 +580,7 @@ jobs:
   contracts:
     name: contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
