@@ -61,8 +61,13 @@ jobs:
   # Cheaper to fail here, in ten seconds, than there.
   preflight:
     runs-on: ubuntu-latest
+    # A ceiling, for the reason `ci.yml` gives at length: GitHub's default is
+    # six hours, which is the absence of a limit rather than a limit. This job
+    # reads two files and two secrets; a minute is already generous, and five
+    # means a runner that never came up rather than a check that is thinking.
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           # Nothing here pushes; `tauri-action` is handed a token of its
           # own. Leaving the default on writes that token into
@@ -104,6 +109,16 @@ jobs:
 
   build:
     needs: preflight
+    # The longest job in the repository, and the one where a stall costs most:
+    # a release run that hangs holds a runner and leaves a draft holding some of
+    # six artifacts, which at a glance is indistinguishable from a finished one.
+    #
+    # Measured against the only two runs there have been — 19m45s on the v0.1.0
+    # tag and 30m15s on the rehearsal of 2026-08-26, both of which failed part
+    # way — plus a cold `cargo install cargo-cyclonedx` and six bundlers. Ninety
+    # minutes is roughly triple the longest observed, which is the same margin
+    # `ci.yml` uses.
+    timeout-minutes: 90
     permissions:
       contents: write
       # Both are required by `attest-build-provenance`: the OIDC token is what
@@ -152,7 +167,7 @@ jobs:
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           # Nothing here pushes; `tauri-action` is handed a token of its
           # own. Leaving the default on writes that token into
@@ -180,7 +195,7 @@ jobs:
         working-directory: src-tauri
         run: rustup target add ${{ matrix.target }}
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -292,7 +307,7 @@ jobs:
         # `if: failure()` would skip the upload on exactly the run whose log is
         # hardest to reach.
         if: ${{ !cancelled() && steps.suite.outcome == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: test-${{ matrix.target }}
           path: test-${{ matrix.target }}.log
@@ -406,7 +421,7 @@ jobs:
 
       - name: Attach the SBOM to the release
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: sbom
           path: sbom/
@@ -534,7 +549,7 @@ jobs:
       # red tick from an upload with nothing to upload.
       - name: Keep the rehearsal bundles
         if: ${{ always() && inputs.rehearsal }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
@@ -623,7 +638,7 @@ jobs:
           done | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
 
       - name: Attach the checksums
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: checksums-${{ matrix.target }}
           path: checksums/

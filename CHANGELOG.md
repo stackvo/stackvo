@@ -3,9 +3,38 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-02
+
+The first release with a changelog behind it. Everything below had been sitting
+under `Unreleased` since the repository started, which meant the file recorded
+the work honestly and dated none of it — a reader could not tell what shipped
+from what was merely written down. It is dated now, and what follows this
+heading is the engineering log; the short version a user reads is
+[`docs/RELEASE-NOTES-0.2.0.md`](docs/RELEASE-NOTES-0.2.0.md).
 
 ### Changed
+
+- **The three actions still on Node 20 are on their Node 24 majors.** Every run
+  of every workflow printed the same warning: `actions/checkout` and
+  `actions/setup-node` target Node 20 and are being forced onto Node 24, which
+  is a deprecation notice with a date behind it. `actions/upload-artifact` was
+  on the same footing and did not appear in the warning only because the job
+  that uses it had not run.
+
+  `checkout` v4 → v5.1.0, `setup-node` v4 → v5.0.0, `upload-artifact` v4 →
+  v5.0.0, in all five workflows, pinned by SHA with the version in the comment
+  beside it as everything here is. The breaking change in that range is
+  `allow-unsafe-pr-checkout`, which changes how `checkout` treats
+  `pull_request_target` — a trigger this repository does not use in any
+  workflow.
+
+- **The release workflow has ceilings too.** `ci.yml` got them when the driver
+  job hung; `release.yml` had none, and it is the file where a stall costs
+  most. A run that hangs holds a runner and leaves a draft holding some of six
+  artifacts, which at a glance is indistinguishable from a finished one.
+  `preflight` reads two files and two secrets and gets five minutes; `build`
+  gets ninety, roughly triple the longest run there has ever been — 30m15s, on
+  the rehearsal of 26 August.
 
 - **`tauri-action` is on 1.0.0, and the input it renamed was renamed here in
   the same commit.** `includeUpdaterJson` became `uploadUpdaterJson`. An action
@@ -145,15 +174,6 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   The check that follows reads the pass count as well as the skip count,
   because a TAP stream with no summary is the signature of the hang above and
   an exit code cannot tell it apart from a clean kill.
-
-## [0.2.0] - 2026-09-01
-
-The first release with a changelog behind it. Everything below had been sitting
-under `Unreleased` since the repository started, which meant the file recorded
-the work honestly and dated none of it — a reader could not tell what shipped
-from what was merely written down. It is dated now, and what follows this
-heading is the engineering log; the short version a user reads is
-[`docs/RELEASE-NOTES-0.2.0.md`](docs/RELEASE-NOTES-0.2.0.md).
 
 ### Added
 
