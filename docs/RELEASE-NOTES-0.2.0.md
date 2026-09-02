@@ -1,6 +1,6 @@
 # StackVo 0.2.0
 
-**1 September 2026** · [Türkçe](#stackvo-020-türkçe)
+**2 September 2026** · [Türkçe](#stackvo-020-türkçe)
 
 StackVo manages Docker-based local development environments from a desktop
 window. Every project gets its own PHP version, its own database, its own
@@ -73,7 +73,7 @@ never as a public issue — see [`SECURITY.md`](../SECURITY.md).
 
 # StackVo 0.2.0 (Türkçe)
 
-**1 Eylül 2026**
+**2 Eylül 2026**
 
 StackVo, Docker tabanlı yerel geliştirme ortamlarını bir masaüstü penceresinden
 yönetir. Her proje kendi PHP sürümünü, kendi veritabanını, kendi alan adını ve
