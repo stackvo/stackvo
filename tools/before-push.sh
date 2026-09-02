@@ -33,13 +33,53 @@ cd "$repo"
 all=0
 [ "${1:-}" = "--all" ] && all=1
 
+# One run at a time, on this tree.
+#
+# Two of these on one machine do not queue — they race, and what they race for
+# is the cargo build lock and the CPU. That produced a `front end · tests`
+# failure whose cause was the other run: thirteen vitest tests take more than
+# three seconds on an idle machine, and a second gate holding the cores pushes
+# them past even the 20-second ceiling. The suite passes on its own, so the
+# report was a fact about the machine wearing the clothes of a defect.
+#
+# `mkdir` rather than a lock file, because it is the one create that is atomic
+# everywhere this runs. The trap removes it on any exit — including the Ctrl-C
+# that a long `--all` invites.
+lock="${TMPDIR:-/tmp}/stackvo-before-push.lock"
+if ! mkdir "$lock" 2>/dev/null; then
+  printf '\033[31mAnother before-push.sh is already running.\033[0m\n' >&2
+  printf 'Two at once race for the cargo lock and the cores, and the loser\n' >&2
+  printf 'reports failures that are about the machine rather than the tree.\n\n' >&2
+  printf 'Wait for it, or remove %s if nothing is running.\n' "$lock" >&2
+  exit 1
+fi
+trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+
 failed=()
+skipped=()
+
+# Exit 3 means "this machine cannot answer this", and it is not a failure.
+#
+# Without it there are only two colours, and a step that cannot run has to pick
+# one: green, which claims an answer nobody got, or red, which sends the reader
+# looking for a defect that is not there. `windows · test` spent ten minutes
+# producing the second — a wall of cc-rs output whose meaning was "this
+# container cannot cross-build ARM64 Windows", which reads exactly like a
+# Windows test failing.
+#
+# A third colour costs one branch and keeps the summary honest: the run is
+# green when nothing failed, and it still says out loud what went unasked.
 step() {
   local name="$1"
   shift
   printf '\n\033[1m▸ %s\033[0m\n' "$name"
-  if "$@"; then
+  local status=0
+  "$@" || status=$?
+  if [ "$status" -eq 0 ]; then
     printf '\033[32m  ok\033[0m\n'
+  elif [ "$status" -eq 3 ]; then
+    printf '\033[33m  skipped\033[0m\n'
+    skipped+=("$name")
   else
     printf '\033[31m  FAILED\033[0m\n'
     failed+=("$name")
@@ -117,6 +157,12 @@ else
 fi
 
 printf '\n'
+if [ ${#skipped[@]} -ne 0 ]; then
+  printf '\033[33m%d check(s) this machine cannot answer:\033[0m\n' "${#skipped[@]}"
+  printf '  %s\n' "${skipped[@]}"
+  printf '\n'
+fi
+
 if [ ${#failed[@]} -eq 0 ]; then
   printf '\033[32mEverything CI asks, answered here.\033[0m\n'
   exit 0
