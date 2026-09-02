@@ -412,7 +412,7 @@ jobs:
           path: sbom/
           if-no-files-found: error
 
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -459,7 +459,20 @@ jobs:
           prerelease: false
           # tauri-action writes latest.json alongside the artifacts; the
           # endpoint in tauri.conf.json has to point at wherever it is served.
-          includeUpdaterJson: true
+          #
+          # `uploadUpdaterJson`, not `includeUpdaterJson`: 1.0.0 renamed it, and
+          # that rename is why the version bump and this line are one commit.
+          # An action ignores an input it does not know and says nothing, so the
+          # two apart would have shipped a release with no `latest.json` — the
+          # exact file the updater endpoint asks for.
+          #
+          # `updater_endpoint.rs` holds the pair, and it now holds it properly:
+          # it used to look for this literal string, which says the workflow
+          # names AN input, not that the pinned action still knows it. It reads
+          # the major out of the `# v` comment beside the pin instead, so
+          # bumping one without the other fails there rather than in a release
+          # nobody can take back.
+          uploadUpdaterJson: true
 
       # ------------------------------------------------------- the last step
       #

@@ -7,6 +7,52 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`tauri-action` is on 1.0.0, and the input it renamed was renamed here in
+  the same commit.** `includeUpdaterJson` became `uploadUpdaterJson`. An action
+  ignores an input it does not know, so the bump on its own would have produced
+  a release with no `latest.json` — and the updater endpoint in
+  `tauri.conf.json` points at exactly that file.
+
+  A test does read this file — `updater_endpoint.rs` exists to hold the
+  endpoint and the input together, because they live in two files and neither
+  mentions the other. It would not have caught this: it looked for the literal
+  `includeUpdaterJson: true`, which says the workflow still names *an* input,
+  not that the pinned action still knows it. Dependabot's bump changed only the
+  SHA, so the test would have passed and the release would have shipped without
+  a `latest.json`.
+
+  It reads the major out of the `# v` comment beside the pin now, and expects
+  `includeUpdaterJson` up to v0 and `uploadUpdaterJson` from 1.0.0 on. Bumping
+  one without the other fails the suite. Checked both ways: the pair as it
+  stands passes, and putting the old input back under the new pin fails.
+
+  The other breaking changes in 1.0.0 were checked against this workflow and
+  none of them apply: `assetNamePattern`, `includeRelease`, `includeDebug` and
+  `updaterJsonKeepUniversal` are not used here, and `tagName`, `releaseName`,
+  `releaseDraft`, `prerelease`, `args` and the `artifactPaths` output all keep
+  their names. 1.0.0 also runs on node24, which is one fewer workflow warning.
+
+- **CI no longer cancels its own runs on `main`.** `cancel-in-progress` was
+  unconditional, and the comment above it named the case it was written for: a
+  superseded push is "answering a question about a tree nobody will ship". True
+  of a pull request, false of `main`, where the tree is the one that ships.
+
+  Three merges inside seven minutes on 2 September 2026 — #85, #79 and #81 —
+  left exactly one run standing. #85's was killed after two seconds; #79's
+  after seven minutes and forty-six, with the matrix nearly done. Neither of
+  those trees was ever tested, and either is a commit a tag could be cut from.
+
+  It matters more now that `strict` is off the ruleset, because the argument
+  for taking it off is the entry below this one: CI runs on `push` to `main` as
+  well, so a pair that is green apart and broken together still fails — on the
+  merge instead of before it. That argument is worth exactly what the run on
+  the merge is worth, and this line was cancelling it. `codeql.yml` carried the
+  same line and gets the same fix: a cancelled scan leaves a tree unscanned,
+  and the weekly schedule only ever looks at the tip.
+
+  Pull requests are unchanged — a superseded run there is still cancelled,
+  which is what the setting was for.
+
 - **`strict` is off in the `main` ruleset, because it needs a queue and there
   is none.** What it bought is worth naming: every merged pull request had been
   tested against `main` exactly as it stood, so two changes that were each
