@@ -5,6 +5,31 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **`strict` is off in the `main` ruleset, because it needs a queue and there
+  is none.** What it bought is worth naming: every merged pull request had been
+  tested against `main` exactly as it stood, so two changes that were each
+  green alone could not land and break together.
+
+  What it cost was measured on 2 September 2026. A merge to `main` marks every
+  other open pull request out-of-date at once; each then needs `Update branch`
+  and a fresh eight-minute run of ten required checks, and any merge inside
+  that window marks them all again. Three pull requests — #78, #79 and #81 —
+  went BEHIND the moment #83 landed. None could be merged. No two of them
+  touched the same file.
+
+  What is actually given up is smaller than it looks: CI runs on `push` to
+  `main` as well as on pull requests, so a pair that only breaks together still
+  fails — on the merge rather than before it. The right replacement is a merge
+  queue, which tests each pull request against the `main` it will land on and
+  merges it with nobody clicking; ten required checks make for a slow queue, so
+  that is its own decision to take.
+
+  Changed in [`.github/rulesets/main.json`](.github/rulesets/main.json) **and**
+  in the repository settings, which is the rule that file exists to enforce: a
+  drift between the two is the invisible state it was written to replace.
+
 ### Fixed
 
 - **`vitest` reported 1437 passed and exited 1.** Three times over two days,
