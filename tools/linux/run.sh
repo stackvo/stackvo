@@ -320,7 +320,18 @@ if [ "${1:-}" = "--windows" ]; then
   # wants between them and a Windows type error.
   # `run` works from /repo/src-tauri, so the tool is one level up.
   run node ../tools/sidecars.mjs --stubs --target x86_64-pc-windows-msvc
-  run cargo xwin check --target x86_64-pc-windows-msvc --all-targets
+  run cargo xwin check --target x86_64-pc-windows-msvc --all-targets || exit $?
+
+  # Clippy too, because `ci.yml` runs clippy on `windows-latest` with
+  # `-D warnings` and `check` does not answer that question.
+  #
+  # The gap has a shape, and it is `cfg`. A `#[cfg(windows)]` block is the tail
+  # of its function on Windows and dead text everywhere else, so a `return`
+  # inside it is needless on exactly one platform — and `needless_return` is
+  # denied there. Two of those reached main: `engine.rs`'s named-pipe connect
+  # and `xdebug.rs`'s output directory, both invisible to every clippy run on
+  # this machine and to `check` on that one.
+  run cargo xwin clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings
   exit $?
 fi
 
