@@ -5,10 +5,7 @@
 # behind, which is eight migrations once the pairs that move together are
 # counted once (eslint with `@eslint/js`, vitest with its coverage provider):
 # vuetify 3→4, pinia 2→4, vite 7→8, vitest 3→4, eslint 9→10, jsdom 26→30,
-# vue-i18n 9→11, vue-router 4→5. It was seven when this file was written and
-# the gap widens every month nobody looks, which makes the eventual migration
-# more expensive rather than more urgent. A pull request per bump is the
-# cheapest way to keep that visible.
+# vue-i18n 9→11, vue-router 4→5.
 #
 # Grouped, and weekly rather than daily. An ungrouped daily Dependabot on three
 # ecosystems is a repository nobody reads the notifications for, which is the
@@ -23,22 +20,9 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    # Ten rather than five, and the reason is the change below. With majors
-    # flowing again there are eight of them waiting on the npm side alone; a
-    # limit of five would let two grouped patch pull requests hide the
-    # migrations behind them, which is the opposite of what raising majors
-    # separately is for.
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     groups:
       vue:
-        # Minors and patches only. This is what "left out of the groups" means
-        # mechanically, and it is the half that used to be missing: the comment
-        # below said majors are raised on their own, and an `ignore` block at
-        # the bottom of this ecosystem silenced every one of them. The file
-        # said two things and did the stricter one, so the seven — now eight —
-        # major upgrades this repository is behind were never going to arrive
-        # from Dependabot at all.
-        update-types: [minor, patch]
         patterns:
           - vue
           - vue-*
@@ -46,7 +30,6 @@ updates:
           - pinia
           - '@vitejs/*'
       tooling:
-        update-types: [minor, patch]
         patterns:
           - vite
           - vitest
@@ -55,10 +38,28 @@ updates:
           - '@eslint/*'
           - prettier
           - jsdom
-    # Majors are left out of the groups above — see `update-types` on each —
-    # and arrive on their own: Vuetify 4 and Pinia 4 are migrations rather than
-    # bumps, and a grouped pull request that mixes one with six patch updates
-    # is one nobody can review or revert cleanly.
+    # Majors are not raised here, and this is the second time this file has
+    # said something about them — so it says what was measured rather than
+    # what sounded right.
+    #
+    # It used to claim majors were "raised on their own" while an `ignore`
+    # block silenced every one of them: the file said two things and did the
+    # stricter one. Removing the block made it truthful, and the truthful
+    # version ran once: **fourteen pull requests and fourteen branches in a
+    # single night**, one per major, every one of them red, none of them
+    # mergeable. That is the eight-migration backlog rendered as noise. A
+    # migration is not reviewable as a bot's diff — vuetify 3→4 and vue-i18n
+    # 9→11 change application code, not a version string — so the pull request
+    # cannot be merged, cannot be closed without losing the reminder, and sits
+    # there making every other pull request harder to see.
+    #
+    # So the backlog is tracked where work is tracked, `docs/isler.md` B-1,
+    # with the eight named and dated. Dependabot keeps the half it is good at:
+    # the minor and patch stream, which is safe, grouped, and mergeable on the
+    # strength of a green run alone.
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: cargo
     directory: /src-tauri
@@ -68,14 +69,26 @@ updates:
     open-pull-requests-limit: 5
     groups:
       tauri:
-        update-types: [minor, patch]
         patterns:
           - tauri
           - tauri-*
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
 
   # The workflows themselves. An action pinned to a tag that stops being
   # maintained is the supply-chain hole nobody looks for, because it is not in
   # any lockfile.
+  #
+  # **No `ignore` here, deliberately** — the two ecosystems above drop majors
+  # and this one keeps them, because a major here is a different kind of thing.
+  # `codeql-action` 3→4 is a version string in a workflow file, proved or
+  # disproved by the run that the pull request itself starts; there is no
+  # migration to review. And every action in this repository is pinned to a
+  # SHA, so ignoring majors would mean pinning eleven actions and then never
+  # moving them — a frozen supply chain rather than a watched one, which is the
+  # opposite of what the pinning is for. It is two or three pull requests a
+  # year, not fourteen in a night.
   - package-ecosystem: github-actions
     directory: /
     schedule:

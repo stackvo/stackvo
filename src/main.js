@@ -32,7 +32,12 @@ globalThis.__STACKVO_ERRORS__ = RECENT_ERRORS;
 
 app.config.errorHandler = (err, _instance, info) => {
   console.error('[Vue error]', err, info);
-  RECENT_ERRORS.push(`${info}: ${err?.stack || err?.message || String(err)}`);
+  // `instanceof Error` rather than `err?.stack`: Vue types the argument
+  // `unknown` because anything can be thrown, and optional chaining does not
+  // narrow it. Narrowing is also the more honest read — a thrown string has
+  // no `.stack` to reach for.
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  RECENT_ERRORS.push(`${info}: ${detail}`);
   if (RECENT_ERRORS.length > 10) RECENT_ERRORS.shift();
 };
 

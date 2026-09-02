@@ -259,7 +259,50 @@ run bash -lc 'node ../tools/sidecars.mjs --stubs --target "$(uname -m)-unknown-l
 # of: the registry, the credential store, ACLs, `FOLDERID_Profile`. A green run
 # here is a first opinion worth minutes, not the answer the runner gives.
 if [ "${1:-}" = "--windows-test" ]; then
-  triple="${2:-aarch64-pc-windows-msvc}"
+  # The triple is chosen by what wine on THIS host can execute, not by taste.
+  # On x86_64 that is the x86_64 row, which is also the row CI runs.
+  case "$(uname -m)" in
+  x86_64 | amd64) triple="${2:-x86_64-pc-windows-msvc}" ;;
+  *) triple="${2:-aarch64-pc-windows-msvc}" ;;
+  esac
+
+  # And on an arm64 host the two halves do not meet.
+  #
+  # Wine 9 here executes ARM64 PE and nothing else, so `aarch64-pc-windows-msvc`
+  # is the only triple that could run — and it is the one triple this image
+  # cannot build. `--windows-bundle` above refuses it in a second for `ring`;
+  # this ran it anyway and spent ten minutes finding the same wall from the
+  # other side. Both backends were measured today:
+  #
+  #   clang-cl (default) — `ring` compiles its ARM64 Windows assembly from `.S`,
+  #     which the cl driver cannot assemble, so `cc-rs` falls back to plain
+  #     clang and carries the MSVC flags with it: `clang: error: no such file
+  #     or directory: '/imsvc'`, five times per object.
+  #   clang (XWIN_CROSS_COMPILER=clang) — the `/imsvc` flags come out GNU-style
+  #     and `ring` gets past it, and then `aws-lc-sys` stops in
+  #     `jitterentropy-timer.c` because that backend's sysroot does not carry
+  #     Microsoft's ARM64 intrinsics: 1309 warnings and one error.
+  #
+  # So this is not a red step, and it is not a green one either — nobody got an
+  # answer. Exit 3 is `tools/before-push.sh`'s third colour: skipped, named in
+  # the summary, counted as neither.
+  #
+  # Where the answer does come from: `windows-latest` in `ci.yml` runs this
+  # suite for real on every push, and it is x86_64. An x86_64 Linux or Intel Mac
+  # runs it here for real too — the branch above picks that triple by itself.
+  if [ "$triple" = "aarch64-pc-windows-msvc" ]; then
+    echo "windows · test cannot be answered on an arm64 host." >&2
+    echo >&2
+    echo "  wine here executes ARM64 PE only, and aarch64-pc-windows-msvc is the" >&2
+    echo "  one Windows triple this image cannot cross-build: ring stops on" >&2
+    echo "  \`/imsvc\` under clang-cl, and aws-lc-sys stops on Microsoft's ARM64" >&2
+    echo "  intrinsics under clang. Both were measured; see the comment above." >&2
+    echo >&2
+    echo "  The suite is run for real by \`windows-latest\` in ci.yml, and by" >&2
+    echo "  this same command on an x86_64 host, where it picks x86_64 by itself." >&2
+    exit 3
+  fi
+
   run bash -lc "
     set -euo pipefail
     node ../tools/sidecars.mjs --stubs --target '$triple'

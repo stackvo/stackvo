@@ -64,8 +64,22 @@ pubkey_line() {
   base64 -d < "$file" 2>/dev/null | sed -n '2p' | tr -d '\r\n'
 }
 
+# Relative, from a `cd`, rather than an absolute path inside the expression.
+#
+# `$repo` is whatever the shell running this script calls the tree, and under
+# Git Bash that is a POSIX path (`/d/a/stackvo/stackvo`) which the Windows
+# `node` this line invokes cannot resolve — it reads the leading slash as the
+# current drive's root and looks for `D:\d\a\...`. `require` throws,
+# `2>/dev/null` swallows it, and the answer comes back empty, which this script
+# then reports as "tauri.conf.json carries no plugins.updater.pubkey" — a
+# missing key rather than a path it could not spell. The worst shape a check
+# can have is a true-sounding failure.
+#
+# `cd` crosses the boundary properly: the shell knows both spellings of its own
+# working directory and hands the child a native one, so a relative `require`
+# resolves on every platform.
 conf_pubkey() {
-  node -p "require('$repo/src-tauri/tauri.conf.json').plugins?.updater?.pubkey ?? ''" 2>/dev/null
+  ( cd "$repo/src-tauri" && node -p "require('./tauri.conf.json').plugins?.updater?.pubkey ?? ''" ) 2>/dev/null
 }
 
 # The key lines inside `pub const PINNED`, one per line.
