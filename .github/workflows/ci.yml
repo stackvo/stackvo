@@ -33,6 +33,20 @@ jobs:
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # A ceiling, because this file had none and the default is six hours.
+    #
+    # `nightly.yml`, `codeql.yml` and `dependency-review.yml` all write one; the
+    # workflow that actually hung was the one that did not. `driver` sat in
+    # `Drive the application` for fifty-five minutes — a suite whose every
+    # internal wait is thirty seconds — and a second run was doing the same on a
+    # pull request that had already been closed, each holding a runner until
+    # GitHub's default expired.
+    #
+    # Set from measurement across three green runs, roughly doubled: the longest
+    # observed was build 6, driver 6, coverage 11, supply chain and contracts
+    # under a minute. Doubling leaves room for a cold cache and still turns a
+    # hang into a failure inside the hour rather than at the end of the day.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -213,6 +227,7 @@ jobs:
   driver:
     name: driver
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -339,6 +354,7 @@ jobs:
   coverage:
     name: coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -460,6 +476,7 @@ jobs:
   supply-chain:
     name: supply chain
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -539,6 +556,7 @@ jobs:
   contracts:
     name: contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

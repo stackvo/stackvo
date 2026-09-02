@@ -256,8 +256,10 @@ describe('the password', () => {
  * something asserts on a menu. So these mount the real thing and read
  * `document.body`, where both the panel and the menu land.
  */
-const mountSheetForOverlays = (service = MONGO) =>
-  mount(
+const live = [];
+
+const mountSheetForOverlays = (service = MONGO) => {
+  const wrapper = mount(
     {
       components: { ServiceDetailSheet },
       props: ['service'],
@@ -268,10 +270,35 @@ const mountSheetForOverlays = (service = MONGO) =>
     },
     { props: { service }, global: { plugins: [vuetify, i18n] }, attachTo: document.body }
   );
+  live.push(wrapper);
+  return wrapper;
+};
 
 const overlays = () => document.body.textContent;
 
+// Unmounted, and *then* the body is cleared. The order is the whole point.
+//
+// This used to clear the body alone, which takes the DOM away from a component
+// that is still mounted and still scheduling. These mount with `attachTo:
+// document.body` and no teleport stub, so Vuetify's real overlays are in play —
+// and an overlay's activation runs through a transition and a `setTimeout`, so
+// a render can leave the queue after the test that asked for it has ended. When
+// it did, the parent it was going to insert into no longer existed:
+//
+//   TypeError: Cannot read properties of null (reading 'insertBefore')
+//     ❯ insert @vue/runtime-dom … ❯ ReactiveEffect.componentUpdateFn
+//
+// Three of those, from one test, while every assertion in the file passed —
+// vitest reported `1437 passed` and exited 1, which is the worst shape a gate
+// can have: right often enough that the reflex is to run it again. It surfaced
+// three times over two days and each time the run before and after was clean,
+// because whether the queued render flushes before or after teardown is a race.
+//
+// `unmount()` stops the effects. After that the body is already empty and the
+// clear is only tidiness — but it stays, because a stray overlay node left by a
+// component this file did not mount would otherwise be read by `overlays()`.
 afterEach(() => {
+  while (live.length) live.pop().unmount();
   document.body.innerHTML = '';
 });
 

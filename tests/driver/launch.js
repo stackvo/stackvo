@@ -237,9 +237,31 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
     throw error;
   }
 
+  // Bounded, because the guard above only covers the wrong half.
+  //
+  // `.catch(() => {})` handles a session close that REJECTS. It does nothing
+  // for one that never answers, and that is the shape this actually takes: the
+  // job sat in `Drive the application` for fifty-five minutes against a suite
+  // whose every internal wait is thirty seconds, and `ci.yml` writes no
+  // `timeout-minutes`, so the ceiling was GitHub's six-hour default. Two runs
+  // were holding runners that way at once, one of them on a pull request that
+  // had already been closed.
+  //
+  // Five seconds, then SIGKILL. A close that has not answered in five is not
+  // going to, and the reason the close is attempted at all — the comment above
+  // this function — is to avoid orphaning the application; SIGKILL on the
+  // driver is the fallback that was always there for the failure path.
   const stop = async () => {
-    await session.close().catch(() => {});
+    await Promise.race([
+      session.close().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 5_000)),
+    ]);
     driver.kill();
+    // The polite signal, then the one that cannot be ignored. `kill()` sends
+    // SIGTERM and returns immediately; a driver that does not act on it keeps
+    // the application alive, and node will not exit while that handle is open.
+    const killed = setTimeout(() => driver.kill('SIGKILL'), 5_000);
+    killed.unref?.();
     await rm(root, { recursive: true, force: true });
   };
 
