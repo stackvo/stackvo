@@ -7,6 +7,28 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`vitest` reported 1437 passed and exited 1.** Three times over two days,
+  with a clean run either side of each — the shape that gets a suite re-run
+  rather than read. The failure was not in an assertion; it arrived after every
+  one of them had passed, as three of:
+
+      TypeError: Cannot read properties of null (reading 'insertBefore')
+        ❯ insert @vue/runtime-dom … ❯ ReactiveEffect.componentUpdateFn
+
+  `tests/service-connection.spec.js` clears `document.body` in `afterEach` and
+  did not unmount first, which takes the DOM away from a component that is still
+  mounted and still scheduling. That file's overlay tests mount with `attachTo:
+  document.body` and no teleport stub on purpose — the stub does not relocate an
+  overlay's content, it drops it, so a menu inside the sheet becomes unreadable
+  — which means Vuetify's real overlays are in play, and an overlay's activation
+  runs through a transition and a `setTimeout`. A render could leave the queue
+  after the test that asked for it had ended, and insert into a parent that no
+  longer existed. Whether it flushed before or after teardown was the race.
+
+  `afterEach` unmounts what it mounted, and then clears. The clear stays: a
+  stray overlay node left by a component this file did not mount would otherwise
+  be read by `overlays()`.
+
 - **The `driver` job passed its five tests and then hung for 55 minutes.** It
   had to be cancelled by hand, and it would have run for six hours if nobody
   had been watching: no job in `ci.yml` carried a `timeout-minutes`, so every
