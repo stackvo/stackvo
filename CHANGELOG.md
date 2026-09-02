@@ -13,10 +13,18 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   a release with no `latest.json` — and the updater endpoint in
   `tauri.conf.json` points at exactly that file.
 
-  Nothing in this repository would have caught it. `release.yml` runs on a tag
-  and on `workflow_dispatch`, never on a pull request, so Dependabot's bump was
-  green about a file no check had opened. That is the failure worth naming: not
-  a red that was ignored, a green that was about something else.
+  A test does read this file — `updater_endpoint.rs` exists to hold the
+  endpoint and the input together, because they live in two files and neither
+  mentions the other. It would not have caught this: it looked for the literal
+  `includeUpdaterJson: true`, which says the workflow still names *an* input,
+  not that the pinned action still knows it. Dependabot's bump changed only the
+  SHA, so the test would have passed and the release would have shipped without
+  a `latest.json`.
+
+  It reads the major out of the `# v` comment beside the pin now, and expects
+  `includeUpdaterJson` up to v0 and `uploadUpdaterJson` from 1.0.0 on. Bumping
+  one without the other fails the suite. Checked both ways: the pair as it
+  stands passes, and putting the old input back under the new pin fails.
 
   The other breaking changes in 1.0.0 were checked against this workflow and
   none of them apply: `assetNamePattern`, `includeRelease`, `includeDebug` and
