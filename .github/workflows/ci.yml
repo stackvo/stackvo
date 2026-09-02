@@ -21,9 +21,23 @@ permissions:
 # four more jobs. The older one is answering a question about a tree nobody will
 # ship, so it is cancelled rather than raced. Keyed by ref: `main` and each pull
 # request queue independently.
+#
+# **On `main`, nothing is cancelled**, and the sentence above is why: a commit
+# on `main` is not a tree nobody will ship, it is the tree. Cancelling there
+# answers "is the tip green" and silently drops the question every commit under
+# it was asked. Three merges inside seven minutes on 2026-09-02 — #85, #79 and
+# #81 — left exactly one run standing: #85's was killed after two seconds and
+# #79's after seven minutes and forty-six, having very nearly finished. Neither
+# of those trees was ever tested, and both are tags somebody could cut.
+#
+# It matters more since `strict` came off the ruleset. The argument for taking
+# it off is that CI runs on `push` to `main` as well, so a pair that is green
+# apart and broken together still fails — on the merge rather than before it.
+# That argument is only as good as the run on the merge, and this line was
+# cancelling it.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # The reason this job exists: the Windows-specific blocks in engine.rs,
