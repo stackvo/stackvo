@@ -108,26 +108,65 @@ fn the_updater_asks_the_release_that_this_repository_publishes() {
         endpoint, &expected,
         "the updater endpoint is not the one this repository's release \
          workflow produces.\n  declared: {endpoint}\n  expected: {expected}\n\n\
-         `tauri-action` runs with `includeUpdaterJson: true`, which writes \
+         `tauri-action` runs with its updater-json input set, which writes \
          latest.json into the release; `releases/latest/download/` is where \
          that file is served from. An endpoint anywhere else answers 404, and \
          with `dialog: false` the app has no way to tell anybody it did."
     );
 }
 
+/// The name of the input that writes `latest.json`, for the pinned major.
+///
+/// `tauri-action` renamed it in 1.0.0: `includeUpdaterJson` became
+/// `uploadUpdaterJson`. The major is read from the version comment beside the
+/// pin — the SHA is what runs, and the comment is the only place the version it
+/// belongs to is written down, which is why every pin in this repository carries
+/// one.
+fn updater_json_input() -> &'static str {
+    let workflow = read(".github/workflows/release.yml");
+    let line = workflow
+        .lines()
+        .find(|l| l.contains("tauri-apps/tauri-action@"))
+        .expect("release.yml pins tauri-apps/tauri-action");
+    let major: u32 = line
+        .split("# v")
+        .nth(1)
+        .and_then(|rest| rest.split(['.', ' ']).next())
+        .and_then(|n| n.trim().parse().ok())
+        .unwrap_or_else(|| panic!("no `# v<version>` comment beside the tauri-action pin: {line}"));
+
+    if major >= 1 {
+        "uploadUpdaterJson: true"
+    } else {
+        "includeUpdaterJson: true"
+    }
+}
+
 /// The workflow still produces the file the endpoint asks for.
 ///
-/// The endpoint and the flag that writes the file are in two different files
-/// and neither mentions the other. Dropping `includeUpdaterJson` would leave a
-/// correct-looking URL pointing at nothing.
+/// The endpoint and the input that writes the file are in two different files
+/// and neither mentions the other. Dropping it would leave a correct-looking
+/// URL pointing at nothing.
+///
+/// The input is looked up by the pinned major rather than hard-coded, and that
+/// is the half this test was missing. It asserted the literal
+/// `includeUpdaterJson: true`, which says the workflow still names *an* input —
+/// not that the action still knows it. Dependabot's bump to 1.0.0 (#78) changed
+/// only the SHA, so this test would have passed while the release shipped
+/// without a `latest.json`: an action ignores an input it does not know, and
+/// says nothing. Reading the major ties the two together, so bumping one
+/// without the other fails here instead of in a release nobody can take back.
 #[test]
 fn the_release_workflow_still_writes_the_file_the_endpoint_asks_for() {
     let workflow = read(".github/workflows/release.yml");
+    let expected = updater_json_input();
     assert!(
-        workflow.contains("includeUpdaterJson: true"),
-        "release.yml no longer sets `includeUpdaterJson: true`, so no \
-         latest.json is written into the release — and the updater endpoint in \
-         tauri.conf.json asks for exactly that file."
+        workflow.contains(expected),
+        "release.yml no longer sets `{expected}`, so no latest.json is written \
+         into the release — and the updater endpoint in tauri.conf.json asks \
+         for exactly that file. The name depends on the pinned major: \
+         `includeUpdaterJson` up to tauri-action v0, `uploadUpdaterJson` from \
+         v1.0.0 on."
     );
     assert!(
         workflow.contains("TAURI_SIGNING_PRIVATE_KEY"),
