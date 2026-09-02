@@ -38,9 +38,13 @@ on:
 permissions:
   contents: read
 
+# Superseded pull request runs are cancelled; runs on `main` are not, for the
+# reason `ci.yml` sets out at length. A scan is a claim about a tree, and a
+# cancelled scan on `main` leaves that tree unscanned rather than scanned
+# later — the weekly `schedule` run only ever looks at the tip.
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   javascript:
