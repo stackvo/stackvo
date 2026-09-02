@@ -412,7 +412,7 @@ jobs:
           path: sbom/
           if-no-files-found: error
 
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -459,7 +459,16 @@ jobs:
           prerelease: false
           # tauri-action writes latest.json alongside the artifacts; the
           # endpoint in tauri.conf.json has to point at wherever it is served.
-          includeUpdaterJson: true
+          #
+          # `uploadUpdaterJson`, not `includeUpdaterJson`: 1.0.0 renamed it, and
+          # that rename is why the version bump and this line are one commit.
+          # `release.yml` runs on a tag and on `workflow_dispatch` — never on a
+          # pull request — so no check in this repository would have looked at
+          # the pair. Dependabot's bump was green, and a green that proves
+          # nothing about the file it changed is the shape of failure worth
+          # naming: an action ignores an input it does not know, so the updater
+          # would have shipped a release with no `latest.json` and said nothing.
+          uploadUpdaterJson: true
 
       # ------------------------------------------------------- the last step
       #
