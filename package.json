@@ -72,10 +72,10 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "pinia": "^2.3.1",
-    "vue": "^3.5.40",
+    "vue": "^3.5.42",
     "vue-i18n": "^9.14.5",
     "vue-router": "^4.6.4",
-    "vuetify": "^3.12.11"
+    "vuetify": "^3.13.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
