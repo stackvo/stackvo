@@ -125,6 +125,11 @@ export default [
     languageOptions: {
       globals: {
         fetch: 'readonly',
+        // `fetch` has no timeout of its own, so the client builds one out of
+        // `AbortSignal.timeout`. It comes with `fetch` and is granted with it:
+        // a client allowed to open a socket and not allowed to give up on it
+        // is how the driver suite hung for 55 minutes.
+        AbortSignal: 'readonly',
       },
     },
   },
