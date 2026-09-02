@@ -124,11 +124,23 @@ koşuda karşılaştırılıyor.
    birlikte hareket eden çiftler bir kez sayıldı.) Belge bunu "yedi" diye taşıyordu;
    bugün ölçülen sayı bu, ve `dependabot.yml`'in başlığı da düzeltildi.
 
-   **Engeli kalktı.** `dependabot.yml` majorları hem "kendi başlarına açılır" diye
-   anlatıp hem `ignore` ile susturuyordu; artık gruplar `update-types: [minor, patch]`
-   alıyor ve `ignore` yok, yani majorlar tek tek PR olarak gelecek. npm tarafının
-   `open-pull-requests-limit`'i 5'ten 10'a çıkarıldı ki sekiz major, gruplanmış yama
-   PR'larının arkasında kalmasın. Bu maddeyi kapatacak olan şey artık zaman.
+   **Ve bu liste artık tek kayıt.** `dependabot.yml` majorları hem "kendi başlarına
+   açılır" diye anlatıp hem `ignore` ile susturuyordu; dosya iki şey söyleyip sıkı
+   olanı yapıyordu. Doğrusu yazıldı, ve doğrusu bir gece koştu: **tek gecede on dört
+   pull request, on dört dal**, her major için bir tane, hepsi kırmızı, hiçbiri
+   birleştirilebilir değil. Bir geçiş botun diff'i olarak incelenemez — vuetify 3→4
+   uygulama kodunu değiştirir, sürüm satırını değil — yani o PR ne birleşir, ne de
+   hatırlatıcıyı kaybetmeden kapatılır; sadece durur ve diğer her PR'ı görmeyi
+   zorlaştırır.
+
+   `ignore` npm ve cargo tarafına geri kondu, gerekçesiyle birlikte. Sekiz geçişin
+   kaydı **burası**; Dependabot iyi olduğu yarıyı tutuyor: gruplanmış minor/patch
+   akışı, ki o yeşil koşuyla birleşir. `github-actions` ekosisteminde `ignore`
+   **bilerek yok** — oradaki major bir workflow dosyasındaki sürüm satırıdır, PR'ın
+   kendi koşusu ispatlar, ve on bir aksiyon SHA'ya çakılı olduğu için majorları
+   susturmak izlenen bir tedarik zincirini dondurulmuş bir zincire çevirirdi.
+
+   Bu maddeyi kapatacak olan şey, sekizini tek tek elle yapmak.
 
 2. ❌ **Dal koruması içe aktarılmadı** (yapılmadı) — **ve bu bir depo ayarı turu, bir
    geliştirme değil.** `.github/rulesets/main.json` yazıldı ve içinde ne olduğunun
