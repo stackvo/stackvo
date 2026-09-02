@@ -1,6 +1,6 @@
 # StackVo Desktop — Açık İşler
 
-**Tarih:** 2026-09-01
+**Tarih:** 2026-09-02
 **Kapsam:** Yalnızca **geliştirmesi kalan** maddeler.
 
 Bu belge her turda budanıyor: yapılan ve yapılmayacağına karar verilen her madde, alt
@@ -19,7 +19,7 @@ yarısı da silindi, yani bir başlık artık **yalnızca kalanı** adlandırıy
 | Blok | Madde | Ne bekliyor |
 | --- | --- | --- |
 | **A. Yayın koşusu** | 4 | Yeşil bir yapı matrisi, bir insanın tuşu, bir Windows makinesi |
-| **B. Bakım borcu** | 3 | Bir depo ayarı turu, Dependabot'un ilk haftası, bir doğrulayıcı |
+| **B. Bakım borcu** | 2 | Sekiz elle geçiş, bir doğrulayıcı |
 | **C. Arayüz borcu** | 3 | Aracın kendi sınırı, ilk yayın, bir ürün kararı |
 | **D. Stratejik** | 1 | **Kullanıcıya sorulacak bir karar** |
 
@@ -33,13 +33,13 @@ gibi ikinci bir kanal da yok.
 > `docs/RELEASE-NOTES-0.2.0.md` imzasız bir yapının iki platformdaki adımını veriyor.
 > **Karar geri alınabilir:** imzalamaya dönülürse iş, o sırları depoya koymaktan ibaret.
 
-**Kritik yol, ve 2026-09-01'de değişti.** Sürüm numarası seçildi (`0.2.0`, üç dosyada ve
-`CHANGELOG.md`'de) ve sürüm notu yazıldı, yani zincirin başındaki iki halka düştü. Yerine
-**daha önce hiç yazılmamış bir engel** geçti: yayın koşusu hiç yeşil olmadı. Sırası şu:
-**yapı matrisini onar** → **etiketle** → **Publish** → `updates:check` → **Windows'ta elle
-tur**. StackVo'nun kendi iki minisign anahtarı duruyor; **içerik anahtarının
-döndürülebildiği pencere ilk varlıklı sürümde kapanıyor**, yani rotasyon gerekiyorsa
-yayından önce yapılmalı.
+**Kritik yol, ve 2026-09-02'de bir halka daha düştü.** Sürüm numarası seçildi (`0.2.0`,
+üç dosyada ve `CHANGELOG.md`'de), sürüm notu yazıldı, ve yayın matrisinin üç kırmızı
+satırının **sebepleri bulunup `main`'de kapatıldı** (A-1). Geriye o kapanışı ölçüme
+çevirmek kalıyor. Sırası şu: **prova koşusu** → **etiketle** → **Publish** →
+`updates:check` → **Windows'ta elle tur**. StackVo'nun kendi iki minisign anahtarı
+duruyor; **içerik anahtarının döndürülebildiği pencere ilk varlıklı sürümde kapanıyor**,
+yani rotasyon gerekiyorsa yayından önce yapılmalı.
 
 ---
 
@@ -47,51 +47,77 @@ yayından önce yapılmalı.
 
 | | Ne | Durum |
 | --- | --- | --- |
-| PR #58 | Kırmızı olan her şeyi yeşile döndürdü | ✅ birleşti |
-| Bu değişiklik | Kalan CI kırmızısı, yerel kapının delikleri, sertleştirme, `0.2.0` | ⏳ tek PR |
+| PR #74 | Kapıya üçüncü renk, tek koşu kilidi, Dependabot susturuldu | ✅ birleşti |
+| PR #76 | CI'ın bulduğu iki ayak; `--windows` artık clippy de soruyor | ✅ birleşti |
+| PR #77 | CodeQL action'ının üç yarısı birlikte | ✅ birleşti |
+| PR #80 | vue + vuetify, lisans bildirimi yanında | ✅ birleşti |
+| Depo ayarları | Dal koruması içe aktarıldı; Secret Protection + push protection açıldı | ✅ |
 
-**Kural setinin sırası kritik.** `.github/rulesets/main.json` üç yeni denetimi
-(`CodeQL (javascript)`, `clippy (sarif)`, `review`) zorunlu kılıyor, ve bir denetim ancak
-workflow'u `main`'de varsa GitHub'ın gözünde var olur. **Bu PR birleşmeden içe aktarılırsa
-sonraki her PR var olmayan denetimleri sonsuza kadar bekler.** Sıra: birleştir → içe aktar.
+`main` yedi ayağın yedisinde de yeşil, ve artık **korumalı**: on zorunlu denetim,
+doğrudan push yok, zorla push yok, ve `strict` — yani bir PR ancak `main`'in güncel
+hâliyle sınandıysa birleşebiliyor. Bugün bir sabah boyunca kırmızı görünen Dependabot
+PR'larının hepsinin sebebi buydu: eski bir `main`'in üstünde koşmuşlardı.
 
-Etiketleme de birleşmeden sonra: `v0.2.0`, ve ondan önce yayın matrisinin düşen üç satırı
-onarılmalı — biri (`ubuntu-24.04-arm`) artık `tools/linux/run.sh --bundle` ile yerelde
-cevaplanabiliyor ve o koşu yeşil.
+Açık kalan iki Dependabot PR'ı — #78 (`tauri-action` 0.6.2→1.0.0) ve #79
+(`attest-build-provenance` 2.4.0→4.2.2) — **bilerek bekliyor.** İkisi de yalnızca
+`release.yml`'de kullanılıyor, o dosyayı hiçbir denetim koşturmuyor, ve o workflow henüz
+hiç yeşil olmadı. Yeşil bir CI rozeti bu ikisi hakkında "bu action çalışıyor" demiyor;
+"workflow dosyasını değiştirmek başka bir şeyi bozmadı" diyor. Sıra: A-1 kapansın, sonra
+bu ikisi.
 
 ### Ve bugünün dersi, buraya yazılıyor çünkü tekrarlanabilir
 
-PR #58 `cargo test` ve `npm test` yeşil diye "ağaç yeşil" denip gönderildi; ardından gelen
-koşu **dört ayağın dördünde de** kırmızıydı. İki cümle de doğruydu: `ci.yml` işletim
-sistemi başına on bir şey soruyor, ve o ikisi onun ikisi.
-
-`tools/before-push.sh` on birini de soruyor — açılış satırı *"everything CI will ask,
-asked here first"* — ve koşturulmadı. Koşturulunca aynı hataları doksan saniyede verdi;
-öğrenilme biçimi ise bir merge, dört iş ve dört ekran görüntüsü oldu.
-
 **Kural: `tools/before-push.sh` koşmadan hiçbir dal push edilmez.** Platformlar arası
-olanlar için `--all`, ve o da artık `--windows-test` içeriyor — Windows takımı wine altında
-yerelde koşabiliyordu ve bu dosya onu hiç sormamıştı. `--windows` **derleme denetimi**,
-koşu değil; aradaki fark tam olarak Windows'ta düşen üç testti.
+olanlar için `--all`.
 
-**Ve kapının kendisi de ölçülmeli.** Konteyner imajı iki gün eskiydi ve `run.sh` onu yalnız
-*yoksa* kuruyordu, yani `--bundle` ve `--windows-test` bozuk bir yapı gibi okunan bayat bir
-konteynerde düşüyordu. Artık Dockerfile'ın sha256'sı imaja etiket olarak yazılıyor ve her
-koşuda karşılaştırılıyor.
+Kural iki kez çiğnendi ve iki kez aynı bedeli ödetti: bir kez `cargo test` ile `npm test`
+yeşil diye "ağaç yeşil" denip gönderildiğinde — sonraki koşu dört ayağın dördünde de
+kırmızıydı — bir kez de son düzenleme kapı koştuktan **sonra** yapıldığında (`types:tsc`).
+İkisinde de kapı aynı hataları saniyeler içinde veriyordu; öğrenilme biçimi bir merge ve
+bir üç-işletim-sistemi matrisi oldu.
+
+**Kapının kendisi de ölçülmeli, ve ölçüldükçe delik çıktı.** `--windows` yalnız `check`
+koşuyordu; `ci.yml` ise Windows'ta clippy'yi `-D warnings` ile koşuyor, ve aradaki fark
+iki `cfg(windows)` hatasıydı — adım artık clippy'yi de soruyor, ve bu kendi kaldırılışına
+karşı denendi. `--windows-test` on dakika derleyip "bu konteyner ARM64 Windows'u
+derleyemiyor" diyordu, ki o bir testin düşmesiyle **aynı renkte** görünüyordu — artık bir
+saniyede, `skipped` olarak, gerekçesiyle; kapının üçüncü rengi bunun için var. İki kapı
+aynı anda koşunca birbirine hayalet kırmızı üretiyordu — artık `mkdir` kilidi var.
+Konteyner imajı sessizce bayatlıyordu — artık Dockerfile'ın sha256'sı imaja etiket olarak
+yazılıyor ve her koşuda karşılaştırılıyor.
+
+**Makineyi okuyan bir test, kodu okumaz.** `apps` testi kurulu terminali olmayan bir
+makinede düşüyordu, `pty` testleri ortam değişkenlerini okuyordu, `key_ceremony` Git
+Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı sınıf: yalnızca
+üzerinde koşulmayan bir makinede görünen testler.
 
 ---
 
 ## A. Yayın koşusu
 
-1. ❌ **Yapı matrisi altı hedefin üçünde düşüyor** (yapılmadı) — **ve bu maddenin yeni
-   olması bir bulgu.** Belge daha önce *"zincirin kod tarafı bitti ve artık dışsal bir
-   bağımlılığı da yok"* diyordu; oysa `release.yml`'in son koşusu (`32986607714`,
-   2026-08-26) `windows-latest / x86_64`, `ubuntu-24.04-arm / aarch64` ve
-   `windows-11-arm / aarch64` satırlarında düştü. macOS'un iki satırı ve Linux x86_64
-   geçti. Yani "Publish bir insanın tuşu" doğru değil: basılacak bir şey üretilmiyor.
+1. ❌ **Yayın matrisi hiç yeşil olmadı** (yapılmadı) — **ama üç kırmızı satırın da sebebi
+   bulundu ve `main`'de kapandı.** `release.yml`'in son koşusu (`32986607714`,
+   2026-08-26) altı hedefin üçünde düştü, ve o koşunun kendi günlüğü sebepleri tek tek
+   veriyor:
 
-   Bu, A-2'nin (eski numarayla A-5) Windows turundan **ayrı** bir iş. Tur, imzasız bir
-   yapının o makinede ne yaptığını soruyor; bu madde yapının **var olmasını** sağlıyor.
+   | Satır | Ne dedi | Nerede kapandı |
+   | --- | --- | --- |
+   | `windows-latest / x86_64` | `exit code 101` — `key_ceremony` çifti | PR #74 |
+   | `windows-11-arm / aarch64` | Aynı `exit code 101` | PR #74 |
+   | Her iki Windows satırı | `failed to bundle project: Couldn't find a .ico icon` | `ea80852` |
+   | `ubuntu-24.04-arm / aarch64` | `xdg-open binary not found /usr/bin/xdg-open` | `ea80852` |
+
+   `.ico` bulunamıyordu çünkü o commit'te `bundle.icon` **tek bir PNG** listeliyordu
+   (`["icons/icon.png"]`) — dosya depoda duruyordu, yapılandırma onu adlandırmıyordu.
+   Bugünkü liste beş dosya. `xdg-open` ise `release.yml`'in Linux bağımlılık adımında
+   `xdg-utils` bulunmadığı için yoktu: AppImage paketleyicisi `/usr/bin/xdg-open`'ı **yapı
+   makinesinden** kopyalıyor, `ubuntu-latest` onu taşıyor, `ubuntu-24.04-arm` taşımıyor —
+   bir satırın geçip öbürünün düşmesinin sebebi tam olarak buydu.
+
+   **Kalan iş, bir çıkarımı ölçüme çevirmek.** `release.yml` `workflow_dispatch` taşıyor,
+   yani bugünkü `main` üzerinde **etiket atmadan** bir prova koşusu yapılabilir; 26
+   Ağustos'taki koşu da öyle başlatılmıştı. Etiket geri alınamaz, prova koşusu alınabilir.
+   Bu madde, o koşu altı satırda da yeşil döndüğünde kapanır — ondan önce değil.
 
 2. ❌ **Publish** (yapılmadı) — #1'den sonra: etiketle, koşuyu rehearsal'da uçtan uca
    doğrula, sonra bas. **Publish bir insanın tuşu.**
@@ -121,45 +147,21 @@ koşuda karşılaştırılıyor.
 
 1. ❌ **Sekiz major bağımlılık geçişi** (yapılmadı) — vuetify 3→4, pinia 2→4, vite 7→8,
    vitest 3→4, eslint 9→10, jsdom 26→30, vue-i18n 9→11, vue-router 4→5. (On paket, ama
-   birlikte hareket eden çiftler bir kez sayıldı.) Belge bunu "yedi" diye taşıyordu;
-   bugün ölçülen sayı bu, ve `dependabot.yml`'in başlığı da düzeltildi.
+   birlikte hareket eden çiftler bir kez sayıldı: eslint `@eslint/js` ile, vitest kendi
+   kapsam sağlayıcısıyla.)
 
-   **Ve bu liste artık tek kayıt.** `dependabot.yml` majorları hem "kendi başlarına
-   açılır" diye anlatıp hem `ignore` ile susturuyordu; dosya iki şey söyleyip sıkı
-   olanı yapıyordu. Doğrusu yazıldı, ve doğrusu bir gece koştu: **tek gecede on dört
-   pull request, on dört dal**, her major için bir tane, hepsi kırmızı, hiçbiri
-   birleştirilebilir değil. Bir geçiş botun diff'i olarak incelenemez — vuetify 3→4
-   uygulama kodunu değiştirir, sürüm satırını değil — yani o PR ne birleşir, ne de
-   hatırlatıcıyı kaybetmeden kapatılır; sadece durur ve diğer her PR'ı görmeyi
-   zorlaştırır.
-
-   `ignore` npm ve cargo tarafına geri kondu, gerekçesiyle birlikte. Sekiz geçişin
-   kaydı **burası**; Dependabot iyi olduğu yarıyı tutuyor: gruplanmış minor/patch
-   akışı, ki o yeşil koşuyla birleşir. `github-actions` ekosisteminde `ignore`
-   **bilerek yok** — oradaki major bir workflow dosyasındaki sürüm satırıdır, PR'ın
-   kendi koşusu ispatlar, ve on bir aksiyon SHA'ya çakılı olduğu için majorları
-   susturmak izlenen bir tedarik zincirini dondurulmuş bir zincire çevirirdi.
+   **Ve bu liste tek kayıt, bilerek.** `dependabot.yml`'in majorları susturmasını
+   kaldırmak bir gece denendi ve sonucu **on dört pull request, on dört dal** oldu; her
+   biri kırmızı, hiçbiri birleştirilebilir değil. Bir geçiş botun diff'i olarak
+   incelenemez — vuetify 3→4 uygulama kodunu değiştirir, sürüm satırını değil — yani o PR
+   ne birleşir ne de hatırlatıcıyı kaybetmeden kapatılır; sadece durur ve diğer her PR'ı
+   görmeyi zorlaştırır. `ignore` npm ve cargo tarafına gerekçesiyle geri kondu;
+   `github-actions`'ta **bilerek yok**, çünkü oradaki major bir workflow satırıdır ve
+   PR'ın kendi koşusu ispatlar.
 
    Bu maddeyi kapatacak olan şey, sekizini tek tek elle yapmak.
 
-2. ❌ **Dal koruması içe aktarılmadı** (yapılmadı) — **ve bu bir depo ayarı turu, bir
-   geliştirme değil.** `.github/rulesets/main.json` yazıldı ve içinde ne olduğunun
-   gerekçesi de duruyor, ama **GitHub `.github/rulesets/` dizinini okumuyor** — dosya
-   burada durduğu için hiçbir şey korunmuyor. Bir kez içe aktarılmalı:
-
-   ```text
-   Settings → Rules → Rulesets → New ruleset → Import a ruleset
-   ```
-
-   ya da `gh api repos/stackvo/stackvo/rulesets --method POST --input .github/rulesets/main.json`
-
-   Ondan sonrası bir PR meselesi. Dosyada bilerek **kapalı** bırakılan üç şey var ve
-   üçünün de gerekçesi ağaçtan ölçüldü: zorunlu onay 1 değil 0 (tek katkıcı var, 1 her
-   PR'ı kilitlerdi), lineer geçmiş yok (72 commit'in 35'i merge), imzalı commit yok
-   (yerel commit'ler bugün imzasız — sıra: anahtarı kur, `Verified` gördüğünü doğrula,
-   sonra kuralı ekle).
-
-3. ❌ **`validate-contracts.mjs` tip alanlarını hâlâ denetlemiyor** (yapılmadı) — sözleşmenin
+2. ❌ **`validate-contracts.mjs` tip alanlarını hâlâ denetlemiyor** (yapılmadı) — sözleşmenin
    `CertStatus`'u düzeltildi (`rejected` ve `error` eklendi, `notAfter` `string?`'ten
    `number?`'a çekildi — UI zaten `new Date(saniye * 1000)` yapıyordu), ve
    `src/lib/ipc.d.ts` yeniden üretildi. Ama **sınıf açık kaldı**: doğrulayıcının E süiti
