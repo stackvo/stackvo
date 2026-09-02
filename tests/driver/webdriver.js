@@ -36,6 +36,40 @@
  */
 
 /**
+ * How long one WebDriver request may take before this client gives up on it.
+ *
+ * `fetch` has no timeout of its own: a driver that accepts a request and never
+ * answers holds the socket open for as long as the process lives. That is not
+ * hypothetical here — `DELETE /session` asks the driver to close the window,
+ * the window's `CloseRequested` handler refuses the default close, and the
+ * response the client is waiting for is never written. The suite then passed
+ * five tests and hung in `after`, with no summary line and nothing on the log
+ * to say which side was waiting; CI ran for 55 minutes and was cancelled by
+ * hand.
+ *
+ * Two values, because two different things are being waited for. A script gets
+ * the session's 30-second script timeout plus the round trip, so the general
+ * budget has to sit above it. Teardown gets its own, much shorter one: by then
+ * the answer no longer matters — [`launch`]'s `stop` kills the driver either
+ * way — and every second spent here is a second of a job that has already
+ * finished its work.
+ */
+export const REQUEST_TIMEOUT_MS = 60_000;
+export const CLOSE_TIMEOUT_MS = 10_000;
+
+/**
+ * An abort signal that fires after `ms`, or nothing where the runtime has no
+ * `AbortSignal.timeout`.
+ *
+ * Node has had it since 17.3, which is below this repository's floor. The guard
+ * is for the unit suite, which passes a recording `fetch` that never looks at
+ * the signal, and for any runtime that reads `init` strictly.
+ */
+function deadline(ms) {
+  return typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
+}
+
+/**
  * A failure the driver reported, rather than one this client caused.
  *
  * `error` is the W3C error code (`no such element`, `javascript error`, …) and
@@ -150,10 +184,11 @@ export function asyncScript(expression) {
  * what it is waiting for.
  */
 export class Session {
-  constructor(base, id, { fetchImpl = fetch } = {}) {
+  constructor(base, id, { fetchImpl = fetch, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
     this.base = base.replace(/\/+$/, '');
     this.id = id;
     this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
   }
 
   /**
@@ -164,12 +199,17 @@ export class Session {
    * real binary, a real webview and a real IPC boundary on the other side of
    * this call.
    */
-  static async open(base, options, { fetchImpl = fetch } = {}) {
+  static async open(base, options, { fetchImpl = fetch, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
     const url = `${base.replace(/\/+$/, '')}/session`;
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(sessionPayload(options)),
+      // Opening a session starts the application, so this is the longest wait
+      // in the suite that is not a script — and the one place where a driver
+      // that never answers used to be indistinguishable from a binary that
+      // takes a while to come up.
+      signal: deadline(REQUEST_TIMEOUT_MS),
     });
     const body = await response.json().catch(() => null);
     unwrap(response.status, body);
@@ -180,15 +220,35 @@ export class Session {
         'the driver answered without a session id; nothing to close and nothing to drive'
       );
     }
-    return new Session(base, id, { fetchImpl });
+    return new Session(base, id, { fetchImpl, timeoutMs });
   }
 
-  async send(method, path, body) {
-    const response = await this.fetchImpl(`${this.base}/session/${this.id}${path}`, {
-      method,
-      headers: body === undefined ? {} : { 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+  /**
+   * One request, with a deadline.
+   *
+   * A timeout is reported as a `WebDriverError` with the code `timeout` rather
+   * than as the runtime's `TimeoutError`, so a caller branching on `.error`
+   * reads one vocabulary — and so the message names the request that stalled
+   * instead of saying only that an operation was aborted.
+   */
+  async send(method, path, body, { timeoutMs = this.timeoutMs } = {}) {
+    let response;
+    try {
+      response = await this.fetchImpl(`${this.base}/session/${this.id}${path}`, {
+        method,
+        headers: body === undefined ? {} : { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: deadline(timeoutMs),
+      });
+    } catch (error) {
+      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+        throw new WebDriverError(
+          'timeout',
+          `${method} ${path || '/session'} went unanswered for ${timeoutMs}ms`
+        );
+      }
+      throw error;
+    }
     const parsed = await response.json().catch(() => null);
     return unwrap(response.status, parsed);
   }
@@ -232,7 +292,15 @@ export class Session {
     return boxed;
   }
 
-  async close() {
-    await this.send('DELETE', '');
+  /**
+   * End the session.
+   *
+   * On its own budget, and a short one. Whether the driver answers changes
+   * nothing a caller can act on: the session is over either way, and
+   * `launch`'s `stop` takes the driver's process group down next. What the
+   * budget buys is that the answer arriving late cannot outlast the run.
+   */
+  async close({ timeoutMs = CLOSE_TIMEOUT_MS } = {}) {
+    await this.send('DELETE', '', undefined, { timeoutMs });
   }
 }
