@@ -31,7 +31,7 @@ on:
 # compiled into the app. That key is a repository secret and never appears in
 # this file or anywhere else in the repo:
 #
-#   npm run tauri signer generate -- -w ~/.tauri/stackvo.key
+#   tools/keys.sh generate        # writes ~/.stackvo-keys/updater.key and .pub
 #
 # Put the PUBLIC key in src-tauri/tauri.conf.json under plugins.updater.pubkey,
 # and the private key plus its password in the repository secrets below. Without
@@ -92,7 +92,7 @@ jobs:
           pubkey=$(node -p "require('./src-tauri/tauri.conf.json').plugins?.updater?.pubkey ?? ''")
           if [ -z "$pubkey" ]; then
             echo "::error file=src-tauri/tauri.conf.json::plugins.updater.pubkey is empty."
-            echo "Generate a key pair with: npm run tauri signer generate -- -w ~/.tauri/stackvo.key"
+            echo "Generate a key pair with tools/keys.sh generate — it writes ~/.stackvo-keys/updater.key and its .pub."
             echo "Put the public half in tauri.conf.json and the private half in TAURI_SIGNING_PRIVATE_KEY."
             exit 1
           fi
@@ -572,7 +572,9 @@ jobs:
           # `||` fires and the rehearsal publishes under the branch name. This
           # form has no falsy left operand on the publishing path.
           tagName: ${{ !inputs.rehearsal && github.ref_name || '' }}
-          releaseName: ${{ !inputs.rehearsal && format('StackVo {0}', github.ref_name) || '' }}
+          # The tag, not `StackVo <tag>`: the page already names the repository,
+          # and v0.1.0 was titled by its tag by hand.
+          releaseName: ${{ !inputs.rehearsal && github.ref_name || '' }}
           releaseDraft: true
           prerelease: false
           # tauri-action writes latest.json alongside the artifacts; the
@@ -776,3 +778,69 @@ jobs:
         run: |
           echo "::error::The suite failed on ${{ matrix.target }}. The bundle steps ran anyway, deliberately — see the artifacts and the summary above for whether the packaging half is sound."
           exit 1
+
+  # One SHA256SUMS.txt on the release, hashed from what a person downloads.
+  #
+  # Each build row hashes what it produced and uploads that as a run
+  # artifact — six `checksums-<target>` files in the run's Artifacts panel,
+  # which is where a reader of the release notes' "checksums published
+  # beside each artifact" could not find them: v0.2.0 shipped with that
+  # sentence and nothing on the release page behind it.
+  #
+  # Two more reasons not to merge the six as they are. tauri-action renames
+  # the macOS tarball on upload (`StackVo.app.tar.gz` becomes
+  # `StackVo_<version>_<arch>.app.tar.gz`), so the per-row lines name a file
+  # nobody can download, twice. And a checksum is a claim about the bytes a
+  # user receives, which are the release's assets — so on a tag this job
+  # downloads those assets from the draft and hashes them there, under their
+  # final names. The per-row files stay as the rehearsal's proof that every
+  # row can hash, since a rehearsal has no release to download from.
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Rehearsal — merge what the six rows hashed
+        if: ${{ inputs.rehearsal }}
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          pattern: checksums-*
+          path: checksums
+          merge-multiple: true
+      - name: Rehearsal — one file, in `sha256sum -c` order
+        if: ${{ inputs.rehearsal }}
+        run: |
+          ls -l checksums/
+          cat checksums/SHA256SUMS-*.txt | sort -k2 > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+      - name: Rehearsal — keep it, there is no release to attach it to
+        if: ${{ inputs.rehearsal }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: SHA256SUMS
+          path: SHA256SUMS.txt
+          if-no-files-found: error
+
+      # `.sig` and `latest.json` are left out on purpose: they are the
+      # updater's, it verifies them itself, and a person checking a download
+      # by hand has an installer in front of them, not a signature.
+      - name: Hash the release's own assets, under their final names
+        if: ${{ !inputs.rehearsal }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download "${{ github.ref_name }}" --dir assets
+          rm -f assets/*.sig assets/latest.json assets/SHA256SUMS.txt
+          ls -l assets/
+          (cd assets && sha256sum * | sort -k2) > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+          { echo "### SHA256SUMS.txt"; echo; echo '```'; cat SHA256SUMS.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Attach it to the draft
+        if: ${{ !inputs.rehearsal }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "${{ github.ref_name }}" SHA256SUMS.txt --clobber
