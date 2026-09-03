@@ -18,6 +18,22 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   which has no release, it merges the per-row files and keeps the result as a
   run artifact, so the six rows' ability to hash is still exercised.
 
+### Removed
+
+- **`docs/isler.md`, the Turkish backlog file.** It held only unfinished work,
+  pruned by hand each round, and after v0.2.0 seven items were left — every one
+  a "some day" item that a tracker holds better than a document: labelled,
+  linked from the pull request that closes it, and not translated. They are
+  issues #98 (a walk-through on a real Windows machine), #99 (eight major
+  dependency migrations, by hand), #100 (`validate-contracts.mjs` and type
+  fields), #101 (two screenshots the tool cannot take), #102 (a `beta.json`
+  channel), #103 (crash reports are a product decision) and #104 (the
+  shareable diagnostics link, waiting on an explicit ask), each carrying the
+  reasoning the file had. The one rule the file was the sole home of — no
+  branch is pushed without `tools/before-push.sh` — is in `CONTRIBUTING.md`
+  now, with the two times it was learnt. `no_dangling_docs.rs` no longer
+  exempts the file, and `dependabot.yml`'s pointer to it is a pointer to #99.
+
 ### Changed
 
 - **MSI is not on the list until an enterprise customer asks for it.** The
@@ -27,8 +43,7 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   two sidecar `[[bin]]` targets into a Cargo workspace to get around
   [tauri#4807](https://github.com/tauri-apps/tauri/issues/4807) — a refactor
   with a Windows CI round-trip to verify, for a buyer who does not exist yet.
-  `docs/isler.md` no longer carries it; the day someone needs `msiexec`, this
-  entry is where to start.
+  The day someone needs `msiexec`, this entry is where to start.
 
 - **A release is titled by its tag.** `release.yml` named the draft
   `StackVo <tag>`; v0.1.0 had been titled `v0.1.0` by hand, and the page

@@ -53,8 +53,8 @@ updates:
     # cannot be merged, cannot be closed without losing the reminder, and sits
     # there making every other pull request harder to see.
     #
-    # So the backlog is tracked where work is tracked, `docs/isler.md` B-1,
-    # with the eight named and dated. Dependabot keeps the half it is good at:
+    # So the backlog is tracked where work is tracked — issue #99, with the
+    # eight named — and nowhere else. Dependabot keeps the half it is good at:
     # the minor and patch stream, which is safe, grouped, and mergeable on the
     # strength of a green run alone.
     ignore:
