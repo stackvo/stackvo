@@ -192,6 +192,31 @@ heading is the engineering log; the short version a user reads is
   asset that says nothing, and each has a test — the entry-point round trip
   runs on `windows-latest` in `ci.yml`, the OS it broke on.
 
+- **The driver suite's retry loop never retried the case it was written
+  for.** `tauri-driver` is a proxy: its port answers as soon as _it_ is up,
+  and `WebKitWebDriver` behind it starts separately. `openWithRetries` in
+  `tests/driver/launch.js` exists for exactly that gap, and its comment
+  quotes the error it retries — `Connection refused (os error 111)`. But that
+  text is on `tauri-driver`'s stderr, which `launch` appends to the error
+  only _after_ it has been thrown past the loop. What `fetch` raises is a
+  `TypeError` whose whole message is `fetch failed`, with the reason one
+  level down in `cause`, and the loop's regex tested the message alone: no
+  match, thrown on the first attempt, every time. The suite passed for as
+  long as the first attempt happened to land after `WebKitWebDriver` was
+  listening; on 3 September 2026, on an identical image with identical
+  packages, one did not, and all five tests failed in twelve seconds.
+
+  `stillComingUp` now decides by the _kind_ of failure: a `WebDriverError` is
+  an HTTP answer from the driver and is never retried; a `TimeoutError` is the
+  request's own deadline and is never retried; anything that failed at the
+  transport — `fetch failed` at the top, or a refused/reset connection
+  anywhere in the `cause` chain — is the race, and waits. `openWithRetries`
+  takes an injectable `open`, so the loop itself is exercised in
+  `tests/driver-client.spec.js` from a machine that cannot run
+  `tauri-driver`: it keeps asking through two dropped connections and returns
+  the session, gives up after the bounded attempts with the count in the
+  message, and does not retry an answer.
+
 - **A release run failed on a translation test that has nothing wrong with its
   translations.** `tray::tests::every_key_differs_between_the_two_languages`
   asserted `navSettings` came back identical for Turkish and English —
