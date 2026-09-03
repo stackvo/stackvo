@@ -8,6 +8,8 @@ import {
   WebDriverError,
 } from './driver/webdriver.js';
 import { whyNotHere, binaryPath } from './driver/launch.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * The half of the driver suite that can be watched from here.
@@ -257,5 +259,36 @@ describe('where the suite can run, and against what', () => {
     expect(binaryPath({ repo: '/r', platform: 'linux', override: '/usr/bin/stackvo' })).toBe(
       '/usr/bin/stackvo'
     );
+  });
+
+  /**
+   * The driver process is not `unref`ed, and this is the only place that can
+   * say so on the platform where the suite does not run.
+   *
+   * It was `unref`ed for two days, on the argument that a `before` hook which
+   * times out must not leave a child holding the event loop open. The cost was
+   * a race: with the child and its pipes `unref`ed, launch is held up only by
+   * the socket `waitForPort` opens and the timer between attempts, and between
+   * those two the loop holds nothing. On 3 September 2026 Node exited there —
+   * five tests `cancelledByParent` with "Promise resolution is still pending
+   * but the event loop has already resolved", 117ms in, on a commit that
+   * changed nothing in that directory. The run before it was green on the same
+   * code.
+   *
+   * Read as text rather than exercised, because exercising it needs a driver
+   * and there is none on the platform this file runs on — which is exactly the
+   * platform where somebody would add the line back.
+   */
+  it('does not unref the driver, which is what let the loop empty mid-launch', () => {
+    const source = readFileSync(join(import.meta.dirname, 'driver', 'launch.js'), 'utf8');
+    for (const call of ['driver.unref()', 'driver.stdout.unref()', 'driver.stderr.unref()']) {
+      expect(
+        source.includes(call),
+        `launch.js calls ${call}. That is what made the suite exit before its own ` +
+          `first test: nothing else holds the loop open while the driver is coming up. ` +
+          `Teardown is covered by stop(), by the exit handler, and by the step's ` +
+          `timeout-minutes — not by this.`
+      ).toBe(false);
+    }
   });
 });
