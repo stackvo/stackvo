@@ -357,7 +357,7 @@ jobs:
         # `if: failure()` would skip the upload on exactly the run whose log is
         # hardest to reach.
         if: ${{ !cancelled() && steps.suite.outcome == 'failure' }}
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-${{ matrix.target }}
           path: test-${{ matrix.target }}.log
@@ -489,7 +489,7 @@ jobs:
 
       - name: Attach the SBOM to the release
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom
           path: sbom/
@@ -655,7 +655,7 @@ jobs:
       # red tick from an upload with nothing to upload.
       - name: Keep the rehearsal bundles
         if: ${{ always() && inputs.rehearsal }}
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
@@ -756,7 +756,7 @@ jobs:
           node tools/checksum-artifacts.mjs | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
 
       - name: Attach the checksums
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: checksums-${{ matrix.target }}
           path: checksums/
@@ -818,7 +818,7 @@ jobs:
           test -s SHA256SUMS.txt
       - name: Rehearsal — keep it, there is no release to attach it to
         if: ${{ inputs.rehearsal }}
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: SHA256SUMS
           path: SHA256SUMS.txt
