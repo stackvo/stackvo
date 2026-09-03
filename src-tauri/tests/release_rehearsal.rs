@@ -363,6 +363,111 @@ fn windows_asks_for_nsis_and_not_the_installer_that_cannot_be_built_here() {
 /// step was ever reached; the day `--bundles nsis` let Windows get past
 /// bundling, `Publish checksums` was the very next thing to fail there, with
 /// `shasum: command not found`.
+/// The other four rows of that same run: `failed to decode base64 secret key:
+/// Invalid symbol 37, offset 348` — a `%` after the key, and a preflight whose
+/// entire check was `-z`. It signs a file now, and compares the key id in the
+/// signature with the one in `tauri.conf.json`, which is the check that would
+/// also have caught the public key being swapped on 28 August.
+#[test]
+fn the_preflight_signs_something_with_the_key_the_app_trusts() {
+    let text = workflow();
+    let preflight = text.find("\n  preflight:").expect("no preflight job");
+    let build = text.find("\n  build:").expect("no build job");
+    assert!(preflight < build, "preflight is not before build");
+    let job = &text[preflight..build];
+
+    let step = steps(job)
+        .into_iter()
+        .find(|step| step.contains("tauri signer sign"))
+        .expect("no preflight step signs anything");
+    assert!(
+        step.contains("if: ${{ !inputs.rehearsal }}"),
+        "the signing check runs in a rehearsal, which has no secret to check: {step}"
+    );
+    for var in [
+        "TAURI_SIGNING_PRIVATE_KEY",
+        "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+    ] {
+        assert!(
+            step.contains(&format!("{var}: ${{{{ secrets.{var} }}}}")),
+            "the signing check cannot see `{var}`, so the CLI has nothing to sign with"
+        );
+    }
+    assert!(
+        step.contains("grep -q '^untrusted comment:'"),
+        "the check does not look at the blob's shape, so a stray character \
+         after the key reaches the build again: {step}"
+    );
+    assert!(
+        step.contains("plugins.updater.pubkey") && step.contains("key_id"),
+        "the check signs but never compares the key id with tauri.conf.json's, \
+         which is the half of the ceremony that was silently undone: {step}"
+    );
+
+    // And the CLI it calls is installed in this job, not assumed.
+    assert!(
+        job.contains("run: npm ci"),
+        "preflight calls `npx --no-install tauri` without an `npm ci` first"
+    );
+}
+
+/// The v0.2.0 run of 3 September 2026: both macOS rows died in
+/// `security import` on a zero-length `.p12`, with no Apple secret set on the
+/// repository. Actions passes an undefined secret as the empty string, and
+/// tauri treats an empty `APPLE_CERTIFICATE` as one to import. The builder's
+/// own `env:` block must therefore not name any of them; the macOS step
+/// exports the present ones through `$GITHUB_ENV` instead, and the absent
+/// ones stay unset — which is the one case tauri handles by not signing.
+#[test]
+fn tauri_is_handed_only_the_apple_secrets_that_exist() {
+    let text = workflow();
+    let steps = steps(&text);
+    let builder = steps
+        .iter()
+        .find(|step| step.contains("uses: tauri-apps/tauri-action@"))
+        .expect("no step runs tauri-action");
+
+    for name in [
+        "APPLE_CERTIFICATE",
+        "APPLE_CERTIFICATE_PASSWORD",
+        "APPLE_SIGNING_IDENTITY",
+        "APPLE_ID",
+        "APPLE_PASSWORD",
+        "APPLE_TEAM_ID",
+    ] {
+        let binding = format!("{name}: ${{{{ secrets.");
+        assert!(
+            !builder.contains(&binding),
+            "the builder's env names `{name}` from secrets. An absent secret arrives \
+             as the empty string, and tauri imports an empty certificate rather \
+             than skipping signing."
+        );
+    }
+
+    let hand = steps
+        .iter()
+        .find(|step| step.contains("$GITHUB_ENV") && step.contains("APPLE_CERTIFICATE"))
+        .expect("no step exports the Apple secrets through $GITHUB_ENV");
+    assert!(
+        hand.contains("if: startsWith(matrix.os, 'macos')"),
+        "the Apple export runs on every platform: {hand}"
+    );
+    assert!(
+        hand.contains("if [ -n \"${!name}\" ]; then"),
+        "the export does not skip the empty ones, which is its whole point: {hand}"
+    );
+    for name in [
+        "APPLE_CERTIFICATE_PASSWORD",
+        "APPLE_SIGNING_IDENTITY",
+        "APPLE_TEAM_ID",
+    ] {
+        assert!(
+            hand.contains(&format!("{name}: ${{{{ secrets.{name} }}}}")),
+            "the export step cannot see `{name}`, so it can never forward it"
+        );
+    }
+}
+
 #[test]
 fn checksums_are_published_with_something_every_runner_has() {
     let text = workflow();
