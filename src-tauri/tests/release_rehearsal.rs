@@ -38,6 +38,49 @@ fn workflow() -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
 }
 
+/// The value of `args:`, whether it is one line or a folded block.
+///
+/// It was read as a single line, and that stopped being true the day the
+/// argument list grew a conditional: `args: >-` puts the value on the lines
+/// below it, so `line.contains("--no-sign")` looked at `>-` and failed on a
+/// workflow that was correct. The test was right to fail — it could no longer
+/// see what it was asserting about — and this is what it should have been
+/// reading all along.
+///
+/// Folded scalars only, which is all this file uses: take the lines under
+/// `args:` that are indented past it, and join them with spaces the way YAML
+/// would.
+fn bundler_args() -> String {
+    let text = workflow();
+    let mut lines = text.lines();
+    let head = lines
+        .by_ref()
+        .find(|l| l.trim_start().starts_with("args:"))
+        .expect("release.yml no longer passes `args:` to tauri-action");
+
+    let value = head.trim_start().trim_start_matches("args:").trim();
+    if !value.starts_with('>') && !value.starts_with('|') {
+        return value.to_string();
+    }
+
+    let indent = head.len() - head.trim_start().len();
+    let mut out = String::new();
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let here = line.len() - line.trim_start().len();
+        if here <= indent {
+            break;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(line.trim());
+    }
+    out
+}
+
 /// One step: the lines from its `- name:`/`- uses:` to the next step's.
 ///
 /// Coarse on purpose. The question is which `if:` governs which action, and a
@@ -238,11 +281,7 @@ fn a_rehearsal_keeps_what_it_built() {
 /// rehearsal publishes nothing, so there is nothing for a signature to protect.
 #[test]
 fn a_rehearsal_tells_the_bundler_not_to_sign() {
-    let text = workflow();
-    let line = text
-        .lines()
-        .find(|l| l.trim_start().starts_with("args:"))
-        .expect("release.yml no longer passes `args:` to tauri-action");
+    let line = bundler_args();
 
     assert!(
         line.contains("--no-sign"),
@@ -258,6 +297,51 @@ fn a_rehearsal_tells_the_bundler_not_to_sign() {
          published release must be signed, and an unsigned one is invisible to \
          the updater on the user's machine rather than here.",
         line.trim()
+    );
+}
+
+/// On Windows the installer that works is built before the one that might not.
+///
+/// `bundle.targets` is `all`, so a Windows row produces an MSI and an NSIS
+/// installer. The bundler runs them in sequence and stops at the first failure,
+/// and MSI runs first by default — so on 2 September 2026 both Windows rows
+/// died in `light.exe` and produced **nothing**, the NSIS installer never
+/// having been attempted. A platform with two installers had none, because of
+/// the order.
+///
+/// Naming the order is the fix, and it is the kind that quietly reverts: the
+/// list reads like a preference rather than a decision, and nothing about
+/// `nsis,msi` says that swapping it costs Windows its entire release. This
+/// asserts the order rather than the presence, for exactly that reason.
+#[test]
+fn windows_builds_the_installer_that_works_before_the_one_that_might_not() {
+    let args = bundler_args();
+
+    assert!(
+        args.contains("--bundles nsis,msi"),
+        "the Windows rows do not name a bundler order: `{args}`. Without it the \
+         bundler runs MSI first, and an MSI that fails takes the NSIS installer \
+         with it — which is how a Windows row produced no artifact at all."
+    );
+
+    let list = args
+        .split("--bundles ")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .expect("`--bundles` has a list after it");
+    let (nsis, msi) = (list.find("nsis"), list.find("msi"));
+    assert!(
+        matches!((nsis, msi), (Some(n), Some(m)) if n < m),
+        "the bundler list is `{list}`. `nsis` has to come before `msi`: the \
+         bundler stops at the first failure, so whichever is named first is the \
+         one Windows is guaranteed to get."
+    );
+
+    assert!(
+        args.contains("startsWith(matrix.os, 'windows')"),
+        "the bundler list is not conditional on the row being Windows: \
+         `{args}`. Naming Windows bundlers on a macOS or Linux row would ask \
+         those bundlers for a package their platform does not build."
     );
 }
 

@@ -14,6 +14,31 @@ heading is the engineering log; the short version a user reads is
 
 ### Changed
 
+- **A Windows row that cannot build an MSI now still builds an installer, and
+  says why the MSI failed.** The rehearsal of 2 September 2026 answered the
+  question it was run for — `ubuntu-24.04-arm` went green for the first time,
+  which was the row nobody could test locally — and both Windows rows failed
+  identically:
+
+      failed to bundle project: `failed to run …\WixTools314\light.exe`
+
+  Two things were wrong beyond WiX itself. `bundle.targets` is `all`, so a
+  Windows row produces an MSI *and* an NSIS installer; the bundler runs them in
+  sequence and stops at the first failure, and MSI runs first. So one broken
+  bundler took the whole platform with it — the NSIS installer, which has never
+  failed, was never attempted. Windows rows now pass `--bundles nsis,msi`,
+  which names the order, and `Keep the rehearsal bundles` already runs on
+  `always()`.
+
+  And the failure was unreadable. `tauri-bundler` runs `candle` and `light`
+  through a helper that pipes their output and discards it when the CLI is
+  quiet — on failure as well as on success — so the log carried the sentence
+  above and not one line from `light`: no LGHT code, no ICE, nothing to act on.
+  The build runs with `--verbose` now, and a Windows row whose bundler fails
+  uploads `target/<triple>/release/wix/` — the generated `main.wxs`, the
+  `.wixobj`, and any log WiX wrote — so the next attempt starts from what
+  happened rather than from a guess.
+
 - **The three actions still on Node 20 are on their Node 24 majors.** Every run
   of every workflow printed the same warning: `actions/checkout` and
   `actions/setup-node` target Node 20 and are being forced onto Node 24, which
