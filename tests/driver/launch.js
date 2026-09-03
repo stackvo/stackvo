@@ -35,7 +35,7 @@ import { mkdtemp, mkdir, rm, access, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Session, CLOSE_TIMEOUT_MS } from './webdriver.js';
+import { Session, WebDriverError, CLOSE_TIMEOUT_MS } from './webdriver.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, '..', '..');
@@ -148,23 +148,66 @@ export async function waitForPort(port, { timeoutMs = 20_000, everyMs = 100 } = 
  * Bounded, and it re-raises the last error rather than a timeout of its own: a
  * driver that is genuinely absent must still say so in its own words.
  */
-async function openWithRetries({ application, args, attempts = 20, gapMs = 500 }) {
+/**
+ * Whether `error` is the shape of "nothing is listening behind the proxy yet".
+ *
+ * Decided by what kind of failure it is, not by what its message says. The
+ * first version of this test matched the message against `connect|refused`,
+ * which is what `tauri-driver` prints — but that text is on the driver's
+ * *stderr*, which `launch` appends to the error only after it has already
+ * been thrown past this point. The error `fetch` actually raises when the
+ * proxy accepts the TCP connection and then drops it is a `TypeError` whose
+ * message is the two words `fetch failed`, with the real reason (`other side
+ * closed`, `ECONNRESET`, `ECONNREFUSED`) one or two levels down in `cause`.
+ * So the retry never fired for the one case it was written for, and the
+ * suite passed only on the runs where the first attempt happened to land
+ * after `WebKitWebDriver` was up. On 3 September 2026 one did not.
+ *
+ * Three answers, in order:
+ *
+ * - A `WebDriverError` is an HTTP response from the driver — a bad
+ *   capability, a missing binary. It answered; asking again gets the same
+ *   answer, slower.
+ * - A `TimeoutError` is the request's own deadline. The driver had its
+ *   chance; twenty more of them is a job timeout.
+ * - Anything else that failed at the transport — `fetch failed` at the top,
+ *   or a connection-refused/reset anywhere down the `cause` chain — is the
+ *   race, and the only thing worth waiting on.
+ */
+export function stillComingUp(error) {
+  if (error instanceof WebDriverError) return false;
+  if (error?.name === 'TimeoutError' || error?.name === 'AbortError') return false;
+  const transport =
+    /fetch failed|connect|refused|ECONNRESET|socket hang up|other side closed|UND_ERR_SOCKET/i;
+  for (let cause = error, depth = 0; cause && depth < 5; cause = cause.cause, depth += 1) {
+    if (transport.test(`${cause.message ?? ''} ${cause.code ?? ''}`)) return true;
+  }
+  return false;
+}
+
+/**
+ * `open` is injectable so the loop itself can be watched from a machine that
+ * cannot run `tauri-driver`; the default is the real thing.
+ */
+export async function openWithRetries({
+  application,
+  args,
+  attempts = 20,
+  gapMs = 500,
+  open = (options) => Session.open(BASE, options),
+}) {
   let last;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      return await Session.open(BASE, { application, args });
+      return await open({ application, args });
     } catch (error) {
       last = error;
-      // Only the shape that means "nothing is listening behind the proxy".
-      // A refusal from the driver itself — a bad capability, a missing
-      // binary — is an answer, and retrying it would turn a clear failure
-      // into a slow one.
-      if (!/connect|refused|ECONNRESET|socket hang up/i.test(String(error.message))) {
-        throw error;
-      }
+      if (!stillComingUp(error)) throw error;
       await new Promise((r) => setTimeout(r, gapMs));
     }
   }
+  // Still the driver's own words, with how long they were given.
+  last.message = `${last.message}\n(after ${attempts} attempts, ${attempts * gapMs} ms apart in total)`;
   throw last;
 }
 
