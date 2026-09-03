@@ -471,21 +471,33 @@ jobs:
           # no ICE, nothing to act on. A bundler that fails without saying why
           # turns every fix into a thirty-minute guess.
           #
-          # `--bundles nsis,msi` on Windows, and the ORDER is the point.
-          # `bundle.targets` is `all`, so a Windows row produces both an MSI and
-          # an NSIS installer — and the bundler runs them in sequence and stops
-          # at the first failure. MSI runs first by default, so when `light`
-          # died on 2026-09-02 the NSIS installer was never attempted and the
-          # row produced nothing at all. One broken bundler took the whole
-          # platform with it.
+          # `--bundles nsis` on Windows, and MSI is not in the list.
           #
-          # Naming the order puts the installer that has never failed first, so
-          # a Windows row that still cannot produce an MSI at least produces
-          # something installable — and `Keep the rehearsal bundles` below runs
-          # on `always()`, so it is kept even when the row ends red.
+          # `--verbose` above is what turned "failed to run light.exe" into an
+          # actual answer: `ICE30`, on `stackvo-mcp.exe`, installed by two
+          # different WiX components — one from `externalBin`'s temp copy, one
+          # from the raw `target/<triple>/release/stackvo-mcp.exe` that
+          # tauri-bundler's Windows path bundles on its own. This crate has two
+          # extra `[[bin]]` targets besides the app itself (`stackvo`,
+          # `stackvo-mcp`, both under `src/bin/`, both existing only so
+          # `tools/sidecars.mjs` has something to copy into `externalBin`), and
+          # WiX auto-includes every one of them — matching a tauri-bundler bug
+          # that has been open since v1 with no fix
+          # (github.com/tauri-apps/tauri/issues/4807). Ordering `nsis` before
+          # `msi` was tried first and only relocated the failure: MSI still
+          # broke, it just stopped taking NSIS down with it.
+          #
+          # The real fix is a Cargo workspace — moving `stackvo` and
+          # `stackvo-mcp` out of this package's own bin targets so
+          # `cargo_metadata` shows tauri-bundler exactly one — and it needs a
+          # Windows CI round-trip to verify, which is why it is not this
+          # commit. `docs/isler.md` tracks it. Until then, Windows ships the
+          # installer this bug does not reach: `UPDATED.windows` in
+          # `tools/check-installers.mjs` is already `-setup.exe`, so the
+          # updater was never depending on MSI to begin with.
           args: >-
             --target ${{ matrix.target }} --verbose
-            ${{ startsWith(matrix.os, 'windows') && '--bundles nsis,msi' || '' }}
+            ${{ startsWith(matrix.os, 'windows') && '--bundles nsis' || '' }}
             ${{ inputs.rehearsal && '--no-sign' || '' }}
           # Empty in a rehearsal, and an empty `tagName` is what makes
           # `tauri-action` build without touching a release — the bundle is
@@ -592,20 +604,6 @@ jobs:
       # and any log WiX wrote — which is where an LGHT code or a rejected file
       # path is named.
       #
-      # Windows only, and only when the bundler actually failed: on a green row
-      # this is a few hundred kilobytes of intermediate files nobody will open.
-      # Keyed on the step rather than on an empty `bundle/` directory, because
-      # with NSIS ordered first that directory is no longer empty on the run
-      # where MSI is the thing that broke.
-      - name: Keep what WiX left, when the Windows bundler failed
-        if: ${{ always() && startsWith(matrix.os, 'windows') && steps.tauri.outcome == 'failure' }}
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: wix-${{ matrix.target }}
-          path: src-tauri/target/${{ matrix.target }}/release/wix/
-          if-no-files-found: warn
-          retention-days: 7
-
       # ---------------------------------------------- what the ARM rows asked for
       #
       # The rehearsal used to end at the upload above, which makes the answer to
@@ -641,6 +639,7 @@ jobs:
           status=0
           node tools/check-installers.mjs \
             --target ${{ matrix.target }} \
+            ${{ startsWith(matrix.os, 'windows') && '--only nsis' || '' }} \
             ${{ inputs.rehearsal && '--unsigned' || '' }} 2>&1 | tee installers.txt || status=$?
           {
             echo "### ${{ matrix.target }}"
