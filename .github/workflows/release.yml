@@ -555,7 +555,8 @@ jobs:
           # `stackvo-mcp` out of this package's own bin targets so
           # `cargo_metadata` shows tauri-bundler exactly one — and it needs a
           # Windows CI round-trip to verify, which is why it is not this
-          # commit. `docs/isler.md` tracks it. Until then, Windows ships the
+          # commit — and it is not on the list until a customer needs `msiexec`
+          # (the decision is in CHANGELOG.md). Until then, Windows ships the
           # installer this bug does not reach: `UPDATED.windows` in
           # `tools/check-installers.mjs` is already `-setup.exe`, so the
           # updater was never depending on MSI to begin with.

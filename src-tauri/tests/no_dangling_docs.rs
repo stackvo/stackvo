@@ -176,15 +176,12 @@ fn nothing_cites_the_deleted_design_document() {
     let mut offenders = Vec::new();
 
     for path in searched() {
-        // Two files name them on purpose, and both are tombstones rather than
-        // dangling pointers — a reader who half-remembers a deleted document
-        // needs somewhere that says it was deleted and where its parts went.
-        //
-        // This one is the gate and has to say what it is gating. `isler.md` is
-        // the report that records both deletions and the cleanup they cost;
-        // rewriting it to keep this scan quiet would be the same trade
-        // `CHANGELOG.md` is exempted from making.
-        if path.ends_with("no_dangling_docs.rs") || path.ends_with("isler.md") {
+        // This file names them on purpose: it is the gate and has to say what
+        // it is gating. (`docs/isler.md` used to be the second exemption, as
+        // the report that recorded the deletions; it was itself retired after
+        // v0.2.0, its remaining items moved to issues #98–#104, and
+        // `CHANGELOG.md` — exempted elsewhere — now carries that record.)
+        if path.ends_with("no_dangling_docs.rs") {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&path) else {
