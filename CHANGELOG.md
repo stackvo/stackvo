@@ -132,6 +132,33 @@ heading is the engineering log; the short version a user reads is
 
 ### Fixed
 
+- **The driver suite exited before its own first test.** Five tests came back
+  `cancelledByParent` with `Promise resolution is still pending but the event
+  loop has already resolved`, 117 milliseconds after the suite started, on a
+  commit that changed nothing in `tests/driver/`. The run before it was green
+  on the same code — which is what a race looks like from the outside.
+
+  It was introduced by the fix for the opposite problem. When the suite was
+  hanging in teardown, `launch.js` was given `driver.unref()` plus an `unref`
+  on both its pipes, so that a `before` hook which timed out could not leave a
+  child holding the event loop open. That was right about the hazard and wrong
+  about the cost: with the child and its pipes unreferenced, the only things
+  keeping the process alive during launch are the socket `waitForPort` opens
+  and the timer between its attempts — and between those two, on every attempt,
+  the loop holds nothing at all. Node is entitled to exit there. Most of the
+  time it did not.
+
+  The `unref`s are gone. The hazard they were aimed at is covered three times
+  over without them: `stop()` kills the driver's process group, an `exit`
+  handler kills it whatever the reason, and `Drive the application` carries
+  `timeout-minutes: 10`. A hook that times out now costs ten minutes and a red
+  job, rather than a suite that fails while the thing it tests is working.
+
+  `driver-client.spec.js` reads `launch.js` as text and fails if any of the
+  three calls comes back. It is checked there because it can only be checked
+  there: the suite itself does not run on macOS, which is the platform somebody
+  would be on when they add the line again.
+
 - **`vitest` reported 1437 passed and exited 1.** Three times over two days,
   with a clean run either side of each — the shape that gets a suite re-run
   rather than read. The failure was not in an assertion; it arrived after every

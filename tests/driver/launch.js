@@ -215,11 +215,30 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
     }
   );
 
-  // The process must not be what keeps this one alive. A hook that times out —
-  // `before` has 120 seconds — leaves the driver running, and an `unref`ed
-  // child cannot hold the event loop open past the last test. `remember` below
-  // is what still takes it down.
-  driver.unref();
+  // NOT `unref`ed, and the reason is a run that failed for it.
+  //
+  // It was, on the argument that a `before` hook which times out leaves the
+  // driver running and an `unref`ed child cannot hold the event loop open past
+  // the last test. That argument was right about the hazard and wrong about the
+  // cost. With the child and both its pipes `unref`ed, the only things keeping
+  // this process alive during launch are the socket `waitForPort` opens and the
+  // timer between its attempts — and there is a gap between the two, on every
+  // attempt, where the loop holds nothing at all. Node is entitled to exit
+  // there, and on 3 September 2026 it did: five tests came back
+  // `cancelledByParent` with
+  //
+  //     Promise resolution is still pending but the event loop has already
+  //     resolved
+  //
+  // 117 milliseconds after the suite started, on a commit that changed nothing
+  // in this directory. The run before it, on the same code, was green — which
+  // is what a race looks like from the outside and why it must not be left in.
+  //
+  // The hazard it was aimed at is covered twice over without it: `stop` kills
+  // the process group, `remember` kills it on exit whatever the reason, and the
+  // `Drive the application` step carries `timeout-minutes: 10`. A hook that
+  // times out now costs ten minutes and a red job — not the fifty-five it used
+  // to, and not a suite that fails while its subject is working.
   const forget = remember(driver);
 
   // Kept, not printed: `tauri-driver`'s own diagnostics are the only place a
@@ -228,8 +247,6 @@ export async function launch({ application = binaryPath(), args = [] } = {}) {
   const noise = [];
   driver.stdout.on('data', (chunk) => noise.push(String(chunk)));
   driver.stderr.on('data', (chunk) => noise.push(String(chunk)));
-  driver.stdout.unref();
-  driver.stderr.unref();
   const died = new Promise((_, reject) => {
     driver.once('error', (error) =>
       reject(new Error(`tauri-driver would not start: ${error.message}`))
