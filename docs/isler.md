@@ -108,6 +108,12 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
    | `ubuntu-24.04-arm / aarch64` | `xdg-open binary not found /usr/bin/xdg-open` | `ea80852` |
    | Her iki Windows satırı | `failed to bundle project: light.exe` — sebepsiz | PR #89 (`--verbose` ekledi) |
    | Her iki Windows satırı | `ICE30`: `stackvo-mcp.exe` iki bileşenden kuruluyor | daraltıldı, kapanmadı — bkz. #5 |
+   | Her iki Windows satırı | `shasum: command not found` — Windows'ta yok | PR #92 (`tools/checksum-artifacts.mjs`) |
+   | Her iki macOS satırı | `EISDIR` — `.app` bir klasör, araç dosya sandı | PR #93 |
+   | Her iki Windows satırı | Yeşil ama **boş** checksum dosyası — giriş noktası kontrolü Windows yolunda eşleşmedi | PR #93 |
+   | Her iki macOS satırı (gerçek koşu) | `security import` boş sertifika — tanımsız `APPLE_*` secret'ları boş dize olarak tauri'ye gitti | bu PR |
+   | Öteki dört satır (gerçek koşu) | `Invalid symbol 37, offset 348` — secret'ta anahtarın ardında zsh'nin `%` işareti | secret yeniden konuyor; preflight artık imzalayarak kontrol ediyor |
+   | Hiçbir satırın ulaşamadığı | `tauri.conf.json` pubkey'i 28 Ağustos'ta tören anahtarından başka bir anahtarla değiştirilmiş | bu PR (tören anahtarı geri) |
 
    `.ico` bulunamıyordu çünkü o commit'te `bundle.icon` **tek bir PNG** listeliyordu
    (`["icons/icon.png"]`) — dosya depoda duruyordu, yapılandırma onu adlandırmıyordu.
