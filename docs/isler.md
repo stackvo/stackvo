@@ -1,6 +1,6 @@
 # StackVo Desktop — Açık İşler
 
-**Tarih:** 2026-09-02
+**Tarih:** 2026-09-03
 **Kapsam:** Yalnızca **geliştirmesi kalan** maddeler.
 
 Bu belge her turda budanıyor: yapılan ve yapılmayacağına karar verilen her madde, alt
@@ -18,7 +18,7 @@ yarısı da silindi, yani bir başlık artık **yalnızca kalanı** adlandırıy
 
 | Blok | Madde | Ne bekliyor |
 | --- | --- | --- |
-| **A. Yayın koşusu** | 5 | Yeşil bir yapı matrisi, bir insanın tuşu, bir Windows makinesi, bir Cargo workspace |
+| **A. Yayın koşusu** | 1 | Bir Windows makinesi |
 | **B. Bakım borcu** | 2 | Sekiz elle geçiş, bir doğrulayıcı |
 | **C. Arayüz borcu** | 3 | Aracın kendi sınırı, ilk yayın, bir ürün kararı |
 | **D. Stratejik** | 1 | **Kullanıcıya sorulacak bir karar** |
@@ -33,13 +33,27 @@ gibi ikinci bir kanal da yok.
 > `docs/RELEASE-NOTES-0.2.0.md` imzasız bir yapının iki platformdaki adımını veriyor.
 > **Karar geri alınabilir:** imzalamaya dönülürse iş, o sırları depoya koymaktan ibaret.
 
-**Kritik yol, ve 2026-09-02'de bir halka daha düştü.** Sürüm numarası seçildi (`0.2.0`,
-üç dosyada ve `CHANGELOG.md`'de), sürüm notu yazıldı, ve yayın matrisinin üç kırmızı
-satırının **sebepleri bulunup `main`'de kapatıldı** (A-1). Geriye o kapanışı ölçüme
-çevirmek kalıyor. Sırası şu: **prova koşusu** → **etiketle** → **Publish** →
-`updates:check` → **Windows'ta elle tur**. StackVo'nun kendi iki minisign anahtarı
-duruyor; **içerik anahtarının döndürülebildiği pencere ilk varlıklı sürümde kapanıyor**,
-yani rotasyon gerekiyorsa yayından önce yapılmalı.
+**v0.2.0 çıktı: 2026-09-03, koşu `33797054815`, altı satır yeşil.** Üçüncü denemede: prova
+yeşildi, ilk gerçek koşu altı satırda birden kırmızıydı — üç sebeple, üçü de bir provanın
+göremeyeceği türden çünkü prova imzalamıyor (boş Apple sertifikası, secret'ın sonuna
+yapışmış bir `%`, ve `tauri.conf.json`'daki genel anahtarın 28 Ağustos'ta tören
+anahtarından başka bir anahtarla değiştirilmiş olması; hepsi `CHANGELOG.md`'de). Preflight
+artık gerçekten bir dosya imzalıyor ve imzanın anahtarını conf'takiyle karşılaştırıyor.
+Yayın sonrası ölçüm: `npm run updates:check` canlı uçta *"0.2.0 for all 6 platforms, each
+with a url and a signature"*; bir paket güncelleyicinin yoluyla yetkisiz indirildi ve
+imzasındaki anahtar kimliği (`3b1e8a8cfd48db9b`) uygulamaya derlenen anahtar. Kalan: A-1,
+Windows'ta elle tur.
+
+**İçerik anahtarının rotasyon penceresi bu yayınla kapandı, ve zincir tutarlı — ölçüldü.**
+`signing.rs`'teki `PINNED` (`96e7a6d25e81509b`) 0.2.0'ın içinde ne varsa odur;
+`stackvo-service-packages`'taki `registry.json.minisig` tam o anahtarla imzalı
+(2026-08-28, *"rotate the key that signs the index"*). Yani bugün imzalı dizin 0.2.0'da
+doğrulanır. Bilinmesi gereken tek şey anahtarların iki makinede olduğu: güncelleyici
+anahtarı (`9BDB…`) bu Mac'te `~/.stackvo-keys/updater.key` ve GitHub secret'ında; içerik
+anahtarının özel yarısı 28 Ağustos'ta `73572fd`'yi yapan **öteki** makinede. Bu Mac'teki
+`registry.key` (`1b0f9a1fff196225`) eski ve hiçbir yerde pinli değil; öteki makinedeki
+`updater.key` (`86F7…`) ise artık hiçbir yapıya derlenmiyor ve secret'a **konmamalı** —
+karışıklığı önlemek için ikisi de yeniden adlandırılabilir.
 
 ---
 
@@ -60,10 +74,9 @@ PR'larının hepsinin sebebi buydu: eski bir `main`'in üstünde koşmuşlardı.
 
 Açık kalan iki Dependabot PR'ı — #78 (`tauri-action` 0.6.2→1.0.0) ve #79
 (`attest-build-provenance` 2.4.0→4.2.2) — **bilerek bekliyor.** İkisi de yalnızca
-`release.yml`'de kullanılıyor, o dosyayı hiçbir denetim koşturmuyor, ve o workflow henüz
-hiç yeşil olmadı. Yeşil bir CI rozeti bu ikisi hakkında "bu action çalışıyor" demiyor;
-"workflow dosyasını değiştirmek başka bir şeyi bozmadı" diyor. Sıra: A-1 kapansın, sonra
-bu ikisi.
+`release.yml`'de kullanılıyor ve o dosyayı hiçbir denetim koşturmuyor. Bekleme sebebi
+2026-09-03'te kalktı: `release.yml` `tauri-action` 1.0.0 ile altı satırda yeşil döndü ve
+v0.2.0'ı yayımladı. Bu ikisinin doğrulaması artık bir prova koşusu.
 
 ### Ve bugünün dersi, buraya yazılıyor çünkü tekrarlanabilir
 
@@ -95,53 +108,7 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
 
 ## A. Yayın koşusu
 
-1. ❌ **Yayın matrisi hiç yeşil olmadı** (yapılmadı) — **ama üç kırmızı satırın da sebebi
-   bulundu ve `main`'de kapandı.** `release.yml`'in son koşusu (`32986607714`,
-   2026-08-26) altı hedefin üçünde düştü, ve o koşunun kendi günlüğü sebepleri tek tek
-   veriyor:
-
-   | Satır | Ne dedi | Nerede kapandı |
-   | --- | --- | --- |
-   | `windows-latest / x86_64` | `exit code 101` — `key_ceremony` çifti | PR #74 |
-   | `windows-11-arm / aarch64` | Aynı `exit code 101` | PR #74 |
-   | Her iki Windows satırı | `failed to bundle project: Couldn't find a .ico icon` | `ea80852` |
-   | `ubuntu-24.04-arm / aarch64` | `xdg-open binary not found /usr/bin/xdg-open` | `ea80852` |
-   | Her iki Windows satırı | `failed to bundle project: light.exe` — sebepsiz | PR #89 (`--verbose` ekledi) |
-   | Her iki Windows satırı | `ICE30`: `stackvo-mcp.exe` iki bileşenden kuruluyor | daraltıldı, kapanmadı — bkz. #5 |
-   | Her iki Windows satırı | `shasum: command not found` — Windows'ta yok | PR #92 (`tools/checksum-artifacts.mjs`) |
-   | Her iki macOS satırı | `EISDIR` — `.app` bir klasör, araç dosya sandı | PR #93 |
-   | Her iki Windows satırı | Yeşil ama **boş** checksum dosyası — giriş noktası kontrolü Windows yolunda eşleşmedi | PR #93 |
-   | Her iki macOS satırı (gerçek koşu) | `security import` boş sertifika — tanımsız `APPLE_*` secret'ları boş dize olarak tauri'ye gitti | bu PR |
-   | Öteki dört satır (gerçek koşu) | `Invalid symbol 37, offset 348` — secret'ta anahtarın ardında zsh'nin `%` işareti | secret yeniden konuyor; preflight artık imzalayarak kontrol ediyor |
-   | Hiçbir satırın ulaşamadığı | `tauri.conf.json` pubkey'i 28 Ağustos'ta tören anahtarından başka bir anahtarla değiştirilmiş | bu PR (tören anahtarı geri) |
-
-   `.ico` bulunamıyordu çünkü o commit'te `bundle.icon` **tek bir PNG** listeliyordu
-   (`["icons/icon.png"]`) — dosya depoda duruyordu, yapılandırma onu adlandırmıyordu.
-   Bugünkü liste beş dosya. `xdg-open` ise `release.yml`'in Linux bağımlılık adımında
-   `xdg-utils` bulunmadığı için yoktu: AppImage paketleyicisi `/usr/bin/xdg-open`'ı **yapı
-   makinesinden** kopyalıyor, `ubuntu-latest` onu taşıyor, `ubuntu-24.04-arm` taşımıyor —
-   bir satırın geçip öbürünün düşmesinin sebebi tam olarak buydu.
-
-   **Kalan iş, bir çıkarımı ölçüme çevirmek.** `release.yml` `workflow_dispatch` taşıyor,
-   yani bugünkü `main` üzerinde **etiket atmadan** bir prova koşusu yapılabilir; 26
-   Ağustos'taki koşu da öyle başlatılmıştı. Etiket geri alınamaz, prova koşusu alınabilir.
-   Bu madde, o koşu altı satırda da yeşil döndüğünde kapanır — ondan önce değil. "Yeşil"in
-   bugünkü tanımı Windows'ta yalnız NSIS'i sayıyor; MSI'ın neden dışarıda bırakıldığı ve ne
-   zaman geri geleceği #5'te ayrı bir madde.
-
-2. ❌ **Publish** (yapılmadı) — #1'den sonra: etiketle, koşuyu rehearsal'da uçtan uca
-   doğrula, sonra bas. **Publish bir insanın tuşu.**
-
-   Bir ayrıntı düzeltildi ve buraya yazılıyor, çünkü eskisi yanlış teşhise götürüyordu:
-   `v0.1.0` sürümü **taslak değil, yayımlanmış** durumda (2026-08-23) — ama **sıfır
-   varlığı var**. Yani `latest.json`'ın bugün 404 vermesinin sebebi `releaseDraft: true`
-   değil, hiçbir koşunun varlık üretmemiş olması. `tools/check-updater-endpoint.mjs` bu
-   iki sebebi zaten ayrı ayrı yazıyor ve sırayla bakmayı söylüyor; doğru olan o.
-
-3. ❌ **Güncelleyici ucu** (yapılmadı) — `npm run updates:check` ile doğrula. #2'den sonra
-   anlamlı. Bugün 404 veriyor ve verdiği açıklama doğru.
-
-4. ❌ **Windows'ta elle tur** (yapılmadı) — `preflight` → proje oluştur → `up` → tarayıcıda
+1. ❌ **Windows'ta elle tur** (yapılmadı) — `preflight` → proje oluştur → `up` → tarayıcıda
    aç. Kategorinin 13/17'si Windows'ta ve bir CI koşusu bu soruyu cevaplamıyor. **Bir
    Windows makinesi gerekiyor.**
 
@@ -150,35 +117,6 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
    güncellemeden sonra yeniden karantinaya alabilir), ve SmartScreen'in kurulumu tamamen mi
    engellediği yoksa bir tıkla mı geçildiği. README ve sürüm notu ikincisini "bir tık" diye
    yazıyor; turun doğrulayacağı şey o.
-
-5. ❌ **Windows'ta MSI yok — yalnız NSIS** (yapılmadı) — 0.2.0'ın bilinçli eksiği.
-   `light.exe`, `--verbose` eklendikten sonra (PR #89) sebebini söyledi: WiX'in `ICE30`'u,
-   `stackvo-mcp.exe`'nin **iki farklı bileşenden** aynı yere kurulduğunu söylüyor — biri
-   `externalBin`'in geçici kopyasından (doğru olan), biri ham
-   `target/<triple>/release/stackvo-mcp.exe`'den (tauri-bundler'ın kendiliğinden eklediği).
-
-   Sebep: `src-tauri/src/bin/stackvo.rs` ve `stackvo-mcp.rs`, `stackvo-desktop` paketinin
-   **örtük `[[bin]]` hedefleri**. Windows'un WiX paketleyicisi — macOS/Linux'un
-   dmg/deb/rpm/AppImage'ından farklı olarak — paketin sahip olduğu her bin hedefini
-   otomatik ekliyor, `externalBin`'de zaten doğru bildirilmiş olsa bile. Aynı sınıf hata
-   upstream'de açık: [tauri#4807](https://github.com/tauri-apps/tauri/issues/4807),
-   çözümsüz.
-
-   **Geçici çözüm, `release.yml`'de:** Windows satırları `--bundles nsis` ile yalnız NSIS
-   istiyor, MSI hiç denenmiyor. `tools/check-installers.mjs`'in doğrulama adımı da
-   Windows'ta `--only nsis` ile daraltıldı — MSI'yı "eksik" diye işaretlemiyor.
-   Güncelleyici bundan etkilenmiyor: `UPDATED.windows` zaten `-setup.exe` (NSIS), MSI'a hiç
-   bağlı değildi.
-
-   **Kalıcı çözüm:** `stackvo` ve `stackvo-mcp`'i `stackvo-desktop` paketinin bin
-   hedeflerinden çıkarıp ayrı bir Cargo workspace üyesi yapmak — böylece tauri-bundler'ın
-   gördüğü paket tek bin hedefi taşır. İkisi de zaten `stackvo_desktop_lib`'e ince bir
-   sarmalayıcı, kod tarafı basit; zor olan `tools/sidecars.mjs`'in cargo çağrısını ve
-   `release.yml`'in `--bin stackvo --bin stackvo-mcp` satırlarını yeni yapıya uydurmak, ve
-   **Windows'ta test etmeden doğrulayamamak** — bir prova turu gerektiriyor. MSI'ı kurumsal
-   bir dağıtım (Group Policy vb.) ihtiyacı doğurana kadar ertelenebilir.
-
----
 
 ## B. Bakım borcu
 
@@ -230,8 +168,8 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
 
    Bugün bir *ayar* eklemek, `channel.rs`'in kendi notunun uyardığı hatayı kurmak olurdu:
    *"kimsenin yayımlamadığı bir kanal, güncellemeleri sessizce durduran bir ayardır."*
-   Engeli kaldıran adım burada daha fazla kod değil, **ilk yayın** — A-2 olduğunda
-   `beta.json` aynı koşunun bir çıktısı daha oluyor.
+   Engeli kaldıran adım burada daha fazla kod değil, **ilk yayın** — ve o 2026-09-03'te
+   çıktı (v0.2.0). `beta.json` artık aynı koşunun bir çıktısı daha olabilir; kalan iş o.
 
 3. ❌ **Çökme raporunu göndermek** (yapılmadı) — çökmeyi bildirmek yerinde (`crash.rs`:
    `install`, `reports`, `unseen`, `mark_seen`); kalan onu bir yere göndermek, ve o bir

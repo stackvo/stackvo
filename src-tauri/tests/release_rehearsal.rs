@@ -363,6 +363,66 @@ fn windows_asks_for_nsis_and_not_the_installer_that_cannot_be_built_here() {
 /// step was ever reached; the day `--bundles nsis` let Windows get past
 /// bundling, `Publish checksums` was the very next thing to fail there, with
 /// `shasum: command not found`.
+/// The release notes promise "checksums published beside each artifact", and
+/// v0.2.0 kept that promise only in the run's Artifacts panel. One job after
+/// the matrix puts one `SHA256SUMS.txt` on the release — hashed from the
+/// release's own assets, under the names tauri-action gave them on upload,
+/// because the per-row files name the macOS tarball by a name nobody can
+/// download. The rehearsal path merges the per-row files instead: it has no
+/// release, and it still has to prove the six rows can hash.
+#[test]
+fn one_checksums_file_reaches_the_release_and_it_hashes_what_users_download() {
+    let text = workflow();
+    let job_at = text.find("\n  checksums:").expect("no checksums job");
+    let build_at = text.find("\n  build:").expect("no build job");
+    assert!(
+        job_at > build_at,
+        "the checksums job is before build, so it cannot need it"
+    );
+    let job = &text[job_at..];
+    assert!(
+        job.contains("    needs: build"),
+        "the checksums job does not wait for the matrix: {job}"
+    );
+    assert!(
+        job.contains("    permissions:\n      contents: write"),
+        "the checksums job cannot write to the release"
+    );
+
+    let steps = steps(job);
+    let hashes = steps
+        .iter()
+        .find(|step| step.contains("gh release download"))
+        .expect("no step downloads the release's assets to hash them");
+    assert!(
+        hashes.contains("if: ${{ !inputs.rehearsal }}"),
+        "a rehearsal has no release to download from: {hashes}"
+    );
+    assert!(
+        hashes.contains("sha256sum *") && hashes.contains("rm -f assets/*.sig assets/latest.json"),
+        "the release path must hash the downloaded assets themselves, and not \
+         the updater's own files: {hashes}"
+    );
+
+    let attaches = steps
+        .iter()
+        .find(|step| step.contains("gh release upload"))
+        .expect("no step attaches SHA256SUMS.txt to the release");
+    assert!(
+        attaches.contains("SHA256SUMS.txt") && attaches.contains("if: ${{ !inputs.rehearsal }}"),
+        "the attach step is not the one file, or it runs in a rehearsal: {attaches}"
+    );
+
+    let merges = steps
+        .iter()
+        .find(|step| step.contains("pattern: checksums-*"))
+        .expect("the rehearsal path no longer merges the per-row files");
+    assert!(
+        merges.contains("if: ${{ inputs.rehearsal }}"),
+        "the per-row merge is not the rehearsal's path: {merges}"
+    );
+}
+
 /// The other four rows of that same run: `failed to decode base64 secret key:
 /// Invalid symbol 37, offset 348` — a `%` after the key, and a preflight whose
 /// entire check was `-z`. It signs a file now, and compares the key id in the

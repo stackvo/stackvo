@@ -226,11 +226,17 @@ targets. **Two things are yours to supply** and are deliberately absent from
 this repo — the signing key pair and the endpoint that serves `latest.json`:
 
 ```bash
-npm run tauri signer generate -- -w ~/.tauri/stackvo.key
+tools/keys.sh generate   # writes ~/.stackvo-keys/updater.key and updater.key.pub
 ```
 
-Put the public half in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`,
-and the private half in the `TAURI_SIGNING_PRIVATE_KEY` repository secret.
+Put the public half (the whole `.pub` file, base64 as it is) in
+`src-tauri/tauri.conf.json` → `plugins.updater.pubkey`, and the private half in
+the `TAURI_SIGNING_PRIVATE_KEY` repository secret — from the file, never pasted
+from a terminal:
+
+```bash
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.stackvo-keys/updater.key
+```
 Without both, builds produce unsigned artifacts that the updater refuses — the
 correct failure, not a bug to route around.
 
