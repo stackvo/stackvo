@@ -459,7 +459,34 @@ jobs:
           # nothing on it. The two ARM rows would have failed at the packaging
           # step for a reason that has nothing to do with packaging, having
           # packaged successfully.
-          args: --target ${{ matrix.target }} ${{ inputs.rehearsal && '--no-sign' || '' }}
+          # `--verbose`, and it is not noise. `tauri-bundler` runs `candle` and
+          # `light` through a helper that pipes their output and, when the CLI
+          # is quiet, throws that output away on failure as well as on success.
+          # The rehearsal of 2026-09-02 is what that costs: both Windows rows
+          # died on
+          #
+          #     failed to bundle project: `failed to run …\WixTools314\light.exe`
+          #
+          # and the log carried not one line from `light` itself — no LGHT code,
+          # no ICE, nothing to act on. A bundler that fails without saying why
+          # turns every fix into a thirty-minute guess.
+          #
+          # `--bundles nsis,msi` on Windows, and the ORDER is the point.
+          # `bundle.targets` is `all`, so a Windows row produces both an MSI and
+          # an NSIS installer — and the bundler runs them in sequence and stops
+          # at the first failure. MSI runs first by default, so when `light`
+          # died on 2026-09-02 the NSIS installer was never attempted and the
+          # row produced nothing at all. One broken bundler took the whole
+          # platform with it.
+          #
+          # Naming the order puts the installer that has never failed first, so
+          # a Windows row that still cannot produce an MSI at least produces
+          # something installable — and `Keep the rehearsal bundles` below runs
+          # on `always()`, so it is kept even when the row ends red.
+          args: >-
+            --target ${{ matrix.target }} --verbose
+            ${{ startsWith(matrix.os, 'windows') && '--bundles nsis,msi' || '' }}
+            ${{ inputs.rehearsal && '--no-sign' || '' }}
           # Empty in a rehearsal, and an empty `tagName` is what makes
           # `tauri-action` build without touching a release — the bundle is
           # produced, nothing is uploaded, no tag is created.
@@ -553,6 +580,29 @@ jobs:
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          if-no-files-found: warn
+          retention-days: 7
+
+      # What WiX left behind, on a Windows row that produced no bundle.
+      #
+      # The second half of the same lesson as `--verbose` above. `light` failed
+      # on both Windows rows on 2026-09-02 and the log said only that it failed;
+      # its inputs were sitting on the runner and went to the bin with it. This
+      # directory holds the generated `main.wxs`, the `.wixobj` candle produced
+      # and any log WiX wrote — which is where an LGHT code or a rejected file
+      # path is named.
+      #
+      # Windows only, and only when the bundler actually failed: on a green row
+      # this is a few hundred kilobytes of intermediate files nobody will open.
+      # Keyed on the step rather than on an empty `bundle/` directory, because
+      # with NSIS ordered first that directory is no longer empty on the run
+      # where MSI is the thing that broke.
+      - name: Keep what WiX left, when the Windows bundler failed
+        if: ${{ always() && startsWith(matrix.os, 'windows') && steps.tauri.outcome == 'failure' }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: wix-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/wix/
           if-no-files-found: warn
           retention-days: 7
 
