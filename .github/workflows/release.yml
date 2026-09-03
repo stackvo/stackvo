@@ -675,16 +675,18 @@ jobs:
 
       # A plain checksum list, for the reviewer who has no `gh` and no interest
       # in SLSA — the lowest common denominator, and the one most people use.
+      # `tools/checksum-artifacts.mjs` reads `ARTIFACT_PATHS`; the shell loop this
+      # replaced called the macOS/Linux-only hashing tool that name-drops itself
+      # in the tool's own header — not on Windows, where nothing caught that for
+      # two rounds because Windows always failed earlier, in WiX, before this
+      # step was ever reached. The tool's own header has the rest.
       - name: Publish checksums
         shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
         run: |
           mkdir -p checksums
-          for path in $(echo '${{ steps.tauri.outputs.artifactPaths }}' | node -e 'JSON.parse(require("fs").readFileSync(0,"utf8")).forEach(p=>console.log(p))'); do
-            [ -f "$path" ] || continue
-            # `basename` in the output, not the runner's absolute path: the
-            # person checking has the file in their downloads folder.
-            ( cd "$(dirname "$path")" && shasum -a 256 "$(basename "$path")" )
-          done | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
+          node tools/checksum-artifacts.mjs | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
 
       - name: Attach the checksums
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
