@@ -29,10 +29,23 @@
  * it through `tee` to write the checksums file, exactly as it did before.
  *
  * Run: `ARTIFACT_PATHS='["a.exe","b.dmg"]' node tools/checksum-artifacts.mjs`
+ *
+ * ## What the first version got wrong, twice
+ *
+ * Release run #6 was the first with every row past bundling, and this file
+ * failed it in two different ways on two different platforms: `EISDIR` on
+ * macOS, where `artifactPaths` includes the `.app` *directory*, and a silent
+ * empty file on Windows, where the entry-point check never matched. Both
+ * were platform-specific behaviour the tests did not exercise, on a file
+ * whose whole reason to exist was platform independence. `isRegularFile`,
+ * `checksumLines` and `isEntryPoint` below each carry the fix and the test
+ * that would have caught it — `ci.yml` runs this file's tests on
+ * `windows-latest` too, so the round trip is now checked on the OS it broke on.
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 /**
  * One `sha256sum`-format line for the bytes in `buffer`, named `path`.
@@ -71,19 +84,64 @@ export function parseArtifactPaths(json) {
   return parsed;
 }
 
-function main() {
-  const paths = parseArtifactPaths(process.env.ARTIFACT_PATHS);
-  for (const path of paths) {
-    // Silent, matching the bash loop this replaces: `tauri-action`'s list can
-    // name a format a rehearsal skipped (`--bundles nsis` on Windows leaves no
-    // `.msi` in `artifactPaths` to begin with, so this is not expected to
-    // trigger there) — but a path that is simply absent is not this script's
-    // question to raise.
-    if (!existsSync(path)) continue;
-    console.log(checksumLine(path, readFileSync(path)));
+/**
+ * Whether `path` is something a person can download and check — a regular
+ * file — as opposed to a directory or nothing at all.
+ *
+ * This is the `[ -f "$path" ]` of the bash loop this file replaced, and the
+ * first version of this file dropped it for `existsSync`. On macOS that was
+ * the difference between passing and failing: `tauri-action` lists
+ * `StackVo.app` in `artifactPaths` alongside the `.dmg`, and a `.app` is a
+ * directory. `existsSync` said yes, `readFileSync` said `EISDIR`, and both
+ * macOS rows of release run #6 went red at the very last step.
+ */
+export function isRegularFile(path) {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * One checksum line per regular file in `paths`, in order; directories and
+ * absent paths skipped.
+ *
+ * Throws when that leaves nothing, on purpose. Every matrix row builds at
+ * least one installer, so an empty list means the step is misconfigured, not
+ * that there was nothing to hash — and a checksums file with zero lines in it
+ * is a release asset that lies. Release run #6 published exactly that for
+ * both Windows rows, green (see `isEntryPoint`).
+ */
+export function checksumLines(paths) {
+  const lines = paths.filter(isRegularFile).map((path) => checksumLine(path, readFileSync(path)));
+  if (lines.length === 0) {
+    throw new Error(`ARTIFACT_PATHS named no regular file to checksum: ${JSON.stringify(paths)}`);
+  }
+  return lines;
+}
+
+/**
+ * Whether this module is the script Node was told to run, rather than an
+ * import — so the tests can load `checksumLine` without `main` firing.
+ *
+ * Compared as URLs, not by pasting `file://` in front of `argv[1]`. The
+ * pasted form is what this file first did, and it is only right on POSIX:
+ * on Windows `argv[1]` is `D:\a\stackvo\...`, its URL is
+ * `file:///D:/a/stackvo/...`, and the two never match — so `main` never ran,
+ * nothing was printed, and the step passed with an empty checksums file on
+ * both Windows rows of release run #6. `pathToFileURL` builds the URL the
+ * way the module loader does, on every OS.
+ */
+export function isEntryPoint(argv1, moduleUrl) {
+  return argv1 !== undefined && pathToFileURL(argv1).href === moduleUrl;
+}
+
+function main() {
+  const paths = parseArtifactPaths(process.env.ARTIFACT_PATHS);
+  for (const line of checksumLines(paths)) console.log(line);
+}
+
+if (isEntryPoint(process.argv[1], import.meta.url)) {
   main();
 }
