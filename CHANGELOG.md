@@ -155,6 +155,29 @@ heading is the engineering log; the short version a user reads is
 
 ### Fixed
 
+- **`Publish checksums` was the next thing Windows had never reached.**
+  `--bundles nsis` let both Windows rows get past bundling for the first time,
+  and the very next step died: `shasum: command not found`, exit code 127.
+  `shasum` is a Perl script on macOS and Linux; GitHub's Windows runners carry
+  `sha256sum` instead, a different program with a different name, and nothing
+  had ever caught the mismatch because Windows always failed earlier, in WiX,
+  before this step was ever reached.
+
+  Replaced with [`tools/checksum-artifacts.mjs`](tools/checksum-artifacts.mjs),
+  which hashes with Node's own `crypto` — the one thing guaranteed on all three
+  platforms — rather than reaching for whichever platform's hashing tool
+  happens to be installed. `steps.tauri.outputs.artifactPaths` now passes
+  through an `ARTIFACT_PATHS` environment variable rather than a `${{ }}`
+  interpolated directly into the shell line, which sidesteps the quoting a
+  Windows path full of backslashes would need.
+
+  The tool's own `basename` extraction splits on both `/` and `\` regardless
+  of the host running it, on purpose: `node:path`'s `basename` picks POSIX or
+  Windows rules from the *host*, not from the path it is given, and this
+  file's own unit tests run that path on `ubuntu-latest` and `macos-latest` in
+  `ci.yml` — a naive `path.basename` would have passed the manual check on
+  this Mac and failed there.
+
 - **A release run failed on a translation test that has nothing wrong with its
   translations.** `tray::tests::every_key_differs_between_the_two_languages`
   asserted `navSettings` came back identical for Turkish and English —

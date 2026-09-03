@@ -355,6 +355,41 @@ fn windows_asks_for_nsis_and_not_the_installer_that_cannot_be_built_here() {
     );
 }
 
+/// Checksums are published with a tool every runner has, not `shasum`.
+///
+/// `shasum` is a Perl script on macOS and Linux and is not on GitHub's Windows
+/// runners — Git for Windows ships `sha256sum` instead. Nothing caught that
+/// for two rounds because Windows always died earlier, in WiX, before this
+/// step was ever reached; the day `--bundles nsis` let Windows get past
+/// bundling, `Publish checksums` was the very next thing to fail there, with
+/// `shasum: command not found`.
+#[test]
+fn checksums_are_published_with_something_every_runner_has() {
+    let text = workflow();
+    let step = steps(&text)
+        .into_iter()
+        .find(|step| step.contains("Publish checksums"))
+        .expect("no step publishes checksums");
+
+    // Not a bare `!step.contains("shasum")`: the comment right above this step
+    // names the command it replaced, to explain why, and a substring check
+    // would fail on its own explanation. The invocation, not the word, is
+    // what must be gone.
+    assert!(
+        !step.contains("shasum -a 256"),
+        "the checksum step still calls `shasum -a 256`: {step}. It is not on \
+         GitHub's Windows runners, and this step runs on every matrix row."
+    );
+    assert!(
+        step.contains("node tools/checksum-artifacts.mjs"),
+        "the checksum step does not call the cross-platform tool: {step}"
+    );
+    assert!(
+        step.contains("ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}"),
+        "the checksum step does not hand the tool `artifactPaths`: {step}"
+    );
+}
+
 /// A rehearsal reaches its bundler even when the suite is red.
 ///
 /// The first real run of this workflow died at the suite on all six targets and
