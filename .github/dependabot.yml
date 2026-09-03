@@ -60,6 +60,17 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
+      # No Tauri package on the npm side, at any level. Each `@tauri-apps/*`
+      # package is one half of a pair whose other half is a crate in
+      # `src-tauri/Cargo.toml`, and the Tauri CLI refuses to build when the two
+      # halves are on different minors — so a bot PR bumping only this half
+      # cannot go green, ever, and neither can the crate half merged alone.
+      # NOTICE.md is generated too, and the bot cannot regenerate it. Measured
+      # on 3 September 2026: five PRs (#106–#110) for one piece of work, two of
+      # them red on exactly those two grounds. The cargo `tauri` group below is
+      # the single reminder; when it appears, a person moves both halves in one
+      # commit and runs `npm run notice`.
+      - dependency-name: '@tauri-apps/*'
 
   - package-ecosystem: cargo
     directory: /src-tauri
@@ -68,6 +79,8 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
+      # This group is the reminder for the npm half too — see the npm `ignore`
+      # above. Its PR is not merged on its own: the JS packages move with it.
       tauri:
         patterns:
           - tauri
