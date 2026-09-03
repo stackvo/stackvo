@@ -13,6 +13,17 @@ Settings.
 
 ## Before you push
 
+**No branch is pushed without `tools/before-push.sh` having run** — `--all` for
+anything that touches the platform-specific parts, which runs the Linux and
+Windows halves in a container. The rule was learnt twice at the same price: once
+a tree was called green on `cargo test` plus `npm test` alone and the next run
+was red on all four legs; once the last edit was made *after* the gate had run.
+Both times the gate had the same answers in seconds; the way they were learnt
+was a merge and a three-OS matrix. The gate has a third colour, `skipped`, for
+what this machine cannot answer, and it says why.
+
+The pieces, if you want them one at a time:
+
 ```bash
 npm run lint        # eslint + prettier
 npm run test:js     # vitest

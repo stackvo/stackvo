@@ -322,8 +322,9 @@ fn a_rehearsal_tells_the_bundler_not_to_sign() {
 ///
 /// The real fix needs a Cargo workspace — moving `stackvo` and `stackvo-mcp`
 /// out of this package's own bin targets — and a Windows CI round-trip neither
-/// of us can shortcut. `docs/isler.md` tracks it. This test pins the interim
-/// choice so it does not quietly grow `msi` back before that fix lands.
+/// of us can shortcut — and it waits for a customer who needs `msiexec`; the
+/// decision is in `CHANGELOG.md`. This test pins the choice so it does not
+/// quietly grow `msi` back without that customer.
 #[test]
 fn windows_asks_for_nsis_and_not_the_installer_that_cannot_be_built_here() {
     let args = bundler_args();
