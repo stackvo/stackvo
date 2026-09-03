@@ -18,7 +18,7 @@ yarısı da silindi, yani bir başlık artık **yalnızca kalanı** adlandırıy
 
 | Blok | Madde | Ne bekliyor |
 | --- | --- | --- |
-| **A. Yayın koşusu** | 4 | Yeşil bir yapı matrisi, bir insanın tuşu, bir Windows makinesi |
+| **A. Yayın koşusu** | 5 | Yeşil bir yapı matrisi, bir insanın tuşu, bir Windows makinesi, bir Cargo workspace |
 | **B. Bakım borcu** | 2 | Sekiz elle geçiş, bir doğrulayıcı |
 | **C. Arayüz borcu** | 3 | Aracın kendi sınırı, ilk yayın, bir ürün kararı |
 | **D. Stratejik** | 1 | **Kullanıcıya sorulacak bir karar** |
@@ -106,6 +106,8 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
    | `windows-11-arm / aarch64` | Aynı `exit code 101` | PR #74 |
    | Her iki Windows satırı | `failed to bundle project: Couldn't find a .ico icon` | `ea80852` |
    | `ubuntu-24.04-arm / aarch64` | `xdg-open binary not found /usr/bin/xdg-open` | `ea80852` |
+   | Her iki Windows satırı | `failed to bundle project: light.exe` — sebepsiz | PR #89 (`--verbose` ekledi) |
+   | Her iki Windows satırı | `ICE30`: `stackvo-mcp.exe` iki bileşenden kuruluyor | daraltıldı, kapanmadı — bkz. #5 |
 
    `.ico` bulunamıyordu çünkü o commit'te `bundle.icon` **tek bir PNG** listeliyordu
    (`["icons/icon.png"]`) — dosya depoda duruyordu, yapılandırma onu adlandırmıyordu.
@@ -117,7 +119,9 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
    **Kalan iş, bir çıkarımı ölçüme çevirmek.** `release.yml` `workflow_dispatch` taşıyor,
    yani bugünkü `main` üzerinde **etiket atmadan** bir prova koşusu yapılabilir; 26
    Ağustos'taki koşu da öyle başlatılmıştı. Etiket geri alınamaz, prova koşusu alınabilir.
-   Bu madde, o koşu altı satırda da yeşil döndüğünde kapanır — ondan önce değil.
+   Bu madde, o koşu altı satırda da yeşil döndüğünde kapanır — ondan önce değil. "Yeşil"in
+   bugünkü tanımı Windows'ta yalnız NSIS'i sayıyor; MSI'ın neden dışarıda bırakıldığı ve ne
+   zaman geri geleceği #5'te ayrı bir madde.
 
 2. ❌ **Publish** (yapılmadı) — #1'den sonra: etiketle, koşuyu rehearsal'da uçtan uca
    doğrula, sonra bas. **Publish bir insanın tuşu.**
@@ -140,6 +144,33 @@ Bash'in yol ad alanını Windows'unkiyle karşılaştırıyordu. Üçü de aynı
    güncellemeden sonra yeniden karantinaya alabilir), ve SmartScreen'in kurulumu tamamen mi
    engellediği yoksa bir tıkla mı geçildiği. README ve sürüm notu ikincisini "bir tık" diye
    yazıyor; turun doğrulayacağı şey o.
+
+5. ❌ **Windows'ta MSI yok — yalnız NSIS** (yapılmadı) — 0.2.0'ın bilinçli eksiği.
+   `light.exe`, `--verbose` eklendikten sonra (PR #89) sebebini söyledi: WiX'in `ICE30`'u,
+   `stackvo-mcp.exe`'nin **iki farklı bileşenden** aynı yere kurulduğunu söylüyor — biri
+   `externalBin`'in geçici kopyasından (doğru olan), biri ham
+   `target/<triple>/release/stackvo-mcp.exe`'den (tauri-bundler'ın kendiliğinden eklediği).
+
+   Sebep: `src-tauri/src/bin/stackvo.rs` ve `stackvo-mcp.rs`, `stackvo-desktop` paketinin
+   **örtük `[[bin]]` hedefleri**. Windows'un WiX paketleyicisi — macOS/Linux'un
+   dmg/deb/rpm/AppImage'ından farklı olarak — paketin sahip olduğu her bin hedefini
+   otomatik ekliyor, `externalBin`'de zaten doğru bildirilmiş olsa bile. Aynı sınıf hata
+   upstream'de açık: [tauri#4807](https://github.com/tauri-apps/tauri/issues/4807),
+   çözümsüz.
+
+   **Geçici çözüm, `release.yml`'de:** Windows satırları `--bundles nsis` ile yalnız NSIS
+   istiyor, MSI hiç denenmiyor. `tools/check-installers.mjs`'in doğrulama adımı da
+   Windows'ta `--only nsis` ile daraltıldı — MSI'yı "eksik" diye işaretlemiyor.
+   Güncelleyici bundan etkilenmiyor: `UPDATED.windows` zaten `-setup.exe` (NSIS), MSI'a hiç
+   bağlı değildi.
+
+   **Kalıcı çözüm:** `stackvo` ve `stackvo-mcp`'i `stackvo-desktop` paketinin bin
+   hedeflerinden çıkarıp ayrı bir Cargo workspace üyesi yapmak — böylece tauri-bundler'ın
+   gördüğü paket tek bin hedefi taşır. İkisi de zaten `stackvo_desktop_lib`'e ince bir
+   sarmalayıcı, kod tarafı basit; zor olan `tools/sidecars.mjs`'in cargo çağrısını ve
+   `release.yml`'in `--bin stackvo --bin stackvo-mcp` satırlarını yeni yapıya uydurmak, ve
+   **Windows'ta test etmeden doğrulayamamak** — bir prova turu gerektiriyor. MSI'ı kurumsal
+   bir dağıtım (Group Policy vb.) ihtiyacı doğurana kadar ertelenebilir.
 
 ---
 

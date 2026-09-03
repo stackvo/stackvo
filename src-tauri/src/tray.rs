@@ -921,27 +921,36 @@ mod tests {
 
     #[test]
     fn every_key_differs_between_the_two_languages() {
-        // A key that returns the same text for both is almost always one that
-        // was added to the match with only one arm filled in.
-        for key in [
-            "checking",
-            "show",
-            "quit",
-            "engineDown",
-            "noWorkspace",
-            "engineUp",
-            "navProjects",
-            "navMarket",
-            "navLogs",
-            "navSettings",
-        ] {
-            assert_ne!(
-                tr("tr", key),
-                tr("en", key),
-                "{key} is not actually translated"
-            );
-            assert_ne!(tr("en", key), key, "{key} fell through to the fallback");
-        }
+        // `with_no_labels`, not a bare call. `tr` checks `fed` before it looks
+        // at locale at all, and `FED` is process-wide — so this ran on
+        // 2026-09-03 while another thread's `with_labels` had the catalog set
+        // to its fallback table, and `navSettings` came back
+        // `"fallback-navSettings"` on both sides of an assertion that the two
+        // locales differ. Not a translation bug: a test that reads a shared
+        // table without taking the lock the table's own tests agreed to.
+        with_no_labels(|| {
+            // A key that returns the same text for both is almost always one
+            // that was added to the match with only one arm filled in.
+            for key in [
+                "checking",
+                "show",
+                "quit",
+                "engineDown",
+                "noWorkspace",
+                "engineUp",
+                "navProjects",
+                "navMarket",
+                "navLogs",
+                "navSettings",
+            ] {
+                assert_ne!(
+                    tr("tr", key),
+                    tr("en", key),
+                    "{key} is not actually translated"
+                );
+                assert_ne!(tr("en", key), key, "{key} fell through to the fallback");
+            }
+        });
     }
 
     #[test]
