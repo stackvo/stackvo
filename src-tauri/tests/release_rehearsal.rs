@@ -300,28 +300,39 @@ fn a_rehearsal_tells_the_bundler_not_to_sign() {
     );
 }
 
-/// On Windows the installer that works is built before the one that might not.
+/// Windows asks its bundler for NSIS only, and MSI is not on the list.
 ///
-/// `bundle.targets` is `all`, so a Windows row produces an MSI and an NSIS
-/// installer. The bundler runs them in sequence and stops at the first failure,
-/// and MSI runs first by default — so on 2 September 2026 both Windows rows
-/// died in `light.exe` and produced **nothing**, the NSIS installer never
-/// having been attempted. A platform with two installers had none, because of
-/// the order.
+/// `bundle.targets` is `all`, which owes Windows both an MSI and an NSIS
+/// installer — and MSI cannot be built here at all. `light.exe` fails on every
+/// Windows row with WiX's `ICE30`: `stackvo-mcp.exe` is installed by two
+/// different components, one from `externalBin`'s temp copy and one from the
+/// raw `target/<triple>/release/stackvo-mcp.exe` that tauri-bundler's Windows
+/// path bundles on its own for every extra `[[bin]]` target a crate has —
+/// matching a tauri-bundler bug open since v1
+/// (github.com/tauri-apps/tauri/issues/4807). This crate has two, `stackvo`
+/// and `stackvo-mcp`, existing only so `tools/sidecars.mjs` has something to
+/// copy into `externalBin`.
 ///
-/// Naming the order is the fix, and it is the kind that quietly reverts: the
-/// list reads like a preference rather than a decision, and nothing about
-/// `nsis,msi` says that swapping it costs Windows its entire release. This
-/// asserts the order rather than the presence, for exactly that reason.
+/// Ordering `nsis` before `msi` was tried first, on the theory that the
+/// bundler stops at the first failure. It does not save the situation: MSI
+/// still fails, it just fails after NSIS rather than before it, and every
+/// Windows row still ends the job red over a package this repository is not
+/// producing on purpose. Asking for `nsis` alone is the difference between "a
+/// known limitation" and "a build that looks broken."
+///
+/// The real fix needs a Cargo workspace — moving `stackvo` and `stackvo-mcp`
+/// out of this package's own bin targets — and a Windows CI round-trip neither
+/// of us can shortcut. `docs/isler.md` tracks it. This test pins the interim
+/// choice so it does not quietly grow `msi` back before that fix lands.
 #[test]
-fn windows_builds_the_installer_that_works_before_the_one_that_might_not() {
+fn windows_asks_for_nsis_and_not_the_installer_that_cannot_be_built_here() {
     let args = bundler_args();
 
     assert!(
-        args.contains("--bundles nsis,msi"),
-        "the Windows rows do not name a bundler order: `{args}`. Without it the \
-         bundler runs MSI first, and an MSI that fails takes the NSIS installer \
-         with it — which is how a Windows row produced no artifact at all."
+        args.contains("--bundles nsis"),
+        "the Windows rows do not name `--bundles nsis`: `{args}`. Without it \
+         `bundle.targets: all` asks for MSI too, and MSI cannot be built here — \
+         see the comment above this test for why."
     );
 
     let list = args
@@ -329,12 +340,11 @@ fn windows_builds_the_installer_that_works_before_the_one_that_might_not() {
         .nth(1)
         .and_then(|rest| rest.split_whitespace().next())
         .expect("`--bundles` has a list after it");
-    let (nsis, msi) = (list.find("nsis"), list.find("msi"));
     assert!(
-        matches!((nsis, msi), (Some(n), Some(m)) if n < m),
-        "the bundler list is `{list}`. `nsis` has to come before `msi`: the \
-         bundler stops at the first failure, so whichever is named first is the \
-         one Windows is guaranteed to get."
+        !list.contains("msi"),
+        "the bundler list is `{list}`, and it still names `msi`. `light.exe` \
+         fails on every Windows row on WiX's ICE30 — see the comment above this \
+         test — so asking for it is asking for a red job, not for a package."
     );
 
     assert!(
@@ -423,6 +433,15 @@ fn the_run_says_what_the_bundler_produced() {
          builds with `--no-sign` so there are no signatures to find; a \
          published release has them, and an artifact without one installs by \
          hand and is invisible to the updater:\n{step}"
+    );
+    assert!(
+        step.contains("startsWith(matrix.os, 'windows') && '--only nsis'"),
+        "the check is not told to narrow Windows to `nsis`: {step}. \
+         `bundle.targets: all` says Windows owes an MSI too, and MSI cannot be \
+         built here — `--bundles nsis` in `windows_asks_for_nsis_and_not_the_\
+         installer_that_cannot_be_built_here` is only half the fix; without \
+         this half the check demands a package nothing asked the bundler to \
+         produce and fails a row that did exactly what it was told."
     );
     assert!(
         step.contains("!cancelled()"),
