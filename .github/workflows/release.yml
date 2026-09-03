@@ -107,6 +107,56 @@ jobs:
             exit 1
           fi
 
+      # "Set" was the whole check until 3 September 2026, and the v0.2.0 run
+      # showed what it lets through. The secret was the key file's 348
+      # characters plus one: a zsh prompt's `%` — the marker it prints after
+      # output with no trailing newline — copied from a terminal along with the
+      # key. `-z` was satisfied. Six rows built for twenty minutes and four of
+      # them died at `failed to decode base64 secret key: Invalid symbol 37,
+      # offset 348`. The same run would also have shipped bundles the app
+      # cannot verify: `plugins.updater.pubkey` had been replaced on 28 August
+      # with a key whose private half nobody holds, and no check compared the
+      # two halves.
+      #
+      # So the preflight now does what the build will do, in miniature: sign
+      # a file with the secret and its password, and read the key id out of
+      # the signature and out of `tauri.conf.json`'s public key. Equal, or
+      # nothing builds. Both are minisign boxes, and both put the 8-byte key id
+      # at bytes 2–9 of their base64 payload's second line.
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        if: ${{ !inputs.rehearsal }}
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install the CLI that signs
+        if: ${{ !inputs.rehearsal }}
+        run: npm ci
+      - name: The signing key must sign, and with the key the app trusts
+        if: ${{ !inputs.rehearsal }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ! printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | base64 -d 2>/dev/null | head -1 | grep -q '^untrusted comment:'; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not the blob 'tauri signer generate' wrote. One stray character is enough — a zsh prompt's % copied along with the key, say. Set it from the file, never from a terminal: gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.stackvo-keys/updater.key"
+            exit 1
+          fi
+
+          echo preflight > sample.txt
+          if ! npx --no-install tauri signer sign sample.txt >/dev/null; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD do not sign together. The CLI's own message is above this line."
+            exit 1
+          fi
+
+          key_id() { base64 -d | sed -n 2p | base64 -d | tail -c +3 | head -c 8 | od -An -tx1 | tr -d ' \n'; }
+          signs_with=$(key_id < sample.txt.sig)
+          trusts=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey" | key_id)
+          if [ "$signs_with" != "$trusts" ]; then
+            echo "::error file=src-tauri/tauri.conf.json::the secret signs with key $signs_with and plugins.updater.pubkey trusts key $trusts. Every update this run produced would be refused on the user's machine. The public half of the key in the secret is what belongs in tauri.conf.json — tools/keys.sh prints it."
+            exit 1
+          fi
+          echo "The secret signs with key $signs_with, and that is the key the app trusts."
+
   build:
     needs: preflight
     # The longest job in the repository, and the one where a stall costs most:
@@ -367,15 +417,33 @@ jobs:
       # Signed-but-not-notarised is called out separately because it is the state
       # people miss: the bundle carries a valid signature and Gatekeeper still
       # refuses it, because notarisation is a separate round trip to Apple.
-      - name: Note whether macOS artifacts will be signed and notarised
+      - name: Hand tauri the Apple secrets that exist, and say what that means
         if: startsWith(matrix.os, 'macos')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          # Only the ones that are set reach the builder. Actions hands an
+          # undefined secret to a step as the empty string, and tauri treats
+          # an empty APPLE_CERTIFICATE as a certificate: it decodes nothing
+          # into a .p12 and asks `security import` to load it, which fails
+          # with "One or more parameters passed to a function were not
+          # valid" — both macOS rows of the v0.2.0 run, 3 September 2026,
+          # with no Apple secret on the repository at all. The rehearsal never
+          # saw it because `--no-sign` skips the whole path. So the builder's
+          # step below names none of these in its `env:`; this loop exports
+          # the present ones through $GITHUB_ENV, and an absent one stays
+          # genuinely unset, which is the case tauri handles by not signing.
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -n "${!name}" ]; then
+              { echo "$name<<STACKVO_SECRET"; echo "${!name}"; echo "STACKVO_SECRET"; } >> "$GITHUB_ENV"
+            fi
+          done
+
           unsigned=""
           [ -n "$APPLE_CERTIFICATE" ] || unsigned="$unsigned APPLE_CERTIFICATE"
           [ -n "$APPLE_SIGNING_IDENTITY" ] || unsigned="$unsigned APPLE_SIGNING_IDENTITY"
@@ -433,14 +501,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS notarisation. Without these the app still builds, but Gatekeeper
-          # shows the "unidentified developer" warning on first launch.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # No Apple variable here, on purpose. The macOS step above exports the
+          # ones that are set through $GITHUB_ENV; naming them in this block
+          # would hand tauri the empty string for each absent one, and an
+          # empty certificate is a certificate it tries to import.
         with:
           # `--no-sign` in a rehearsal, and it is the difference between a
           # rehearsal that answers the ARM question and one that cannot.

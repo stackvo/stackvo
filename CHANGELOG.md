@@ -217,6 +217,41 @@ heading is the engineering log; the short version a user reads is
   the session, gives up after the bounded attempts with the count in the
   message, and does not retry an answer.
 
+- **The first real release run, v0.2.0 on 3 September 2026, failed on all six
+  rows — for three reasons the rehearsal cannot see, because a rehearsal
+  signs nothing.**
+
+  _macOS, both rows:_ `security import` on a zero-length `.p12`. No Apple
+  secret exists on the repository, and none is needed for an unsigned 0.2.0
+  — the workflow's own step says so with a warning. But the builder's `env:`
+  named all six `APPLE_*` secrets, and Actions passes an undefined secret as
+  the empty string, which tauri takes for a certificate and tries to import.
+  The same trap the file already documents for `TAURI_SIGNING_PRIVATE_KEY`,
+  one block down. The builder's `env:` names none of them now; the macOS
+  step exports the ones that are set through `$GITHUB_ENV`, and an absent
+  one stays absent, which is the case tauri handles by not signing.
+
+  _Linux and Windows, all four rows:_ `failed to decode base64 secret key:
+  Invalid symbol 37, offset 348`. Symbol 37 is `%`; offset 348 is one past
+  the end of the 348-byte key file. The secret was the key plus the `%` a
+  zsh prompt prints after output with no trailing newline, copied from a
+  terminal together with the key. The preflight's entire check was `-z`.
+  It signs a file now — with the secret and its password, through the same
+  CLI the build uses — so a malformed key or a wrong password fails in the
+  first minute rather than the twentieth.
+
+  _And the one no row reached:_ `plugins.updater.pubkey` was not the
+  ceremony's key. `tools/keys.sh` generated the updater pair on 23 August
+  and the public half went into `tauri.conf.json`; a commit on 28 August
+  (`73572fd`, about something else entirely) replaced it with a key whose
+  private half nobody holds, and said nothing. Had the secret decoded, every
+  bundle would have been signed with a key the app does not trust, and the
+  updater would have refused all of them on the user's machine. The
+  ceremony's key is back, and the new preflight reads the key id out of the
+  signature it just made and out of `tauri.conf.json`, and stops the run if
+  they differ. v0.1.0 shipped no `.sig` at all, so no installed copy loses
+  an update path it ever had.
+
 - **A release run failed on a translation test that has nothing wrong with its
   translations.** `tray::tests::every_key_differs_between_the_two_languages`
   asserted `navSettings` came back identical for Turkish and English —
