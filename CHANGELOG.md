@@ -36,6 +36,17 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Tauri plugins move as pairs, by hand.** `plugin-updater` 2.10.1→2.11.0,
+  `plugin-notification` 2.3.3→2.4.0, `plugin-dialog` 2.7.2→2.7.3 and
+  `plugin-opener` 2.5.4→2.5.5, on both sides at once (plus the crate-only
+  `single-instance` 2.4.3→2.4.4), with `NOTICE.md` regenerated. Dependabot had
+  opened five pull requests for this one piece of work — four npm, one Cargo
+  group — and two were red on grounds a bot cannot fix: the Tauri CLI refuses
+  to build when a package and its crate are on different minors, and
+  `NOTICE.md` is generated. The npm side now ignores `@tauri-apps/*`; the
+  cargo `tauri` group is the one reminder, and a person moves both halves in
+  one commit when it appears.
+
 - **MSI is not on the list until an enterprise customer asks for it.** The
   Windows installer is NSIS (`-setup.exe`); it installs silently with `/S`
   and it is what the updater downloads. MSI's one real audience is fleet
