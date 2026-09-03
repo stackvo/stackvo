@@ -178,6 +178,20 @@ heading is the engineering log; the short version a user reads is
   `ci.yml` — a naive `path.basename` would have passed the manual check on
   this Mac and failed there.
 
+  That first version then failed release run #6 in two ways of its own, on
+  two platforms, at the one step every row had finally reached. On macOS,
+  `artifactPaths` lists `StackVo.app` next to the `.dmg`, and a `.app` is a
+  directory: the bash loop's `[ -f "$path" ]` had skipped it, `existsSync`
+  did not, and `readFileSync` died with `EISDIR` on both macOS rows. On
+  Windows the step went green with an _empty_ checksums file: the
+  entry-point check pasted `file://` in front of `process.argv[1]`, which is
+  `D:\a\...` there and never equals the module's `file:///D:/a/...` URL, so
+  `main` never ran. `isRegularFile` (a `statSync().isFile()`) and
+  `isEntryPoint` (`pathToFileURL`, the way the loader builds the URL) replace
+  both, `checksumLines` refuses to emit zero lines rather than publish an
+  asset that says nothing, and each has a test — the entry-point round trip
+  runs on `windows-latest` in `ci.yml`, the OS it broke on.
+
 - **A release run failed on a translation test that has nothing wrong with its
   translations.** `tray::tests::every_key_differs_between_the_two_languages`
   asserted `navSettings` came back identical for Turkish and English —
