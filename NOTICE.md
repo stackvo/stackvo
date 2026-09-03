@@ -491,13 +491,13 @@ Counted from 601 Rust crates and 43 npm packages.
 | tauri-codegen | 2.6.3 | Apache-2.0 OR MIT |
 | tauri-macros | 2.6.3 | Apache-2.0 OR MIT |
 | tauri-plugin-autostart | 2.5.1 | Apache-2.0 OR MIT |
-| tauri-plugin-dialog | 2.7.2 | Apache-2.0 OR MIT |
-| tauri-plugin-fs | 2.5.1 | Apache-2.0 OR MIT |
-| tauri-plugin-notification | 2.3.3 | Apache-2.0 OR MIT |
-| tauri-plugin-opener | 2.5.4 | Apache-2.0 OR MIT |
+| tauri-plugin-dialog | 2.7.3 | Apache-2.0 OR MIT |
+| tauri-plugin-fs | 2.5.2 | Apache-2.0 OR MIT |
+| tauri-plugin-notification | 2.4.0 | Apache-2.0 OR MIT |
+| tauri-plugin-opener | 2.5.5 | Apache-2.0 OR MIT |
 | tauri-plugin-process | 2.3.1 | Apache-2.0 OR MIT |
-| tauri-plugin-single-instance | 2.4.3 | Apache-2.0 OR MIT |
-| tauri-plugin-updater | 2.10.1 | Apache-2.0 OR MIT |
+| tauri-plugin-single-instance | 2.4.4 | Apache-2.0 OR MIT |
+| tauri-plugin-updater | 2.11.0 | Apache-2.0 OR MIT |
 | tauri-runtime | 2.11.3 | Apache-2.0 OR MIT |
 | tauri-runtime-wry | 2.11.4 | Apache-2.0 OR MIT |
 | tauri-utils | 2.9.3 | Apache-2.0 OR MIT |
@@ -685,11 +685,11 @@ Counted from 601 Rust crates and 43 npm packages.
 | @mdi/font | 7.4.47 | Apache-2.0 |
 | @tauri-apps/api | 2.11.1 | Apache-2.0 OR MIT |
 | @tauri-apps/plugin-autostart | 2.5.1 | MIT OR Apache-2.0 |
-| @tauri-apps/plugin-dialog | 2.7.2 | MIT OR Apache-2.0 |
-| @tauri-apps/plugin-notification | 2.3.3 | MIT OR Apache-2.0 |
-| @tauri-apps/plugin-opener | 2.5.4 | MIT OR Apache-2.0 |
+| @tauri-apps/plugin-dialog | 2.7.3 | MIT OR Apache-2.0 |
+| @tauri-apps/plugin-notification | 2.4.0 | MIT OR Apache-2.0 |
+| @tauri-apps/plugin-opener | 2.5.5 | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-process | 2.3.1 | MIT OR Apache-2.0 |
-| @tauri-apps/plugin-updater | 2.10.1 | MIT OR Apache-2.0 |
+| @tauri-apps/plugin-updater | 2.11.0 | MIT OR Apache-2.0 |
 | @vue/compiler-core | 3.5.42 | MIT |
 | @vue/compiler-dom | 3.5.42 | MIT |
 | @vue/compiler-sfc | 3.5.42 | MIT |
