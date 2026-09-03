@@ -7,7 +7,7 @@ import {
   Session,
   WebDriverError,
 } from './driver/webdriver.js';
-import { whyNotHere, binaryPath } from './driver/launch.js';
+import { whyNotHere, binaryPath, stillComingUp, openWithRetries } from './driver/launch.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -290,5 +290,108 @@ describe('where the suite can run, and against what', () => {
           `timeout-minutes — not by this.`
       ).toBe(false);
     }
+  });
+});
+
+/**
+ * The retry loop, driven from here with a fake `open`.
+ *
+ * This is the half of `launch` that failed the driver job on 3 September
+ * 2026: `WebKitWebDriver` was still coming up behind the proxy, `fetch`
+ * raised `TypeError: fetch failed`, and the loop that existed for exactly
+ * that case did not recognise it — the message it matched against was the
+ * one on `tauri-driver`'s stderr, appended later, not the one on the error.
+ */
+describe('stillComingUp', () => {
+  const fetchFailed = (cause) => {
+    const error = new TypeError('fetch failed');
+    error.cause = cause;
+    return error;
+  };
+
+  it('is the shape the proxy produces before WebKitWebDriver is listening', () => {
+    // undici, when the proxy accepts the connection and then drops it.
+    const closed = new Error('other side closed');
+    closed.code = 'UND_ERR_SOCKET';
+    expect(stillComingUp(fetchFailed(closed))).toBe(true);
+  });
+
+  it('is also a refused or reset connection, wherever in the cause chain it is', () => {
+    const refused = new Error('connect ECONNREFUSED 127.0.0.1:4444');
+    refused.code = 'ECONNREFUSED';
+    expect(stillComingUp(fetchFailed(refused))).toBe(true);
+    expect(stillComingUp(fetchFailed(new Error('wrapped', { cause: refused })))).toBe(true);
+    expect(stillComingUp(new Error('socket hang up'))).toBe(true);
+  });
+
+  it('is not an answer from the driver, even one that mentions connecting', () => {
+    expect(
+      stillComingUp(new WebDriverError('session not created', 'could not connect to the binary'))
+    ).toBe(false);
+  });
+
+  it("is not the request's own deadline", () => {
+    const timeout = new Error('The operation was aborted due to timeout');
+    timeout.name = 'TimeoutError';
+    expect(stillComingUp(timeout)).toBe(false);
+  });
+
+  it('is not anything else', () => {
+    expect(stillComingUp(new Error('ENOENT: no such file'))).toBe(false);
+    expect(stillComingUp(undefined)).toBe(false);
+  });
+});
+
+describe('openWithRetries', () => {
+  const race = () => {
+    const error = new TypeError('fetch failed');
+    error.cause = Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' });
+    return error;
+  };
+
+  it('keeps asking while the proxy has nothing behind it, and returns the session', async () => {
+    let calls = 0;
+    const open = async () => {
+      calls += 1;
+      if (calls < 3) throw race();
+      return { id: 'session' };
+    };
+    const session = await openWithRetries({ application: '/bin/app', args: [], gapMs: 0, open });
+    expect(session).toEqual({ id: 'session' });
+    expect(calls).toBe(3);
+  });
+
+  it("gives up after the bounded attempts, in the driver's words plus the count", async () => {
+    let calls = 0;
+    const open = async () => {
+      calls += 1;
+      throw race();
+    };
+    await expect(
+      openWithRetries({ application: '/bin/app', args: [], attempts: 4, gapMs: 0, open })
+    ).rejects.toThrow(/fetch failed[\s\S]*after 4 attempts/);
+    expect(calls).toBe(4);
+  });
+
+  it('does not retry an answer from the driver', async () => {
+    let calls = 0;
+    const open = async () => {
+      calls += 1;
+      throw new WebDriverError('invalid argument', 'no such binary');
+    };
+    await expect(
+      openWithRetries({ application: '/bin/app', args: [], gapMs: 0, open })
+    ).rejects.toThrow('invalid argument: no such binary');
+    expect(calls).toBe(1);
+  });
+
+  it('passes the application and its arguments through to the driver', async () => {
+    let seen;
+    const open = async (options) => {
+      seen = options;
+      return {};
+    };
+    await openWithRetries({ application: '/bin/app', args: ['--flag'], open });
+    expect(seen).toEqual({ application: '/bin/app', args: ['--flag'] });
   });
 });
