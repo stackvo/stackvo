@@ -3,6 +3,43 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **One `SHA256SUMS.txt` on the release.** The release notes have promised
+  "checksums published beside each artifact" since 0.2.0, and 0.2.0 kept that
+  promise only in the run's Artifacts panel — six `checksums-<target>` files
+  nobody reading the release page would find. A `checksums` job now runs after
+  the matrix; on a tag it downloads the draft's assets and hashes them there,
+  under the names tauri-action gave them on upload (the per-row files name the
+  macOS tarball `StackVo.app.tar.gz`, twice, which is what it is called on the
+  runner and not on the release), and attaches the one file. In a rehearsal,
+  which has no release, it merges the per-row files and keeps the result as a
+  run artifact, so the six rows' ability to hash is still exercised.
+
+### Changed
+
+- **MSI is not on the list until an enterprise customer asks for it.** The
+  Windows installer is NSIS (`-setup.exe`); it installs silently with `/S`
+  and it is what the updater downloads. MSI's one real audience is fleet
+  deployment through Group Policy or Intune, and building it means moving the
+  two sidecar `[[bin]]` targets into a Cargo workspace to get around
+  [tauri#4807](https://github.com/tauri-apps/tauri/issues/4807) — a refactor
+  with a Windows CI round-trip to verify, for a buyer who does not exist yet.
+  `docs/isler.md` no longer carries it; the day someone needs `msiexec`, this
+  entry is where to start.
+
+- **A release is titled by its tag.** `release.yml` named the draft
+  `StackVo <tag>`; v0.1.0 had been titled `v0.1.0` by hand, and the page
+  already says which repository it is. `releaseName` is now `github.ref_name`,
+  so v0.3.0 arrives as `v0.3.0` without anyone editing the draft — v0.2.0 was
+  renamed in the form before publishing. The three places that still told a
+  reader to generate the updater key at `~/.tauri/stackvo.key` now point at
+  `tools/keys.sh`, which is the procedure and keeps the pair in
+  `~/.stackvo-keys/`; the old path is where the v0.2.0 preflight's own error
+  message would have sent someone, and there is nothing there.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
