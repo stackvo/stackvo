@@ -14,6 +14,29 @@ heading is the engineering log; the short version a user reads is
 
 ### Changed
 
+- **Windows ships an NSIS installer for 0.2.0; MSI is deferred, not silently
+  dropped.** `--verbose` (added for the exact purpose of finding this) turned
+  `light.exe`'s unexplained failure into `ICE30`: `stackvo-mcp.exe` installed
+  by two different WiX components, one from `externalBin`'s temp copy and one
+  from the raw `target/<triple>/release/stackvo-mcp.exe` that tauri-bundler's
+  Windows path bundles on its own for every extra `[[bin]]` a crate has —
+  `stackvo` and `stackvo-mcp`, both under `src/bin/`, both existing only so
+  `tools/sidecars.mjs` has something to copy into `externalBin`. Matches a
+  tauri-bundler bug open since v1 with no fix
+  ([tauri#4807](https://github.com/tauri-apps/tauri/issues/4807)).
+
+  Ordering `nsis` before `msi` — the previous entry in this file — only
+  relocated the failure: MSI still broke, it stopped taking NSIS down with it.
+  Windows rows now ask for `--bundles nsis` alone, and the installer-check step
+  narrows to `--only nsis` on Windows so it stops calling a package nobody
+  asked for "missing." The updater loses nothing: `UPDATED.windows` in
+  `tools/check-installers.mjs` was already `-setup.exe`.
+
+  The real fix needs a Cargo workspace — moving `stackvo` and `stackvo-mcp` out
+  of this package's own bin targets, so `cargo_metadata` shows tauri-bundler
+  exactly one — and a Windows CI round-trip to verify. Tracked in
+  `docs/isler.md`, section A, item 5.
+
 - **A Windows row that cannot build an MSI now still builds an installer, and
   says why the MSI failed.** The rehearsal of 2 September 2026 answered the
   question it was run for — `ubuntu-24.04-arm` went green for the first time,
@@ -131,6 +154,25 @@ heading is the engineering log; the short version a user reads is
   drift between the two is the invisible state it was written to replace.
 
 ### Fixed
+
+- **A release run failed on a translation test that has nothing wrong with its
+  translations.** `tray::tests::every_key_differs_between_the_two_languages`
+  asserted `navSettings` came back identical for Turkish and English —
+  `"fallback-navSettings"` on both sides — on Release #4 of 3 September 2026,
+  in a build that changed nothing in `tray.rs`.
+
+  `tr()` checks the front end's sent catalog (`FED`) before it looks at locale
+  at all, and `FED` is process-wide across every test in the file. The module
+  has a `SERIAL` mutex for exactly this — a test that seeds a catalog takes it,
+  and so does every test that reads the built-in table while a catalog might be
+  seeded — and this test took neither. It ran concurrently with
+  `a_sent_catalog_replaces_the_built_in_table` on another thread, which had
+  `FED` set to a table whose untouched keys default to `"fallback-<key>"`
+  regardless of locale, and read `navSettings` off it mid-mutation.
+
+  Wrapped in `with_no_labels`, like the other tests that read the built-in
+  table. Confirmed by running the module 30 times in a row rather than once —
+  a race is exactly the kind of fix a single green run cannot vouch for.
 
 - **The driver suite exited before its own first test.** Five tests came back
   `cancelledByParent` with `Promise resolution is still pending but the event
