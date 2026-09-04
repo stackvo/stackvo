@@ -1,8 +1,9 @@
 # Screenshots
 
-Thirty-seven pictures of the application, all taken by `npm run screenshots` at
-1600x1000@2x in the light theme. Re-running it reshoots every one of them, so they
-age with the tree rather than with somebody's afternoon.
+Thirty-nine pictures of the application, all taken by `npm run screenshots` —
+thirty-eight of them at 1600x1000@2x in the light theme, and one of a terminal
+at 80x24 cells. Re-running it reshoots every one of them, so they age with the
+tree rather than with somebody's afternoon.
 
 **What these are pictures of.** The webview half. The tool boots the built front end
 in Chromium and replaces `window.__TAURI_INTERNALS__.invoke` with
@@ -50,3 +51,32 @@ Sheets and drawers: no address, opened by the control that opens them.
 <table>
   <tr><td width="25%" valign="top"><a href="market-service-detail.png"><img src="market-service-detail.png" alt="Service detail"></a><br><sub><b>Service detail</b><br>Runtime, network, connection strings</sub></td><td width="25%" valign="top"><a href="market-instance-settings.png"><img src="market-instance-settings.png" alt="Service settings"></a><br><sub><b>Service settings</b><br>The package's own settings</sub></td><td width="25%" valign="top"><a href="market-add-instance.png"><img src="market-add-instance.png" alt="New service instance"></a><br><sub><b>New service instance</b><br>Defaults, credentials, port</sub></td><td width="25%" valign="top"><a href="project-new.png"><img src="project-new.png" alt="New project"></a><br><sub><b>New project</b><br>Name, runtime, configuration</sub></td></tr>
 </table>
+
+## The two the browser could not take
+
+The original list had two screens this tool had no way to reach, and it now
+reaches both — by a different route each, because they are missing for
+different reasons.
+
+<table>
+  <tr><td width="25%" valign="top"><a href="project-detail-worktrees.png"><img src="project-detail-worktrees.png" alt="Worktrees"></a><br><sub><b>Worktrees</b><br>A branch with an environment of its own</sub></td><td width="25%" valign="top"><a href="tui.png"><img src="tui.png" alt="stackvo tui"></a><br><sub><b><code>stackvo tui</code></b><br>The stack, from a terminal</sub></td><td width="25%"></td><td width="25%"></td></tr>
+</table>
+
+**Worktrees** is a place on the Configuration section rather than a section of
+its own, below the fold of that picture. The screen "wants a working git tree
+behind it", and it has one — on the Rust side of `worktree_support`, the one
+call the pane makes. The browser never reads the tree, so the tree is staged
+the way everything else on these pages is:
+[`tools/screenshots/worktree-stage.mjs`](../../tools/screenshots/worktree-stage.mjs)
+answers that call with two branch environments of `shop`, and the tool scrolls
+to the pane, opens the form and types a branch so the preview is in the
+picture.
+
+**`stackvo tui`** is a terminal program, and there is no window to shoot. Its
+`draw` builds each frame as a string so a test can read it;
+[`examples/tui_frame.rs`](../../src-tauri/examples/tui_frame.rs) prints one
+frame for the same staged stack, and
+[`tools/screenshots/ansi-frame.mjs`](../../tools/screenshots/ansi-frame.mjs)
+reads the escapes back into cells that the tool draws in Chromium like any
+other page. `npm run screenshots -- --page tui` needs `cargo`; the first run
+builds the library.

@@ -264,13 +264,16 @@ bir düğme vardır.
   <tr><td width="25%" valign="top"><a href="docs/screenshots/mail.png"><img src="docs/screenshots/mail.png" alt="Mail"></a><br><sub><b>Mail</b><br>Projelerin gönderdikleri</sub></td><td width="25%" valign="top"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="Günlükler"></a><br><sub><b>Günlükler</b><br>Uygulama ve sunucu</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Görünüm"></a><br><sub><b>Görünüm</b><br>Tema, yarıçap, yoğunluk</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings-doctor.png"><img src="docs/screenshots/settings-doctor.png" alt="Doctor"></a><br><sub><b>Doctor</b><br>Ne bozuk, adıyla</sub></td></tr>
 </table>
 
-**[Bütün ekranlar, tek sayfada →](docs/screenshots/README.md)** — otuz yedi görüntü: her sayfa,
-proje detayının on bölümü, ayarların on yedi paneli, ve kendi adresi olmayan dört ekran.
+**[Bütün ekranlar, tek sayfada →](docs/screenshots/README.md)** — otuz dokuz
+görüntü: her sayfa, proje detayının on bölümü, ayarların on yedi paneli, kendi
+adresi olmayan dört ekran, ve tarayıcının çekemediği iki ekran.
 
-Hepsi elle değil, `npm run screenshots` ile çekiliyor: 1600x1000@2x, ve Playwright
-takımının sahnelediği sınırın karşısında — yani arayüz değişince hepsi yeniden çekiliyor
-ve hiçbiri "o an pencere ne kadarsa" değil. Listedeki iki ekran hâlâ yok ve bu araçtan
-çıkamaz: dal başına worktree ortamı, ve bir terminal programı olan `stackvo tui`.
+Hepsi elle değil, `npm run screenshots` ile çekiliyor: 1600x1000@2x, ve
+Playwright takımının sahnelediği sınırın karşısında — yani arayüz değişince
+hepsi yeniden çekiliyor ve hiçbiri "o an pencere ne kadarsa" değil. Eksik olan
+iki ekran da aynı yoldan geliyor: dal başına worktree ortamı diğer her şey gibi
+sınırda sahneleniyor; bir terminal programı olan `stackvo tui` ise onu çizen
+kodun bastığı tek bir kare olarak, hücre hücre çiziliyor.
 
 ---
 

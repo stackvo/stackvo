@@ -1,10 +1,11 @@
 # Images
 
 **The screenshots are not here, and are not taken by hand.** They live in
-[`docs/screenshots/`](../screenshots/README.md) — thirty-seven of them, written by
+[`docs/screenshots/`](../screenshots/README.md) — thirty-nine of them, written by
 `npm run screenshots` at 1600x1000@2x against the boundary the Playwright suite
-stages. Re-running that command reshoots every one, which is what keeps them from
-drifting away from the tree; a file dropped in by hand would not.
+stages, and one of those a terminal at 80x24 cells. Re-running that command
+reshoots every one, which is what keeps them from drifting away from the tree; a
+file dropped in by hand would not.
 
 This folder is for the one image that cannot be generated:
 
