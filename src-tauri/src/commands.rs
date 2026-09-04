@@ -14208,6 +14208,21 @@ mod migrate_tests {
 mod prefs_tests {
     use super::*;
 
+    /// The key the startup reads is the key the defaults write.
+    ///
+    /// Two spellings of one preference would be a beta switch that saves under
+    /// one name and is read under another — a setting that silently does
+    /// nothing, which is the failure `channel.rs` exists to refuse.
+    #[test]
+    fn the_update_channel_default_is_stable_under_the_key_the_startup_reads() {
+        let defaults = default_prefs();
+        assert_eq!(defaults[crate::channel::PREFERENCE], "stable");
+        assert_eq!(
+            crate::channel::Channel::parse(defaults[crate::channel::PREFERENCE].as_str().unwrap()),
+            Some(crate::channel::Channel::Stable)
+        );
+    }
+
     /// The failure this guards: two settings changed at once, one silently lost.
     ///
     /// Exercised through the real merge-and-write path rather than a copy of it,
@@ -14300,6 +14315,11 @@ fn default_prefs() -> serde_json::Value {
         "closeBehaviour": "ask",
         "autostart": false,
         "notifyOnBuild": true,
+        // Stable, and `channel.rs` reads this key before the updater plugin
+        // is built — it is the one preference the app acts on before the
+        // first command runs. `crate::channel::PREFERENCE` names it; the test
+        // below holds the two together.
+        "updateChannel": "stable",
         // Off, because a feature that starts writing hundreds of megabytes
         // without being asked is one people find out about when a disk fills.
         "backupSchedule": "off",
