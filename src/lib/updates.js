@@ -130,7 +130,7 @@ export async function checkForUpdate({ channel = null } = {}) {
     // verify" — the second is a security event and must not be silent.
     const message = String(e);
     if (/signature|pubkey|public key/i.test(message)) {
-      throw new Error(`Update signature could not be verified: ${message}`);
+      throw new Error(`Update signature could not be verified: ${message}`, { cause: e });
     }
     return null;
   }

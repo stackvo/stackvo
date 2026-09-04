@@ -113,6 +113,11 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   `~/.stackvo-keys/`; the old path is where the v0.2.0 preflight's own error
   message would have sent someone, and there is nothing there.
 
+- **ESLint 10** (#99, 1 of 8). Flat config was already in place; the
+  upgrade is the three findings `eslint:recommended` gained — two throws
+  inside a `catch` now carry the original as `cause`, one initialiser that
+  a `try` always overwrote is gone.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
