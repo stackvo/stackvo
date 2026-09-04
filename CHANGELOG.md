@@ -7,6 +7,20 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The two screenshots the browser could not take** (#101). The worktree
+  pane reads no git tree — it asks one IPC question, `worktree_support`, and
+  git lives behind that call in Rust — so it is staged the way every other
+  page is, from `tools/screenshots/worktree-stage.mjs`: two branch
+  environments for `shop`, one with its own database and uncommitted changes,
+  one a sandbox with four hours left, and a plan for `feature/search` typed
+  into the form. `stackvo tui` needs no terminal recorder either: `tui::draw`
+  already returns the frame as a string with ANSI colour, so
+  `examples/tui_frame.rs` prints a sample model and
+  `tools/screenshots/ansi-frame.mjs` turns the escapes into an 80×24 `<pre>`
+  the same browser photographs. Both regenerate with `npm run screenshots`,
+  and a new test holds `docs/screenshots/` and its README index to the same
+  set, which nothing had checked before.
+
 - **One `SHA256SUMS.txt` on the release.** The release notes have promised
   "checksums published beside each artifact" since 0.2.0, and 0.2.0 kept that
   promise only in the run's Artifacts panel — six `checksums-<target>` files
@@ -17,6 +31,23 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   runner and not on the release), and attaches the one file. In a rehearsal,
   which has no release, it merges the per-row files and keeps the result as a
   run artifact, so the six rows' ability to hash is still exercised.
+
+- **A beta update channel** (#102). A tag with a hyphen — `v0.3.0-beta.1` —
+  is a pre-release, and GitHub's `releases/latest` never resolves to one, so
+  the stable endpoint cannot be pointed at a beta by any route. Pre-releases
+  have no `latest` of their own, so the workflow keeps a pointer: a rolling
+  release tagged `beta`, holding one file, `beta.json`, refreshed by a
+  `channel` job the moment any release is *published* — on stable publishes
+  too, because the updater stops at the first endpoint that answers and a
+  stale `beta.json` would hide a stable release from beta installs. The
+  client side is one preference, `updateChannel`, read at startup and
+  written into the updater's endpoint list (`[beta.json, latest.json]` or
+  `[latest.json]`); a beta install accepts a stable manifest, a stable one
+  refuses a beta. Settings → About → Updates has the switch; `npm run
+  updates:check -- --channel beta` checks the other endpoint. Found on the
+  way: `channel.rs` compared `0.3.0-beta.1` as newer than `0.3.0`, so a beta
+  install would have refused its stable successor forever; it is semver
+  precedence now.
 
 ### Removed
 
@@ -33,6 +64,22 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   branch is pushed without `tools/before-push.sh` — is in `CONTRIBUTING.md`
   now, with the two times it was learnt. `no_dangling_docs.rs` no longer
   exempts the file, and `dependabot.yml`'s pointer to it is a pointer to #99.
+
+### Fixed
+
+- **The contract validator compares type fields** (#100). Suite E kept the
+  command lists in step and never read a type's fields; a field added to a
+  `#[derive(Serialize)]` struct went unnoticed. Suite H links each contract
+  type to its struct through the command that returns or takes it — a name
+  alone is neither complete (`DnsStatus` is `dns::Status`) nor safe (three
+  `Port`s, two `Manifest`s) — then compares field names and optionality,
+  reading `rename_all`, `rename`, `skip`, `skip_serializing_if`, `flatten`
+  and `Option<T>`. Its first run found the drift the issue predicted: 38
+  serialised fields absent from `contracts/ipc.json` and 8 wrong on
+  optionality (`Project.domain` is `string | null`; `Manifest.hooks` and
+  four siblings are optional). All are in the contract now, with `ipc.d.ts`
+  regenerated; `DumpsStatus`, which no command or struct produces, is
+  reported as an orphan rather than deleted.
 
 ### Changed
 

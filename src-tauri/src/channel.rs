@@ -59,39 +59,67 @@ pub enum Channel {
     Beta,
 }
 
+/// The preferences key the chosen channel is stored under.
+///
+/// In `preferences.json`, beside the editor and the theme, because it is a
+/// fact about this installation and not about the stack — and because that is
+/// the one file this crate reads **before** the updater plugin is built, which
+/// is the only moment the endpoint list can be chosen. See [`configure`].
+pub const PREFERENCE: &str = "updateChannel";
+
+/// The tag of the rolling release that serves `beta.json`.
+///
+/// `releases/latest/download/` is GitHub's own pointer to the newest published
+/// non-prerelease, and there is no equivalent for pre-releases. So the beta
+/// channel has a pointer of its own: one release, tagged `beta`, marked
+/// pre-release so it can never *become* `latest`, holding one file that
+/// `release.yml` replaces every time somebody presses Publish. The workflow's
+/// `channel` job is the other half of this constant, and
+/// `tests/update_channels.rs` holds the two together.
+pub const ROLLING_TAG: &str = "beta";
+
+/// What the stable endpoint ends in, and the only shape the beta one can be
+/// derived from.
+const STABLE_SUFFIX: &str = "/releases/latest/download/latest.json";
+
 impl Channel {
-    /// ## Beta is declared and not yet reachable, and that is written down
+    /// ## How an install ends up on beta
     ///
-    /// This enum, [`offer`] and the whole rollout shape are here and tested.
-    /// What is **not** here is a way for somebody to be on beta, and the reason
-    /// is a dependency rather than an omission:
+    /// This enum, [`offer`] and the whole rollout shape were here and tested
+    /// before anybody could be on beta, and the reason was a dependency rather
+    /// than an omission: nothing had been published, so a setting would have
+    /// been the exact failure the note above warns about — somebody ticks
+    /// "beta", the endpoint keeps answering `latest.json`, [`offer`] correctly
+    /// says `otherChannel`, and they receive nothing at all, with no error.
     ///
-    /// * `tauri.conf.json` declares one endpoint. The updater plugin walks its
-    ///   endpoint list until one answers, so a second entry would not select a
-    ///   channel — it would be a fallback, and a stable install whose manifest
-    ///   momentarily failed would take the beta one. There is no channel
-    ///   placeholder in an endpoint and no endpoint override on `check()`.
-    /// * Nothing has been published yet. `beta.json` does not exist, and
-    ///   `checkForUpdate` takes a channel that nothing supplies.
+    /// v0.2.0 shipped on 3 September 2026 and `release.yml` now publishes the
+    /// beta manifest, so the setting exists. Three things keep the failure
+    /// impossible rather than merely unlikely:
     ///
-    /// So adding a *setting* today would build the exact failure the note above
-    /// warns about: a channel nobody publishes to is a setting that silently
-    /// stops updates. Somebody would tick "beta", the endpoint would keep
-    /// answering `latest.json`, [`offer`] would correctly say `otherChannel`,
-    /// and they would receive nothing at all — with no error, because none of
-    /// that is wrong.
-    ///
-    /// The unblocking step is the first release, not more code here: once a
-    /// version number is chosen and a publish happens, `beta.json` is one more
-    /// artefact from the same run, and the endpoint question becomes a real one
-    /// with a real answer to test against.
+    /// * **The endpoint list is chosen per launch, from the preference.** The
+    ///   updater plugin walks its endpoints until one answers, so a second
+    ///   entry is a *fallback*, never a selector. That is used rather than
+    ///   fought: a beta install asks `[beta.json, latest.json]` and a stable
+    ///   install asks `[latest.json]` alone. A stable install can never reach
+    ///   the beta file, and a beta install whose `beta.json` does not exist yet
+    ///   — the state before the first pre-release — walks on to the stable one.
+    ///   See [`endpoints`](Self::endpoints) and [`configure`].
+    /// * **Beta means "stable, plus betas".** [`accepts`](Self::accepts) lets
+    ///   a beta install take a stable manifest, so the fallback above is an
+    ///   update and not an `otherChannel` refusal. The reverse stays refused:
+    ///   a pre-release must never be offered to somebody who did not ask.
+    /// * **`beta.json` names the newest published release, stable or not.** The
+    ///   plugin stops at the first endpoint that answers, so a `beta.json`
+    ///   still naming 0.3.0-beta.1 after 0.3.0 shipped would hide the stable
+    ///   release from every beta install. The workflow refreshes it on every
+    ///   publish, with the rule in `tools/beta-manifest.mjs`.
     ///
     /// The name this channel's manifest is published under.
     ///
     /// Stable keeps `latest.json` because that is the name `tauri-action`
-    /// writes and the endpoint points at; a beta manifest sits beside
-    /// it under its own name rather than in a second release, so one publish
-    /// produces both and they cannot drift apart.
+    /// writes and the endpoint points at; the beta manifest is a stamped copy
+    /// of it under its own name, so one publish produces both and they cannot
+    /// drift apart.
     pub fn manifest_name(self) -> &'static str {
         match self {
             Channel::Stable => "latest.json",
@@ -106,6 +134,127 @@ impl Channel {
             _ => None,
         }
     }
+
+    /// Whether an install on this channel may take a manifest from `published`.
+    ///
+    /// Beta is a superset of stable, not a sibling: somebody who opted into
+    /// pre-releases still wants every stable release, and the endpoint walk in
+    /// [`endpoints`](Self::endpoints) relies on it — the stable manifest is
+    /// what a beta install reads when no beta has been published yet. Stable
+    /// accepts only stable.
+    pub fn accepts(self, published: Channel) -> bool {
+        !matches!((self, published), (Channel::Stable, Channel::Beta))
+    }
+
+    /// This channel's endpoint, derived from the stable one.
+    ///
+    /// Derived rather than typed, for the reason `updater_endpoint.rs` gives
+    /// at length: a constant is a second copy of the repository's name, and
+    /// the copy is the one that goes stale. Stable is the endpoint as
+    /// configured; beta replaces GitHub's `latest` pointer with the rolling
+    /// release [`ROLLING_TAG`] names. `None` when the stable endpoint is not
+    /// the GitHub shape this can be derived from — the caller then keeps the
+    /// stable list rather than inventing a URL.
+    pub fn endpoint(self, stable: &str) -> Option<String> {
+        match self {
+            Channel::Stable => Some(stable.to_string()),
+            Channel::Beta => stable.strip_suffix(STABLE_SUFFIX).map(|base| {
+                format!(
+                    "{base}/releases/download/{ROLLING_TAG}/{}",
+                    self.manifest_name()
+                )
+            }),
+        }
+    }
+
+    /// The endpoint list this channel asks, in the order the plugin walks it.
+    ///
+    /// Stable is always last and always present: the fallback is the whole
+    /// safety of the design, and a beta list that could lose it would be a
+    /// setting that silently stops updates. A beta endpoint that cannot be
+    /// derived leaves the stable list untouched.
+    pub fn endpoints(self, stable: &str) -> Vec<String> {
+        match self {
+            Channel::Stable => vec![stable.to_string()],
+            Channel::Beta => match self.endpoint(stable) {
+                Some(beta) => vec![beta, stable.to_string()],
+                None => vec![stable.to_string()],
+            },
+        }
+    }
+}
+
+/// The channel this install chose, from `preferences.json`.
+///
+/// Through `prefs_get` rather than a second reader, so a corrupt file is
+/// moved aside the way the first command would have moved it anyway. Anything
+/// unreadable, absent or unknown is stable — the direction in which a wrong
+/// answer costs a pre-release nobody asked for rather than an update.
+pub fn preferred() -> Channel {
+    crate::commands::prefs_get()
+        .ok()
+        .and_then(|prefs| {
+            prefs
+                .get(PREFERENCE)
+                .and_then(|v| v.as_str())
+                .and_then(Channel::parse)
+        })
+        .unwrap_or_default()
+}
+
+/// Rewrite the updater plugin's `endpoints` for `wanted`, in place.
+///
+/// The plugin reads its endpoint list once, out of the app configuration, when
+/// it is built — there is no override on `check()` and no channel placeholder
+/// in a URL — so the list has to be chosen before that, and this is the
+/// function that chooses it. Pure over the JSON so every branch is testable
+/// without a running app; [`configure`] is the two lines that hand it the real
+/// configuration.
+///
+/// Returns the list the plugin will walk. Empty when there was nothing to
+/// configure, which is the "updater not set up" case and not an error here.
+pub fn apply(updater: &mut serde_json::Value, wanted: Channel) -> Vec<String> {
+    let Some(stable) = updater
+        .get("endpoints")
+        .and_then(|list| list.as_array())
+        .and_then(|list| list.first())
+        .and_then(|first| first.as_str())
+        .map(str::to_string)
+    else {
+        return Vec::new();
+    };
+
+    let list = wanted.endpoints(&stable);
+    if wanted == Channel::Beta && list.len() == 1 {
+        // Said out loud, once per launch: the person chose beta, and this
+        // launch cannot honour it. Stable updates still arrive, which is the
+        // one outcome this module refuses to trade away.
+        tracing::warn!(
+            stable,
+            "the beta endpoint cannot be derived from the stable one; this launch asks stable only"
+        );
+    }
+    if let Some(section) = updater.as_object_mut() {
+        section.insert("endpoints".into(), serde_json::json!(list));
+    }
+    list
+}
+
+/// Choose this launch's endpoint list from the stored preference.
+///
+/// Called on the `Context` before `tauri::Builder::run`, which is the only
+/// moment the plugin's configuration can still be changed. A change to the
+/// preference therefore takes effect at the next launch, and the settings
+/// screen says so; until then the check keeps asking the list this launch
+/// chose, which in both directions is a safe list — see
+/// [`Channel::accepts`].
+pub fn configure(config: &mut tauri::Config) {
+    let wanted = preferred();
+    let Some(updater) = config.plugins.0.get_mut("updater") else {
+        return;
+    };
+    let list = apply(updater, wanted);
+    tracing::info!(channel = ?wanted, endpoints = ?list, "update endpoints for this launch");
 }
 
 /// The fields this app adds to the updater manifest.
@@ -177,30 +326,83 @@ pub fn bucket(install_id: &str, version: &str) -> u8 {
     (u64::from_be_bytes(head) % 100) as u8
 }
 
-/// Compare two dotted versions numerically.
+/// Is `candidate` a later version than `current`, by semver precedence.
 ///
-/// Not `semver`: the crate is a dependency for a comparison this needs three
-/// numbers for, and the manifest's versions are this app's own. A part that
-/// does not parse sorts as 0, which makes a malformed version *older* — the
-/// safe direction, because the outcome is "no update" rather than a downgrade
-/// to something unreadable.
+/// Not the `semver` crate: the crate is a dependency for a rule that fits in
+/// a screen, and the manifest's versions are this app's own. But the rule has
+/// to be the whole of semver's ordering and not "three numbers", because the
+/// beta channel is built out of pre-release versions and the first version of
+/// this split on `-` and compared the pieces as numbers — which made
+/// `0.3.0-beta.1` *newer* than `0.3.0`, so a beta install would have declined
+/// the stable release that superseded its beta, for ever.
+///
+/// The order, from the specification: the three numbers first; then a version
+/// with no pre-release part beats one with; then the pre-release identifiers
+/// one by one, numeric ones as numbers and lower than any word, words as
+/// strings, and a shorter list that matches so far is the lower one. Build
+/// metadata after `+` is ignored. A number that does not parse sorts as 0,
+/// which makes a malformed version *older* — the safe direction, because the
+/// outcome is "no update" rather than a downgrade to something unreadable.
 fn newer(candidate: &str, current: &str) -> bool {
-    let parts = |v: &str| -> Vec<u64> {
-        v.split(['.', '-', '+'])
-            .map(|p| p.parse::<u64>().unwrap_or(0))
-            .collect()
-    };
-    let (a, b) = (parts(candidate), parts(current));
-    for i in 0..a.len().max(b.len()) {
+    precedence_of(candidate, current) == std::cmp::Ordering::Greater
+}
+
+/// Semver precedence of `a` against `b`.
+fn precedence_of(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    let (core_a, pre_a) = split(a);
+    let (core_b, pre_b) = split(b);
+
+    for i in 0..core_a.len().max(core_b.len()) {
         let (x, y) = (
-            a.get(i).copied().unwrap_or(0),
-            b.get(i).copied().unwrap_or(0),
+            core_a.get(i).copied().unwrap_or(0),
+            core_b.get(i).copied().unwrap_or(0),
         );
         if x != y {
-            return x > y;
+            return x.cmp(&y);
         }
     }
-    false
+
+    match (pre_a.is_empty(), pre_b.is_empty()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => {
+            for (x, y) in pre_a.iter().zip(pre_b.iter()) {
+                let order = match (x.parse::<u64>(), y.parse::<u64>()) {
+                    (Ok(m), Ok(n)) => m.cmp(&n),
+                    (Ok(_), Err(_)) => Ordering::Less,
+                    (Err(_), Ok(_)) => Ordering::Greater,
+                    (Err(_), Err(_)) => x.cmp(y),
+                };
+                if order != Ordering::Equal {
+                    return order;
+                }
+            }
+            pre_a.len().cmp(&pre_b.len())
+        }
+    }
+}
+
+/// `0.3.0-beta.1+build` → `([0, 3, 0], ["beta", "1"])`.
+///
+/// A leading `v` is tolerated because a tag carries one and a manifest copied
+/// from a tag might.
+fn split(version: &str) -> (Vec<u64>, Vec<String>) {
+    let version = version.trim().trim_start_matches('v');
+    let version = version.split('+').next().unwrap_or("");
+    let (core, pre) = version.split_once('-').unwrap_or((version, ""));
+    let core = core
+        .split('.')
+        .map(|p| p.parse::<u64>().unwrap_or(0))
+        .collect();
+    let pre = if pre.is_empty() {
+        Vec::new()
+    } else {
+        pre.split('.').map(str::to_string).collect()
+    };
+    (core, pre)
 }
 
 /// The whole decision, in the order it has to be made.
@@ -215,7 +417,7 @@ pub fn offer(manifest: &Rollout, wanted: Channel, install_id: &str, current: &st
     if manifest.paused {
         return Offer::Paused;
     }
-    if manifest.channel != wanted {
+    if !wanted.accepts(manifest.channel) {
         return Offer::OtherChannel(manifest.channel);
     }
 
@@ -527,5 +729,120 @@ mod tests {
         assert!(!newer("0.9.0", "0.10.0"));
         assert!(newer("1.0.0", "0.99.99"));
         assert!(!newer("0.2.0", "0.2.0"));
+    }
+
+    #[test]
+    fn a_release_is_newer_than_its_own_pre_releases() {
+        // The bug the first version of `newer` had: split on `-` and compared
+        // as numbers, `0.3.0-beta.1` came out ahead of `0.3.0`, so a beta
+        // install would have declined the stable release for ever.
+        assert!(newer("0.3.0", "0.3.0-beta.1"));
+        assert!(!newer("0.3.0-beta.1", "0.3.0"));
+        // And a pre-release is still ahead of the stable before it.
+        assert!(newer("0.3.0-beta.1", "0.2.0"));
+        assert!(!newer("0.2.0", "0.3.0-beta.1"));
+    }
+
+    #[test]
+    fn pre_release_identifiers_order_the_way_semver_says() {
+        assert!(newer("0.3.0-beta.2", "0.3.0-beta.1"));
+        // Numerically, not as strings: "10" > "9".
+        assert!(newer("0.3.0-beta.10", "0.3.0-beta.9"));
+        // A word beats a number, and words compare as strings: rc > beta.
+        assert!(newer("0.3.0-rc.1", "0.3.0-beta.9"));
+        assert!(newer("0.3.0-beta", "0.3.0-1"));
+        // A longer list that matches so far is the later one.
+        assert!(newer("0.3.0-beta.1", "0.3.0-beta"));
+        assert!(!newer("0.3.0-beta.1", "0.3.0-beta.1"));
+        // Build metadata and a tag's `v` change nothing.
+        assert!(!newer("0.3.0+build.7", "v0.3.0"));
+    }
+
+    #[test]
+    fn beta_accepts_stable_and_stable_does_not_accept_beta() {
+        // Beta is a superset. The fallback endpoint depends on it: a beta
+        // install whose `beta.json` does not exist yet reads `latest.json`,
+        // and a refusal there would be the silent stop this module exists to
+        // prevent. The other direction is the promise to everybody else.
+        let mut stable = manifest("0.3.0");
+        stable.channel = Channel::Stable;
+        assert_eq!(
+            offer(&stable, Channel::Beta, "install", "0.2.0"),
+            Offer::Update("0.3.0".into())
+        );
+
+        let mut beta = manifest("0.3.0-beta.1");
+        beta.channel = Channel::Beta;
+        assert_eq!(
+            offer(&beta, Channel::Stable, "install", "0.2.0"),
+            Offer::OtherChannel(Channel::Beta)
+        );
+        assert_eq!(
+            offer(&beta, Channel::Beta, "install", "0.2.0"),
+            Offer::Update("0.3.0-beta.1".into())
+        );
+    }
+
+    const STABLE: &str = "https://github.com/o/r/releases/latest/download/latest.json";
+
+    #[test]
+    fn the_beta_endpoint_is_derived_from_the_stable_one() {
+        assert_eq!(
+            Channel::Beta.endpoint(STABLE).as_deref(),
+            Some("https://github.com/o/r/releases/download/beta/beta.json")
+        );
+        assert_eq!(Channel::Stable.endpoint(STABLE).as_deref(), Some(STABLE));
+        // A stable endpoint that is not GitHub's `latest` pointer has no beta
+        // sibling this can name, and inventing one would be a URL nobody
+        // publishes to.
+        assert_eq!(
+            Channel::Beta.endpoint("https://updates.example.com/latest.json"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_beta_install_asks_beta_first_and_stable_always() {
+        let beta = Channel::Beta.endpoints(STABLE);
+        assert_eq!(beta.len(), 2);
+        assert!(beta[0].ends_with("/releases/download/beta/beta.json"));
+        assert_eq!(beta[1], STABLE, "stable is the fallback, and it is last");
+
+        assert_eq!(Channel::Stable.endpoints(STABLE), vec![STABLE.to_string()]);
+    }
+
+    #[test]
+    fn a_stable_install_never_sees_the_beta_endpoint() {
+        let mut updater = serde_json::json!({ "endpoints": [STABLE], "pubkey": "k" });
+        let list = apply(&mut updater, Channel::Stable);
+        assert_eq!(list, vec![STABLE.to_string()]);
+        assert_eq!(updater["endpoints"], serde_json::json!([STABLE]));
+        assert_eq!(updater["pubkey"], "k", "nothing else in the section moves");
+    }
+
+    #[test]
+    fn a_beta_install_keeps_stable_as_the_fallback() {
+        let mut updater = serde_json::json!({ "endpoints": [STABLE] });
+        let list = apply(&mut updater, Channel::Beta);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[1], STABLE);
+        assert_eq!(updater["endpoints"], serde_json::json!(list));
+    }
+
+    #[test]
+    fn an_underivable_beta_endpoint_leaves_the_stable_list_alone() {
+        // The "silently stops updates" case, refused: a beta preference that
+        // cannot be honoured must not cost the stable endpoint.
+        let other = "https://updates.example.com/latest.json";
+        let mut updater = serde_json::json!({ "endpoints": [other] });
+        assert_eq!(apply(&mut updater, Channel::Beta), vec![other.to_string()]);
+        assert_eq!(updater["endpoints"], serde_json::json!([other]));
+    }
+
+    #[test]
+    fn an_updater_section_with_no_endpoints_is_left_as_it_is() {
+        let mut updater = serde_json::json!({ "pubkey": "k" });
+        assert!(apply(&mut updater, Channel::Beta).is_empty());
+        assert_eq!(updater, serde_json::json!({ "pubkey": "k" }));
     }
 }

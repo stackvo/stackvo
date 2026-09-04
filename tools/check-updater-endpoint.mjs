@@ -2,9 +2,16 @@
  * Does the update endpoint answer, and is what it answers usable?
  *
  * ```sh
- * npm run updates:check                 # the endpoint in tauri.conf.json
- * npm run updates:check -- --url <url>  # a draft's asset, before publishing
+ * npm run updates:check                    # the endpoint in tauri.conf.json
+ * npm run updates:check -- --channel beta  # the beta channel's beta.json
+ * npm run updates:check -- --url <url>     # a draft's asset, before publishing
  * ```
+ *
+ * The beta endpoint is not in `tauri.conf.json`. It is derived from the stable
+ * one the same way `channel.rs` derives it at launch — GitHub's `latest`
+ * pointer replaced by the rolling `beta` release — so this asks the file a beta
+ * install will actually be asking, and the two derivations are pinned to each
+ * other by test.
  *
  * ## Why this exists
  *
@@ -64,10 +71,38 @@ function valueOf(flag) {
   return at === -1 ? undefined : process.argv[at + 1];
 }
 
-/** The declared endpoint, and the version the application says it is. */
-export function declared(conf) {
+/** The two channels, in the words `channel.rs` and `preferences.json` use. */
+export const CHANNELS = ['stable', 'beta'];
+
+/** What the stable endpoint ends in; the beta one is derived from it. */
+const STABLE_SUFFIX = '/releases/latest/download/latest.json';
+
+/**
+ * The beta channel's endpoint, from the stable one.
+ *
+ * `releases/latest/download/` is GitHub's pointer to the newest published
+ * non-prerelease and has no counterpart for pre-releases, so `release.yml`
+ * keeps one: a release tagged `beta` whose `beta.json` is replaced on every
+ * publish. Derived rather than typed so the repository's name lives in one
+ * place; `null` when the stable endpoint is not that GitHub shape, because a
+ * URL nobody publishes to is worse than no URL.
+ */
+export function betaEndpoint(stable) {
+  if (typeof stable !== 'string' || !stable.endsWith(STABLE_SUFFIX)) return null;
+  return `${stable.slice(0, -STABLE_SUFFIX.length)}/releases/download/beta/beta.json`;
+}
+
+/**
+ * The endpoint for a channel, and the version the application says it is.
+ *
+ * `endpoint` is `undefined` for a beta whose stable endpoint cannot be turned
+ * into one — the same case `channel.rs` answers by asking stable only.
+ */
+export function declared(conf, channel = 'stable') {
   const endpoints = conf.plugins?.updater?.endpoints ?? [];
-  return { endpoint: endpoints[0], version: conf.version };
+  const stable = endpoints[0];
+  const endpoint = channel === 'beta' ? (betaEndpoint(stable) ?? undefined) : stable;
+  return { endpoint, version: conf.version, channel };
 }
 
 /**
@@ -108,11 +143,28 @@ export function platformsFrom(workflow) {
  * that have each of these faults. A checker whose judgement is only exercised
  * by the thing it checks is a checker nobody knows the shape of.
  */
-export function inspect(manifest, { platforms, version }) {
+export function inspect(manifest, { platforms, version, channel = 'stable' }) {
   const problems = [];
 
   if (!manifest || typeof manifest !== 'object') {
     return ['the endpoint answered with something that is not a JSON object'];
+  }
+
+  // The one thing the stable endpoint must never serve. `releases/latest`
+  // excludes pre-releases, so this can only happen if a pre-release was
+  // published without the flag — and then every stable install is offered it.
+  if (channel === 'stable' && manifest.channel === 'beta') {
+    problems.push(
+      `the stable endpoint serves a manifest stamped \`channel: beta\`. A pre-release reached ` +
+        `releases/latest, which means it was published without the pre-release flag, and every ` +
+        `stable install is now offered it.`
+    );
+  }
+  if (manifest.channel !== undefined && !CHANNELS.includes(manifest.channel)) {
+    problems.push(
+      `the manifest names channel ${JSON.stringify(manifest.channel)}, which is neither ` +
+        `stable nor beta — the app would read it as stable, which may not be what was meant`
+    );
   }
 
   if (!manifest.version) {
@@ -152,7 +204,23 @@ export function inspect(manifest, { platforms, version }) {
 }
 
 /** The diagnosis for a status code, because 404 here has one likely cause. */
-export function diagnose(status, endpoint) {
+export function diagnose(status, endpoint, channel = 'stable') {
+  if (status === 404 && channel === 'beta') {
+    // Not the stable diagnosis, because a missing beta.json is a state every
+    // repository is in until its first pre-release is published — and a
+    // state in which nothing is broken for anybody: beta installs walk on to
+    // latest.json. Worth saying, or the first person to run this reads a
+    // healthy repository as a broken one.
+    return (
+      `404 — nothing is served at ${endpoint}.\n\n` +
+      `No beta has been published yet, or the rolling \`beta\` release has no beta.json on it. ` +
+      `Neither breaks anything: a beta install asks this URL first and latest.json second, so ` +
+      `it receives stable updates exactly as a stable install does.\n\n` +
+      `The file appears when a pre-release (a tag with a hyphen, v0.3.0-beta.1) is published — ` +
+      `not drafted, published — and release.yml's \`channel\` job has run. Check that job's run ` +
+      `page if a pre-release was published and this is still 404.`
+    );
+  }
   if (status === 404) {
     return (
       `404 — nothing is served at ${endpoint}.\n\n` +
@@ -173,17 +241,28 @@ export function diagnose(status, endpoint) {
 }
 
 async function main() {
+  const channel = valueOf('--channel') ?? 'stable';
+  if (!CHANNELS.includes(channel)) {
+    console.error(`--channel takes ${CHANNELS.join(' or ')}, not ${JSON.stringify(channel)}.`);
+    process.exit(1);
+  }
+
   const conf = JSON.parse(read('src-tauri/tauri.conf.json'));
-  const { endpoint: configured, version } = declared(conf);
+  const { endpoint: configured, version } = declared(conf, channel);
   const endpoint = valueOf('--url') ?? configured;
 
   if (!endpoint) {
-    console.error('tauri.conf.json declares no updater endpoint.');
+    console.error(
+      channel === 'beta'
+        ? 'the beta endpoint cannot be derived: the stable endpoint in tauri.conf.json is not ' +
+            "GitHub's releases/latest/download/latest.json. A beta install asks stable only."
+        : 'tauri.conf.json declares no updater endpoint.'
+    );
     process.exit(1);
   }
 
   const platforms = platformsFrom(read('.github/workflows/release.yml'));
-  console.log(`asking ${endpoint}`);
+  console.log(`asking ${endpoint} (${channel} channel)`);
   console.log(`expecting ${version} for ${platforms.join(', ')}\n`);
 
   let response;
@@ -199,7 +278,7 @@ async function main() {
   }
 
   if (!response.ok) {
-    console.error(diagnose(response.status, endpoint));
+    console.error(diagnose(response.status, endpoint, channel));
     process.exit(1);
   }
 
@@ -211,7 +290,7 @@ async function main() {
     process.exit(1);
   }
 
-  const problems = inspect(manifest, { platforms, version });
+  const problems = inspect(manifest, { platforms, version, channel });
   if (problems.length) {
     console.error(`the manifest is served and the updater cannot use it:\n`);
     for (const problem of problems) console.error(`  · ${problem}\n`);
@@ -219,7 +298,7 @@ async function main() {
   }
 
   console.log(`the endpoint serves ${manifest.version} for all ${platforms.length} platforms,`);
-  console.log('each with a url and a signature.');
+  console.log(`each with a url and a signature (channel: ${manifest.channel ?? 'stable'}).`);
 }
 
 // Importable for the tests without running the fetch.
