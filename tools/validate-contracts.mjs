@@ -12,6 +12,8 @@
  *      three have to agree or a command is either unreachable or undocumented
  *   F. reachability: JS wrappers no view calls, and declared events nothing emits
  *   G. the three service-package schemas: headers, required-vs-declared, category agreement
+ *   H. the contract's named types against the Rust structs that serialise them,
+ *      field by field — the half of E that E never read
  *
  * Zero dependencies — it implements the specific rules rather than pulling in a schema engine,
  * so it runs in CI and in a fresh clone with nothing installed.
@@ -22,6 +24,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkTypeFields } from './contract-fields.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONTRACTS = join(HERE, '..', 'contracts');
@@ -975,6 +978,58 @@ if (existsSync(jsApiPath)) {
   }
 }
 
+// ================================================================ SUITE H — type fields
+
+/**
+ * The fields, which suite E never read.
+ *
+ * E proves the three lists of commands agree. It says nothing about what a
+ * command returns: a field added to a `#[derive(Serialize)]` struct and left
+ * out of `ipc.json` passed every suite, and the `.d.ts` generated from the
+ * contract went on telling the editor the field did not exist. Issue #100.
+ *
+ * The comparison lives in `tools/contract-fields.mjs`, where
+ * `tests/contract-fields.spec.js` can feed it one broken fixture at a time —
+ * a check is only known to fire when something has been seen to make it fire.
+ * What this suite adds is the real tree: every `.rs` file under
+ * `src-tauri/src/`, against the contract as committed.
+ *
+ * The matching rule is in that module's header. The short version: a type is
+ * the struct returned by the command that returns it, then whatever the fields
+ * of an already-matched struct point at, then — only when nothing else
+ * answers — the one struct in the crate with the same name.
+ */
+let typeSummary = { checked: 0, handBuilt: [] };
+
+if (existsSync(ipcPath)) {
+  const rustSources = collectSources(join(HERE, '..', 'src-tauri', 'src'), /\.rs$/).map((f) => ({
+    file: basename(f),
+    text: readFileSync(f, 'utf8'),
+  }));
+  const {
+    findings: typeFindings,
+    checked,
+    handBuilt,
+  } = checkTypeFields(readJson(ipcPath), rustSources);
+  typeSummary = { checked: checked.length, handBuilt };
+  for (const f of typeFindings)
+    (f.level === 'error' ? err : warn)('H', f.subject, f.code, f.message);
+
+  // A scraper that finds nothing looks exactly like a contract with nothing
+  // wrong in it — the lesson `EMBEDDED_UNREADABLE` already paid for. The
+  // contract declares well over a hundred object types and nearly all of them
+  // are returned by a command, so a count this low means the linking has
+  // stopped, not that the types went away.
+  if (checked.length < 50)
+    err(
+      'H',
+      'tools/contract-fields.mjs',
+      'TYPES_UNREADABLE',
+      `only ${checked.length} contract type(s) could be matched to a Rust struct — ` +
+        'the matcher has stopped working, and every field is about to go unchecked'
+    );
+}
+
 // ================================================================ output
 
 const errors = findings.filter((f) => f.level === 'error');
@@ -983,7 +1038,14 @@ const warns = findings.filter((f) => f.level === 'warn');
 if (asJson) {
   console.log(
     JSON.stringify(
-      { root: STACKVO_ROOT, envFile: envPath, manifests: manifestCount, errors, warnings: warns },
+      {
+        root: STACKVO_ROOT,
+        envFile: envPath,
+        manifests: manifestCount,
+        types: typeSummary,
+        errors,
+        warnings: warns,
+      },
       null,
       2
     )
@@ -997,13 +1059,23 @@ if (asJson) {
     E: 'IPC surface',
     F: 'reachability',
     G: 'package contracts',
+    H: 'type fields',
   };
   console.log(`\nstackvo contract check — v1`);
   console.log(`  root      ${STACKVO_ROOT}${HAVE_WORKSPACE ? '' : '  (not there)'}`);
   console.log(`  env       ${envPath ?? '(none — every setting is a binary default)'}`);
   console.log(`  manifests ${manifestCount}`);
+  // How many types were actually compared, beside the findings — a suite that
+  // reports "clean" over nothing is the failure mode this file keeps meeting.
+  console.log(
+    `  types     ${typeSummary.checked} matched to a Rust struct, ` +
+      `${typeSummary.handBuilt.length} hand-built or not Rust's` +
+      (typeSummary.handBuilt.length
+        ? ` (${typeSummary.handBuilt.map(([name]) => name).join(', ')})`
+        : '')
+  );
   if (!HAVE_WORKSPACE) {
-    console.log(`  note      no workspace, so A–D checked nothing. E and F are about this repo.`);
+    console.log(`  note      no workspace, so A–D checked nothing. E–H are about this repo.`);
   }
   console.log('');
 
