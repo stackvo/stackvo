@@ -154,6 +154,47 @@ impl Model {
     }
 }
 
+/// The stack the picture of this screen shows.
+///
+/// `docs/screenshots/tui.png` cannot come from the screenshot tool's browser
+/// — this is a terminal program — so `examples/tui_frame.rs` prints
+/// [`draw`] of this model instead, and the tool draws that. The rows are the
+/// machine every other picture is staged with in `tools/screenshots.mjs`:
+/// two projects, two services, the engine up. A picture of a different stack
+/// would be a picture of a different product from the one the pages show.
+///
+/// Here rather than in the example so a test can hold it: the example is a
+/// `print!`, and what has to stay true is that this draws inside the width
+/// the picture is taken at.
+pub fn sample() -> Model {
+    let project = |name: &str, running: bool| Row {
+        id: name.into(),
+        label: name.into(),
+        detail: format!("{name}.loc"),
+        running,
+        project: true,
+    };
+    let service = |id: &str| Row {
+        id: id.into(),
+        label: id.into(),
+        detail: "healthy".into(),
+        running: true,
+        project: false,
+    };
+    Model {
+        rows: vec![
+            project("shop", true),
+            project("storefront", false),
+            service("mysql-8-4"),
+            service("redis-8-0"),
+        ],
+        selected: 0,
+        engine: true,
+        engine_detail: "29.7.2".into(),
+        message: None,
+    }
+}
+
 /// Read the stack into a model, keeping the selection where it was.
 ///
 /// By **id**, not by index: a project that goes away while the screen is open
@@ -803,5 +844,49 @@ mod tests {
     fn an_empty_stack_says_so_rather_than_drawing_a_blank() {
         let text = draw(&Model::default(), &Style::plain(), 80);
         assert!(text.contains("nothing to show"));
+    }
+
+    /// What is left once the escapes are gone: the cells a terminal shows.
+    fn visible(frame: &str) -> String {
+        let mut out = String::new();
+        let mut chars = frame.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                // `ESC [`, parameters, then one letter closes it.
+                if chars.peek() == Some(&'[') {
+                    chars.next();
+                    for c in chars.by_ref() {
+                        if c.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+                continue;
+            }
+            out.push(c);
+        }
+        out
+    }
+
+    /// The picture is taken at 80 columns, and a frame wider than that would
+    /// wrap in the picture while the real terminal wrapped it differently.
+    /// Drawn in colour rather than plain, because the escapes are what the
+    /// renderer reads and a plain frame would not exercise them.
+    #[test]
+    fn the_sample_frame_fits_the_width_the_picture_is_taken_at() {
+        let frame = draw(&sample(), &Style::always(), 80);
+        let text = visible(&frame);
+        for line in text.split("\r\n") {
+            assert!(
+                line.chars().count() <= 80,
+                "a line wider than the picture: {line:?}"
+            );
+        }
+        for name in ["shop.loc", "storefront.loc", "mysql-8-4", "redis-8-0"] {
+            assert!(text.contains(name), "{name} is on every other picture");
+        }
+        assert!(text.contains("engine up · 2 projects"));
+        assert!(text.contains("q quit"), "the hints, not a message");
+        assert!(frame.contains("\x1b[32m"), "the colour the renderer draws");
     }
 }
