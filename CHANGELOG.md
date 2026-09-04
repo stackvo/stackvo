@@ -137,6 +137,13 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   getting anyway. `engines.node` now says what jsdom requires:
   `^22.22.2 || >=24.15.0`.
 
+- **Vite 8** (#99, 4 of 8). The framework chunk is a Rolldown
+  `codeSplitting` group (the object form of `manualChunks` is gone) and the
+  minifier is `oxc` (esbuild is no longer a dependency of Vite). The eager
+  set is 13.8 KB smaller; `tools/bundle-budget.mjs` records the new
+  measurement, and `NOTICE.md` follows `postcss` to 8.5.28. Suite, budget
+  and the 19 Playwright tests passed.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
