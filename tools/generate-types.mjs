@@ -105,7 +105,7 @@ const SCALARS = {
  * string`, which is not a type, so nine list-shaped returns landed as
  * `unknown`. The depth counter is the whole fix.
  */
-function headOf(raw) {
+export function headOf(raw) {
   let depth = 0;
   for (let i = 0; i < raw.length; i += 1) {
     const ch = raw[i];

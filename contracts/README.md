@@ -29,10 +29,20 @@ node tools/validate-contracts.mjs --root ../stackvo
 node tools/validate-contracts.mjs --root ../stackvo --json   # machine-readable
 ```
 
-Exits non-zero on any error. Seven suites: manifests, extension catalog, services, env keys, IPC
-surface, reachability, package contracts.
+Exits non-zero on any error. Eight suites: manifests, extension catalog, services, env keys, IPC
+surface, reachability, package contracts, type fields.
 
-The last one checks **this** repo rather than a checkout — the packages themselves live in
+The last two check **this** repo rather than a checkout. Type fields (suite H) reads every
+`#[derive(Serialize)]` struct under `src-tauri/src/` and compares it, field by field and on
+optionality, with the type in `ipc.json` it produces — a field added to a struct and not to the
+contract used to pass every check, and the front end's generated `ipc.d.ts` then denied the field
+existed. A type is matched to its struct through the command that returns it (`DnsStatus` is
+`dns::Status` because `dns_status()` returns one), then through the fields of structs already
+matched, and only then by name; a type none of those reach is reported, and one that can only be
+reached that way can be pinned with `"_rust": "module::Name"`. `tools/contract-fields.mjs` states
+the rule in full.
+
+Package contracts (suite G) is the other one about this repo — the packages themselves live in
 `stackvo/stackvo-service-packages`, which runs its manifests against these same three schema files.
 What is checked here is the schemas: headers, a `required` name that is not among the properties, a
 leaf nobody described, and the two files agreeing about which categories exist. That

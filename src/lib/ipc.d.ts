@@ -86,6 +86,10 @@ export interface Catalog {
     /** string */
     defaultServer: string;
     phpExtensions: Record<string, unknown>;
+    /**
+     * number — how many extensions a manifest may carry. Once a hard 50 (the Bash extractor's `grep -A 50` window, CONFLICTS.md C-04); nothing reads stackvo.json with grep any more, so it is now the size of the catalog — still derived rather than hardcoded, so the picker's counter cannot disagree with the list it is counting
+     */
+    maxExtensions: number;
 }
 
 export interface CertPlan {
@@ -107,6 +111,10 @@ export interface CertPlan {
     installCa: boolean;
     /** bool (cert_apply only) */
     reloaded: boolean;
+    /**
+     * string? — why the certificate authority was not added to the system trust store, when it was meant to be. Not an error from cert_apply: trusting the CA and issuing the certificate are two jobs, and the first failing must not cost the second — an untrusted certificate serves every domain behind a browser warning, no certificate serves nothing
+     */
+    trustFailed?: string;
 }
 
 export interface CertStatus {
@@ -235,6 +243,16 @@ export interface ContainerStats {
     netRx: number;
     /** u64 */
     netTx: number;
+    /** u64 — processes inside the container */
+    pids: number;
+    /** u64 — cumulative block I/O read since the container started, in bytes */
+    blockRead: number;
+    /** u64 — the write half of the same counter */
+    blockWrite: number;
+    /**
+     * u64 — CPUs the engine reports as available to the container; cpuPercent is scaled by it, so a container using two whole cores reads 200
+     */
+    onlineCpus: number;
 }
 
 export interface CpuBreakdown {
@@ -581,8 +599,8 @@ export interface DnsStatus {
     reload?: string;
     /** string? — a file already at that path that is not ours, and what it says */
     foreign?: string;
-    /** string[] — resolver files this app wrote for a suffix the workspace has since left */
-    stale: string[];
+    /** string[]? — resolver files this app wrote for a suffix the workspace has since left */
+    stale?: string[];
     /**
      * bool — the machine asks us and nothing answers, which is the state where every name under the suffix fails
      */
@@ -620,6 +638,10 @@ export interface Doctor {
     /** SystemResources? */
     space?: SystemResources;
     extensions: Record<string, unknown>;
+    core: Record<string, unknown>;
+    keystore: { state: 'ok' | 'warn' | 'fail' | 'unknown'; moved: string[]; unresolved: string[] };
+    revoked: Record<string, unknown>;
+    overrides: Record<string, unknown>;
 }
 
 export interface DumpsStatus {
@@ -837,6 +859,12 @@ export interface HostStats {
     network: NetworkStats;
     /** DiskStats */
     disk: DiskStats;
+    /** string? — the machine's name, when the OS reports one */
+    hostName?: string;
+    /** string? — the operating system, as the OS names it */
+    os?: string;
+    /** u64 — seconds since the host booted */
+    uptime: number;
     /** u64 */
     timestamp: number;
 }
@@ -870,6 +898,10 @@ export interface HostsPlan {
     changed: boolean;
     /** string */
     path: string;
+    /**
+     * string — the file as it stands, so the UI can diff against it rather than guess which lines are new
+     */
+    current: string;
 }
 
 export interface HtmlCheck {
@@ -1075,6 +1107,10 @@ export interface MailMessage {
     snippet?: string;
     /** bool */
     read: boolean;
+    /**
+     * f64? — the same instant as seconds since the epoch, when it could be read. `date` is whatever the server said and cannot be put on an axis beside a dump and a query; this is the parsed half, and it is null rather than zero when parsing fails, because on a timeline 1970 is not a missing value but a wrong one. Two formats, because the two catchers disagree: Mailpit answers RFC 3339, MailHog carries the message's own RFC 2822 Date header
+     */
+    at?: number;
 }
 
 export interface MailStatus {
@@ -1144,18 +1180,22 @@ export interface Manifest {
     errors: ManifestFinding[];
     /** ManifestFinding[] */
     warnings: ManifestFinding[];
-    /** Record<string, unknown> */
-    hooks: Record<string, unknown>;
-    /** Record<string, unknown> */
-    commands: Record<string, unknown>;
+    /** Record<string, unknown>? — omitted when empty */
+    hooks?: Record<string, unknown>;
+    /** Record<string, unknown>? — omitted when empty */
+    commands?: Record<string, unknown>;
     /** Record<string, unknown> */
     sidecars: Record<string, unknown>;
-    /** unknown[] — commands this project runs on a timer; omitted when empty */
-    schedule: unknown;
-    /** Record<string, unknown> — named places this project's data lives; omitted when empty */
-    providers: Record<string, unknown>;
-    /** string[] */
-    local: string[];
+    /** unknown[]? — commands this project runs on a timer; omitted when empty */
+    schedule?: unknown;
+    /** Record<string, unknown>? — named places this project's data lives; omitted when empty */
+    providers?: Record<string, unknown>;
+    /**
+     * Record<string, unknown> — other directories of this repository, each with its own runtime, keyed by id and kept in file order. The third of three declarations that put a container beside a project: `services` is a shared need, `sidecars` is somebody else's image, a component is this repository's own code, built here and routed at its own hostname. Empty on every project written before the field. project_components answers with the resolved form, DeclaredComponent[]
+     */
+    components: Record<string, unknown>;
+    /** string[]? — omitted when empty */
+    local?: string[];
 }
 
 export interface ManifestFinding {
@@ -1493,6 +1533,10 @@ export interface Preferences {
     startMinimized: boolean;
     /** 'ask' | 'quit' | 'tray' */
     closeBehaviour: 'ask' | 'quit' | 'tray';
+    /**
+     * 'stable' | 'beta' — which manifest the updater asks first at the next launch. 'beta' asks beta.json and falls through to latest.json, so a beta install is a superset and never misses a stable release; 'stable' never sees a pre-release. Read at startup only (the updater plugin takes its endpoint list once), which is why the setting says it applies after a restart
+     */
+    updateChannel: 'stable' | 'beta';
     /** bool */
     autostart: boolean;
     /** bool */
@@ -1573,6 +1617,7 @@ export interface ProfileReport {
     /** number */
     selfTotal: number;
     functions: Record<string, unknown>;
+    edges: Record<string, unknown>;
     /** number */
     functionCount: number;
     /** bool */
@@ -1584,6 +1629,14 @@ export interface ProfilerStatus {
     xdebug: XdebugStatus;
     /** 'debug'|'profile'|'trace' */
     mode: 'debug' | 'profile' | 'trace';
+    /**
+     * bool — whether Xdebug's `develop` rides along with the mode. Beside the mode rather than inside it because xdebug.mode is a list and develop is not an alternative to stepping: it is what makes var_dump readable and puts a stack trace on a warning
+     */
+    develop: boolean;
+    /**
+     * string — what XDEBUG_MODE is actually set to: `debug`, or `debug,develop`. Rendered here rather than in the front end so the screen and the overlay cannot disagree about what was applied
+     */
+    modeValue: string;
     /** string (XDEBUG_TRIGGER) */
     trigger: string;
     /** ProfileFile[] */
@@ -1608,8 +1661,8 @@ export interface ProgressEvent {
 export interface Project {
     /** string */
     name: string;
-    /** string */
-    domain: string;
+    /** string | null */
+    domain: string | null;
     /** 'php'|'node' */
     runtime: 'php' | 'node';
     /** string */
@@ -1707,6 +1760,10 @@ export interface PruneReport {
     volumesDeleted: number;
     /** u64 */
     spaceReclaimed: number;
+    /**
+     * u64 — build-cache records removed. Counted separately from images because one image's worth of cache is many records
+     */
+    cachesDeleted: number;
 }
 
 export interface PtyTarget {
@@ -2385,6 +2442,18 @@ export interface Workspace {
     projectsDir?: string;
     /** string? */
     envFile?: string;
+    /**
+     * bool — has the first-run setup ever finished. A marker written after the LAST step, not a file some step leaves behind: for about an hour it was the generated compose file, and a run that wrote the compose files and then failed to issue the certificate looked complete for ever after. Skipping past a failure does not write it, so the offer comes back next launch
+     */
+    bootstrapped: boolean;
+    /**
+     * bool — has a catalogue ever been fetched onto this machine. Nothing is embedded, so false means there are no service definitions here at all, not an empty catalogue. Read from the cached index rather than from a marker, so it stops saying yes when that file is deleted; on the workspace rather than left to the Market page because the answer decides which screen opens
+     */
+    catalogueFetched: boolean;
+    /**
+     * bool — does this workspace still keep its services in .env: the instance table is absent and .env has a service switched on. A gate rather than a banner, because the .env branch of the renderer is gone and a workspace in this state cannot build a stack at all
+     */
+    migrationPending: boolean;
 }
 
 export interface Worktree {
@@ -2412,6 +2481,10 @@ export interface Worktree {
     env: Record<string, unknown>;
     /** string — RFC 3339 */
     createdAt: string;
+    /**
+     * string? — when this worktree stops being wanted, RFC 3339 UTC. The field that turns a worktree into a sandbox: a branch environment made for one task by somebody who is not going to remember it exists. A person's own worktree carries null. Nothing acts on it by itself — an app that deleted a directory on a timer would one day delete a morning's uncommitted work — it makes "this is finished with" a fact the screen can state and a person can act on
+     */
+    expiresAt?: string;
 }
 
 export interface WorktreePlan {
@@ -2429,6 +2502,10 @@ export interface WorktreePlan {
     domain: string;
     /** { instance: string, service: string, name: string, seed: bool, source?: string } | null */
     database: Record<string, unknown> | null;
+    /**
+     * string? — when it would expire, when a duration was asked for. Shown before anything is created, like every other derived value on that screen
+     */
+    expiresAt?: string;
     /** string[] — what proceeds anyway */
     warnings: string[];
     /** string | null — one sentence naming why it cannot */
@@ -2448,6 +2525,18 @@ export interface WorktreeRow extends Worktree {
      * bool — the record points somewhere git no longer has a checkout, usually because the folder was deleted by hand
      */
     orphaned: boolean;
+    /**
+     * bool — whether this branch reaches its database with a login of its own. Derived from whether a login is held for it rather than stored on the record, so the file that holds the password is the file that decides. false means the branch uses the instance's shared account and can reach the parent's data — on PostgreSQL and MongoDB the only answer there is
+     */
+    isolated: boolean;
+    /**
+     * bool — whether its time has passed. false for a worktree with no expiry, which is every worktree somebody made for themselves
+     */
+    expired: boolean;
+    /**
+     * number? — whole minutes left, for one with an expiry. 0 is "over", null is "no expiry" — two answers, not one
+     */
+    remainingMinutes?: number;
 }
 
 export interface WorktreeSupport {
@@ -2473,6 +2562,18 @@ export interface WorktreeSupport {
     branches: Record<string, unknown>[];
     /** DbInstance[] — stopped ones included and marked */
     instances: DbInstance[];
+    /**
+     * bool — whether this worktree reaches its database with a login of its own: the one fact that decides whether "this branch has its own database" also means "this branch cannot reach the parent's". false is a real answer and not a missing one, and is what a project that is not a worktree gets
+     */
+    isolated: boolean;
+    /**
+     * string[] — the flags that would give an assistant this worktree and nothing else, rendered from a grant rather than assembled on screen so what a person copies is the sentence the server enforces. Empty for a project that is not a worktree; carries --for only while there is time left on the sandbox
+     */
+    grantArgs: string[];
+    /**
+     * { sanctum?: string, passport?: string, sessionDomain?: string, statefulDomains?: string, passportKeysMissing: bool } | null
+     */
+    auth: Record<string, unknown> | null;
     /** string | null — why worktrees are unavailable here */
     reason: string | null;
     /** WorktreeRow[] — this project's own */
@@ -2486,6 +2587,14 @@ export interface XdebugStatus {
     enabled: boolean;
     /** bool? */
     active?: boolean;
+    /**
+     * string? — the mode the container is actually in: debug, profile, or null. Separate from `active` because only this catches a switch that has not been applied yet — after flipping stepping to profiling both variables are still present, so `active` stays true while XDEBUG_MODE still says debug
+     */
+    activeMode?: string;
+    /**
+     * bool — does the image carry the extension at all. Split from `enabled` because the screen has to explain itself: switching on for the first time rebuilds the image, every time after that recreates a container, and without this the second toggle looks identical to the first
+     */
+    compiledIn: boolean;
     /** bool */
     needsRebuild: boolean;
     /** bool */
