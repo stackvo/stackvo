@@ -144,6 +144,12 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   measurement, and `NOTICE.md` follows `postcss` to 8.5.28. Suite, budget
   and the 19 Playwright tests passed.
 
+- **Pinia 4 and Vue Router 5** (#99, 5 of 8), together because both need
+  `@vue/devtools-api` 8, now a dependency of the app. No application code
+  moved. Router 5 ships its unplugin toolchain as runtime dependencies,
+  tree-shaken out of the bundle but present in the manifest, so
+  `NOTICE.md` gains 36 packages.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
