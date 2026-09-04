@@ -81,10 +81,11 @@ export default mergeConfig(
         // number, `lcov` for an editor gutter or an upload later.
         reporter: ['text', 'json-summary', 'lcov'],
         reportsDirectory: 'coverage',
-        // Every source file, including the ones no spec imports — the default
-        // only counts files a test touched, which reports the covered subset of
-        // the covered subset and always looks healthy.
-        all: true,
+        // Every source file, including the ones no spec imports. `include`
+        // alone does that since Vitest 4 (it removed `all`, whose job this
+        // was): a file matching the pattern is counted whether or not a test
+        // touched it, which is the difference between a percentage of the
+        // code and a percentage of the code somebody already tested.
         include: ['src/**/*.{js,vue}'],
         exclude: [
           'src/**/*.spec.js',
