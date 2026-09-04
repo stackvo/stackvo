@@ -150,6 +150,12 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   tree-shaken out of the bundle but present in the manifest, so
   `NOTICE.md` gains 36 packages.
 
+- **vue-i18n 11** (#99, 6 of 8), two majors at once, no application code
+  moved. `@intlify/core-base` 11 has no `new Function` at all, so the CSP
+  hazard the runtime-build alias in `vite.config.js` worked around is gone
+  from the library; the alias stays and its comment says which reasons are
+  history.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
