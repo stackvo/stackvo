@@ -4085,7 +4085,7 @@
         {
           "id": "string",
           "versions": "string[]",
-          "default": "string",
+          "default": "string? — null when nothing names a default version for this runtime",
           "available": "bool"
         }
       ],
@@ -4099,7 +4099,8 @@
           "minPhp": "string?",
           "removedIn": "string?"
         }
-      ]
+      ],
+      "maxExtensions": "number — how many extensions a manifest may carry. Once a hard 50 (the Bash extractor's `grep -A 50` window, CONFLICTS.md C-04); nothing reads stackvo.json with grep any more, so it is now the size of the catalog — still derived rather than hardcoded, so the picker's counter cannot disagree with the list it is counting"
     },
     "CertPlan": {
       "add": "string[]",
@@ -4111,6 +4112,7 @@
       "certPath": "string",
       "installCa": "bool",
       "reloaded": "bool (cert_apply only)",
+      "trustFailed": "string? — why the certificate authority was not added to the system trust store, when it was meant to be. Not an error from cert_apply: trusting the CA and issuing the certificate are two jobs, and the first failing must not cost the second — an untrusted certificate serves every domain behind a browser warning, no certificate serves nothing",
       "note": "`domains` is the exact SAN list mkcert will be invoked with, so what the user approves is what lands — the same relationship `preview` has to the hosts file. `remove` names domains the certificate still covers that no project asks for any more; they disappear on the next reissue and are listed so that is not a surprise. `rejected` names domains dropped as invalid rather than silently omitting them.",
       "reloadedNote": "Writing the certificate is not enough to change what a browser gets. Traefik's file provider watches generated/traefik/dynamic, and the certificates are not in it — routes.yml only points at them, and a certFile is read while the dynamic configuration is parsed. So cert_apply rewrites the watched files with their own bytes to force a reparse. Observed on a real checkout: Traefik up two days, serving a certificate a day older than the one on disk. False after an apply means the new certificate is on disk but not yet served."
     },
@@ -4183,7 +4185,11 @@
       "memoryLimit": "u64",
       "memoryPercent": "f32",
       "netRx": "u64",
-      "netTx": "u64"
+      "netTx": "u64",
+      "pids": "u64 — processes inside the container",
+      "blockRead": "u64 — cumulative block I/O read since the container started, in bytes",
+      "blockWrite": "u64 — the write half of the same counter",
+      "onlineCpus": "u64 — CPUs the engine reports as available to the container; cpuPercent is scaled by it, so a container using two whole cores reads 200"
     },
     "CpuBreakdown": {
       "user": "number",
@@ -4382,7 +4388,7 @@
       "instruction": "string — the file this app would write, or the line the user must place",
       "reload": "string? — what is reloaded after the write, spelled out rather than done quietly",
       "foreign": "string? — a file already at that path that is not ours, and what it says",
-      "stale": "string[] — resolver files this app wrote for a suffix the workspace has since left",
+      "stale": "string[]? — resolver files this app wrote for a suffix the workspace has since left",
       "broken": "bool — the machine asks us and nothing answers, which is the state where every name under the suffix fails",
       "note": "The responder answers ONE suffix and refuses everything else — it never forwards, has no upstream and holds no cache, because an open forwarder on a machine is a thing that can be pointed at and a development tool has no business becoming the resolver for anything it did not create. `listening` is read from whether the socket is bound rather than from a preference: a setting saying yes over a port something else took would be a screen that lies. `mechanism` is detected rather than derived from the platform — on Linux WHICH file to write is a question about the machine (NetworkManager's dnsmasq, a standalone dnsmasq, systemd-resolved), and a guessed path is worse than no feature because it rearranges name resolution on a machine this app was wrong about. `manual` is the honest answer when none of them is found. `foreign` MUST be reported before the switch is pressed and the file MUST be copied aside rather than replaced — /etc/resolver/test is a path dnsmasq, Valet or a colleague's script may own, and taking a suffix away from another tool with no way back is not a thing to discover afterwards. `stale` exists because macOS's mechanism is one file PER SUFFIX: changing DEFAULT_TLD_SUFFIX leaves the old file pointing at a responder that now REFUSES that TLD, which is worse than never having written it — before, those names went upstream and failed honestly. `broken` is asked of the socket rather than of this process's own flag: a responder whose thread died and one in another copy of the app are both cases where the flag and the machine disagree, and the machine is right."
     },
@@ -4423,8 +4429,41 @@
           "isDefaultSet": "bool"
         }
       ],
+      "core": [
+        {
+          "service": "string — the compose service name, as the generated file declares it",
+          "container": "string — what the engine calls it, `stackvo-traefik`",
+          "state": "'ok'|'warn'|'fail'|'unknown'",
+          "exists": "bool — whether a container object exists at all. Separate from `running` because `compose down` removes containers, and \"stopped\" and \"never created\" need different sentences",
+          "running": "bool",
+          "image": "string? — the image, when there is a container to read one from"
+        }
+      ],
+      "keystore": {
+        "state": "'ok'|'warn'|'fail'|'unknown'",
+        "moved": "string[] — the .env keys whose value now lives in the keystore",
+        "unresolved": "string[] — of those, the ones the keystore would not produce right now: a locked keychain, or an entry deleted by hand. Generation refuses while this is non-empty, so it is the more urgent half"
+      },
+      "revoked": [
+        {
+          "instance": "string",
+          "service": "string",
+          "version": "string",
+          "reason": "string? — the publisher's own words, shown verbatim: a withdrawal nobody can read the reason for is one people work around"
+        }
+      ],
+      "overrides": [
+        {
+          "service": "string",
+          "version": "string",
+          "path": "string",
+          "applied": "bool — false when policy.market.allowOverrides is off, or when the package it belongs to is no longer installed: a file that exists, looks like it is doing something, and is doing nothing",
+          "ignoredBecause": "string? — why it is not being read, when it is not"
+        }
+      ],
       "extensionsNote": "**Added after reading `tools/validate-contracts.mjs`'s output instead of its summary line.** Three of that tool's four errors on this checkout are C-06 — all one root cause, `imap` removed in PHP 8.2, sitting in two project manifests AND in the stack's default extension set — and every one is local and fixable. The desktop app reported none of them, because the doctor knew about ports, disk and hosts and nothing about extensions. It matters more than a lint: the Bash generator SKIPS A BAD EXTENSION SILENTLY, so nothing fails and nothing is logged, and the symptom is a fatal `Call to undefined function imap_open()` at runtime with nothing connecting it to a build that reported success. `isDefaultSet` entries come first because they are the worse case — a project created right now, with nothing customised, cannot build. The default PHP version is itself contested (DEFAULT_PHP_VERSION vs SUPPORTED_LANGUAGES_PHP_DEFAULT, CONFLICTS.md C-12), so BOTH are checked rather than one being picked: an extension failing on either is a problem whichever key wins. Project rows reuse manifest::normalize's own C-06/C-07 findings rather than restating the rule.",
-      "note": "ports.requiredBy is the compose service that publishes the port, read from the generated files — which is the enabled set, because the generator only writes enabled services. ports.state: ok = free or held by the stack itself; warn = a docker backend holds it but the engine could not say whose container; fail = a named conflict. generated.state: warn = an input (.env or a manifest) is newer than the oldest generated compose file, detail names it; fail = never generated."
+      "note": "ports.requiredBy is the compose service that publishes the port, read from the generated files — which is the enabled set, because the generator only writes enabled services. ports.state: ok = free or held by the stack itself; warn = a docker backend holds it but the engine could not say whose container; fail = a named conflict. generated.state: warn = an input (.env or a manifest) is newer than the oldest generated compose file, detail names it; fail = never generated.",
+      "coreNote": "The containers the stack is addressed through — Traefik today. The requirements screen answers \"can this run\" and the ports section answers \"is 80 free\"; between the two there was no row for \"the proxy every domain resolves through is not running\". `keystore` names the credentials the Bash CLI would misread. `revoked` is the other half of a takedown: market_install refuses a withdrawn version, which stops the next machine, and this is what tells the ones that already have it. `overrides` are package files this workspace has put its own copy in front of — not a fault, and listed anyway, because \"the compose fragment on this machine is not the published one\" is the answer to \"why does this service behave unlike everything written about it\" more often than anything else here."
     },
     "DumpsStatus": {
       "available": "bool",
@@ -4549,6 +4588,9 @@
       "storage": "StorageStats",
       "network": "NetworkStats",
       "disk": "DiskStats",
+      "hostName": "string? — the machine's name, when the OS reports one",
+      "os": "string? — the operating system, as the OS names it",
+      "uptime": "u64 — seconds since the host booted",
       "timestamp": "u64"
     },
     "HostsEntry": {
@@ -4568,6 +4610,7 @@
       "preview": "string",
       "changed": "bool",
       "path": "string",
+      "current": "string — the file as it stands, so the UI can diff against it rather than guess which lines are new",
       "note": "`preview` is the exact text that will be written — the same value the diff is rendered from, so what the user approves is what lands."
     },
     "HtmlCheck": {
@@ -4700,6 +4743,7 @@
       "date": "string?",
       "snippet": "string?",
       "read": "bool",
+      "at": "f64? — the same instant as seconds since the epoch, when it could be read. `date` is whatever the server said and cannot be put on an axis beside a dump and a query; this is the parsed half, and it is null rather than zero when parsing fails, because on a timeline 1970 is not a missing value but a wrong one. Two formats, because the two catchers disagree: Mailpit answers RFC 3339, MailHog carries the message's own RFC 2822 Date header",
       "note": "`date` is passed through unparsed: the UI formats it in the user's locale, and the two servers disagree about which field it lives in, not about the format. `snippet` is null on MailHog, which does not send one — deriving it from the raw body would render MIME boundaries as preview text. `bcc` is populated only by Mailpit, which derives it from the SMTP envelope; MailHog cannot tell a Bcc from a To, so there it is empty rather than guessed. MailHog's `cc`/`replyTo` come from headers as one joined string per entry."
     },
     "MailStatus": {
@@ -4736,12 +4780,13 @@
       "valid": "bool",
       "errors": "ManifestFinding[]",
       "warnings": "ManifestFinding[]",
-      "hooks": "Record<string, unknown>",
-      "commands": "Record<string, unknown>",
+      "hooks": "Record<string, unknown>? — omitted when empty",
+      "commands": "Record<string, unknown>? — omitted when empty",
       "sidecars": "Record<string, unknown>",
-      "schedule": "unknown[] — commands this project runs on a timer; omitted when empty",
-      "providers": "Record<string, unknown> — named places this project's data lives; omitted when empty",
-      "local": "string[]",
+      "schedule": "unknown[]? — commands this project runs on a timer; omitted when empty",
+      "providers": "Record<string, unknown>? — named places this project's data lives; omitted when empty",
+      "components": "Record<string, unknown> — other directories of this repository, each with its own runtime, keyed by id and kept in file order. The third of three declarations that put a container beside a project: `services` is a shared need, `sidecars` is somebody else's image, a component is this repository's own code, built here and routed at its own hostname. Empty on every project written before the field. project_components answers with the resolved form, DeclaredComponent[]",
+      "local": "string[]? — omitted when empty",
       "note": "`stackvo.json` as the READER returns it: the file's fields plus this app's verdict on them. ProjectManifest is the file itself, defined by project.schema.json — the difference is `valid`, `errors`, `warnings` and `local`, none of which are ever written. `runtime` is canonical and absent-means-php. `aliases` are lower-cased, de-duplicated and never contain `domain`; a leading `*.` is the one entry that reaches the certificate and the router and cannot reach /etc/hosts. `hooks`, `commands`, `sidecars` and `providers` are keyed maps whose values are defined by project.schema.json — the FILE's spelling, so a step is `{\"exec\": [...]}` and a command's argv is `exec`; `schedule` is a list in the same spelling. Each is omitted entirely when empty. They are written that way because this payload is posted back through project_manifest_write: serialised any other way, every one of them was dropped on the first save. `local` names the dotted fields this machine's stackvo.local.json supplied and is empty for a manifest read straight from the committed file — `project_manifest_write` refuses a manifest whose `local` is non-empty, which is what stops one developer's overrides being saved into the file the team shares."
     },
     "ManifestFinding": {
@@ -4919,6 +4964,7 @@
       "dbClientCustom": "string | null — as `editorCustom`, with the connection URI appended last. It has no `dbClient` companion because the client is chosen per service in the endpoint menu rather than stored: which clients are offered depends on the scheme that service speaks",
       "startMinimized": "bool",
       "closeBehaviour": "'ask' | 'quit' | 'tray'",
+      "updateChannel": "'stable' | 'beta' — which manifest the updater asks first at the next launch. 'beta' asks beta.json and falls through to latest.json, so a beta install is a superset and never misses a stable release; 'stable' never sees a pre-release. Read at startup only (the updater plugin takes its endpoint list once), which is why the setting says it applies after a restart",
       "autostart": "bool",
       "notifyOnBuild": "bool",
       "backupSchedule": "string",
@@ -4992,13 +5038,24 @@
           "percent": "number"
         }
       ],
+      "edges": [
+        {
+          "caller": "string",
+          "callee": "string",
+          "inclusiveTime": "number — the callee's inclusive cost when reached from this caller",
+          "calls": "number"
+        }
+      ],
       "functionCount": "number",
       "truncated": "bool",
-      "note": "`events` carries the units the file declares — do not assume microseconds. `summary` is the file's own total and is LARGER than `self_total`; the two are reported separately rather than conflated, and `percent` is a share of `self_total` so the column adds to 100. `functionCount` is how many distinct functions the file held before the top-60 cut. Measured on real output: 200,004 blocks aggregated to 5 functions, 10 MB parsed in under a second."
+      "note": "`events` carries the units the file declares — do not assume microseconds. `summary` is the file's own total and is LARGER than `self_total`; the two are reported separately rather than conflated, and `percent` is a share of `self_total` so the column adds to 100. `functionCount` is how many distinct functions the file held before the top-60 cut. Measured on real output: 200,004 blocks aggregated to 5 functions, 10 MB parsed in under a second.",
+      "edgesNote": "Who called whom, and what it cost — the half of the file the top-N table throws away. A cost table answers \"where did the time go\"; it cannot answer \"what called that\", which is the question a flame graph exists for. The parser was already reading these edges to attribute an inclusive cost to a callee, and was discarding the caller."
     },
     "ProfilerStatus": {
       "xdebug": "XdebugStatus",
       "mode": "'debug'|'profile'|'trace'",
+      "develop": "bool — whether Xdebug's `develop` rides along with the mode. Beside the mode rather than inside it because xdebug.mode is a list and develop is not an alternative to stepping: it is what makes var_dump readable and puts a stack trace on a warning",
+      "modeValue": "string — what XDEBUG_MODE is actually set to: `debug`, or `debug,develop`. Rendered here rather than in the front end so the screen and the overlay cannot disagree about what was applied",
       "trigger": "string (XDEBUG_TRIGGER)",
       "profiles": "ProfileFile[]",
       "traces": "ProfileFile[] — read by profiler_flame, not profiler_read",
@@ -5014,7 +5071,7 @@
     },
     "Project": {
       "name": "string",
-      "domain": "string",
+      "domain": "string | null",
       "runtime": "'php'|'node'",
       "path": "string",
       "containerName": "string",
@@ -5072,7 +5129,8 @@
     "PruneReport": {
       "imagesDeleted": "u64",
       "volumesDeleted": "u64",
-      "spaceReclaimed": "u64"
+      "spaceReclaimed": "u64",
+      "cachesDeleted": "u64 — build-cache records removed. Counted separately from images because one image's worth of cache is many records"
     },
     "PtyTarget": {
       "oneOf": [
@@ -5305,6 +5363,7 @@
     },
     "StreamId": "string",
     "SupervisorAlarm": {
+      "_rust": "supervisor::Raised",
       "project": "string",
       "process": "string",
       "kind": "'fatal' | 'flapping' | 'notAnswering'",
@@ -5471,6 +5530,9 @@
       "stackvoVersion": "string?",
       "projectsDir": "string?",
       "envFile": "string?",
+      "bootstrapped": "bool — has the first-run setup ever finished. A marker written after the LAST step, not a file some step leaves behind: for about an hour it was the generated compose file, and a run that wrote the compose files and then failed to issue the certificate looked complete for ever after. Skipping past a failure does not write it, so the offer comes back next launch",
+      "catalogueFetched": "bool — has a catalogue ever been fetched onto this machine. Nothing is embedded, so false means there are no service definitions here at all, not an empty catalogue. Read from the cached index rather than from a marker, so it stops saying yes when that file is deleted; on the workspace rather than left to the Market page because the answer decides which screen opens",
+      "migrationPending": "bool — does this workspace still keep its services in .env: the instance table is absent and .env has a service switched on. A gate rather than a banner, because the .env branch of the renderer is gone and a workspace in this state cannot build a stack at all",
       "note": "root is null when source is 'none'. `source` exists so the UI can say WHY it is pointing at a given checkout — silently guessing wrong would be worse than asking."
     },
     "Worktree": {
@@ -5482,6 +5544,7 @@
       "database": "{ instance: string, name: string, seededFrom?: string } | null",
       "env": "Record<string,string> — what somebody typed. The database credentials are NOT here; they are derived from the instance on every render",
       "createdAt": "string — RFC 3339",
+      "expiresAt": "string? — when this worktree stops being wanted, RFC 3339 UTC. The field that turns a worktree into a sandbox: a branch environment made for one task by somebody who is not going to remember it exists. A person's own worktree carries null. Nothing acts on it by itself — an app that deleted a directory on a timer would one day delete a morning's uncommitted work — it makes \"this is finished with\" a fact the screen can state and a person can act on",
       "note": "N. Stored in <root>/worktrees.json, outside every checkout, because the files in a worktree directory are the branch's and this app writes nothing there that git tracks. `seededFrom` is the only record of whether a branch started with a copy of the data or an empty schema, which is the question somebody asks three weeks later."
     },
     "WorktreePlan": {
@@ -5492,6 +5555,7 @@
       "path": "string",
       "domain": "string",
       "database": "{ instance: string, service: string, name: string, seed: bool, source?: string } | null",
+      "expiresAt": "string? — when it would expire, when a duration was asked for. Shown before anything is created, like every other derived value on that screen",
       "warnings": "string[] — what proceeds anyway",
       "refused": "string | null — one sentence naming why it cannot",
       "possible": "bool",
@@ -5501,7 +5565,10 @@
       "...": "every field of Worktree, flattened",
       "exists": "bool — is the directory still there",
       "dirty": "bool | null — uncommitted work a removal would discard. null when git could not answer, which is a third state and not a warning",
-      "orphaned": "bool — the record points somewhere git no longer has a checkout, usually because the folder was deleted by hand"
+      "orphaned": "bool — the record points somewhere git no longer has a checkout, usually because the folder was deleted by hand",
+      "isolated": "bool — whether this branch reaches its database with a login of its own. Derived from whether a login is held for it rather than stored on the record, so the file that holds the password is the file that decides. false means the branch uses the instance's shared account and can reach the parent's data — on PostgreSQL and MongoDB the only answer there is",
+      "expired": "bool — whether its time has passed. false for a worktree with no expiry, which is every worktree somebody made for themselves",
+      "remainingMinutes": "number? — whole minutes left, for one with an expiry. 0 is \"over\", null is \"no expiry\" — two answers, not one"
     },
     "WorktreeSupport": {
       "gitAvailable": "bool",
@@ -5513,6 +5580,10 @@
       "currentBranch": "string | null — null for a detached head",
       "branches": "Array<{ name: string, checkedOut: bool, current: bool }> — newest commit first",
       "instances": "DbInstance[] — stopped ones included and marked",
+      "isolated": "bool — whether this worktree reaches its database with a login of its own: the one fact that decides whether \"this branch has its own database\" also means \"this branch cannot reach the parent's\". false is a real answer and not a missing one, and is what a project that is not a worktree gets",
+      "grantArgs": "string[] — the flags that would give an assistant this worktree and nothing else, rendered from a grant rather than assembled on screen so what a person copies is the sentence the server enforces. Empty for a project that is not a worktree; carries --for only while there is time left on the sandbox",
+      "auth": "{ sanctum?: string, passport?: string, sessionDomain?: string, statefulDomains?: string, passportKeysMissing: bool } | null",
+      "authNote": "`auth` is what a branch's own hostname breaks, and is absent for a project that is not a worktree. Sanctum ties a session to a list of hostnames and Passport keeps its signing key in a gitignored file, so a branch environment signs people out with a 419 and answers token requests with a stack trace, and nothing on screen says why.",
       "reason": "string | null — why worktrees are unavailable here",
       "worktrees": "WorktreeRow[] — this project's own"
     },
@@ -5520,6 +5591,8 @@
       "supported": "bool",
       "enabled": "bool",
       "active": "bool?",
+      "activeMode": "string? — the mode the container is actually in: debug, profile, or null. Separate from `active` because only this catches a switch that has not been applied yet — after flipping stepping to profiling both variables are still present, so `active` stays true while XDEBUG_MODE still says debug",
+      "compiledIn": "bool — does the image carry the extension at all. Split from `enabled` because the screen has to explain itself: switching on for the first time rebuilds the image, every time after that recreates a container, and without this the second toggle looks identical to the first",
       "needsRebuild": "bool",
       "running": "bool",
       "port": "number",
