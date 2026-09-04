@@ -51,18 +51,41 @@
  *    by the same jsdom everywhere and pays nothing.
  *  * **A module in flight**: its uncovered lines over the tree's total. The
  *    Rust core is 59.5k counted lines, so a 1,200-line module written before
- *    its tests costs two points. The front end is 32.8k, so a 650-line pane
- *    costs two. Branches swing wider than lines on a new component full of
+ *    its tests costs two points. The front end is 10.3k *executable* lines
+ *    (see the next section for why that number used to read 37.6k), so a
+ *    pane of 200 executable lines written before its tests costs two.
+ *    Branches swing wider than lines on a new component full of
  *    conditionals, so that one is given three.
  *
  * Which makes the blind spot three points on the Rust side and two on the
  * front end, in place of eight and seven. Re-measure before moving one of
  * these; the whole argument rests on the pair below being the same age.
+ *
+ * ## The front-end number fell twenty points on 2026-09-04, and nothing got
+ * ## worse
+ *
+ * Vitest 3's v8 provider counted every line of every file in `include` —
+ * comments, blank lines, the `<template>` — and marked a file's lines covered
+ * once its module had been evaluated. A component nobody rendered read as
+ * 100%: `CloseDialog.vue`, which `app-shell.spec.js` stubs out, stood at
+ * 72 lines, all covered. Vitest 4 remaps V8's byte ranges through the AST,
+ * so only executable statements count and only executed ones count as
+ * covered. Measured on the same tree, same day, with both providers:
+ *
+ *     vitest 3.2.7   37,595 lines counted, 34,702 covered   92.3%
+ *     vitest 5.0.0   10,312 lines counted,  7,397 covered   71.7%
+ *
+ * The second row is the truth the first was hiding, and it is the one the
+ * floors below now guard. `CloseDialog.vue` reads 0%, which is what a stubbed
+ * component is. The way to move this number is the way it was always meant
+ * to move: a test that renders something.
  */
 
 /**
- * Measured 2026-08-29 on macOS — `npm run test:rs:coverage` and
- * `npm run test:js:coverage`, on a clean tree.
+ * Measured on macOS, on a clean tree — Rust on 2026-08-29 with
+ * `npm run test:rs:coverage`; the front end on 2026-09-04 with
+ * `npm run test:js:coverage` under Vitest 5, the day the provider changed
+ * what a line is (the section above).
  *
  * Kept next to the floors so the distance between them is visible: a floor
  * three points under a number that was last measured a year ago is not a floor,
@@ -73,7 +96,7 @@
  */
 export const measured = {
   rust: { lines: 68.05, functions: 64.98, regions: 68.46 },
-  frontend: { lines: 92.2, statements: 92.2, branches: 80.99, functions: 60.7 },
+  frontend: { lines: 71.73, statements: 70.59, branches: 62.14, functions: 63.26 },
 };
 
 export const floors = {
@@ -102,10 +125,16 @@ export const floors = {
    * jsdom at all. A floor on a number nobody can act on teaches people to
    * ignore a failing gate.
    *
-   * `statements` and `lines` are the same figure under v8's instrumentation.
-   * Both are listed so a future switch of provider does not silently drop one.
+   * `statements` and `lines` were the same figure under the old
+   * instrumentation; the AST-aware provider separates them by a point (a
+   * line can hold two statements). Both are floored, two points under their
+   * own measurement.
+   *
+   * 71.73 / 70.59 / 62.14 measured, less two for a module in flight (three
+   * for branches). Not the 90 / 90 / 78 of the previous provider: those
+   * guarded a number that counted comments as covered code.
    */
-  frontend: { lines: 90, statements: 90, branches: 78 },
+  frontend: { lines: 69.5, statements: 68.5, branches: 59 },
 };
 
 export default floors;
