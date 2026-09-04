@@ -33,6 +33,21 @@
  * Sharing the stage with the suite is the point rather than a convenience: a
  * screenshot generator with its own fixture drifts into showing a product that
  * no test has ever rendered. This one can only show what `shell.e2e.js` boots.
+ *
+ * ## The two that are not a page in a browser (#101)
+ *
+ * The worktree screen wanted "a working git tree behind it", and it does — on
+ * the Rust side of `worktree_support`, which is the one call the pane makes.
+ * The browser never reads the tree, so the tree is staged the way everything
+ * else is: `tools/screenshots/worktree-stage.mjs` answers that call, and the
+ * detail page's Configuration section is scrolled to the pane and shot.
+ *
+ * `stackvo tui` has no window at all. `tui::draw` builds each frame as a
+ * string so that a test can read it, and `examples/tui_frame.rs` prints one
+ * for the staged stack; `tools/screenshots/ansi-frame.mjs` reads the escapes
+ * back into styled cells and this file draws them in Chromium like any other
+ * page. Not a pty recorder: a pty would need the real binary, raw mode and a
+ * Docker socket to list from, and would show whatever that machine had.
  */
 
 import { spawn } from 'node:child_process';
@@ -45,6 +60,8 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
 import { DEFAULT_STAGE, callsOf, stage } from '../tests/e2e/stage.js';
+import { htmlOf, linesOf, widthOf } from './screenshots/ansi-frame.mjs';
+import { PLANNED_BRANCH, WORKTREE_STAGE } from './screenshots/worktree-stage.mjs';
 
 /**
  * What the staged machine answers on top of `DEFAULT_STAGE`.
@@ -552,7 +569,10 @@ const STAGE = {
   // other never stops loading.
   project_adoptable: [],
   imports_scan: [],
-  worktree_list: [],
+  // `worktree_list`, `worktree_support` and `worktree_plan`: the branch
+  // environments `shop` has, kept in their own file so a test can check the
+  // two commands agree about them without shooting anything.
+  ...WORKTREE_STAGE,
   handover_preview: {
     pending: false,
     migrated: true,
@@ -946,30 +966,67 @@ const SECTIONS = [
   ['agent', 'AI'],
 ];
 
+/** Click one entry of the detail page's rail, and let the pane it opens fetch. */
+async function openSection(page, label) {
+  await page
+    .getByRole('main')
+    .locator('.nav-item')
+    // Anchored, and that is not defensiveness: `hasText` matches a
+    // case-insensitive SUBSTRING, so 'AI' selected "Cont(ai)ner" and the
+    // AI tab's picture was the container pane's, with the rail to prove it.
+    .filter({ hasText: new RegExp(`^\\s*${label}\\s*$`) })
+    .first()
+    .click();
+  // The panes fetch on activation, and several draw a chart once they
+  // have. Long enough for that, short enough to keep ten of these cheap.
+  await page.waitForTimeout(900);
+}
+
+// The detail page titles itself with the project's name, not its domain —
+// waiting on `shop.loc` here timed out on every run and shot the page mid-load.
+const projectReady = (page) => page.getByRole('main').getByText('shop', { exact: true }).first();
+
 function projectSections() {
   return SECTIONS.map(([key, label]) => ({
     name: key === 'indicator' ? 'project-detail' : `project-detail-${key}`,
     path: '/#/projects/shop',
-    // The detail page titles itself with the project's name, not its domain —
-    // waiting on `shop.loc` here timed out on every run and shot the page mid-load.
-    ready: (page) => page.getByRole('main').getByText('shop', { exact: true }).first(),
-    act: label
-      ? async (page) => {
-          await page
-            .getByRole('main')
-            .locator('.nav-item')
-            // Anchored, and that is not defensiveness: `hasText` matches a
-            // case-insensitive SUBSTRING, so 'AI' selected "Cont(ai)ner" and the
-            // AI tab's picture was the container pane's, with the rail to prove it.
-            .filter({ hasText: new RegExp(`^\\s*${label}\\s*$`) })
-            .first()
-            .click();
-          // The panes fetch on activation, and several draw a chart once they
-          // have. Long enough for that, short enough to keep ten of these cheap.
-          await page.waitForTimeout(900);
-        }
-      : null,
+    ready: projectReady,
+    act: label ? (page) => openSection(page, label) : null,
   }));
+}
+
+/**
+ * The worktree pane, which is a place on the Configuration section rather
+ * than a section: it sits below the two manifests, and at this viewport that
+ * is below the fold of `project-detail-configuration.png`. Scrolled to, then
+ * the form is opened and given a branch, because a list of two rows is not
+ * what the feature is for — the plan the form previews is.
+ */
+function worktreePane() {
+  return {
+    name: 'project-detail-worktrees',
+    path: '/#/projects/shop',
+    ready: projectReady,
+    act: async (page) => {
+      await openSection(page, 'Configuration');
+      const main = page.getByRole('main');
+      // The pane's own header, then the card it heads: the page scrolls inside
+      // `v-main`, and `scrollIntoView` walks up to whatever scrolls.
+      const toTop = (el) =>
+        (el.closest('.pane') ?? el).scrollIntoView({ block: 'start', behavior: 'instant' });
+      const title = main.getByText('Worktrees', { exact: true }).first();
+      await title.evaluate(toTop);
+      await main.getByRole('button', { name: 'New worktree', exact: true }).click();
+      await main.getByLabel('Branch', { exact: true }).fill(PLANNED_BRANCH);
+      // Typing opened the combobox's own menu over the fields below it;
+      // Escape closes the menu and leaves the value.
+      await page.keyboard.press('Escape');
+      // The plan is fetched on every keystroke and drawn when it lands.
+      await page.waitForTimeout(900);
+      // Opening the form grew the card downwards; the header stays where it was.
+      await title.evaluate(toTop);
+    },
+  };
 }
 
 /**
@@ -1024,6 +1081,7 @@ const PAGES = [
     ready: (page) => page.getByRole('main').getByRole('button', { name: 'shop.loc' }),
   },
   ...projectSections(),
+  worktreePane(),
   { name: 'market', path: '/#/market', ready: (page) => page.getByRole('main') },
   { name: 'logs', path: '/#/logs', ready: (page) => page.getByRole('main') },
   { name: 'dumps', path: '/#/dumps', ready: (page) => page.getByRole('main') },
@@ -1067,6 +1125,11 @@ const PAGES = [
     ready: (page) => page.getByRole('main').getByRole('button', { name: 'shop.loc' }),
     act: (page) => openOverlay(page, 'New project'),
   },
+
+  // ---- the screen that is not in the app --------------------------------
+  // `stackvo tui`, at the size every terminal has been since the VT100. The
+  // frame comes from the Rust side; see `shootTerminal`.
+  { name: 'tui', terminal: { columns: 80, rows: 24 } },
 ];
 
 /**
@@ -1206,6 +1269,85 @@ async function shoot(browser, spec) {
   return { file, noise, unanswered };
 }
 
+/**
+ * One frame of the terminal screen, from the code that draws it.
+ *
+ * `cargo run` rather than a checked-in frame: a frame in the repository would
+ * be a picture of the screen as it was the day somebody pasted it, which is
+ * the hand-taken screenshot this whole file exists to replace. The first run
+ * builds the library and takes a while; the rest are seconds.
+ */
+function terminalFrame(columns) {
+  return new Promise((ok, fail) => {
+    const child = spawn(
+      'cargo',
+      [
+        'run',
+        '--quiet',
+        '--manifest-path',
+        'src-tauri/Cargo.toml',
+        '--example',
+        'tui_frame',
+        '--',
+        String(columns),
+      ],
+      { cwd: ROOT, stdio: ['ignore', 'pipe', 'inherit'], shell: false }
+    );
+    let out = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => (out += chunk));
+    child.on('error', (error) => fail(new Error(`cargo could not be run: ${error.message}`)));
+    child.on('exit', (code) =>
+      code === 0 ? ok(out) : fail(new Error(`cargo run --example tui_frame exited ${code}`))
+    );
+  });
+}
+
+/**
+ * The terminal screen, drawn in the same Chromium as the pages.
+ *
+ * No preview server, no stage and no navigation: the page IS the frame, set
+ * as content, and the picture is of the terminal element rather than of a
+ * viewport — a terminal is its cells, and a 1600×1000 window around 80×24 of
+ * them would be a picture of the margin.
+ */
+async function shootTerminal(browser, spec) {
+  const { columns, rows } = spec.terminal;
+  let frame;
+  try {
+    frame = await terminalFrame(columns);
+  } catch (error) {
+    // Reported and skipped rather than written: a file of nothing would
+    // replace the last good picture with a blank one.
+    return { file: null, noise: [`the frame could not be produced: ${error.message}`] };
+  }
+
+  const lines = linesOf(frame);
+  const noise = [];
+  if (widthOf(lines) > columns) {
+    noise.push(`the frame is ${widthOf(lines)} columns wide, more than the ${columns} drawn`);
+  }
+
+  const context = await browser.newContext({
+    viewport: { width: 1200, height: 800 }, // Larger than the element; the shot is the element.
+    deviceScaleFactor: 2,
+    colorScheme: THEME,
+  });
+  const page = await context.newPage();
+  await page.setContent(htmlOf(lines, { columns, rows }));
+  // The monospace face is a system one and arrives after `setContent`; a shot
+  // taken before it does is drawn in the fallback, one cell narrower. As a
+  // string because it runs in the page, where `document` exists, and not here,
+  // where the linter rightly says it does not.
+  await page.evaluate('document.fonts.ready');
+
+  const file = join(OUT, `${spec.name}.png`);
+  await page.locator('#terminal').screenshot({ path: file, animations: 'disabled' });
+  await context.close();
+
+  return { file, noise, unanswered: [] };
+}
+
 const specs = wanted.length ? PAGES.filter((p) => wanted.includes(p.name)) : PAGES;
 if (!specs.length) {
   console.error(`No such page. Known: ${PAGES.map((p) => p.name).join(', ')}`);
@@ -1226,9 +1368,17 @@ let complained = false;
 
 try {
   for (const spec of specs) {
-    const { file, noise, unanswered } = await shoot(browser, spec);
-    const size = (await stat(file)).size;
-    console.log(`${file.replace(`${ROOT}/`, '')}  ${(size / 1024).toFixed(0)} KB`);
+    const {
+      file,
+      noise,
+      unanswered = [],
+    } = spec.terminal ? await shootTerminal(browser, spec) : await shoot(browser, spec);
+    if (file) {
+      const size = (await stat(file)).size;
+      console.log(`${file.replace(`${ROOT}/`, '')}  ${(size / 1024).toFixed(0)} KB`);
+    } else {
+      console.log(`docs/screenshots/${spec.name}.png  not written`);
+    }
     if (unanswered.length) console.log(`  ? unstaged: ${unanswered.join(', ')}`);
     for (const line of noise) {
       complained = true;
@@ -1242,7 +1392,8 @@ try {
 
 const written = (await readdir(OUT)).filter((f) => f.endsWith('.png'));
 console.log(
-  `\n${written.length} file(s) in docs/screenshots/ at ${VIEWPORT.width}×${VIEWPORT.height}@2x, ${THEME}.`
+  `\n${written.length} file(s) in docs/screenshots/ at ${VIEWPORT.width}×${VIEWPORT.height}@2x, ${THEME}` +
+    ` — tui.png at 80×24 cells@2x.`
 );
 
 // A console error on a page is not a reason to refuse the picture — it is a
