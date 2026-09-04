@@ -63,7 +63,8 @@ function read(path, what) {
     throw new Error(
       `no ${what} coverage report at ${path} (${e.code ?? e.message}).\n` +
         `  Rust:     npm run test:rs:coverage\n` +
-        `  Frontend: npm run test:js:coverage`
+        `  Frontend: npm run test:js:coverage`,
+      { cause: e }
     );
   }
 }
