@@ -458,3 +458,47 @@ fn both_workflows_run_the_suite_to_the_end() {
         );
     }
 }
+
+/// npm's audit endpoint returned 503 for most of 2026-09-04 and the
+/// supply-chain job blocked six pull requests over nothing in the tree. The
+/// step retries now — but only the registry's own failure. A finding must
+/// still be the verdict on the first attempt, so the retry has to be keyed on
+/// the endpoint error's own text and nothing broader.
+#[test]
+fn the_npm_audit_step_retries_the_endpoint_error_and_nothing_else() {
+    let ci = read(".github/workflows/ci.yml");
+    let start = ci.find("- name: npm audit").expect("no npm audit step");
+    let end = ci[start..]
+        .find("\n      - name:")
+        .map(|i| start + i)
+        .unwrap_or(ci.len());
+    let step = &ci[start..end];
+
+    assert!(
+        step.contains("npm audit --omit=dev --audit-level=moderate"),
+        "the audit command changed; the retry wraps it and the local `npm run \
+         audit` script must keep matching: {step}"
+    );
+    assert!(
+        step.contains("grep -q 'audit endpoint returned an error'"),
+        "the retry is not keyed on npm's endpoint error, so a real finding \
+         would be retried too and reported five times: {step}"
+    );
+    assert!(
+        step.contains("for attempt in 1 2 3 4 5") && step.contains("sleep 120"),
+        "the retry lost its bound or its pause: {step}"
+    );
+
+    let job_start = ci.find("\n  supply-chain:").expect("no supply-chain job");
+    let job = &ci[job_start..start];
+    let minutes: u32 = job
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("timeout-minutes:"))
+        .and_then(|v| v.trim().parse().ok())
+        .expect("supply-chain has no timeout-minutes");
+    assert!(
+        minutes >= 20,
+        "five attempts two minutes apart need eight minutes of waiting; the \
+         job's timeout is {minutes} minutes"
+    );
+}
