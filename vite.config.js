@@ -195,14 +195,22 @@ export default defineConfig({
        *
        * The runtime build registers `compile` instead, which parses the
        * message to an AST and walks it. Same syntax, same messages, no `eval`
-       * — see `@intlify/core-base`, where `new Function` appears once and only
-       * inside `compileToFunction`. The flags below are what that build reads;
-       * without them the alias would swap one broken bundle for another.
+       * — in vue-i18n 9, `@intlify/core-base` had `new Function` once, inside
+       * `compileToFunction`, and only the runtime build stayed clear of it.
+       * The flags below are what that build reads; without them the alias
+       * would swap one broken bundle for another.
        *
        * The alternative was `'unsafe-eval'` in the CSP, which is not a fix. It
        * would buy a rendering window by giving every script in the webview the
        * ability to build code out of strings, to work around one library's
        * choice of how to cache a format string.
+       *
+       * Since vue-i18n 11 (2026-09-04): `@intlify/core-base` contains no
+       * `new Function` at all — both bundles compile to an AST — so the hazard
+       * this alias was built against is gone from the library. The alias
+       * stays: the path still exists (a one-line shim re-exporting
+       * `dist/vue-i18n.runtime.mjs`), the runtime build is still the smaller
+       * one, and the driver suite still proves the CSP holds on every push.
        */
       'vue-i18n': 'vue-i18n/dist/vue-i18n.runtime.esm-bundler.js',
     },
@@ -219,6 +227,8 @@ export default defineConfig({
   define: {
     // The whole point of the alias: compile messages to an AST at runtime
     // rather than to a function through `new Function`.
+    // Read by vue-i18n 9 and 10; 11 reads it nowhere (JIT is its only mode).
+    // Kept so a downgrade for a bisect does not lose the flag it needs.
     __INTLIFY_JIT_COMPILATION__: true,
     // Keep the compiler. Dropping it is for applications that pre-compile
     // their messages at build time; these are plain objects in
