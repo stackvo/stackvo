@@ -514,7 +514,9 @@ jobs:
   supply-chain:
     name: supply chain
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Room for the audit step's five attempts (up to eight minutes of
+    # waiting) on top of cargo-deny and the notices check.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -546,8 +548,30 @@ jobs:
 
       # Production dependencies only: a dev-only advisory does not ship to a
       # user, and failing the build on one blocks work for no gain in safety.
+      #
+      # Retried, and only for the registry's own failure. npm's audit endpoint
+      # returned 503 for most of 2026-09-04, and this job blocked six pull
+      # requests over nothing in the tree — each merge waited for a person to
+      # press "re-run". A finding is not retried: npm reports it and exits 1
+      # without the endpoint error, so the first attempt is the verdict.
       - name: npm audit
-        run: npm audit --omit=dev --audit-level=moderate
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if out=$(npm audit --omit=dev --audit-level=moderate 2>&1); then
+              printf '%s\n' "$out"
+              exit 0
+            fi
+            printf '%s\n' "$out"
+            if ! grep -q 'audit endpoint returned an error' <<<"$out"; then
+              exit 1
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::npm's audit endpoint stayed down through 5 attempts, 2 minutes apart."
+              exit 1
+            fi
+            echo "::warning::npm's audit endpoint errored (attempt $attempt of 5); retrying in 120 s."
+            sleep 120
+          done
 
       # The other half of a supply chain: what we owe the people whose code we
       # ship. Every permissive licence here requires its notice to travel with
