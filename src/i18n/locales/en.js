@@ -2318,6 +2318,9 @@ export default {
     updaterUnconfigured:
       'This build cannot verify updates: it has no public key compiled in. Update checks stay off until the release signing key is configured.',
     updateSigned: 'The bundle signature is verified against the key compiled into this build.',
+    betaChannel: 'Also receive beta releases',
+    betaChannelHint:
+      'Pre-releases, before they are final. Stable releases still arrive. Takes effect the next time StackVo starts.',
     generator: 'Generator (drift check)',
     generatorReady: 'the disk matches what the generator writes',
     generatorDiffers: 'drift — a generated file was changed by hand or is stale',
