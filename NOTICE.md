@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 601 Rust crates and 79 npm packages.
+Counted from 601 Rust crates and 80 npm packages.
 
 ## Summary
 
@@ -48,7 +48,7 @@ Counted from 601 Rust crates and 79 npm packages.
 | ISC | 5 | 1 |
 | ISC AND (Apache-2.0 OR ISC) | 1 |  |
 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | 1 |  |
-| MIT | 138 | 67 |
+| MIT | 138 | 68 |
 | MIT OR Apache-2.0 | 281 | 6 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |  |
 | MIT OR Apache-2.0 OR Zlib | 3 |  |
@@ -61,7 +61,7 @@ Counted from 601 Rust crates and 79 npm packages.
 | Unlicense/MIT | 2 |  |
 | Zlib | 1 |  |
 | Zlib OR Apache-2.0 OR MIT | 20 |  |
-| **Total** | **601** | **79** |
+| **Total** | **601** | **80** |
 
 ## Rust crates (601)
 
@@ -669,7 +669,7 @@ Counted from 601 Rust crates and 79 npm packages.
 | zvariant_utils | 2.1.0 | MIT |
 | zvariant_utils | 3.5.0 | MIT |
 
-## npm packages (79)
+## npm packages (80)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -677,9 +677,10 @@ Counted from 601 Rust crates and 79 npm packages.
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
 | @babel/parser | 7.29.8 | MIT |
 | @babel/types | 7.29.8 | MIT |
-| @intlify/core-base | 9.14.5 | MIT |
-| @intlify/message-compiler | 9.14.5 | MIT |
-| @intlify/shared | 9.14.5 | MIT |
+| @intlify/core-base | 11.4.10 | MIT |
+| @intlify/devtools-types | 11.4.10 | MIT |
+| @intlify/message-compiler | 11.4.10 | MIT |
+| @intlify/shared | 11.4.10 | MIT |
 | @jridgewell/gen-mapping | 0.3.13 | MIT |
 | @jridgewell/remapping | 2.3.5 | MIT |
 | @jridgewell/resolve-uri | 3.1.2 | MIT |
@@ -748,7 +749,7 @@ Counted from 601 Rust crates and 79 npm packages.
 | unplugin | 3.3.0 | MIT |
 | unplugin-utils | 0.3.2 | MIT |
 | vue | 3.5.42 | MIT |
-| vue-i18n | 9.14.5 | MIT |
+| vue-i18n | 11.4.10 | MIT |
 | vue-router | 5.3.1 | MIT |
 | vuetify | 3.13.3 | MIT |
 | webpack-virtual-modules | 0.6.2 | MIT |
@@ -983,6 +984,7 @@ be carried.
 - Copyright (c) 2024 Orson Peters
 - Copyright (c) 2024 The lru-slab Developers
 - Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
+- Copyright (c) 2024 kazuya kawaguchi
 - Copyright (c) 2025-PRESENT Anthony Fu <https://github.com/antfu> and Kevin Deng <https://github.com/sxzz>
 - Copyright (c) 2026-present Vercel Inc.
 - Copyright (c) [2021] [Marvin Countryman]
