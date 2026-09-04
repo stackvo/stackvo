@@ -709,7 +709,7 @@ Counted from 601 Rust crates and 43 npm packages.
 | nanoid | 3.3.18 | MIT |
 | picocolors | 1.1.1 | ISC |
 | pinia | 2.3.1 | MIT |
-| postcss | 8.5.23 | MIT |
+| postcss | 8.5.28 | MIT |
 | source-map-js | 1.2.1 | BSD-3-Clause |
 | vue | 3.5.42 | MIT |
 | vue-demi | 0.14.10 | MIT |
