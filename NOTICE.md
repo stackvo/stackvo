@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 601 Rust crates and 43 npm packages.
+Counted from 601 Rust crates and 79 npm packages.
 
 ## Summary
 
@@ -48,7 +48,7 @@ Counted from 601 Rust crates and 43 npm packages.
 | ISC | 5 | 1 |
 | ISC AND (Apache-2.0 OR ISC) | 1 |  |
 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | 1 |  |
-| MIT | 138 | 31 |
+| MIT | 138 | 67 |
 | MIT OR Apache-2.0 | 281 | 6 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |  |
 | MIT OR Apache-2.0 OR Zlib | 3 |  |
@@ -61,7 +61,7 @@ Counted from 601 Rust crates and 43 npm packages.
 | Unlicense/MIT | 2 |  |
 | Zlib | 1 |  |
 | Zlib OR Apache-2.0 OR MIT | 20 |  |
-| **Total** | **601** | **43** |
+| **Total** | **601** | **79** |
 
 ## Rust crates (601)
 
@@ -669,7 +669,7 @@ Counted from 601 Rust crates and 43 npm packages.
 | zvariant_utils | 2.1.0 | MIT |
 | zvariant_utils | 3.5.0 | MIT |
 
-## npm packages (43)
+## npm packages (79)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -680,7 +680,11 @@ Counted from 601 Rust crates and 43 npm packages.
 | @intlify/core-base | 9.14.5 | MIT |
 | @intlify/message-compiler | 9.14.5 | MIT |
 | @intlify/shared | 9.14.5 | MIT |
+| @jridgewell/gen-mapping | 0.3.13 | MIT |
+| @jridgewell/remapping | 2.3.5 | MIT |
+| @jridgewell/resolve-uri | 3.1.2 | MIT |
 | @jridgewell/sourcemap-codec | 1.5.5 | MIT |
+| @jridgewell/trace-mapping | 0.3.31 | MIT |
 | @material/material-color-utilities | 0.4.0 | Apache-2.0 |
 | @mdi/font | 7.4.47 | Apache-2.0 |
 | @tauri-apps/api | 2.11.1 | Apache-2.0 OR MIT |
@@ -690,11 +694,15 @@ Counted from 601 Rust crates and 43 npm packages.
 | @tauri-apps/plugin-opener | 2.5.5 | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-process | 2.3.1 | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-updater | 2.11.0 | MIT OR Apache-2.0 |
+| @vue-macros/common | 3.1.4 | MIT |
 | @vue/compiler-core | 3.5.42 | MIT |
 | @vue/compiler-dom | 3.5.42 | MIT |
 | @vue/compiler-sfc | 3.5.42 | MIT |
 | @vue/compiler-ssr | 3.5.42 | MIT |
 | @vue/devtools-api | 6.6.4 | MIT |
+| @vue/devtools-api | 8.2.1 | MIT |
+| @vue/devtools-kit | 8.2.1 | MIT |
+| @vue/devtools-shared | 8.2.1 | MIT |
 | @vue/reactivity | 3.5.42 | MIT |
 | @vue/runtime-core | 3.5.42 | MIT |
 | @vue/runtime-dom | 3.5.42 | MIT |
@@ -702,20 +710,48 @@ Counted from 601 Rust crates and 43 npm packages.
 | @vue/shared | 3.5.42 | MIT |
 | @xterm/addon-fit | 0.11.0 | MIT |
 | @xterm/xterm | 6.0.0 | MIT |
+| acorn | 8.17.0 | MIT |
+| ast-kit | 2.2.0 | MIT |
+| ast-walker-scope | 0.9.0 | MIT |
+| birpc | 2.9.0 | MIT |
+| chokidar | 5.0.0 | MIT |
+| confbox | 0.1.8 | MIT |
+| confbox | 0.2.4 | MIT |
+| confbox | 0.3.1 | MIT |
 | csstype | 3.2.3 | MIT |
 | entities | 7.0.1 | BSD-2-Clause |
 | estree-walker | 2.0.2 | MIT |
+| exsolve | 1.1.1 | MIT |
+| fdir | 6.5.0 | MIT |
+| hookable | 5.5.3 | MIT |
+| local-pkg | 1.2.1 | MIT |
 | magic-string | 0.30.21 | MIT |
+| magic-string-ast | 1.0.3 | MIT |
+| mlly | 1.8.2 | MIT |
+| muggle-string | 0.4.1 | MIT |
 | nanoid | 3.3.18 | MIT |
+| nostics | 1.2.0 | MIT |
+| pathe | 2.0.3 | MIT |
+| perfect-debounce | 2.1.0 | MIT |
 | picocolors | 1.1.1 | ISC |
-| pinia | 2.3.1 | MIT |
+| picomatch | 4.0.7 | MIT |
+| pinia | 4.0.3 | MIT |
+| pkg-types | 1.3.1 | MIT |
+| pkg-types | 2.3.2 | MIT |
 | postcss | 8.5.28 | MIT |
+| quansync | 0.2.11 | MIT |
+| readdirp | 5.0.0 | MIT |
+| scule | 1.3.0 | MIT |
 | source-map-js | 1.2.1 | BSD-3-Clause |
+| tinyglobby | 0.2.17 | MIT |
+| ufo | 1.6.4 | MIT |
+| unplugin | 3.3.0 | MIT |
+| unplugin-utils | 0.3.2 | MIT |
 | vue | 3.5.42 | MIT |
-| vue-demi | 0.14.10 | MIT |
 | vue-i18n | 9.14.5 | MIT |
-| vue-router | 4.6.4 | MIT |
+| vue-router | 5.3.1 | MIT |
 | vuetify | 3.13.3 | MIT |
+| webpack-virtual-modules | 0.6.2 | MIT |
 
 ## Copyright holders
 
@@ -723,15 +759,20 @@ Collected from the licence files in the packages above. This is the part
 of a permissive licence that is not boilerplate, and the part it requires
 be carried.
 
+- Copyright (C) 2011-2015 by Vitaly Puzrin
 - Copyright (C) 2012-2014 by various contributors (see AUTHORS)
+- Copyright (C) 2012-2022 by various contributors (see AUTHORS)
 - Copyright (c) 2006-2009 Graydon Hoare
 - Copyright (c) 2009 The Go Authors. All rights reserved.
 - Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
 - Copyright (c) 2009-2011, Mozilla Foundation and contributors
 - Copyright (c) 2009-2013 Mozilla Foundation
 - Copyright (c) 2010 The Rust Project Developers
+- Copyright (c) 2012 Paul Miller (https://paulmillr.com), Elan Shanker
 - Copyright (c) 2012-2013 Mozilla Foundation
 - Copyright (c) 2012-2013, Christopher Jeffrey (https://github.com/chjj/)
+- Copyright (c) 2012-2018 Aseem Kishore, and others (https://github.com/json5/json5/graphs/contributors)
+- Copyright (c) 2012-2019 Thorsten Lorenz, Paul Miller (https://paulmillr.com)
 - Copyright (c) 2013 Nicolas Silva
 - Copyright (c) 2013-2014 The Rust Project Developers.
 - Copyright (c) 2013-2016 The rust-url developers
@@ -831,6 +872,7 @@ be carried.
 - Copyright (c) 2017 Redox OS Developers
 - Copyright (c) 2017 Robert Grosse
 - Copyright (c) 2017 Sergio Benitez
+- Copyright (c) 2017 SysGears
 - Copyright (c) 2017 Ted Driggs
 - Copyright (c) 2017 The Tokio Authors
 - Copyright (c) 2017 The foreign-types Developers
@@ -844,6 +886,7 @@ be carried.
 - Copyright (c) 2017-2021, The Gtk-rs Project Developers.
 - Copyright (c) 2017-2023 Maik Klein, Maja Kądziołka
 - Copyright (c) 2017-2024 oyvindln
+- Copyright (c) 2017-present, Jon Schlinkert.
 - Copyright (c) 2018 Akash Kurdekar
 - Copyright (c) 2018 Artyom Pavlov
 - Copyright (c) 2018 Ashley Mannix, Christopher Armstrong, Dylan DPC, Hunar Roop Kahlon
@@ -876,6 +919,7 @@ be carried.
 - Copyright (c) 2019 Nick Fitzgerald
 - Copyright (c) 2019 Nick Fitzgerald, 2021 Yuki Okushi
 - Copyright (c) 2019 Osspial
+- Copyright (c) 2019 RollupJS Plugin Contributors (https://github.com/rollup/plugins/graphs/contributors)
 - Copyright (c) 2019 The Crossbeam Project Developers
 - Copyright (c) 2019 The CryptoCorrosion Contributors
 - Copyright (c) 2019 Tokio Contributors
@@ -899,16 +943,18 @@ be carried.
 - Copyright (c) 2020-2022 Tauri Programme within The Commons Conservancy
 - Copyright (c) 2020-2023 Ngo Iok Ui & Tauri Programme within The Commons Conservancy
 - Copyright (c) 2020-2025 The RustCrypto Project Developers
-- Copyright (c) 2020-present, Anthony Fu
+- Copyright (c) 2021 Anthony Fu <https://github.com/antfu>
 - Copyright (c) 2021 Chip Reed
 - Copyright (c) 2021 RustCrypto Developers
 - Copyright (c) 2021 Tauri Apps Contributors
+- Copyright (c) 2021 Titus Wormer <mailto:tituswormer@gmail.com>
 - Copyright (c) 2021 the Deno authors
 - Copyright (c) 2021, Maarten de Vries <maarten@de-vri.es>
 - Copyright (c) 2021, Tauri Programme within The Commons Conservancy
 - Copyright (c) 2021, Tauri Programme within The Commons Conservancy.
 - Copyright (c) 2021-2022 The Nushell Project Developers
 - Copyright (c) 2021-2024 Oleksii Raspopov, Kostiantyn Denysov, Anton Verinov
+- Copyright (c) 2021-PRESENT Nuxt Contrib
 - Copyright (c) 2022 1Password
 - Copyright (c) 2022 Artyom Pavlov
 - Copyright (c) 2022 Bartłomiej Maryńczak
@@ -916,6 +962,8 @@ be carried.
 - Copyright (c) 2022 The RustCrypto Project Developers
 - Copyright (c) 2022 zzzgydi
 - Copyright (c) 2022-2022 Tauri Programme within The Commons Conservancy
+- Copyright (c) 2022-PRESENT Kevin Deng
+- Copyright (c) 2022-present Johnson Chu
 - Copyright (c) 2023 4lDO2
 - Copyright (c) 2023 Dirkjan Ochtman <dirkjan@ochtman.nl>
 - Copyright (c) 2023 Jacob Pratt et al.
@@ -925,13 +973,18 @@ be carried.
 - Copyright (c) 2023 The Rust Project Developers
 - Copyright (c) 2023 The swift-rs Developers
 - Copyright (c) 2023 dAxpeDDa
+- Copyright (c) 2023 webfansplz
 - Copyright (c) 2023-2025 Sean McArthur
+- Copyright (c) 2023-present Fabio Spampinato
 - Copyright (c) 2024 Jacob Pratt et al.
+- Copyright (c) 2024 Madeline Gurriarán
 - Copyright (c) 2024 Marat Dulin
 - Copyright (c) 2024 Mullvad VPN AB
 - Copyright (c) 2024 Orson Peters
 - Copyright (c) 2024 The lru-slab Developers
 - Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
+- Copyright (c) 2025-PRESENT Anthony Fu <https://github.com/antfu> and Kevin Deng <https://github.com/sxzz>
+- Copyright (c) 2026-present Vercel Inc.
 - Copyright (c) [2021] [Marvin Countryman]
 - Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
 - Copyright 2013 Andrey Sitnik <andrey@sitnik.es>
@@ -953,6 +1006,7 @@ be carried.
 - Copyright 2017-2023 Maik Klein, Maja Kądziołka
 - Copyright 2018 Developers of the Rand project
 - Copyright 2018 Rich Harris
+- Copyright 2019 Justin Ridgewell <jridgewell@google.com>
 - Copyright 2019 Niel Drummond
 - Copyright 2019 The CryptoCorrosion Contributors
 - Copyright 2019 The Fuchsia Authors.
@@ -963,6 +1017,7 @@ be carried.
 - Copyright 2021 Google LLC
 - Copyright 2021, Maarten de Vries <maarten@de-vri.es>
 - Copyright 2022 Kirill Chibisov
+- Copyright 2023 Abdullah Atta
 - Copyright 2023 Dirkjan Ochtman
 - Copyright 2023 Jacob Pratt et al.
 - Copyright 2023 Notify Contributors
@@ -984,6 +1039,9 @@ be carried.
 - Copyright © 2015, Simonas Kazlauskas
 - Copyright © 2017-2018 Arm Limited
 - Copyright © 2020-2024 Unicode, Inc.
+- Copyright © 2022-PRESENT Kevin Deng (https://github.com/sxzz)
+- Copyright © 2023-PRESENT Kevin Deng (https://github.com/sxzz)
+- Copyright © 2025-PRESENT Kevin Deng (https://github.com/sxzz)
 - Copyright © `2015` `Sebastian Thiel`
 
 ## Licence texts
