@@ -125,6 +125,32 @@ if (typeof SVGElement !== 'undefined' && !SVGElement.prototype.getTotalLength) {
 // jsdom performs no layout, so it implements no scrolling either — the method
 // is simply absent, and a component that keeps its current row in view calls it
 // on every arrow key. Inert like the rest: there is no viewport to scroll.
+/**
+ * The one computed style nobody needs, answered without the walk.
+ *
+ * jsdom 27 rebuilt `getComputedStyle` on a real cascade: an inherited property
+ * is resolved by walking every ancestor, on every call. Correct, and fifteen
+ * times slower than jsdom 26 for the one caller that asks in a loop:
+ * VTextarea's auto-grow, which reads the computed style of its hidden sizer
+ * on mount and again on every model change, and the Settings page has five
+ * textareas at the bottom of a deep tree. Measured on 2026-09-04, the Settings
+ * specs went from 0.7 s of test time to 9 s, and `coverage` in CI timed a
+ * test out at 20 s. A CPU profile put 39% of the whole run inside that one
+ * measurement.
+ *
+ * There is no layout in jsdom, so every value the measurement reads is `''`
+ * and the height it computes is NaN whichever way the question is answered.
+ * The sizer, and only the sizer, gets the empty answer straight away; every
+ * other element — the ones axe inspects for visibility and contrast — still
+ * goes through the real cascade.
+ */
+if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+  const real = window.getComputedStyle.bind(window);
+  const empty = Object.freeze({ getPropertyValue: () => '', lineHeight: '' });
+  window.getComputedStyle = (element, pseudo) =>
+    element?.classList?.contains('v-textarea__sizer') ? empty : real(element, pseudo);
+}
+
 if (typeof globalThis.Element !== 'undefined' && !globalThis.Element.prototype.scrollIntoView) {
   globalThis.Element.prototype.scrollIntoView = function () {};
 }

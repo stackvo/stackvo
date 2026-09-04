@@ -127,6 +127,16 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   lines at 92.3% against 10,312 at 71.7%. The reasoning is in
   `tools/coverage-floors.mjs`.
 
+- **jsdom 30** (#99, 3 of 8), four majors at once; the suite, axe runs
+  included, passed unchanged — but not at the same speed. jsdom 27 rebuilt
+  `getComputedStyle` on a real cascade, and VTextarea's auto-grow asks for
+  its hidden sizer's computed style on every model change: the Settings
+  specs went from 0.7 s to 9 s and CI's coverage job timed a test out. The
+  sizer, and only the sizer, now gets the empty answer straight from
+  `tests/setup.js`; there is no layout in jsdom, so that is the answer it was
+  getting anyway. `engines.node` now says what jsdom requires:
+  `^22.22.2 || >=24.15.0`.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
