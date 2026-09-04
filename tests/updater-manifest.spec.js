@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { inspect, diagnose, platformsFrom, declared } from '../tools/check-updater-endpoint.mjs';
+import {
+  inspect,
+  diagnose,
+  platformsFrom,
+  declared,
+  betaEndpoint,
+} from '../tools/check-updater-endpoint.mjs';
 
 /**
  * The judgement half of `npm run updates:check`, exercised without a network.
@@ -140,7 +146,81 @@ describe('what it reads out of the configuration', () => {
     const conf = JSON.parse(readFileSync(resolve(ROOT, 'src-tauri/tauri.conf.json'), 'utf8'));
     const { endpoint, version } = declared(conf);
 
-    expect(endpoint).toMatch(/^https:\/\/github\.com\/.+\/releases\/latest\/download\/latest\.json$/);
+    expect(endpoint).toMatch(
+      /^https:\/\/github\.com\/.+\/releases\/latest\/download\/latest\.json$/
+    );
     expect(version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  /**
+   * The beta endpoint is not in the configuration and must not be: a second
+   * entry there would be a fallback for every install, stable ones included.
+   * It is derived, here and in `channel.rs`, from the one entry — the same
+   * repository, GitHub's `latest` pointer swapped for the rolling `beta`
+   * release. `src-tauri/tests/update_channels.rs` pins the Rust derivation to
+   * the same string.
+   */
+  it('derives the beta endpoint from the stable one rather than declaring it', () => {
+    const conf = JSON.parse(readFileSync(resolve(ROOT, 'src-tauri/tauri.conf.json'), 'utf8'));
+    expect(conf.plugins.updater.endpoints).toHaveLength(1);
+
+    const { endpoint, channel } = declared(conf, 'beta');
+    expect(channel).toBe('beta');
+    expect(endpoint).toBe(
+      conf.plugins.updater.endpoints[0].replace(
+        '/releases/latest/download/latest.json',
+        '/releases/download/beta/beta.json'
+      )
+    );
+    expect(endpoint).toMatch(/^https:\/\/github\.com\/.+\/releases\/download\/beta\/beta\.json$/);
+  });
+
+  it('refuses to invent a beta endpoint from a stable one it does not understand', () => {
+    expect(betaEndpoint('https://updates.example.com/latest.json')).toBeNull();
+    expect(betaEndpoint(undefined)).toBeNull();
+    expect(
+      declared({ plugins: { updater: { endpoints: ['https://x/latest.json'] } } }, 'beta')
+    ).toMatchObject({ endpoint: undefined, channel: 'beta' });
+  });
+});
+
+describe('the channel a manifest belongs to', () => {
+  /**
+   * The one thing the stable endpoint must never serve. `releases/latest`
+   * excludes pre-releases, so a beta manifest there means a pre-release was
+   * published without its flag — and every stable install is being offered it.
+   */
+  it('refuses a beta manifest on the stable channel', () => {
+    const manifest = { ...good(), channel: 'beta' };
+    const problems = inspect(manifest, { platforms: PLATFORMS, version: '0.1.0' });
+    expect(problems.join(' ')).toContain('channel: beta');
+    expect(problems.join(' ')).toContain('published without the pre-release flag');
+  });
+
+  it('accepts either channel on the beta endpoint, because beta includes stable', () => {
+    // beta.json names the newest published release, stable or not; a beta
+    // install reading a stable manifest there is the ordinary case the day
+    // after a stable ships.
+    for (const channel of ['beta', 'stable', undefined]) {
+      const manifest = { ...good(), channel };
+      expect(
+        inspect(manifest, { platforms: PLATFORMS, version: '0.1.0', channel: 'beta' })
+      ).toEqual([]);
+    }
+  });
+
+  it('flags a channel word the app would silently read as stable', () => {
+    const manifest = { ...good(), channel: 'nightly' };
+    expect(inspect(manifest, { platforms: PLATFORMS, version: '0.1.0' }).join(' ')).toContain(
+      'nightly'
+    );
+  });
+
+  it('explains a missing beta.json as a channel nobody has published to yet', () => {
+    const text = diagnose(404, 'https://github.com/o/r/releases/download/beta/beta.json', 'beta');
+    // The important sentence: nothing is broken for anybody.
+    expect(text).toContain('latest.json second');
+    expect(text).toContain('channel');
+    expect(text).not.toContain('releaseDraft');
   });
 });

@@ -27,7 +27,7 @@ vi.mock('@/lib/ipc', () => ({
   },
 }));
 
-const { checkForUpdate } = await import('../src/lib/updates.js');
+const { checkForUpdate, channelOf, CHANNEL_PREFERENCE } = await import('../src/lib/updates.js');
 
 /** What the plugin hands back when a newer version exists. */
 function available(rawJson = { version: '0.2.0' }) {
@@ -169,5 +169,28 @@ describe('a signature that does not verify', () => {
     // people to ignore the banner.
     check.mockRejectedValue(new Error('error sending request'));
     expect(await checkForUpdate()).toBeNull();
+  });
+});
+
+describe('the channel an install follows', () => {
+  it('is beta only when the preference says exactly that', () => {
+    expect(channelOf({ [CHANNEL_PREFERENCE]: 'beta' })).toBe('beta');
+    expect(channelOf({ [CHANNEL_PREFERENCE]: 'stable' })).toBe('stable');
+  });
+
+  it('is stable for anything else, including nothing at all', () => {
+    // The safe direction. A wrong answer here costs a pre-release nobody asked
+    // for; an older preferences file with no such key costs nothing.
+    expect(channelOf({})).toBe('stable');
+    expect(channelOf(null)).toBe('stable');
+    expect(channelOf(undefined)).toBe('stable');
+    expect(channelOf({ [CHANNEL_PREFERENCE]: 'nightly' })).toBe('stable');
+    expect(channelOf({ [CHANNEL_PREFERENCE]: 'BETA' })).toBe('stable');
+  });
+
+  it('is stored under the key channel.rs reads at launch', () => {
+    // Two readers, one spelling. `update_channels.rs` pins the Rust side to
+    // this literal; a rename on either side fails there.
+    expect(CHANNEL_PREFERENCE).toBe('updateChannel');
   });
 });
