@@ -61,7 +61,8 @@ vi.mock('@tauri-apps/plugin-autostart', () => ({
   enable: vi.fn(),
   disable: vi.fn(),
 }));
-vi.mock('@/lib/updates', () => ({
+vi.mock('@/lib/updates', async (importOriginal) => ({
+  ...(await importOriginal()),
   checkForUpdate: async () => null,
   updatesConfigured: async () => false,
 }));

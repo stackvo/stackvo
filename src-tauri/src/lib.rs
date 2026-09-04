@@ -156,6 +156,17 @@ pub fn run() {
     // through the old name has settings worth keeping.
     appdir::migrate_config();
 
+    // The update channel is chosen here, before the updater plugin is built,
+    // because that is the only moment its endpoint list can still be changed:
+    // the plugin reads the list out of this configuration once, in its own
+    // setup, and neither `check()` nor a URL placeholder can pick a channel
+    // afterwards. `channel::configure` reads the stored preference and
+    // rewrites `plugins.updater.endpoints` for this launch — the beta file
+    // first and the stable one behind it for a beta install, the stable one
+    // alone for everybody else. `channel.rs` has the reasoning.
+    let mut context = tauri::generate_context!();
+    channel::configure(context.config_mut());
+
     tauri::Builder::default()
         // A second launch focuses the existing window instead of opening a
         // rival instance: two apps driving the same Docker stack and the same
@@ -771,6 +782,6 @@ pub fn run() {
             commands::generator_verify,
             commands::generate_with,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running StackVo");
 }

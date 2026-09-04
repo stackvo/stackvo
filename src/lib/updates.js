@@ -16,6 +16,24 @@ import { api } from '@/lib/ipc';
  * secret and never appears in this repository.
  */
 
+/** The preferences key the channel is stored under; `channel.rs` reads it. */
+export const CHANNEL_PREFERENCE = 'updateChannel';
+
+/**
+ * The channel an install follows, out of its preferences.
+ *
+ * Anything but the word `beta` is stable — an absent key, an older file, a
+ * value somebody typed by hand. The direction is deliberate: a wrong answer
+ * here costs a pre-release nobody asked for, and the stable one costs nothing.
+ *
+ * Two readers of this preference and one rule. The Rust side chooses the
+ * endpoint list from it at launch; this side hands it to `updater_offer`, which
+ * is what refuses a beta manifest to an install that wants stable.
+ */
+export function channelOf(prefs) {
+  return prefs?.[CHANNEL_PREFERENCE] === 'beta' ? 'beta' : 'stable';
+}
+
 /**
  * Can this build verify an update at all?
  *

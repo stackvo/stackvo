@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useIconRail } from '@/composables/useIconRail';
 import { useAppStore } from '@/stores/app';
 import { api } from '@/lib/ipc';
-import { checkForUpdate, updatesConfigured } from '@/lib/updates';
+import { CHANNEL_PREFERENCE, channelOf, checkForUpdate, updatesConfigured } from '@/lib/updates';
 import { getVersion } from '@tauri-apps/api/app';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import CertificatesPane from '@/components/settings/CertificatesPane.vue';
@@ -331,7 +331,12 @@ const checkingUpdate = ref(false);
 async function checkUpdate() {
   checkingUpdate.value = true;
   try {
-    update.value = await checkForUpdate();
+    // The channel travels with the check, so `updater_offer` can refuse a
+    // beta manifest to an install that wants stable. Loaded here rather than
+    // assumed loaded: `loadPrefs` is not awaited on mount, and a check that
+    // ran ahead of it would ask for stable on behalf of a beta install.
+    const prefs = preferences.prefs.value ?? (await preferences.load());
+    update.value = await checkForUpdate({ channel: channelOf(prefs) });
   } catch (e) {
     // A signature failure is a security event, not a network hiccup.
     envError.value = { code: 'PERMISSION_DENIED', message: e.message };
@@ -342,6 +347,23 @@ async function checkUpdate() {
 
 async function installUpdate() {
   await update.value.install((p) => (updateProgress.value = p));
+}
+
+/**
+ * Whether this install also takes pre-releases.
+ *
+ * One preference, two readers: the Rust side chooses the endpoint list from
+ * it when the app starts, and the check above hands it to `updater_offer`.
+ * The switch therefore says "next launch" — until then the plugin keeps the
+ * endpoints this launch chose, which `channel.rs` shows is a safe list in
+ * both directions. The re-check after saving is for the other half: a beta
+ * install that reads a stable manifest is still offered it.
+ */
+const betaChannel = computed(() => channelOf(preferences.prefs.value) === 'beta');
+
+async function setChannel(beta) {
+  await preferences.set({ [CHANNEL_PREFERENCE]: beta ? 'beta' : 'stable' });
+  if (updaterReady.value) await checkUpdate();
 }
 
 /**
@@ -686,6 +708,22 @@ onMounted(async () => {
               <v-alert v-if="updaterReady === false" type="warning" variant="tonal" class="mb-2">
                 <div class="text-caption">{{ t('settings.updaterUnconfigured') }}</div>
               </v-alert>
+
+              <!-- Beta is "stable, plus pre-releases", never a sibling stream:
+                   a beta install keeps receiving every stable release, and a
+                   stable install never sees a pre-release. The hint says the
+                   endpoint changes at the next launch, because that is when
+                   the updater plugin reads its endpoint list. -->
+              <v-switch
+                :model-value="betaChannel"
+                :label="t('settings.betaChannel')"
+                :hint="t('settings.betaChannelHint')"
+                persistent-hint
+                density="compact"
+                color="primary"
+                class="beta-channel mb-2"
+                @update:model-value="(v) => setChannel(!!v)"
+              />
 
               <div v-if="!update" class="text-caption text-medium-emphasis">
                 {{ checkingUpdate ? t('app.loading') : t('settings.upToDate') }}
