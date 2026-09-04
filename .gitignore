@@ -176,3 +176,6 @@ src-tauri/binaries/
 # produces it rather than a file checked in beside it. Its own directory because
 # test-results/ is Playwright's and gets emptied at the start of every run.
 /reports/
+
+# Vitest 5 writes its own reports here.
+.vitest/

@@ -118,6 +118,15 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   inside a `catch` now carry the original as `cause`, one initialiser that
   a `try` always overwrote is gone.
 
+- **Vitest 5, and coverage floors that guard a real number** (#99, 2 of 8).
+  The suite passed unchanged. The floors move from 90/90/78 to 69.5/68.5/59
+  and nothing got worse: Vitest 3's provider counted every line of every
+  file and marked a module covered once evaluated — `CloseDialog.vue`,
+  stubbed in every test, read 72 lines at 100%. The AST-aware provider
+  counts executable statements that ran: same tree, same day, 37,595
+  lines at 92.3% against 10,312 at 71.7%. The reasoning is in
+  `tools/coverage-floors.mjs`.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting

@@ -7,7 +7,7 @@ export default [
   // files carrying their own eslint-disable comments, which this config then
   // reports as unused directives. Linting a report about the code is not
   // linting the code.
-  { ignores: ['dist/**', 'src-tauri/**', 'node_modules/**', 'coverage/**'] },
+  { ignores: ['dist/**', 'src-tauri/**', 'node_modules/**', 'coverage/**', '.vitest/**'] },
 
   js.configs.recommended,
   ...pluginVue.configs['flat/recommended'],
