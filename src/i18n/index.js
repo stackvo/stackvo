@@ -83,7 +83,7 @@ export const i18n = createI18n({
  */
 export async function loadLocalePacks() {
   const { api } = await import('@/lib/ipc');
-  let packs = [];
+  let packs;
   try {
     packs = (await api.localePacks()) ?? [];
   } catch {
