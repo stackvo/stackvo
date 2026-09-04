@@ -2293,6 +2293,9 @@ export default {
     updaterUnconfigured:
       'Bu yapı güncellemeleri doğrulayamaz: içine gömülü bir açık anahtar yok. Yayın imzalama anahtarı tanımlanana kadar güncelleme denetimi kapalı.',
     updateSigned: 'Paket imzası, uygulamaya gömülü anahtarla doğrulanır.',
+    betaChannel: 'Beta sürümleri de al',
+    betaChannelHint:
+      'Kesinleşmeden önceki ön sürümler. Kararlı sürümler yine gelir. StackVo bir sonraki açılışında geçerli olur.',
     generator: 'Üretici (sapma denetimi)',
     generatorReady: 'disk, üreticinin yazacağıyla aynı',
     generatorDiffers: 'sapma var — üretilmiş bir dosya elle değişmiş ya da bayat',

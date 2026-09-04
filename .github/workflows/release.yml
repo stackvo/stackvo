@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # The moment a person presses Publish on a draft. Nothing in the tag run
+  # can move the beta channel's pointer, because the tag run ends in a draft
+  # and a draft's assets are not downloadable — a `beta.json` written then
+  # would offer every beta install a file it cannot fetch. The `channel` job
+  # at the bottom runs on this event alone; every other job is gated off it.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       # The six-target matrix was "unverified until a tag runs it", and
@@ -60,6 +67,11 @@ jobs:
   # surfaces months later on a user's machine as an unexplained signature error.
   # Cheaper to fail here, in ten seconds, than there.
   preflight:
+    # Not on a publish. A published release is one this workflow already
+    # built; rebuilding it would open a second draft named after the same
+    # tag. `build` and `checksums` follow through `needs`, and say so
+    # themselves rather than relying on it.
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     # A ceiling, for the reason `ci.yml` gives at length: GitHub's default is
     # six hours, which is the absence of a limit rather than a limit. This job
@@ -159,6 +171,7 @@ jobs:
 
   build:
     needs: preflight
+    if: github.event_name != 'release'
     # The longest job in the repository, and the one where a stall costs most:
     # a release run that hangs holds a runner and leaves a draft holding some of
     # six artifacts, which at a glance is indistinguishable from a finished one.
@@ -577,7 +590,21 @@ jobs:
           # and v0.1.0 was titled by its tag by hand.
           releaseName: ${{ !inputs.rehearsal && github.ref_name || '' }}
           releaseDraft: true
-          prerelease: false
+          # ---------------------------------------------------- the tag rule
+          #
+          # A hyphen in the tag makes a pre-release: `v0.3.0-beta.1`,
+          # `v0.3.0-rc.1`. That is semver's own marker, it is what the
+          # updater's version comparison already orders below the release it
+          # precedes, and it needs no second input anybody has to remember.
+          #
+          # The flag is what keeps the stable channel honest. GitHub resolves
+          # `releases/latest` to the newest published NON-prerelease, and the
+          # stable endpoint in tauri.conf.json is exactly that URL — so a
+          # release marked pre-release can never be what `latest.json` is
+          # served from, whatever else goes wrong. The beta channel is served
+          # from a different place altogether; see the `channel` job at the
+          # bottom of this file.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           # tauri-action writes latest.json alongside the artifacts; the
           # endpoint in tauri.conf.json has to point at wherever it is served.
           #
@@ -636,6 +663,14 @@ jobs:
             echo "write that one file, so a platform missing from it is the failure to look for."
             echo
             echo "After publishing, the same command with no arguments."
+            case "${{ github.ref_name }}" in
+              *-*)
+                echo
+                echo "This tag is a **pre-release**. Publishing it moves the beta channel's \`beta.json\`"
+                echo "and never \`releases/latest\`: stable installs do not see it, and beta installs"
+                echo "see it once the \`channel\` job has run. Check with \`npm run updates:check -- --channel beta\`."
+                ;;
+            esac
           } >> "$GITHUB_STEP_SUMMARY"
 
       # What a rehearsal is for: the bundle each target actually produced,
@@ -798,6 +833,7 @@ jobs:
   # row can hash, since a rehearsal has no release to download from.
   checksums:
     needs: build
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -845,3 +881,76 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: gh release upload "${{ github.ref_name }}" SHA256SUMS.txt --clobber
+
+  # ------------------------------------------------------- the beta channel
+  #
+  # The stable channel has a pointer GitHub maintains: `releases/latest`
+  # resolves to the newest published non-prerelease, and `latest.json` is
+  # read from there. Pre-releases have no such pointer, so the beta channel
+  # keeps one of its own — a release tagged `beta`, holding one file,
+  # `beta.json`, that this job replaces on every publish. The app's beta
+  # channel asks that file first and `latest.json` second; `channel.rs`
+  # explains why the second entry is the whole safety of the design.
+  #
+  # Two rules, and both are in `tools/beta-manifest.mjs` so they can be tested
+  # without a runner:
+  #
+  # * `beta.json` names the NEWEST published release, pre-release or not. The
+  #   updater plugin stops at the first endpoint that answers, so a file
+  #   still naming 0.3.0-beta.1 after 0.3.0 shipped would hide the stable
+  #   release from every beta install. Hence every publish refreshes it,
+  #   stable publishes included, and the tool orders versions by semver
+  #   precedence rather than by date.
+  # * The file is a copy of that release's own `latest.json` with `channel`
+  #   stamped in, and it is checked before it is copied: a version, and a
+  #   URL plus a signature for every platform the matrix builds. The pointer
+  #   never moves to a manifest the updater could not use.
+  #
+  # On the `release` event only. The tag run ends in a draft, and a draft's
+  # assets cannot be fetched, so a pointer written then would offer beta
+  # installs a file they cannot download.
+  channel:
+    if: github.event_name == 'release' && !github.event.release.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # `gh` and `node` are on the runner image; the tool has no dependencies,
+      # so there is no `npm ci` here.
+      - name: Point beta.json at the newest published release
+        if: ${{ !inputs.rehearsal }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release list --limit 100 --json tagName,isDraft,isPrerelease > releases.json
+          tag=$(node tools/beta-manifest.mjs newest releases.json)
+          echo "the newest published release is $tag (this event published ${{ github.event.release.tag_name }})"
+          gh release download "$tag" --pattern latest.json --dir manifest
+          node tools/beta-manifest.mjs stamp manifest/latest.json "$tag" > beta.json
+          { echo "### beta.json now names $tag"; echo; echo '```json'; cat beta.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # `--prerelease`, and it is load-bearing rather than descriptive: a
+      # release that is not a pre-release becomes `releases/latest` the
+      # moment it is newer than the current one, and this release carries no
+      # `latest.json` — so without the flag the stable endpoint would answer
+      # 404 for everybody the first time this job ran. `--latest=false` says
+      # the same thing a second way, because the cost of being wrong here is
+      # every stable install.
+      - name: Publish it on the rolling `beta` release
+        if: ${{ !inputs.rehearsal }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view beta >/dev/null 2>&1; then
+            gh release create beta --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "Beta channel" \
+              --notes "The beta channel's pointer. \`beta.json\` here names the newest published release, pre-release or not, and the app's beta channel reads it. Nothing else is published here; the installers are on the release it names."
+          fi
+          gh release upload beta beta.json --clobber

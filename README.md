@@ -178,6 +178,29 @@ app's updater verifies a **minisign** signature over the update manifest.
 
 </details>
 
+<details>
+<summary><b>Beta releases</b> (the second update channel)</summary>
+
+A tag with a hyphen — `v0.3.0-beta.1`, `v0.3.0-rc.1` — is published as a
+GitHub **pre-release**. GitHub's `releases/latest` never resolves to one, and
+`releases/latest/download/latest.json` is the stable update endpoint, so a
+stable install is never offered a pre-release by any route.
+
+Beta installs read `beta.json` from the rolling
+[`beta`](https://github.com/stackvo/stackvo/releases/tag/beta) release first
+and `latest.json` second. That file is replaced every time a release is
+published — a stable one included — and always names the newest published
+release, so a beta install keeps receiving stable releases and a beta that
+turns out badly is left behind by whatever ships next. Before the first
+pre-release exists the file is simply absent, and a beta install receives
+stable updates like everybody else.
+
+Turn it on under **Settings → About → Also receive beta releases**. It takes
+effect at the next launch, because the updater reads its endpoints once, when
+the app starts. From a checkout, `npm run updates:check -- --channel beta`
+asks the beta endpoint the same way `npm run updates:check` asks the stable one.
+</details>
+
 ### 3) First run
 
 The first launch asks exactly one question: **where should the workspace live?**
@@ -260,16 +283,18 @@ button that fixes them.
   <tr><td width="25%" valign="top"><a href="docs/screenshots/mail.png"><img src="docs/screenshots/mail.png" alt="Mail"></a><br><sub><b>Mail</b><br>What the projects sent</sub></td><td width="25%" valign="top"><a href="docs/screenshots/logs.png"><img src="docs/screenshots/logs.png" alt="Logs"></a><br><sub><b>Logs</b><br>Application and server</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Appearance"></a><br><sub><b>Appearance</b><br>Theme, radius, density</sub></td><td width="25%" valign="top"><a href="docs/screenshots/settings-doctor.png"><img src="docs/screenshots/settings-doctor.png" alt="Doctor"></a><br><sub><b>Doctor</b><br>What is wrong, by name</sub></td></tr>
 </table>
 
-**[Every screen, in one page →](docs/screenshots/README.md)** — thirty-seven pictures: each
-page, the project detail page's ten sections, the settings page's seventeen panes,
-and the four sheets that have no address of their own.
+**[Every screen, in one page →](docs/screenshots/README.md)** — thirty-nine
+pictures: each page, the project detail page's ten sections, the settings
+page's seventeen panes, the four sheets that have no address of their own, and
+the two the browser could not take.
 
-They are taken by `npm run screenshots` rather than by hand, at 1600x1000@2x, against
-the same boundary the Playwright suite stages — so a UI change reshoots all of them
-and none of them is somebody's window at whatever size it happened to be. Two screens
-on the original list are still missing and cannot come from this tool: the per-branch
-worktree environment, and `stackvo tui`, which is a terminal program rather than a
-window in this app.
+They are taken by `npm run screenshots` rather than by hand, at 1600x1000@2x,
+against the same boundary the Playwright suite stages — so a UI change reshoots
+all of them and none of them is somebody's window at whatever size it happened
+to be. The two that were missing come the same way: the per-branch worktree
+environment is staged at the boundary like everything else, and `stackvo tui`,
+a terminal program rather than a window, is one frame printed by the code that
+draws it and rendered cell by cell.
 
 ---
 
