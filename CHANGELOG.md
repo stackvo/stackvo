@@ -156,6 +156,14 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   from the library; the alias stays and its comment says which reasons are
   history.
 
+- **`npm audit` in CI retries the registry's own failure, and nothing
+  else.** npm's audit endpoint returned 503 for most of 2026-09-04, and the
+  supply-chain job blocked six pull requests over nothing in the tree, each
+  merge waiting for a person to press "re-run". The step now tries five
+  times, two minutes apart, but only when npm reports the endpoint error; a
+  finding exits on the first attempt as before. The job's timeout grows to
+  25 minutes to hold the waiting.
+
 ## [0.2.0] - 2026-09-02
 
 The first release with a changelog behind it. Everything below had been sitting
