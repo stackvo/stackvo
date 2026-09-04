@@ -71,6 +71,13 @@
  */
 export const measured = {
   /**
+   * Re-measured 2026-09-04 under Vite 8: 1327.4 KB, down 13.8 on the figure
+   * below. Rolldown splits the eager set differently — a `rolldown-runtime`
+   * chunk and a preload helper appear, `vue.js` is 160 KB, the CSS is 314 —
+   * and Oxc minifies a little tighter than esbuild did. Nothing in `src/`
+   * moved for it. The paragraph below is the previous measurement's story and
+   * still explains what is on this path.
+   *
    * index.js 766 KB + vue.js 169 KB + index.css 406 KB.
    *
    * Up 92.4 KB on the last figure written here, and almost none of it is the
@@ -84,7 +91,7 @@ export const measured = {
    * `check-bundle.mjs` prints the kept-rule count on every run, and the build
    * emits only the 385 rules something in `src/` or `src-tauri/src/` names.
    */
-  eagerKb: 1341.2,
+  eagerKb: 1327.4,
   /**
    * Every asset, including the lazy route chunks and xterm's 333 KB.
    *
@@ -108,7 +115,7 @@ export const measured = {
    * the next piece of this work rather than done badly — and it is now also
    * where the headroom for the next feature is going to have to come from.
    */
-  totalKb: 2933.0,
+  totalKb: 2938.0,
 };
 
 export const ceilings = {

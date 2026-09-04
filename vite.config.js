@@ -279,11 +279,27 @@ export default defineConfig({
   // (WKWebView / WebView2 / WebKitGTK) does not need.
   build: {
     target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
-    minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
+    // `oxc`, not `esbuild`: Vite 8 bundles with Rolldown and minifies with
+    // Oxc, and esbuild is no longer a dependency of Vite at all — naming it
+    // here would mean installing it for this one line.
+    minify: !process.env.TAURI_ENV_DEBUG ? 'oxc' : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: { vue: ['vue', 'vue-router', 'pinia', 'vue-i18n'] },
+        // The framework in its own chunk, so a change to the app's code does
+        // not invalidate the cached framework and vice versa. This is what
+        // `manualChunks: { vue: [...] }` did until Vite 8, which removed the
+        // object form; Rolldown's groups match by module path, so the four
+        // packages' own dependencies (`@vue/*`, `@intlify/*`) come along,
+        // which the package-name list never quite managed.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vue',
+              test: /node_modules[\\/](vue|@vue|vue-router|pinia|vue-i18n|@intlify)[\\/]/,
+            },
+          ],
+        },
       },
     },
   },
