@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/stackvo/stackvo/issues"
   },
-  "homepage": "https://github.com/stackvo/stackvo#readme",
+  "homepage": "https://www.stackvo.io/",
   "engines": {
     "node": "^22.22.2 || >=24.15.0"
   },

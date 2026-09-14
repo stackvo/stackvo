@@ -67,6 +67,18 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A folder named like a site is adopted as one.** Adoption, and the
+  wizard's first suggestion, hung the whole `DEFAULT_TLD_SUFFIX` under the
+  folder name, so a park Herd or Valet once served — `api.showtv`,
+  `localnews.parser`, fourteen of them beside eight the same person had
+  created by hand as `parser.ajans.loc` — came out of "Adopt all" as
+  `api.showtv.stackvo.loc`: a fourth label nobody chose, under a wildcard
+  certificate that reaches exactly one. A dotted name now keeps its labels
+  and takes only the suffix's TLD, `api.showtv.loc`; a plain name is
+  unchanged. One rule in both places (`default_domain` in Rust,
+  `defaultDomain` in `src/lib/manifest.js`), so the two routes to a project
+  still produce one hostname.
+
 - **The contract validator compares type fields** (#100). Suite E kept the
   command lists in step and never read a type's fields; a field added to a
   `#[derive(Serialize)]` struct went unnoticed. Suite H links each contract
@@ -171,7 +183,7 @@ under `Unreleased` since the repository started, which meant the file recorded
 the work honestly and dated none of it — a reader could not tell what shipped
 from what was merely written down. It is dated now, and what follows this
 heading is the engineering log; the short version a user reads is
-[`docs/RELEASE-NOTES-0.2.0.md`](docs/RELEASE-NOTES-0.2.0.md).
+the [0.2.0 release page](https://github.com/stackvo/stackvo/releases/tag/v0.2.0).
 
 ### Changed
 

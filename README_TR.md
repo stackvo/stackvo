@@ -11,6 +11,7 @@
 Her projeye kendi PHP sürümü, kendi veritabanı, kendi alan adı ve kendi HTTPS sertifikası.
 Terminalde `docker compose` yazmadan, makinenize tek bir PHP kurmadan.
 
+[![Website](https://img.shields.io/badge/website-stackvo.io-0A66C2?style=flat-square&logo=googlechrome&logoColor=white)](https://www.stackvo.io/)
 [![CI](https://img.shields.io/github/actions/workflow/status/stackvo/stackvo/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/stackvo/stackvo/actions/workflows/ci.yml)
 [![Nightly](https://img.shields.io/github/actions/workflow/status/stackvo/stackvo/nightly.yml?branch=main&style=flat-square&logo=github&label=nightly)](https://github.com/stackvo/stackvo/actions/workflows/nightly.yml)
 [![Release](https://img.shields.io/github/v/release/stackvo/stackvo?style=flat-square&sort=semver&display_name=tag&label=release)](https://github.com/stackvo/stackvo/releases)
@@ -34,6 +35,7 @@ Terminalde `docker compose` yazmadan, makinenize tek bir PHP kurmadan.
 
 **Türkçe** &nbsp;·&nbsp; [English](README.md)
 
+[Web sitesi](https://www.stackvo.io/) ·
 [Hızlı başlangıç](#hızlı-başlangıç-5-dakika) ·
 [Özellikler](#neden-stackvo) ·
 [Örnekler](#örneklerle-kullanım) ·

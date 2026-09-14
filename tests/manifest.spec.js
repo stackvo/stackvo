@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   blankForm,
+  defaultDomain,
   domainAdvice,
   domainSuggestions,
   humaniseField,
@@ -387,6 +388,36 @@ describe('domain suggestions', () => {
 
   it('offers nothing before there is a name to build on', () => {
     expect(domainSuggestions('', 'loc')).toEqual([]);
+  });
+
+  // A folder already named like a site — `api.showtv` in a park Herd once
+  // served — is a hostname missing only its TLD. Leading with
+  // `api.showtv.stackvo.loc` proposed a fourth label the wildcard does not
+  // reach, beside siblings the same person had created as `api.showtv.loc`.
+  it('leads a dotted name with the TLD alone, not the whole suffix', () => {
+    expect(domainSuggestions('api.showtv', 'stackvo.loc')).toEqual([
+      'api.showtv.loc',
+      'api.showtv.test',
+      'api.showtv.localhost',
+      'api.showtv.dev',
+    ]);
+  });
+});
+
+describe('defaultDomain', () => {
+  it('hangs a plain name under the whole suffix', () => {
+    expect(defaultDomain('shop', 'stackvo.loc')).toBe('shop.stackvo.loc');
+  });
+
+  it('gives a dotted name only the TLD of the suffix', () => {
+    expect(defaultDomain('api.showtv', 'stackvo.loc')).toBe('api.showtv.loc');
+    expect(defaultDomain('localnews.parser', 'example.test')).toBe('localnews.parser.test');
+    expect(defaultDomain('api.showtv', 'loc')).toBe('api.showtv.loc');
+  });
+
+  it('is empty without a name or a suffix, which the schema then rejects', () => {
+    expect(defaultDomain('', 'stackvo.loc')).toBe('');
+    expect(defaultDomain('shop', '')).toBe('');
   });
 });
 
