@@ -8139,6 +8139,31 @@ pub fn project_devcontainer_write(state: State<'_, AppState>, name: String) -> R
 /// makes the two routes agree, and `certs::suffix` is the reader the rest of
 /// the app already uses — including the certificate that has to cover whatever
 /// this writes.
+/// The hostname a project gets when nobody typed one.
+///
+/// `<name>.<suffix>` for a plain name: `shop` under `stackvo.loc` is
+/// `shop.stackvo.loc`, and the wizard's first suggestion is the same string
+/// (`defaultDomain` in `src/lib/manifest.js` is this function's twin — the two
+/// routes to a project must keep producing one answer).
+///
+/// A dotted name is already a hostname missing only its TLD. A park that Herd,
+/// Valet or a hand-written vhost served names its folders after their sites —
+/// `api.showtv`, `localnews.parser` — and hanging the whole suffix under one of
+/// those gave `api.showtv.stackvo.loc`: a fourth label nobody chose, under a
+/// wildcard that reaches exactly one (`*.stackvo.loc` covers `api.stackvo.loc`
+/// and not `api.showtv.stackvo.loc`, see `certs::san_covers`), beside siblings
+/// the same person had created by hand as `api.showtv.loc`. "Adopt all" over
+/// such a park wrote fourteen of them in one press. So a dotted name keeps the
+/// labels it has and takes only the suffix's last one: `api.showtv.loc`.
+fn default_domain(name: &str, suffix: &str) -> String {
+    if name.contains('.') {
+        let tld = suffix.rsplit('.').next().unwrap_or(suffix);
+        format!("{name}.{tld}")
+    } else {
+        format!("{name}.{suffix}")
+    }
+}
+
 fn detected_spec(
     name: &str,
     detected: &detect::Detected,
@@ -8147,7 +8172,7 @@ fn detected_spec(
 ) -> serde_json::Value {
     let mut spec = serde_json::json!({
         "name": name,
-        "domain": format!("{name}.{suffix}"),
+        "domain": default_domain(name, suffix),
         "runtime": detected.runtime,
     });
 
@@ -14186,6 +14211,34 @@ mod migrate_tests {
         // And it follows the setting, exactly as the wizard does.
         let moved = detected_spec("shop", &detected("php"), &env, "example.test");
         assert_eq!(moved["domain"], "shop.example.test");
+    }
+
+    /// A folder that is already named like a site takes only the TLD.
+    ///
+    /// The park this was written against: fourteen checkouts named
+    /// `api.showtv`, `localnews.parser` and so on, beside eight the same
+    /// person had created by hand as `parser.ajans.loc`. "Adopt all" gave
+    /// every one of the fourteen `api.showtv.stackvo.loc` — a fourth label
+    /// under a wildcard that covers one, and nothing like its neighbours.
+    #[test]
+    fn a_dotted_folder_keeps_its_labels_and_takes_only_the_tld() {
+        assert_eq!(
+            default_domain("api.showtv", "stackvo.loc"),
+            "api.showtv.loc"
+        );
+        assert_eq!(
+            default_domain("localnews.parser", "example.test"),
+            "localnews.parser.test"
+        );
+        // A one-label suffix is its own TLD, so nothing changes.
+        assert_eq!(default_domain("api.showtv", "loc"), "api.showtv.loc");
+        // And a plain name still takes the whole suffix.
+        assert_eq!(default_domain("shop", "stackvo.loc"), "shop.stackvo.loc");
+
+        let env = Env::parse("");
+        let spec = detected_spec("api.showtv", &detected("php"), &env, "stackvo.loc");
+        assert_eq!(spec["domain"], "api.showtv.loc");
+        parse_spec(&spec, "api.showtv").expect("the adopted spec must validate");
     }
 
     /// A compose file that states nothing extra must leave detection alone
