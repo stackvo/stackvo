@@ -4,7 +4,7 @@
 
 Please report privately, not as a public issue: open a
 [security advisory](https://github.com/stackvo/stackvo/security/advisories/new),
-or email **backend@cyh.com.tr**.
+or email **info@stackvo.io**.
 
 Include what you did, what happened, and which version and platform. A proof of
 concept helps but is not required to file.

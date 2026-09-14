@@ -457,12 +457,9 @@ mod tests {
     #[test]
     fn the_scp_form_every_forge_copy_button_produces() {
         // The URL this was asked for: a self-hosted host and a nested group.
-        let repo = parse("git@gitlab.bitem.tr:ajans/parser/ajans-parser.git").unwrap();
-        assert_eq!(repo.name, "ajans-parser");
-        assert_eq!(
-            repo.url,
-            "git@gitlab.bitem.tr:ajans/parser/ajans-parser.git"
-        );
+        let repo = parse("git@gitlab.example.com:group/sub/repo.git").unwrap();
+        assert_eq!(repo.name, "repo");
+        assert_eq!(repo.url, "git@gitlab.example.com:group/sub/repo.git");
     }
 
     #[test]

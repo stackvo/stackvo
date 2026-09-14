@@ -14,7 +14,7 @@ Anywhere this project happens: issues, pull requests, discussions, commit messag
 
 ## Reporting
 
-Email **backend@cyh.com.tr**.
+Email **info@stackvo.io**.
 
 Reports are read by the maintainer and nobody else. You will get an acknowledgement; you may not get a detailed account of what was decided, because the other person's side of it is not the reporter's to be told.
 

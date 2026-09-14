@@ -280,7 +280,7 @@ export function formToSpec(form, tld) {
   const suffix = String(tld ?? '').trim();
   const spec = {
     name: form.name,
-    domain: form.domain || (suffix ? `${form.name}.${suffix}` : ''),
+    domain: form.domain || defaultDomain(form.name, suffix),
     runtime: form.runtime,
   };
 
@@ -383,8 +383,31 @@ export function canonical(value) {
 export function domainSuggestions(name, configured) {
   const base = String(name ?? '').trim();
   if (!base) return [];
-  const suffixes = [String(configured ?? '').trim(), ...LOCAL_SUFFIXES].filter(Boolean);
-  return [...new Set(suffixes.map((s) => `${base}.${s}`))];
+  const lead = defaultDomain(base, configured);
+  const rest = LOCAL_SUFFIXES.map((s) => `${base}.${s}`);
+  return [...new Set([lead, ...rest].filter(Boolean))];
+}
+
+/**
+ * The hostname a project gets when nobody typed one, under one suffix.
+ *
+ * `shop` under `stackvo.loc` is `shop.stackvo.loc`. A dotted name is already a
+ * hostname missing only its TLD — a park served by Herd, Valet or a hand-written
+ * vhost names its folders after their sites, `api.showtv`, `localnews.parser` —
+ * and hanging the whole suffix under one gave `api.showtv.stackvo.loc`: a
+ * fourth label nobody chose, which the `*.stackvo.loc` wildcard does not reach,
+ * beside siblings the same person had created as `api.showtv.loc`. So a dotted
+ * name keeps its labels and takes only the suffix's last one.
+ *
+ * The twin of `default_domain` in `src-tauri/src/commands.rs`, which adoption
+ * uses: the two routes to a project must produce one answer.
+ */
+export function defaultDomain(name, configured) {
+  const base = String(name ?? '').trim();
+  const suffix = String(configured ?? '').trim();
+  if (!base || !suffix) return '';
+  const tail = base.includes('.') ? suffix.split('.').pop() : suffix;
+  return `${base}.${tail}`;
 }
 
 /**
