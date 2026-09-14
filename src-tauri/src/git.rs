@@ -459,10 +459,7 @@ mod tests {
         // The URL this was asked for: a self-hosted host and a nested group.
         let repo = parse("git@gitlab.example.com:group/sub/repo.git").unwrap();
         assert_eq!(repo.name, "repo");
-        assert_eq!(
-            repo.url,
-            "git@gitlab.example.com:group/sub/repo.git"
-        );
+        assert_eq!(repo.url, "git@gitlab.example.com:group/sub/repo.git");
     }
 
     #[test]
