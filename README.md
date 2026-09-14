@@ -12,6 +12,7 @@ Every project gets its own PHP version, its own database, its own domain and its
 own HTTPS certificate — without typing `docker compose` or installing a single
 PHP on your machine.
 
+[![Website](https://img.shields.io/badge/website-stackvo.io-0A66C2?style=flat-square&logo=googlechrome&logoColor=white)](https://www.stackvo.io/)
 [![CI](https://img.shields.io/github/actions/workflow/status/stackvo/stackvo/ci.yml?branch=main&style=flat-square&logo=github&label=CI)](https://github.com/stackvo/stackvo/actions/workflows/ci.yml)
 [![Nightly](https://img.shields.io/github/actions/workflow/status/stackvo/stackvo/nightly.yml?branch=main&style=flat-square&logo=github&label=nightly)](https://github.com/stackvo/stackvo/actions/workflows/nightly.yml)
 [![Release](https://img.shields.io/github/v/release/stackvo/stackvo?style=flat-square&sort=semver&display_name=tag&label=release)](https://github.com/stackvo/stackvo/releases)
@@ -35,6 +36,7 @@ PHP on your machine.
 
 [Türkçe](README_TR.md) &nbsp;·&nbsp; **English**
 
+[Website](https://www.stackvo.io/) ·
 [Quick start](#quick-start-5-minutes) ·
 [Features](#why-stackvo) ·
 [Examples](#usage-by-example) ·
@@ -1139,7 +1141,6 @@ supported.
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Be decent to people; argue with the work as hard as it deserves |
 | [CHANGELOG.md](CHANGELOG.md) | Every change, with the reasoning behind it |
 | [README_TR.md](README_TR.md) | Bu belgenin Türkçesi — the same document in Turkish |
-| [docs/README-legacy.md](docs/README-legacy.md) | The previous long-form README, kept for its design notes |
 
 **License:** [MIT](LICENSE) © 2026 Fahrettin Aksoy
 
