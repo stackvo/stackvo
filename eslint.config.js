@@ -7,7 +7,13 @@ export default [
   // files carrying their own eslint-disable comments, which this config then
   // reports as unused directives. Linting a report about the code is not
   // linting the code.
-  { ignores: ['dist/**', 'src-tauri/**', 'node_modules/**', 'coverage/**', '.vitest/**'] },
+  {
+    // `site/` is the built documentation site (`mkdocs build`), gitignored
+    // and regenerated locally by anyone who runs the docs server — never
+    // source, and its vendor assets (a minified search worker, `lunr.js`)
+    // are not written to this project's style.
+    ignores: ['dist/**', 'src-tauri/**', 'node_modules/**', 'coverage/**', '.vitest/**', 'site/**', '.venv/**'],
+  },
 
   js.configs.recommended,
   ...pluginVue.configs['flat/recommended'],

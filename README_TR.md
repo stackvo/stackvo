@@ -627,7 +627,7 @@ proje için cevap vermez. Bu bir bilgi yalıtımı değildir ve öyle anlatılm�
 makine geneli araçlar cevap vermeye devam eder, çünkü onlar bir projeyle değil
 makineyle ilgilidir.
 
-**Sunulmayan:** değiştiren yüzeyin geri kalanı. 344 komutun 69'u bir `AppHandle`
+**Sunulmayan:** değiştiren yüzeyin geri kalanı. 344 komutun 68'i bir `AppHandle`
 alır, çünkü ilerlemeyi Tauri'nin olay sistemi üzerinden bildirirler ve bir stdio
 alt süreci içine olay yayabileceği bir uygulamaya sahip değildir. Bunu ayırmak
 kendi başına bir yeniden yapılandırma; aksini iddia etmek `project_build`'i
