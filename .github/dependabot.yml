@@ -102,6 +102,20 @@ updates:
   # moving them — a frozen supply chain rather than a watched one, which is the
   # opposite of what the pinning is for. It is two or three pull requests a
   # year, not fourteen in a night.
+  # The documentation site — docs/requirements.txt. Two pins, both exact:
+  # Material for MkDocs is in maintenance mode until 5 November 2026 and
+  # MkDocs 2.0 does not work with it, so a bump here is read, not merged on
+  # green alone. Majors are dropped for the same reason as npm and cargo.
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

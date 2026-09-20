@@ -147,6 +147,26 @@ describe('opening help for a card', () => {
     expect(document.body.innerHTML).not.toContain('about project-container.');
   });
 
+  /**
+   * Offline on a machine that has never fetched this document: the documents
+   * are only ever pulled, nothing ships inside the installer, so the panel has
+   * nothing to show and must say why — "you are offline", not "not written".
+   */
+  it('says the machine is offline when nothing is cached', async () => {
+    replies.helpDoc = Object.assign(
+      new Error('help document for project-tunnel could not be fetched, and it is not cached'),
+      { code: 'NETWORK_ERROR' }
+    );
+    mountSheet();
+
+    useHelp().openHelp('project-tunnel');
+    await settle();
+
+    expect(document.body.textContent).toContain('You are offline');
+    expect(document.body.textContent).not.toContain('has not been written');
+    expect(document.body.innerHTML).not.toContain('<table>');
+  });
+
   /** A topic nobody has written yet is a state, not a failure. */
   it('says so when the document has not been written', async () => {
     replies.helpDoc = new Error('no help document for project-hooks in en');

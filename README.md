@@ -145,17 +145,18 @@ Three sentences:
 
 ### 2) Installation
 
-Six installers are built per release, two per platform:
+Ten installers are built per release:
 
 | Platform | Formats | Notes |
 |----------|---------|-------|
 | macOS | `.dmg` | Apple Silicon and Intel |
-| Windows | `.msi`, `.exe` (NSIS) | x64 and ARM64 |
+| Windows | `.exe` (NSIS) | x64 and ARM64 |
 | Linux | `.deb`, `.rpm`, `.AppImage` | x86_64 and aarch64 |
 
-> **No release is published yet.** Today the only route is
-> [building from source](#building-from-source). This section gets download
-> links when the first tag ships.
+Download the one for your machine from the
+[latest release](https://github.com/stackvo/stackvo/releases/latest); the
+[documentation site](https://stackvo.github.io/stackvo/) names it for you.
+Every release publishes `SHA256SUMS` beside its files.
 
 <details>
 <summary><b>Opening a build that is not code-signed</b> (read this if macOS says "damaged")</summary>

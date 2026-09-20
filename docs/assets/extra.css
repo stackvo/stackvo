@@ -1,0 +1,346 @@
+/* The accent is the application's own primary blue — `primary` in
+   src/plugins/vuetify.js — so the page and the product on its screenshots
+   agree. The logo's orange stays where it is in the app too: on the logo
+   and nowhere else. `primary: custom` in mkdocs.yml is what makes the
+   theme read these.
+
+   The light scheme is white on white, as the theme's own `primary: white`
+   preset paints it, and the dark scheme is the theme's near-black; the
+   accent goes where an accent goes: the active tab, the icons, the buttons,
+   the links, the search highlight. */
+:root {
+  --md-primary-fg-color: #ffffff;
+  --md-primary-fg-color--light: #ffffff;
+  --md-primary-fg-color--dark: #f5f5f5;
+  --md-primary-bg-color: rgba(0, 0, 0, 0.87);
+  --md-primary-bg-color--light: rgba(0, 0, 0, 0.54);
+  --md-accent-fg-color: #1976d2;
+  --md-accent-fg-color--transparent: rgba(25, 118, 210, 0.1);
+  --md-accent-bg-color: rgba(0, 0, 0, 0.87);
+  --md-accent-bg-color--light: rgba(0, 0, 0, 0.54);
+  /* Two tokens the theme does not have, for text rather than surfaces. The
+     accent itself is a surface colour: #1976d2 on a tinted chip is 4.0:1 and
+     on the dark scheme's cards 3.2:1, both short of the 4.5:1 that WCAG AA
+     asks of text. `--sv-accent-ink` is the accent as ink — one step darker
+     in the light scheme, two steps lighter in the dark one — and
+     `--sv-muted` is secondary text at a ratio that survives the light
+     footer's grey (#757575 on #f5f5f5 was 4.47:1). */
+  --sv-accent-ink: #1565c0;
+  --sv-muted: rgba(0, 0, 0, 0.62);
+}
+
+/* Body links, the active page in the sidebar, the active heading in the
+   table of contents: all read `--md-typeset-a-color`, and the theme sets
+   that per colour scheme — so it is set here per scheme too, or the theme's
+   own `[data-md-color-scheme]` rule wins over `:root` and every link comes
+   out in the header's near-black. The app's blue is 4.6:1 on white, so it
+   serves as the link colour as it is; the dark scheme gets a lighter one. */
+[data-md-color-scheme='default'] {
+  /* One step darker than the accent: #1976d2 is 4.2:1 on the grey sections
+     of the landing page, #1565c0 is 5.5:1. */
+  --md-typeset-a-color: #1565c0;
+}
+
+[data-md-color-scheme='slate'] {
+  --md-primary-fg-color: #1f1f1f;
+  --md-primary-fg-color--light: #333333;
+  --md-primary-fg-color--dark: #000000;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+  --md-accent-fg-color: #1976d2;
+  --md-typeset-a-color: #64b5f6;
+  --sv-accent-ink: #90caf9;
+  --sv-muted: rgba(255, 255, 255, 0.72);
+}
+
+/* A white header on a white page needs an edge; the theme only draws its
+   shadow once the page has scrolled. */
+[data-md-color-scheme='default'] .md-header {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+[data-md-color-scheme='default'] .md-tabs {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+[data-md-color-scheme='default'] .md-header--shadow {
+  border-bottom-color: transparent;
+}
+
+/* The active tab and the active section in the sidebar: the accent, so the
+   header is not a row of white words with one bolder than the rest. */
+.md-tabs__link--active,
+.md-tabs__item--active .md-tabs__link {
+  color: var(--sv-accent-ink);
+}
+
+/* ---------------------------------------------------------------- header */
+
+/* The search field: a soft surface with a rounded edge instead of the
+   theme's flat grey block, in both schemes. */
+.md-search__form {
+  border-radius: 0.4rem;
+  background-color: var(--md-code-bg-color);
+  box-shadow: none;
+}
+
+.md-search__form:hover {
+  background-color: var(--md-default-fg-color--lightest);
+}
+
+[data-md-toggle='search']:checked ~ .md-header .md-search__form {
+  border-radius: 0.4rem 0.4rem 0 0;
+}
+
+.md-search__input::placeholder {
+  color: var(--sv-muted);
+}
+
+/* No logo in the bar: the name is the mark. The favicon keeps the icon.
+   The theme has no "no logo" setting, so the button is hidden here, in the
+   header and in the drawer alike. */
+.md-header__button.md-logo,
+.md-nav--primary .md-nav__title .md-nav__button.md-logo {
+  display: none;
+}
+
+/* The title: the product name at a firm weight, nothing else in the bar
+   competing with it. */
+.md-header__topic:first-child {
+  font-weight: 700;
+}
+
+/* Tabs: the first one starts where the title and the content start — the
+   theme's list sits 0.4rem to the left of that once the logo is gone. */
+[dir='ltr'] .md-tabs__list {
+  margin-left: 0.6rem;
+}
+
+[dir='rtl'] .md-tabs__list {
+  margin-right: 0.6rem;
+}
+
+/* Tabs: a little more air, and the active one underlined in the accent the
+   way a Material tab is — not only coloured. */
+.md-tabs__link {
+  margin-top: 0.7rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 2px solid transparent;
+  opacity: 0.8;
+}
+
+.md-tabs__link:hover,
+.md-tabs__link--active,
+.md-tabs__item--active .md-tabs__link {
+  opacity: 1;
+}
+
+.md-tabs__link--active,
+.md-tabs__item--active .md-tabs__link {
+  border-bottom-color: var(--md-accent-fg-color);
+}
+
+/* The repository widget: the name, quietly; the numbers under it are small
+   enough already. */
+.md-header__source {
+  opacity: 0.85;
+}
+
+.md-header__source:hover {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+/* The footer follows the page's scheme. The theme paints its footer from
+   these five variables, so the light scheme sets them once — a light
+   surface with a top rule, dark text — and every part of the footer, the
+   band, the copyright line, the social icons, follows. The dark scheme
+   keeps the theme's own. */
+[data-md-color-scheme='default'] {
+  --md-footer-bg-color: var(--md-code-bg-color);
+  --md-footer-bg-color--dark: var(--md-code-bg-color);
+  --md-footer-fg-color: rgba(0, 0, 0, 0.87);
+  --md-footer-fg-color--light: rgba(0, 0, 0, 0.62);
+  --md-footer-fg-color--lighter: rgba(0, 0, 0, 0.62);
+}
+
+[data-md-color-scheme='default'] .md-footer {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+[data-md-color-scheme='default'] .md-footer-meta {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* The link columns (`overrides/partials/footer.html`): the name and a line
+   on the left, four short lists beside it. Small type, secondary colour,
+   the accent only on hover — a footer is for finding, not for reading. */
+.sv-footer {
+  padding: 2.4rem 0 1.6rem;
+  font-family: var(--md-text-font-family, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+.sv-footer__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+  gap: 1.6rem 2rem;
+  padding: 0 0.8rem;
+}
+
+@media screen and (min-width: 76.25em) {
+  .sv-footer__inner {
+    padding: 0 1.2rem;
+  }
+}
+
+.sv-footer__name {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+
+.sv-footer__tagline {
+  max-width: 26ch;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--sv-muted);
+}
+
+.sv-footer__heading {
+  margin: 0 0 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sv-muted);
+}
+
+.sv-footer__links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sv-footer__links li {
+  margin: 0 0 0.35rem;
+}
+
+.sv-footer__links a {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color);
+  text-decoration: none;
+  opacity: 0.85;
+  transition: color 125ms, opacity 125ms;
+}
+
+.sv-footer__links a:hover {
+  color: var(--md-accent-fg-color);
+  opacity: 1;
+}
+
+.sv-footer__links a:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+}
+
+/* The theme's dark footer: the same columns in its colours. */
+[data-md-color-scheme='slate'] .sv-footer__name,
+[data-md-color-scheme='slate'] .sv-footer__links a {
+  color: var(--md-footer-fg-color, #fff);
+}
+
+[data-md-color-scheme='slate'] .sv-footer__tagline,
+[data-md-color-scheme='slate'] .sv-footer__heading {
+  color: var(--md-footer-fg-color--light, rgba(255, 255, 255, 0.7));
+}
+
+[data-md-color-scheme='slate'] .sv-footer__links a:hover {
+  color: var(--md-accent-fg-color);
+}
+
+@media screen and (max-width: 76.1875em) {
+  .sv-footer__inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sv-footer__brand {
+    grid-column: 1 / -1;
+  }
+}
+
+@media screen and (max-width: 44.9375em) {
+  .sv-footer__inner {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Screenshots: the README shows them full width; here they get a frame so
+   a light window on a light page has an edge. */
+.md-typeset img[src*='screenshots/'] {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 6px;
+}
+
+/* ---- accessibility: the parts of WCAG 2.2 AA the theme leaves to the site */
+
+/* A link in running text is told apart from the text by more than its colour
+   (1.4.1). Navigation, cards, buttons and headings keep the theme's look. */
+.md-typeset p a:not(.md-button),
+.md-typeset li a:not(.md-button),
+.md-typeset td a:not(.md-button),
+.md-typeset dd a:not(.md-button) {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+.md-typeset .grid.cards a,
+.md-typeset .task-list-item a {
+  text-decoration: underline;
+}
+
+/* Every pointer target at least 24px tall (2.5.8): the sidebar's rows and
+   the header's repository facts. */
+.md-nav__link {
+  min-height: 1.2rem;
+  padding-block: 0.1rem;
+}
+.md-nav--primary .md-nav__item .md-nav__link {
+  margin-top: 0.35rem;
+}
+[data-md-color-scheme='default'] .md-header__source {
+  opacity: 1;
+}
+[data-md-color-scheme='default'] .md-source__facts,
+[data-md-color-scheme='default'] .md-source__fact {
+  color: rgba(0, 0, 0, 0.62);
+  /* The theme fades the facts in to 0.75 and keeps them there; at that
+     opacity the grey is 2.8:1 on the white header. */
+  animation: none;
+  opacity: 1 !important;
+}
+
+/* Numbers in code blocks: the theme's dark-scheme red is 3.8:1 on the code
+   background; this orange is above 7:1. */
+[data-md-color-scheme='slate'] {
+  --md-code-hl-number-color: #ffab91;
+}
+
+/* Publication dates, from the git revision plugin. */
+.md-source-file {
+  margin-top: 1.5rem;
+}
+
+/* The announcement bar: the theme colours it like the footer; its link is
+   the accent as ink so it clears 4.5:1 on the light footer grey. */
+.md-banner {
+  color: var(--md-footer-fg-color);
+}
+.md-banner a,
+.md-banner a:hover,
+.md-banner a:focus {
+  color: var(--sv-accent-ink);
+  text-decoration: underline;
+}

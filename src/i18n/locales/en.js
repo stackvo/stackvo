@@ -2350,6 +2350,8 @@ export default {
   help: {
     notWritten:
       'The help for this card has not been written yet ({topic}). Its own description line is the whole summary for now.',
+    offline:
+      'You are offline, so this help document cannot be reached. It is fetched from the repository and has not been opened on this machine before. Connect to the network and open it again.',
   },
   a11y: {
     help: 'What this card is for',
@@ -3851,6 +3853,8 @@ export default {
       'This one is installed by its own installer rather than by StackVo. The Tooling page says where to get it.',
     toolDigestMismatch:
       'The download does not match the checksum compiled into this build and was discarded. Try again, and report it if it happens twice.',
+    helpNeedsNetwork:
+      'You are offline, so the help document cannot be reached. It is fetched from the repository; connect to the network and open it again.',
   },
 
   errors: {
