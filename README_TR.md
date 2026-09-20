@@ -150,12 +150,12 @@ Her sürüm için üç platformda altı yükleyici üretilir:
 | Platform | Biçim | Not |
 |----------|-------|-----|
 | macOS | `.dmg` | Apple Silicon ve Intel |
-| Windows | `.msi`, `.exe` (NSIS) | x64 ve ARM64 |
+| Windows | `.exe` (NSIS) | x64 ve ARM64 |
 | Linux | `.deb`, `.rpm`, `.AppImage` | x86_64 ve aarch64 |
 
-> **Şu an yayımlanmış bir sürüm yok.** Bugün tek yol
-> [kaynaktan derlemek](#kaynaktan-derleme-ve-geliştirme). İlk etiket
-> yayımlandığında bu bölüm indirme bağlantılarıyla güncellenecek.
+Makinenize uygun olanı [son sürümden](https://github.com/stackvo/stackvo/releases/latest)
+indirin; [doküman sitesi](https://stackvo.github.io/stackvo/) sizin için
+adlandırır. Her sürüm dosyalarının yanında `SHA256SUMS` yayımlar.
 
 <details>
 <summary><b>İmzasız bir derlemeyi açmak</b> (macOS "hasarlı" diyorsa buraya bakın)</summary>

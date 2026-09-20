@@ -2326,6 +2326,8 @@ export default {
   help: {
     notWritten:
       'Bu kartın yardım metni henüz yazılmadı ({topic}). Kartın kendi açıklama satırı şimdilik özetin tamamı.',
+    offline:
+      'Çevrimdışısınız, bu yüzden yardım belgesine ulaşılamıyor. Belge depodan çekilir ve bu makinede daha önce hiç açılmamış. Ağa bağlanıp yeniden açın.',
   },
   a11y: {
     copy: 'Panoya kopyala',
@@ -3819,6 +3821,8 @@ export default {
       'Bunu StackVo değil, kendi kurulumu kuruyor. Nereden alınacağını Araçlar sayfası söylüyor.',
     toolDigestMismatch:
       'İndirilen dosya bu yapıya gömülü sağlama toplamıyla eşleşmedi ve atıldı. Yeniden deneyin; iki kez olursa bildirin.',
+    helpNeedsNetwork:
+      'Çevrimdışısınız, bu yüzden yardım belgesine ulaşılamıyor. Belge depodan çekilir; ağa bağlanıp yeniden açın.',
   },
 
   errors: {

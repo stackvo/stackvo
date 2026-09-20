@@ -45,6 +45,18 @@ const open = computed({
 const html = computed(() => renderMarkdown(source.value));
 
 /**
+ * Offline, and this document has never been fetched on this machine.
+ *
+ * The backend says so with `NETWORK_ERROR`: the documents are only ever pulled
+ * from the repository, nothing ships inside the installer, so a first open
+ * with no network has nothing to show. That is a different sentence from "not
+ * written yet" — one asks for a cable, the other asks for an author — and
+ * showing the second for the first would send the reader after the wrong
+ * problem.
+ */
+const offline = computed(() => error.value?.code === 'NETWORK_ERROR');
+
+/**
  * The document's own `# heading` is the panel's title.
  *
  * Taken from the file rather than from the card that opened it: the card's
@@ -75,12 +87,13 @@ watch(topic, async (next) => {
   <SideSheet v-model="open" icon="mdi-help-circle-outline" :title="title" :width="620" above>
     <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
 
-    <!-- A topic whose document nobody has written yet is a normal state, not a
-         fault: the documents land one tab at a time. It says which topic, so
-         whoever sees it knows what to write. -->
-    <ErrorAlert v-if="error" :error="error" type="info" class="mb-4" />
+    <!-- Two errors, two sentences. Offline with nothing cached is a warning
+         that names the network. A topic whose document nobody has written yet
+         is a normal state, not a fault: the documents land one tab at a time.
+         It says which topic, so whoever sees it knows what to write. -->
+    <ErrorAlert v-if="error" :error="error" :type="offline ? 'warning' : 'info'" class="mb-4" />
     <div v-if="error" class="text-caption text-medium-emphasis">
-      {{ t('help.notWritten', { topic }) }}
+      {{ offline ? t('help.offline') : t('help.notWritten', { topic }) }}
     </div>
 
     <!-- eslint-disable-next-line vue/no-v-html -->

@@ -28,9 +28,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": {
-      "../docs/help": "docs/help"
-    },
     "externalBin": [
       "binaries/stackvo",
       "binaries/stackvo-mcp"
