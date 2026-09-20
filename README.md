@@ -647,7 +647,7 @@ outside the scope. It is not information isolation and is not described as one â
 the machine-wide instruments still answer, because they are about the machine
 rather than about a project.
 
-**Not exposed:** the rest of the mutating surface. 69 of the 344 commands take
+**Not exposed:** the rest of the mutating surface. 68 of the 344 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it

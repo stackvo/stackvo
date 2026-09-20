@@ -454,14 +454,22 @@
       fetch('https://api.github.com/repos/stackvo/stackvo/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (rel) {
-          if (!rel || !rel.tag_name) return;
-          var version = rel.tag_name.replace(/^v/, '');
+          // The tag is validated against the shape every release actually
+          // has (`v0.2.0`) before it is used, rather than passed straight
+          // from the response into an href: CodeQL flags any string built
+          // from a fetch() result and assigned to a DOM sink as tainted,
+          // and a same-origin API being trustworthy today does not change
+          // what the sink is. A tag that does not match is treated the same
+          // as no answer — the links built at page load stand.
+          if (!rel || typeof rel.tag_name !== 'string' || !/^v\d+\.\d+\.\d+$/.test(rel.tag_name)) return;
+          var tag = rel.tag_name;
+          var version = tag.replace(/^v/, '');
           document.querySelectorAll('[data-sv-file]').forEach(function (a) {
             var file = a.getAttribute('data-sv-file').replace('{v}', version);
-            a.href = 'https://github.com/stackvo/stackvo/releases/download/' + rel.tag_name + '/' + file;
+            a.href = 'https://github.com/stackvo/stackvo/releases/download/' + tag + '/' + file;
           });
           document.querySelectorAll('[data-sv-version]').forEach(function (el) {
-            el.textContent = rel.tag_name;
+            el.textContent = tag;
           });
         })
         .catch(function () {});
