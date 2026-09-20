@@ -137,6 +137,14 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`rustls` 0.23.45**, for RUSTSEC-2026-0285 (CVE-2025-61730): TLS 1.3
+  handshake messages accepted across encryption level boundaries. The
+  `supply chain` job found it the day the advisory was published, on a pull
+  request that touched no Rust; `cargo update -p rustls --precise 0.23.45`
+  in `src-tauri/`, which brings `aws-lc-rs`, `aws-lc-sys` and
+  `rustls-webpki` along.
+
+
 - **A folder named like a site is adopted as one.** Adoption, and the
   wizard's first suggestion, hung the whole `DEFAULT_TLD_SUFFIX` under the
   folder name, so a park Herd or Valet once served — `api.showtv`,
