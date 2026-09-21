@@ -183,6 +183,19 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The minor and patch stream, one week's worth in one commit.** vue
+  3.5.42→3.5.43, vue-i18n 11.4.10→11.4.12, vuetify 3.13.3→3.13.4,
+  @vitejs/plugin-vue 6.0.8→6.0.9, @vitest/coverage-v8 5.0.0→5.0.1, eslint
+  10.9.1→10.10.0, eslint-plugin-vue 10.10.0→10.11.0, jsdom 30.0.1→30.1.0,
+  prettier 3.9.6→3.9.8, vite 8.2.2→8.3.0, sass 1.102.0→1.104.1,
+  @playwright/test 1.62.1→1.63.0 and reqwest 0.13.4→0.13.5, which brings
+  base64 0.23.1 beside 0.22.1 — with `NOTICE.md` regenerated. Dependabot had
+  raised these as six pull requests (#132, #133, #134, #140, #141, #142),
+  three of them red on the notice it cannot regenerate and three on a rustls
+  advisory `main` had already fixed; the six touch two lock files between
+  them, so merging them one at a time was a rebase and a regenerated notice
+  per merge. This supersedes them.
+
 - **Help documents are fetched, never bundled.** `docs/help` no longer rides
   inside the installer as `bundle.resources`: that copy was as old as the
   build, it was the one thing the installer carried that a push to `main`
