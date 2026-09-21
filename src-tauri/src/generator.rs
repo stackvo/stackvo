@@ -1224,7 +1224,59 @@ pub fn render_nginx_conf_with(document_root: &str, limits: &ServerSettings, extr
 /// image whose config predates the socket, and it has to be rebuilt before the
 /// Supervisor pane can reach it. The pane says so rather than reporting the
 /// project as broken.
+#[cfg(test)]
 fn render_supervisord_conf(webserver: &str, command: &str) -> String {
+    render_supervisord_conf_with(webserver, command, &[])
+}
+
+/// The web server's command line under supervisord, per server.
+///
+/// Named once, here, because two callers need it: the generated file, and
+/// `supervisor_apply` pushing the same text into a running container. Two
+/// spellings of `nginx -g 'daemon off;'` would be the config baked into the
+/// image and the config the daemon was told to reload disagreeing.
+fn supervised_server(server: Server) -> Option<(&'static str, &'static str)> {
+    match server {
+        Server::Nginx => Some(("nginx", "/usr/sbin/nginx -g 'daemon off;'")),
+        Server::Caddy => Some(("caddy", "/usr/bin/caddy run --config /etc/caddy/Caddyfile")),
+        _ => None,
+    }
+}
+
+/// The whole `supervisord.conf` for a project, or `None` when its server does
+/// not run under supervisord.
+///
+/// This is the one renderer for that file. `write_generated` writes what it
+/// returns beside the Dockerfile, and the supervisor pane's *apply* pushes
+/// what it returns into the running container — so what a rebuild bakes in
+/// and what the daemon reloads now are the same bytes by construction, and
+/// the `processes` block of the manifest reaches both.
+pub fn supervisord_conf_for(manifest: &Manifest, default_server: &str) -> Option<String> {
+    if manifest.runtime != "php" {
+        return None;
+    }
+    let server = Server::parse(manifest.server_or(default_server))?;
+    let (name, command) = supervised_server(server)?;
+    Some(render_supervisord_conf_with(
+        name,
+        command,
+        &manifest.processes,
+    ))
+}
+
+/// [`render_supervisord_conf`] with the project's own processes appended —
+/// see [`crate::processes::render`] for the block each one becomes.
+fn render_supervisord_conf_with(
+    webserver: &str,
+    command: &str,
+    processes: &[crate::processes::Process],
+) -> String {
+    let mut conf = render_supervisord_base(webserver, command);
+    conf.push_str(&crate::processes::render(processes));
+    conf
+}
+
+fn render_supervisord_base(webserver: &str, command: &str) -> String {
     format!(
         "[supervisord]\n\
          nodaemon=true\n\
@@ -1376,29 +1428,28 @@ pub fn render_project_config_files_with(
     };
     let document_root = manifest.document_root.as_deref().unwrap_or("public");
 
+    // The supervisord file is rendered by the same function the apply path
+    // calls, so the two cannot drift; `expect` because the arms below are the
+    // two servers that function answers for.
+    let supervisord = || {
+        supervisord_conf_for(manifest, default_server)
+            .expect("nginx and caddy run under supervisord")
+    };
+
     match server {
         Server::Nginx => vec![
             (
                 "nginx.conf",
                 render_nginx_conf_with(document_root, limits, &extra.nginx),
             ),
-            (
-                "supervisord.conf",
-                render_supervisord_conf("nginx", "/usr/sbin/nginx -g 'daemon off;'"),
-            ),
+            ("supervisord.conf", supervisord()),
         ],
         Server::Caddy => vec![
             (
                 "Caddyfile",
                 render_caddyfile_with(document_root, limits, &extra.caddy),
             ),
-            (
-                "supervisord.conf",
-                render_supervisord_conf(
-                    "caddy",
-                    "/usr/bin/caddy run --config /etc/caddy/Caddyfile",
-                ),
-            ),
+            ("supervisord.conf", supervisord()),
         ],
         Server::FrankenPhp => vec![(
             "Caddyfile",
@@ -2980,6 +3031,7 @@ mod tests {
             warnings: vec![],
             hooks: Default::default(),
             schedule: Vec::new(),
+            processes: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             components: Default::default(),
@@ -3378,6 +3430,81 @@ mod tests {
 
         // And the programs still come after, unchanged.
         assert!(conf.contains("[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\n"));
+    }
+
+    /// The bug this closes: a process added inside the container was gone at
+    /// the next rebuild, because the generated file knew nothing about it.
+    /// Declared in the manifest, it is in the generated file — and therefore
+    /// in every rebuild — and the file still ends the way the parity test
+    /// above requires.
+    #[test]
+    fn a_declared_process_is_in_the_generated_supervisord_conf() {
+        let mut m = php_manifest("nginx");
+        let (processes, problems) = crate::processes::parse(&serde_json::json!({
+            "processes": {
+                "queue": {
+                    "exec": ["php", "artisan", "queue:work", "rabbitmq", "--queue=a,b", "--sleep=3"],
+                    "replicas": 2,
+                    "stopWait": 30
+                },
+                "scheduler": { "exec": ["php", "artisan", "schedule:work"] }
+            }
+        }));
+        assert!(problems.is_empty(), "{problems:?}");
+        m.processes = processes;
+
+        let files = render_project_config_files(&m, crate::config::DEFAULT_SERVER);
+        let conf = &files
+            .iter()
+            .find(|(name, _)| *name == "supervisord.conf")
+            .unwrap()
+            .1;
+
+        // The image's own two first, untouched.
+        assert!(conf.contains("[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\n"));
+        assert!(conf.contains("[program:nginx]\ncommand=/usr/sbin/nginx -g 'daemon off;'\n"));
+        // Then the project's, after a blank line, in the manifest's order.
+        let nginx_at = conf.find("[program:nginx]").unwrap();
+        let queue_at = conf.find("[program:queue]").unwrap();
+        let scheduler_at = conf.find("[program:scheduler]").unwrap();
+        assert!(nginx_at < queue_at && queue_at < scheduler_at, "{conf}");
+        assert!(conf.contains(
+            "\n[program:queue]\ncommand=php artisan queue:work rabbitmq --queue=a,b --sleep=3\n"
+        ), "{conf}");
+        assert!(conf.contains("stopwaitsecs=30\n"));
+        assert!(conf.contains("numprocs=2\nprocess_name=%(program_name)s_%(process_num)02d\n"));
+        assert!(conf.ends_with("stderr_logfile_maxbytes=0\n"));
+        assert!(!conf.ends_with("\n\n"));
+
+        // Caddy gets exactly the same block under its own server.
+        m.server = Some("caddy".into());
+        let caddy = supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).unwrap();
+        assert!(caddy.contains("[program:caddy]\n"));
+        assert!(caddy.contains("[program:queue]\n"));
+
+        // And the apply path is the same renderer: no supervisord, no config.
+        for server in ["apache", "frankenphp", "swoole", "roadrunner"] {
+            m.server = Some(server.into());
+            assert!(
+                supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).is_none(),
+                "{server}"
+            );
+        }
+        m.server = Some("nginx".into());
+        m.runtime = "node".into();
+        assert!(supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).is_none());
+    }
+
+    /// No processes declared: byte for byte what the file was before the field
+    /// existed, so nobody's image changes for a manifest that did not change.
+    #[test]
+    fn no_declared_process_leaves_the_supervisord_conf_as_it_was() {
+        let m = php_manifest("nginx");
+        let with_field = supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).unwrap();
+        assert_eq!(
+            with_field,
+            render_supervisord_conf("nginx", "/usr/sbin/nginx -g 'daemon off;'")
+        );
     }
 
     #[test]

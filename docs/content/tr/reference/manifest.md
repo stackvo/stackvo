@@ -21,6 +21,7 @@ beklenen tek dosyadır; gerisi ondan üretilir. Sözleşme depodaki
 | `commands` | nesne | — | Projenin düğme olarak sunduğu komutlar. Aşağıda. |
 | `hooks` | nesne | `{}` | Kurulumdan sonra, başlatmadan sonra, durdurmadan önce çalışacak komutlar. |
 | `schedule` | liste | `[]` | Zamanlayıcıdaki adlı işler, her birinin kendi logu. |
+| `processes` | nesne | `{}` | Container'ın kendi supervisord'u altında uzun ömürlü süreçler — kuyruk işçisi, zamanlayıcı. Buradan üretildikleri için yeniden derlemede kaybolmazlar. |
 | `components` | nesne | — | Bu deponun diğer dizinleri, her biri kendi çalışma zamanı ve adresiyle. |
 | `sidecars` | nesne | — | Projenin ihtiyaç duyduğu ama katalogda olmayan konteynerler. Projeyle gelir, projeyle gider. |
 | `providers` | nesne | — | Proje verisinin gerçekte yaşadığı adlı yerler ve oradan nasıl çekilip geri gönderileceği. |
@@ -120,6 +121,46 @@ başlatmadan önce çalışacak konteyner yok.
 
 Adlı işler, her birinin kendi son çalışması ve kendi logu — tek ya hep ya hiç
 zamanlayıcı süreci yerine.
+
+## Süreçler
+
+```json
+"processes": {
+  "scheduler": { "exec": ["php", "artisan", "schedule:work"] },
+  "queue": {
+    "exec": ["php", "artisan", "queue:work", "rabbitmq", "--queue=photos,default", "--tries=3"],
+    "replicas": 2,
+    "stopWait": 30
+  }
+}
+```
+
+Uzun ömürlü süreçler; projenin container'ında `php-fpm` ve web sunucusunun
+yanında zaten çalışan `supervisord` tarafından yürütülür. Her anahtar, üretilen
+`supervisord.conf` içinde bir `[program:<id>]` bloğu olur.
+
+Bu dosya **her yeniden derlemede sıfırdan üretilir**; bloğun var olma sebebi
+budur: container içinde elle eklenen ya da `conf.d/` altına bırakılan bir
+program bir sonraki derlemede kaybolur. Burada tanımlandığında yeniden derleme
+onu geri getirir ve klonlayan ekip arkadaşı da alır. Supervisor paneli bunları
+imajın kendi iki sürecinin yanında listeler; manifest, çalışan daemon'da henüz
+olmayan bir şey tanımlıyorsa yapılandırmayı derlemeden uygulamayı önerir.
+
+| Alan | Varsayılan | Ne söyler |
+| --- | --- | --- |
+| `exec` | — | Program ve argümanları, dizi olarak. `/var/www/html` içinde çalışır. Kabuk yok. |
+| `enabled` | `true` | `false` girdiyi dosyada tutar, daemon'ın dışında bırakır. |
+| `replicas` | `1` | Kaç kopya. Birden fazlaysa tek grupta `<id>_00`, `<id>_01`, … olur. |
+| `stopWait` | `10` | SIGTERM sonrası supervisord'un öldürmeden önce beklediği saniye. İş ortasındaki kuyruk işçisi daha fazlasını ister. |
+
+Yalnızca `nginx` ve `caddy` projeleri supervisord çalıştırır; diğer sunucularda
+blok saklanır ve hiçbir şey yapmaz. `php-fpm`, `nginx` ve `caddy` ayrılmış
+kimliklerdir. Loglar container'ın stdout'una, yani Loglar sekmesine gider.
+
+`schedule` ile karıştırmayın: o bir komutu zamanlayıcıyla başlatır ve çıkmasını
+bekler. Workers paneli de Laravel'in sabit işçi komutlarını yan container'larda
+çalıştırır. Buradaki süreç herhangi bir komuttur ve container ayakta olduğu
+sürece çalışır tutulur.
 
 ## Bileşenler
 

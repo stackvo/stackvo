@@ -7,6 +7,30 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A project declares the processes its supervisord runs.** An nginx or
+  caddy project's container runs `supervisord` with `php-fpm` and the web
+  server under it, and its config is generated: `generated/projects/<name>/
+  supervisord.conf`, `COPY`d in at build. So a queue worker added inside the
+  container — an `[include]`, a file in `conf.d/`, a `supervisorctl update` —
+  lived exactly until the next rebuild, when the generator wrote the file
+  again from what it knew, and the worker was gone with nothing to say why.
+  The Debian `[include] files = conf.d/*.conf` was no rescue either: the
+  image starts the daemon with `-c` on the generated file, which includes
+  nothing. `stackvo.json` now has a `processes` block — an id, an argv, and
+  optionally `replicas`, `stopWait` and `enabled` — that `processes.rs` reads
+  and the generator renders as `[program:]` blocks into that same file, so a
+  rebuild *restores* the worker and a clone gets it. An argv, never a
+  command line: every word is quoted so supervisord's own `shlex` split
+  gives back exactly the array, and a `%` is doubled past its `%(ENV_X)s`
+  expansion. Same container, same rule as an `exec` hook, no gate. The
+  Supervisor pane names what the manifest declares and the daemon is not
+  running yet, and `supervisor_apply` pushes the same rendered config into
+  the running container through `tee` and `supervisorctl reread`/`update` —
+  the new process starts now, `php-fpm` and the web server stay up — so a
+  rebuild is the durable half rather than the only one. The reverse is named
+  too: a process running that nothing declares, because the next rebuild
+  drops it.
+
 - **A Sponsor button.** `.github/FUNDING.yml` names the organisation's
   GitHub Sponsors profile, https://github.com/sponsors/stackvo — the place
   the documentation site's sponsor band already pointed at, now reachable

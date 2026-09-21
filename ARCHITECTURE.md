@@ -20,8 +20,8 @@ Three parts, in the order a request travels:
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | [`src/`](src/)                         | 38k lines               |
-| Back end — Rust, 130 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
-| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 348 commands, 73 events |
+| Back end — Rust, 131 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
+| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 349 commands, 73 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -68,7 +68,7 @@ an accident of how it was first written:
 
 ### 3.1 Layers
 
-`src-tauri/src/` is flat — 130 modules, no subdirectories — but it is not
+`src-tauri/src/` is flat — 131 modules, no subdirectories — but it is not
 unstructured. There are four bands, and the dependency arrows only ever point
 downward:
 
@@ -79,7 +79,7 @@ downward:
   commands.rs       14.9k   the IPC surface: 344 #[tauri::command] functions
       │                     argument validation, orchestration, nothing else
       ▼
-  domain            89.7k   107 modules: generator, manifest, certs, hosts,
+  domain            89.7k   108 modules: generator, manifest, certs, hosts,
       │                     mail, xdebug, profile, preset, migrate, worktree, …
       │                     one subject each; no Tauri types
       ▼
@@ -126,7 +126,7 @@ in both directions.
 | The manifest   | `manifest`, `lock`, `deps`, `component`, `detect`, `migrate`                                                    | `stackvo.json`: its schema, the lock file that records what its service list resolved to, what its own `composer.lock` and `package-lock.json` pull in, the other directories of one repository that are built with their own runtimes, guessing a manifest for an adopted folder, and moving old ones forward                                                                                                          |
 | Docker         | `engine`, `runner`, `inflight`, `images`                                           | Talking to the daemon (bollard), running `docker compose` as a streamed operation, refusing two at once on one subject, and the one table of images this app runs but did not build                   |
 | Networking     | `certs`, `hosts`, `elevate`, `tunnel`, `tunnelid`, `egress`                                  | TLS via mkcert, `/etc/hosts`, the one privileged call, the nine-provider tunnel table, the guard that puts a password and a kept address in front of one (B-7), and which containers can route off the machine at all                                    |
-| Services       | `db`, `worker`, `quickcmd`, `repl`, `release`, `stats`                             | The optional stack, the per-project sidecars, the command catalogue, the snippet workbench, and the production image                                                                                 |
+| Services       | `db`, `worker`, `cron`, `processes`, `quickcmd`, `repl`, `release`, `stats`         | The optional stack, the per-project sidecars and the processes under a project's own supervisord, the command catalogue, the snippet workbench, and the production image                                                                                 |
 | PHP            | `phpini`, `xdebug`, `profile`, `spx`, `debugbridge`, `capture`, `queuelog`, `explain`         | The overlay that reaches a running container, both profilers — Xdebug's exact one and php-spx's sampling one — their output, the time-boxed permission that records a request's session so a POST can be replayed, what the queue worker reported it did, and the join that puts a recording, the query log and the axis around one request (B-1) |
 | Node           | `devserver`                                                                        | The dev-server sidecar and the `allowedHosts` snippet                                                                                                                                                |
 | Mail           | `mail`                                                                             | The catcher, its search, and the HTML/link checks                                                                                                                                                    |
@@ -328,7 +328,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (130 modules, 348 commands) come from
+covers `README.md`; the counts above (131 modules, 349 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 

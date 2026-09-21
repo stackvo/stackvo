@@ -49,9 +49,24 @@ Container'ında ulaşılabilir supervisord olmayan bir proje hiçbir şey tetikl
 | Projeyi yeniden derleyin | İmaj, StackVo üretilen `supervisord.conf`'a soketi eklemeden önce derlenmiş. Yeniden derlemek yeni yapılandırmayı içeri yazar. |
 | Container çalışmıyor | Projeyi başlatın. |
 
+## Kendi süreçleriniz
+
+İmajla gelen iki satır hikâyenin tamamı değil. Kuyruk işçisi, zamanlayıcı, soket sunucusu — projenin ayakta tutulmasını istediği her şey — `stackvo.json` içinde `processes` altına yazılır ve StackVo bunu aynı üretilen yapılandırmaya işler:
+
+```json
+"processes": {
+  "scheduler": { "exec": ["php", "artisan", "schedule:work"] },
+  "queue": { "exec": ["php", "artisan", "queue:work", "--tries=3"], "replicas": 2, "stopWait": 30 }
+}
+```
+
+Kalıcı olan tek yol bu. Bu container'daki yapılandırmayı **StackVo üretir** ve imaja gömer; çalışan bir container'ın içine elle eklenen bir program — ya da `conf.d/` altına bırakılan bir dosya — bir sonraki derlemede kaybolur ve panel yeniden başladığı iki satırı gösterir. Manifestte tanımlandığında yeniden derleme onu geri getirir, klonlayan ekip arkadaşı da alır.
+
+Birini başlatmak için yeniden derleme gerekmez. Manifest, çalışan daemon'da olmayan bir şey tanımlıyorsa bir uyarı şeridi onu adıyla gösterir ve **Uygula** düğmesi sunar: yapılandırma container'a yazılır, supervisord yeniden okur, yeni olanı başlatır ve `php-fpm` ile web sunucusuna dokunmaz. Tersi de adlandırılır — burada çalışan ama manifestin tanımlamadığı bir süreç — çünkü bir sonraki derleme onu düşürecek ve bunu önceden söylemek sonradan söylemekten iyidir.
+
 ## Bilinmesi gerekenler
 
-- Bu container'daki yapılandırmayı **StackVo üretir** ve imaja gömer, yani burada düzenlenecek bir şey yok: çalışan bir container'ın içinde yapılan değişiklik bir sonraki derlemede kaybolur. Değiştirmek için projenin kendi ayarlarını değiştirip yeniden derleyin.
+- Burada hiçbir şey elle düzenlenmez. Bir süreci, manifestteki `processes` bloğunu değiştirip uygulayarak ya da yeniden derleyerek değiştirin.
 - Soket, container'ın içinde 0700 modlu bir Unix soketi. Hiçbir şey yayımlanmaz ve hiçbir port açılmaz — ona ulaşmak, zaten o container'da süreç çalıştırabiliyor olmak demektir.
 - Buradan `php-fpm`'i yeniden başlatmak, container'ı yeniden başlatmadan PHP'yi yeniden başlatır: web sunucusu bağlantılarını korur ve tam bir açılışı beklemezsiniz.
 - Bu süreçler loglarını container'ın stdout'una yazar, yani Loglar sekmesine. Buradaki log düğmesi supervisord'un kendi yakaladığını gösterir, ve tam bu yüzden genelde boştur.

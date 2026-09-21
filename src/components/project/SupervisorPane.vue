@@ -24,6 +24,14 @@ import SupervisorCheckDialog from '@/components/project/SupervisorCheckDialog.vu
  * prose and then left the reader to go and find. It carries the standard
  * button now, and re-reads itself when the rebuild finishes rather than sitting
  * on the warning it just made untrue.
+ *
+ * The rows are not only the image's two. A project declares its own long
+ * processes — a queue worker, a scheduler — in `stackvo.json`, and the
+ * generator writes them into the same config, so a rebuild keeps them. What a
+ * rebuild does not do is reach a container that is already up: `pending` is
+ * the list the manifest declares and the daemon is not running, and the
+ * button beside it pushes the config in now. `stale` is the reverse — running,
+ * not declared — and is named because the next rebuild will drop it.
  */
 const props = defineProps({
   name: { type: String, required: true },
@@ -39,6 +47,8 @@ let timer = null;
 
 const snapshot = computed(() => view.value?.snapshot ?? null);
 const reach = computed(() => view.value?.reach ?? null);
+const pending = computed(() => view.value?.pending ?? []);
+const stale = computed(() => view.value?.stale ?? []);
 
 async function load() {
   try {
@@ -82,6 +92,24 @@ async function control(verb, target) {
   } finally {
     busy.value = null;
     await load();
+  }
+}
+
+/**
+ * Push what stackvo.json declares into the running daemon. The answer is the
+ * same view `load` fetches, so the banner clears on the daemon's say-so
+ * rather than on this pane's.
+ */
+async function apply() {
+  busy.value = 'apply';
+  error.value = null;
+  try {
+    view.value = await api.supervisorApply(props.name);
+  } catch (e) {
+    error.value = e;
+    await load();
+  } finally {
+    busy.value = null;
   }
 }
 
@@ -132,6 +160,39 @@ async function openLog(process) {
     </v-alert>
 
     <template v-else-if="snapshot">
+      <!--
+        The manifest and the daemon disagree. Two directions, one alert: a
+        declared process that is not running has a button; a running process
+        that is not declared has a sentence, because the fix for that one is a
+        decision — declare it or let the rebuild drop it — and not a click.
+      -->
+      <v-alert
+        v-if="pending.length || stale.length"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        class="mb-3"
+        data-testid="supervisor-drift"
+      >
+        <div v-if="pending.length" class="text-caption">
+          {{ t('projectSupervisor.pending', { list: pending.join(', ') }, pending.length) }}
+        </div>
+        <div v-if="stale.length" class="text-caption">
+          {{ t('projectSupervisor.stale', { list: stale.join(', ') }, stale.length) }}
+        </div>
+        <template v-if="pending.length" #append>
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="warning"
+            :loading="busy === 'apply'"
+            @click="apply"
+          >
+            {{ t('projectSupervisor.apply') }}
+          </v-btn>
+        </template>
+      </v-alert>
+
       <div class="text-caption text-medium-emphasis mb-2">
         {{
           t('projectSupervisor.counts', {

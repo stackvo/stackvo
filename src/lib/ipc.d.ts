@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 161 named types, 341 wrappers, 8 field(s) the
+ * Measured at generation: 161 named types, 342 wrappers, 8 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -1188,6 +1188,10 @@ export interface Manifest {
     sidecars: Record<string, unknown>;
     /** unknown[]? — commands this project runs on a timer; omitted when empty */
     schedule?: unknown;
+    /**
+     * Record<string, unknown>? — long-running processes the container's own supervisord runs beside php-fpm and the web server, keyed by id in the FILE's spelling ({ exec, enabled?, replicas?, stopWait? }); omitted when empty. In the manifest rather than in the container because the generated supervisord.conf is rewritten on every rebuild, and a program the manifest does not declare is one every rebuild forgets
+     */
+    processes?: Record<string, unknown>;
     /** Record<string, unknown>? — named places this project's data lives; omitted when empty */
     providers?: Record<string, unknown>;
     /**
@@ -1704,6 +1708,14 @@ export interface ProjectSupervisor {
     reach: 'ok' | 'noSupervisord' | 'noSocket' | 'stopped';
     /** SupervisorSnapshot? */
     snapshot?: SupervisorSnapshot;
+    /**
+     * string[] — process ids stackvo.json declares (and enables) that the daemon is not running: the manifest changed and nothing applied it. Empty unless the daemon answered. supervisor_apply closes it now; a rebuild closes it for good
+     */
+    pending: string[];
+    /**
+     * string[] — groups the daemon runs that are neither the image's own programs nor declared: added by hand inside the container, or removed from the manifest. The next rebuild drops them, and this is the sentence that says so beforehand
+     */
+    stale: string[];
 }
 
 export interface Provider {
@@ -3352,6 +3364,10 @@ export interface StackvoApi {
    * Where a FATAL says why. The last N bytes, which is the shape supervisord's own web interface uses; paging back through a log is a separate feature and is not pretended at.
    */
   supervisorLog(name: string, process: string, channel?: 'stdout' | 'stderr', lines?: number): Promise<string>;
+  /**
+   * A process declared in stackvo.json reaches the container's supervisord through the generated config, and the generated config reaches the container at BUILD time — so a worker added to the manifest would otherwise start at the next rebuild and not before. This renders the same config the generator writes (the same function, never the generated directory, which may be older than the file just saved), writes it into the running container through `tee` on standard input, and runs `supervisorctl reread` then `update`, which starts what is new, restarts what changed and stops what is gone while leaving php-fpm and the web server untouched. Every step is an argv; there is no shell.
+   */
+  supervisorApply(name: string): Promise<ProjectSupervisor>;
   /**
    * supervisord reports that a process is up. It has no idea whether the thing inside it is answering — a php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 are all RUNNING, and that is the state somebody is staring at when they open this. One check per process, because a process either answers or it does not.
    */

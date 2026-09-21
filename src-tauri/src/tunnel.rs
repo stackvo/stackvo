@@ -1295,6 +1295,7 @@ https://fatoc-188-119-17-94.run.pinggy-free.link\n";
             warnings: vec![],
             hooks: Default::default(),
             schedule: Vec::new(),
+            processes: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             components: Default::default(),

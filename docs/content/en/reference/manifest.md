@@ -22,6 +22,7 @@ Two fields are required: `name` and `domain`. Everything else has a default.
 | `commands` | object | — | Commands the project offers as buttons. See below. |
 | `hooks` | object | `{}` | Commands to run after a build, after a start, before a stop. |
 | `schedule` | list | `[]` | Named jobs on a timer, each with its own log. |
+| `processes` | object | `{}` | Long-running processes under the container's own supervisord — a queue worker, a scheduler. Survive a rebuild because they are rendered from here. |
 | `components` | object | — | Other directories of this repository, each with its own runtime and address. |
 | `sidecars` | object | — | Containers the project needs that the catalogue does not have. They come and go with the project. |
 | `providers` | object | — | Named places the project's data really lives, and how to fetch it or send it back. |
@@ -121,6 +122,46 @@ on purpose: before a start there is no container to run in.
 
 Named jobs, each with its own last run and its own log — rather than one
 all-or-nothing scheduler process.
+
+## Processes
+
+```json
+"processes": {
+  "scheduler": { "exec": ["php", "artisan", "schedule:work"] },
+  "queue": {
+    "exec": ["php", "artisan", "queue:work", "rabbitmq", "--queue=photos,default", "--tries=3"],
+    "replicas": 2,
+    "stopWait": 30
+  }
+}
+```
+
+Long-running processes, run by the `supervisord` that is already in the
+project's container beside `php-fpm` and the web server. Each key becomes a
+`[program:<id>]` block in the generated `supervisord.conf`.
+
+That file is **regenerated on every rebuild**, which is the reason this block
+exists: a program added inside the container, or dropped into `conf.d/`, is
+gone at the next build. Declared here, a rebuild restores it and a teammate's
+clone gets it. The Supervisor pane lists them beside the image's own two, and
+when the manifest declares something the running daemon does not have yet, it
+offers to apply the config without a rebuild.
+
+| Field | Default | What it says |
+| --- | --- | --- |
+| `exec` | — | Program and arguments, as an array. Runs in `/var/www/html`. No shell. |
+| `enabled` | `true` | `false` keeps the entry in the file and out of the daemon. |
+| `replicas` | `1` | How many copies. Above one they are `<id>_00`, `<id>_01`, … in one group. |
+| `stopWait` | `10` | Seconds after SIGTERM before supervisord kills. A queue worker mid-job wants more. |
+
+Only `nginx` and `caddy` projects run supervisord; for any other server the
+block is kept and does nothing. `php-fpm`, `nginx` and `caddy` are reserved
+ids. Logs go to the container's stdout, which is the Logs tab.
+
+Not to be confused with `schedule`, which starts a command on a timer and
+expects it to exit, or with the Workers pane, which runs Laravel's fixed
+worker commands in sidecar containers. A process here is any command, kept
+running for as long as the container is.
 
 ## Components
 

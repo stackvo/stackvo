@@ -361,7 +361,7 @@ side by side.
                    ┌──────────────────────────────┐
    Window ─────────►│                              │
    (Vue 3)          │   Rust core                  │──► Docker / Compose
-   stackvo CLI ────►│   (130 modules, 348 commands)│──► Traefik · mkcert · hosts
+   stackvo CLI ────►│   (131 modules, 349 commands)│──► Traefik · mkcert · hosts
    stackvo-mcp ────►│                              │──► Filesystem (workspace)
    (AI assistant)   └──────────────────────────────┘
 ```
@@ -647,7 +647,7 @@ outside the scope. It is not information isolation and is not described as one �
 the machine-wide instruments still answer, because they are about the machine
 rather than about a project.
 
-**Not exposed:** the rest of the mutating surface. 68 of the 344 commands take
+**Not exposed:** the rest of the mutating surface. 68 of the 345 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it
