@@ -1,0 +1,6 @@
+# The Sponsor button on the repository page. One entry: the organisation's
+# GitHub Sponsors profile, https://github.com/sponsors/stackvo — the same
+# place the documentation site's sponsor band and its *Sponsoring* page send
+# people. No other platform is used; adding one here without the profile
+# behind it is a button that goes nowhere.
+github: stackvo
