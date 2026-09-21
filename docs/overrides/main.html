@@ -1,0 +1,38 @@
+{#-
+  Every page: Open Graph and Twitter tags from the page's own title and
+  description (the hook fills `description` from the first paragraph when the
+  front matter does not), and the announcement bar naming the release these
+  pages are ahead of.
+-#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {%- set og_title = config.site_name -%}
+  {%- if page and page.meta and page.meta.title -%}
+    {%- set og_title = page.meta.title ~ " – " ~ config.site_name -%}
+  {%- elif page and page.title and not page.is_homepage -%}
+    {%- set og_title = page.title ~ " – " ~ config.site_name -%}
+  {%- endif -%}
+  {%- set og_description = page.meta.description if page and page.meta and page.meta.description else config.site_description -%}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ og_title }}">
+  <meta property="og:description" content="{{ og_description }}">
+  <meta property="og:url" content="{{ page.canonical_url }}">
+  <meta property="og:image" content="{{ config.extra.social_image }}">
+  <meta property="og:locale" content="{{ 'tr_TR' if config.theme.language == 'tr' else 'en_US' }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ og_title }}">
+  <meta name="twitter:description" content="{{ og_description }}">
+  <meta name="twitter:image" content="{{ config.extra.social_image }}">
+{% endblock %}
+
+{% block announce %}
+  {%- set a = config.extra.announce -%}
+  {%- if a and config.extra.release -%}
+    {{ a.before }} <strong>{{ config.extra.release.tag }}</strong> {{ a.after }}
+    <a href="{{ a.href | url }}">{{ a.link }}</a>
+  {%- elif a -%}
+    {{ a.fallback }} <a href="{{ a.href | url }}">{{ a.link }}</a>
+  {%- endif -%}
+{% endblock %}

@@ -1,0 +1,470 @@
+{#-
+  The landing page. Used by `content/<locale>/index.md` through
+  `template: home.html`; every word on it comes from that page's front matter
+  (`hero`, `stack`, `features`, `download`, `steps`, `compare`, `pricing`,
+  `faq`, `more`, `sponsor`; the lists are named `list`, because `.items` is a
+  dict method to Jinja), so the two languages share this one file and the copy
+  lives beside the other copy.
+
+  Same shape as Material's own site: the header and tabs stay, the sidebars
+  and the table of contents go, and the page is a sequence of full-width
+  sections rather than an article. `assets/home.css` carries the styles and is
+  linked only here.
+
+  The download links are written at build time: `hooks/stackvo.py` asks the
+  releases API for the latest tag and `config.extra.release` carries it, so
+  each installer gets its direct URL from the file-name pattern in the front
+  matter. The small script at the end does two things on top: it names the
+  visitor's operating system on the hero button and marks that download
+  card, and it asks the API once more so a release newer than the last site
+  build is offered too — but only if the API answers; the anonymous limit is
+  sixty requests an hour per address, and a miss leaves the built links.
+-#}
+{% extends "main.html" %}
+
+{% block styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ 'assets/home.css' | url }}">
+{% endblock %}
+
+{% block tabs %}
+  {{ super() }}
+  {% set m = page.meta %}
+
+  {#- The hero. On the right, the screenshots: one frame, a tab per view
+      beneath it, the visitor picks — no carousel, nothing moves on its own.
+      The frame carries the screenshots' aspect ratio, so switching never
+      moves the page. -#}
+  <section class="sv-hero" id="top">
+    <div class="md-grid sv-hero__inner">
+      <div class="sv-hero__copy">
+        <p class="sv-hero__eyebrow">{{ m.hero.eyebrow }}</p>
+        <h1 class="sv-hero__title">{{ m.hero.title }}</h1>
+        <p class="sv-hero__text">{{ m.hero.text }}</p>
+        <div class="sv-hero__actions">
+          <a href="#download" class="sv-btn sv-btn--filled" data-sv-download-label="{{ m.download.hero_label }}">
+            <span class="sv-btn__icon" aria-hidden="true">{% include ".icons/material/download.svg" %}</span>
+            <span>{{ m.download.hero_fallback }}</span>
+          </a>
+          <a href="{{ m.hero.secondary.href | url }}" class="sv-btn sv-btn--outlined">
+            {{ m.hero.secondary.label }}
+          </a>
+        </div>
+        <p class="sv-hero__meta">
+          <span data-sv-version>{% if config.extra.release %}{{ config.extra.release.tag }}{% else %}{{ m.download.version_fallback }}{% endif %}</span>
+          <span>{{ m.hero.meta }}</span>
+        </p>
+      </div>
+      <div class="sv-hero__shot">
+        <div class="sv-hero__frame" style="aspect-ratio: 3200 / 2000">
+          {% for shot in m.hero.shots %}
+            <img
+              class="sv-hero__img{% if loop.first %} sv-hero__img--active{% endif %}"
+              src="{{ ('screenshots/' ~ shot.file) | url }}"
+              alt="{{ shot.alt }}"
+              width="3200"
+              height="2000"
+              loading="{{ 'eager' if loop.first else 'lazy' }}"
+              draggable="false"
+              data-sv-shot="{{ loop.index0 }}"
+            >
+          {% endfor %}
+        </div>
+        <div class="sv-hero__tabs" role="tablist" aria-label="{{ m.hero.tabs_label }}">
+          {% for shot in m.hero.shots %}
+            <button
+              type="button"
+              class="sv-hero__tab{% if loop.first %} sv-hero__tab--active{% endif %}"
+              role="tab"
+              aria-selected="{{ 'true' if loop.first else 'false' }}"
+              tabindex="{{ '0' if loop.first else '-1' }}"
+              data-sv-tab="{{ loop.index0 }}"
+            >{{ shot.label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {#- What it runs: one outlined card per category, a row per item with its
+      mark. Marks are Simple Icons where the set has one, a generic Material
+      icon for the category where it does not — all in one colour, so the
+      list reads as a list and not as a wall of logos. -#}
+  <section class="sv-section sv-stack" id="stack">
+    <div class="md-grid sv-stack__inner">
+      <div class="sv-stack__head">
+        <div>
+          <h2 class="sv-stack__title">{{ m.stack.title }}</h2>
+          <p class="sv-stack__lead">{{ m.stack.text }}</p>
+        </div>
+        <a class="sv-stack__link" href="{{ m.stack.href | url }}">
+          {{ m.stack.link }}
+          <span class="sv-compare__arrow" aria-hidden="true">{% include ".icons/material/arrow-right.svg" %}</span>
+        </a>
+      </div>
+      <div class="sv-stack__cards">
+        {% for group in m.stack.groups %}
+          <div class="sv-stack__card">
+            <h3 class="sv-stack__group">{{ group.title }}</h3>
+            <ul class="sv-stack__items">
+              {% for item in group.list %}
+                <li>
+                  <span class="sv-stack__mark" aria-hidden="true">{% include ".icons/" ~ (item.icon or group.icon) ~ ".svg" %}</span>
+                  <span>{{ item.name }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      </div>
+      <p class="sv-stack__more">{{ m.stack.more }}</p>
+    </div>
+  </section>
+
+  {#- Six features, no boxes: a tonal icon, a title, one supporting line —
+      the way Material's own site lists what it does. Outside `.md-typeset`. -#}
+  <section class="sv-section" id="features">
+    <div class="md-grid sv-ft">
+      <div class="sv-ft__head">
+        <h2 class="sv-ft__title">{{ m.features.title }}</h2>
+        <p class="sv-ft__lead">{{ m.features.text }}</p>
+      </div>
+      <div class="sv-ft__grid">
+        {% for f in m.features.list %}
+          <div class="sv-ft__item">
+            <span class="sv-ft__icon" aria-hidden="true">
+              {% include ".icons/" ~ f.icon ~ ".svg" %}
+            </span>
+            <h3 class="sv-ft__name">{{ f.title }}</h3>
+            <p class="sv-ft__text">{{ f.text }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {#- One card per operating system, one button per card — the first format
+      is the one most people want — and the rest as a short list beneath. The
+      visitor's own card is outlined in the accent and its button filled; the
+      others stay outlined, so the page has one primary action, not three. -#}
+  {% macro asset_url(f) %}{% set rel = config.extra.release %}{% if rel %}https://github.com/stackvo/stackvo/releases/download/{{ rel.tag }}/{{ f.file | replace("{v}", rel.version) }}{% else %}https://github.com/stackvo/stackvo/releases/latest{% endif %}{% endmacro %}
+  <section class="sv-section sv-section--alt" id="download">
+    <div class="md-grid sv-dl">
+      <div class="sv-dl__head">
+        <h2 class="sv-dl__title">{{ m.download.title }}</h2>
+        <p class="sv-dl__lead">{{ m.download.text }}</p>
+      </div>
+      <div class="sv-dl__cards">
+        {% for os in m.download.list %}
+          <div class="sv-dl__card" data-sv-os="{{ os.key }}">
+            <div class="sv-dl__top">
+              <span class="sv-dl__icon" aria-hidden="true">{% include ".icons/" ~ os.icon ~ ".svg" %}</span>
+              <span class="sv-dl__yours" hidden>{{ m.download.yours }}</span>
+            </div>
+            <h3 class="sv-dl__os">{{ os.title }}</h3>
+            <p class="sv-dl__note">{{ os.note }}</p>
+            {% set first = os.formats[0] %}
+            <a class="sv-dl__button" href="{{ asset_url(first) | trim }}" data-sv-file="{{ first.file }}">
+              <span class="sv-dl__button-icon" aria-hidden="true">{% include ".icons/material/download.svg" %}</span>
+              <span>{{ first.label }}</span>
+            </a>
+            {% if os.formats | length > 1 %}
+              <p class="sv-dl__others-label">{{ m.download.others }}</p>
+              <ul class="sv-dl__others">
+                {% for f in os.formats[1:] %}
+                  <li><a href="{{ asset_url(f) | trim }}" data-sv-file="{{ f.file }}">{{ f.label }}</a></li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <p class="sv-dl__meta">
+        <span><span data-sv-version>{% if config.extra.release %}{{ config.extra.release.tag }}{% else %}{{ m.download.version_fallback }}{% endif %}</span></span>
+        <span>{{ m.download.integrity }}</span>
+        <a href="https://github.com/stackvo/stackvo/releases/latest">{{ m.download.all }}</a>
+        <a href="{{ 'getting-started/installation/' | url }}">{{ m.download.help }}</a>
+      </p>
+    </div>
+  </section>
+
+  {#- A vertical stepper, as Material draws one: a numbered disc per step,
+      a connector between the discs, the title and its supporting line. -#}
+  <section class="sv-section" id="steps">
+    <div class="md-grid sv-steps">
+      <div class="sv-steps__copy">
+        <h2 class="sv-steps__title">{{ m.steps.title }}</h2>
+        <p class="sv-steps__lead">{{ m.steps.text }}</p>
+        <ol class="sv-stepper">
+          {% for s in m.steps.list %}
+            <li class="sv-stepper__step">
+              <span class="sv-stepper__disc" aria-hidden="true">{{ loop.index }}</span>
+              <div class="sv-stepper__body">
+                <h3 class="sv-stepper__label">{{ s.title }}</h3>
+                <p class="sv-stepper__text">{{ s.text }}</p>
+              </div>
+            </li>
+          {% endfor %}
+        </ol>
+        <a class="sv-steps__cta" href="#download">
+          {{ m.steps.cta }}
+          <span class="sv-compare__arrow" aria-hidden="true">{% include ".icons/material/arrow-right.svg" %}</span>
+        </a>
+      </div>
+      <figure class="sv-steps__shot">
+        <img
+          src="{{ 'screenshots/web/project-new.webp' | url }}"
+          alt="{{ m.steps.alt }}"
+          loading="lazy"
+          draggable="false"
+        >
+        <figcaption>{{ m.steps.caption }}</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  {#- A cell is a word or a fact. The words — yes, no, partial, in either
+      language, as `compare.words` names them — become icons, so the eye
+      reads a column of checks rather than a column of text; anything else
+      is printed as it is. Outside `.md-typeset` for the same reason as the
+      questions: the theme's table styling is for prose, not for a matrix. -#}
+  {% macro cell(text, words) %}
+    {% set lc = (text | string | lower) %}
+    {% if lc == words.yes | lower %}
+      <span class="sv-cell sv-cell--yes" title="{{ text }}">{% include ".icons/material/check.svg" %}<span class="sv-sr">{{ text }}</span></span>
+    {% elif lc == words.no | lower %}
+      <span class="sv-cell sv-cell--no" title="{{ text }}">{% include ".icons/material/close.svg" %}<span class="sv-sr">{{ text }}</span></span>
+    {% elif lc.startswith(words.partial | lower) %}
+      <span class="sv-cell sv-cell--partial">{% include ".icons/material/circle-half-full.svg" %}<span class="sv-cell__note">{{ text[words.partial | length:] | trim }}</span><span class="sv-sr">{{ words.partial }}</span></span>
+    {% elif lc.startswith((words.yes | lower) ~ ' ') %}
+      <span class="sv-cell sv-cell--yes">{% include ".icons/material/check.svg" %}<span class="sv-cell__note">{{ text[words.yes | length:] | trim }}</span><span class="sv-sr">{{ words.yes }}</span></span>
+    {% else %}
+      <span class="sv-cell sv-cell--text">{{ text }}</span>
+    {% endif %}
+  {% endmacro %}
+
+  <section class="sv-section sv-section--alt" id="compare">
+    <div class="md-grid sv-compare">
+      <div class="sv-compare__head">
+        <h2 class="sv-compare__title">{{ m.compare.title }}</h2>
+        <p class="sv-compare__lead">{{ m.compare.text }}</p>
+      </div>
+      <div class="sv-compare__surface">
+        <div class="sv-compare__scroll">
+          <table class="sv-compare__table">
+            <thead>
+              <tr>
+                <th scope="col" class="sv-compare__label"></th>
+                {% for name in m.compare.columns %}
+                  <th scope="col"{% if loop.first %} class="sv-compare__us"{% endif %}>{{ name }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in m.compare.rows %}
+                <tr>
+                  {% for value in row %}
+                    {% if loop.first %}
+                      <th scope="row" class="sv-compare__label">{{ value }}</th>
+                    {% else %}
+                      <td{% if loop.index == 2 %} class="sv-compare__us"{% endif %}>{{ cell(value, m.compare.words) }}</td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sv-compare__foot">
+        <ul class="sv-compare__legend">
+          <li><span class="sv-cell sv-cell--yes">{% include ".icons/material/check.svg" %}</span>{{ m.compare.words.yes }}</li>
+          <li><span class="sv-cell sv-cell--partial">{% include ".icons/material/circle-half-full.svg" %}</span>{{ m.compare.words.partial }}</li>
+          <li><span class="sv-cell sv-cell--no">{% include ".icons/material/close.svg" %}</span>{{ m.compare.words.no }}</li>
+        </ul>
+        <a class="sv-compare__more" href="{{ m.compare.href | url }}">
+          {{ m.compare.more }}
+          <span class="sv-compare__arrow" aria-hidden="true">{% include ".icons/material/arrow-right.svg" %}</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {#- One price, one card; beside it the three facts that "free" hides,
+      each a row with an icon, so the reader gets them at a glance instead
+      of in a paragraph. Outside `.md-typeset`. -#}
+  <section class="sv-section" id="pricing">
+    <div class="md-grid sv-pricing">
+      <div class="sv-pricing__card">
+        <p class="sv-pricing__eyebrow">{{ m.pricing.eyebrow }}</p>
+        <p class="sv-pricing__price">{{ m.pricing.price }}<span class="sv-pricing__per">{{ m.pricing.per }}</span></p>
+        <h2 class="sv-pricing__title">{{ m.pricing.title }}</h2>
+        <p class="sv-pricing__text">{{ m.pricing.text }}</p>
+        <ul class="sv-pricing__list">
+          {% for item in m.pricing.list %}
+            <li>
+              <span class="sv-pricing__check" aria-hidden="true">{% include ".icons/material/check.svg" %}</span>
+              <span>{{ item }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+        <a href="#download" class="sv-pricing__button">{{ m.pricing.cta }}</a>
+      </div>
+      <div class="sv-pricing__aside">
+        <h3 class="sv-pricing__aside-title">{{ m.pricing.aside_title }}</h3>
+        <ul class="sv-pricing__facts">
+          {% for fact in m.pricing.facts %}
+            <li>
+              <span class="sv-pricing__fact-icon" aria-hidden="true">{% include ".icons/" ~ fact.icon ~ ".svg" %}</span>
+              <span class="sv-pricing__fact-body">
+                <span class="sv-pricing__fact-title">{{ fact.title }}</span>
+                <span class="sv-pricing__fact-text">{{ fact.text }}</span>
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+        <a class="sv-pricing__link" href="#sponsor">
+          {{ m.pricing.aside_link }}
+          <span class="sv-compare__arrow" aria-hidden="true">{% include ".icons/material/arrow-right.svg" %}</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {#- Not inside `.md-typeset`: the theme styles every `details` in there as
+      an admonition, and an FAQ is a list, not a row of call-outs. Native
+      `details` still, so it works without the stylesheet and with a
+      keyboard; the chevron and the divider are the Material expansion-list
+      pattern. -#}
+  <section class="sv-section sv-section--alt" id="faq">
+    {#- The heading, the line under it and the "something else?" link on the
+        left; the questions, one list, on the right. -#}
+    <div class="md-grid sv-faq">
+      <div class="sv-faq__intro">
+        <h2 class="sv-faq__title">{{ m.faq.title }}</h2>
+        <p class="sv-faq__lead">{{ m.faq.text }}</p>
+        <p class="sv-faq__more">
+          {{ m.faq.more }} <a href="{{ m.faq.more_href }}">{{ m.faq.more_label }}</a>
+        </p>
+      </div>
+      <div class="sv-faq__list">
+        {% for q in m.faq.list %}
+          <details class="sv-faq__item">
+            <summary class="sv-faq__question">
+              <span class="sv-faq__label">{{ q.q }}</span>
+              <span class="sv-faq__chevron" aria-hidden="true">
+                {% include ".icons/material/chevron-down.svg" %}
+              </span>
+            </summary>
+            <div class="sv-faq__answer">
+              <p>{{ q.a }}</p>
+            </div>
+          </details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {#- Material's list of links: each row is one link, whole row clickable,
+      a title, one supporting line, the arrow on the right. -#}
+  <section class="sv-section" id="more">
+    <div class="md-grid sv-more">
+      <div class="sv-more__head">
+        <h2 class="sv-more__title">{{ m.more.title }}</h2>
+        <p class="sv-more__lead">{{ m.more.text }}</p>
+      </div>
+      <div class="sv-more__grid">
+        {% for item in m.more.list %}
+          <a class="sv-more__item" href="{{ item.href | url }}">
+            <span class="sv-more__body">
+              <span class="sv-more__name">{{ item.title }}</span>
+              <span class="sv-more__text">{{ item.text }}</span>
+            </span>
+            <span class="sv-more__arrow" aria-hidden="true">{% include ".icons/material/arrow-right.svg" %}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {#- Follows the page's own scheme: light on the light site, dark on the
+      dark one — the accent and the tinted heart are what set it apart. -#}
+  <section class="sv-section sv-sponsor" id="sponsor">
+    <div class="md-grid sv-sponsor__inner">
+      <span class="sv-sponsor__icon" aria-hidden="true">
+        {% include ".icons/material/heart.svg" %}
+      </span>
+      <p class="sv-sponsor__eyebrow">{{ m.sponsor.eyebrow }}</p>
+      <h2 class="sv-sponsor__title">{{ m.sponsor.title }}</h2>
+      <p class="sv-sponsor__text">{{ m.sponsor.text }}</p>
+      <div class="sv-sponsor__actions">
+        <a href="{{ m.sponsor.href }}" class="sv-sponsor__button" target="_blank" rel="noopener">
+          {{ m.sponsor.label }}
+        </a>
+        <a href="https://github.com/stackvo/stackvo" class="sv-sponsor__link" target="_blank" rel="noopener">
+          {{ m.sponsor.secondary }}
+          <span class="sv-compare__arrow" aria-hidden="true">{% include ".icons/material/arrow-right.svg" %}</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      // The visitor's operating system: the hero button names it and the
+      // matching download card is marked. Nothing is sent anywhere.
+      var ua = navigator.userAgent || '';
+      var os = /Mac|iPhone|iPad/.test(ua) ? 'mac' : /Win/.test(ua) ? 'win' : /Linux|X11/.test(ua) ? 'linux' : null;
+      var names = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
+      var hero = document.querySelector('[data-sv-download-label]');
+      if (hero && os) hero.textContent = hero.getAttribute('data-sv-download-label').replace('{os}', names[os]);
+      // The screenshot tabs: click or arrow keys pick a view; nothing
+      // rotates by itself.
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-sv-tab]'));
+      var shots = Array.prototype.slice.call(document.querySelectorAll('[data-sv-shot]'));
+      function show(i) {
+        tabs.forEach(function (t, k) {
+          var on = k === i;
+          t.classList.toggle('sv-hero__tab--active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          t.setAttribute('tabindex', on ? '0' : '-1');
+        });
+        shots.forEach(function (s, k) { s.classList.toggle('sv-hero__img--active', k === i); });
+      }
+      tabs.forEach(function (t, k) {
+        t.addEventListener('click', function () { show(k); });
+        t.addEventListener('keydown', function (e) {
+          var n = e.key === 'ArrowRight' ? k + 1 : e.key === 'ArrowLeft' ? k - 1 : null;
+          if (n === null) return;
+          n = (n + tabs.length) % tabs.length;
+          show(n); tabs[n].focus(); e.preventDefault();
+        });
+      });
+
+      var card = os && document.querySelector('[data-sv-os="' + os + '"]');
+      if (card) {
+        card.classList.add('sv-dl__card--yours');
+        var chip = card.querySelector('.sv-dl__yours');
+        if (chip) chip.hidden = false;
+      }
+
+      // The download links and the version text are written once, at build
+      // time, from the release the hook resolved (`config.extra.release`).
+      // An earlier version of this block asked the releases API again from
+      // the browser and rewrote the links live, so a release published
+      // between two site builds would still show as current. CodeQL's
+      // js/xss-through-dom correctly does not trust a client-controlled
+      // fetch() result reaching an href or a text node, validated or not —
+      // a regex check on the value is not a sanitizer its dataflow
+      // analysis recognises, and reaching for `encodeURIComponent` to make
+      // it recognise one would be satisfying the scanner rather than the
+      // reason it exists. The site already rebuilds on every push to
+      // `docs/**` and can rebuild again when the release workflow's
+      // `release: published` trigger is turned on (`docs-publish.yml`), so
+      // the gap this closed is short and the fetch is not worth the sink.
+    })();
+  </script>
+{% endblock %}
+
+{# The article body is not shown: the page is the sections above. #}
+{% block content %}{% endblock %}

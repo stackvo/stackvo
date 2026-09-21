@@ -298,6 +298,12 @@ hints! {
         "Xdebug compresses by default; StackVo turns that off when it enables profiling. \
          Re-record this profile, or gunzip the file yourself.";
 
+    // ---------------------------------------------------------------- help
+    /// The panel's own words for an offline first open: the document is only
+    /// ever fetched, and this machine has never fetched this one.
+    HELP_NEEDS_NETWORK = "helpNeedsNetwork",
+        "You are offline, so the help document cannot be reached. It is fetched from the repository; connect to the network and open it again.";
+
     // ---------------------------------------------------------------- misc surfaces
     LOG_IDS_ARE_RELATIVE = "logIdsAreRelative",
         "Log ids are relative, with no parent or root segments.";

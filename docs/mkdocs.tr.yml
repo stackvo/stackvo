@@ -1,0 +1,164 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+#
+# The Turkish site: `mkdocs.yml` with the language, the source directory and
+# the navigation labels changed, built into `site/tr/` so that the two builds
+# make one site. `INHERIT` merges mappings, so only the keys that differ are
+# repeated here.
+
+INHERIT: mkdocs.yml
+
+site_url: https://stackvo.github.io/stackvo/tr/
+site_description: >-
+  StackVo, makinenizdeki yerel geliştirme ortamını yöneten bir masaüstü
+  uygulamasıdır — proje başına bir Docker konteyneri, otomatik HTTPS, web
+  arayüzü değil gerçek bir pencere.
+copyright: Telif hakkı &copy; Fahrettin Aksoy — MIT lisansı
+edit_uri: edit/main/docs/content/tr/
+
+docs_dir: content/tr
+site_dir: ../site/tr
+
+theme:
+  language: tr
+  palette:
+    - media: '(prefers-color-scheme)'
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-auto
+        name: Açık temaya geç
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Koyu temaya geç
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Sistem tercihine dön
+
+extra:
+  footer:
+    tagline: Masaüstü uygulaması olan bir yerel geliştirme ortamı. Ücretsiz, MIT lisanslı.
+    columns:
+      - title: Ürün
+        links:
+          - { label: İndir, href: '.#download' }
+          - { label: Başlarken, href: getting-started/ }
+          - { label: Desteklenen yığın, href: reference/supported-stack/ }
+          - { label: Karşılaştırma, href: reference/comparison/ }
+          - { label: Fiyat, href: '.#pricing' }
+      - title: Belgeler
+        links:
+          - { label: Günlük kullanım, href: guide/everyday-use/ }
+          - { label: Uygulama içi yardım, href: help/ }
+          - { label: Katkı, href: community/contributing/ }
+          - { label: README, href: 'https://github.com/stackvo/stackvo/blob/main/README_TR.md' }
+      - title: Topluluk
+        links:
+          - { label: GitHub, href: 'https://github.com/stackvo/stackvo' }
+          - { label: Tartışmalar, href: 'https://github.com/stackvo/stackvo/discussions' }
+          - { label: Sorunlar, href: 'https://github.com/stackvo/stackvo/issues' }
+          - { label: Sponsor, href: 'https://github.com/sponsors/stackvo' }
+      - title: Proje
+        links:
+          - { label: Yardım almak, href: community/contributing/ }
+          - { label: Güvenlik politikası, href: 'https://github.com/stackvo/stackvo/blob/main/SECURITY.md' }
+          - { label: Gizlilik, href: 'https://github.com/stackvo/stackvo/blob/main/PRIVACY.md' }
+          - { label: Değişiklik günlüğü, href: insiders/changelog/ }
+          - { label: MIT lisansı, href: 'https://github.com/stackvo/stackvo/blob/main/LICENSE' }
+  mounted:
+    note: >-
+      Bu belge depoda İngilizce tutulur; bu sayfa dosyanın kendisidir.
+  announce:
+    before: 'Bu sayfalar <code>main</code> dalını izler. Son sürüm'
+    after: '—'
+    link: 'yenilikler ve nasıl güncellenir.'
+    href: insiders/whats-new/
+    fallback: 'Bu sayfalar <code>main</code> dalını izler, son sürümün önündedir —'
+  help:
+    title: Uygulama içi yardım
+    sections:
+      dashboard: Panel kutuları
+      pages: Sayfalar
+      panels: Paneller
+      project: Proje kartları
+      settings: Ayar kartları
+
+plugins:
+  - search:
+      lang: tr
+
+nav:
+  - Ana sayfa: index.md
+  - Başlarken:
+      - getting-started/index.md
+      - Gereksinimler: getting-started/requirements.md
+      - Kurulum: getting-started/installation.md
+      - İlk çalıştırma: getting-started/first-run.md
+      - Sorun giderme: getting-started/troubleshooting.md
+      - Başka bir araçtan geçiş: getting-started/migrating.md
+  - Kılavuz:
+      - guide/index.md
+      - Günlük kullanım: guide/everyday-use.md
+      - Projeler: guide/projects.md
+      - Servisler ve veritabanları: guide/services.md
+      - Alan adları ve HTTPS: guide/domains-https.md
+      - Hata ayıklama: guide/debugging.md
+      - Mail: guide/mail.md
+      - Snapshot ve yedekler: guide/snapshots.md
+      - Dal başına ortam: guide/branches.md
+      - Paylaşım ve ekip: guide/sharing.md
+      - Komut satırı: guide/cli.md
+      - Yapay zekâ asistanları: guide/ai-assistants.md
+      - Tarifler:
+          - guide/recipes/index.md
+          - Laravel: guide/recipes/laravel.md
+          - WordPress: guide/recipes/wordpress.md
+          - Node.js: guide/recipes/nodejs.md
+          - Python: guide/recipes/python.md
+  - Başvuru:
+      - reference/index.md
+      - Manifest: reference/manifest.md
+      - Çalışma alanı ve dosyalar: reference/workspace.md
+      - Ayarlar, .env: reference/settings.md
+      - Komut satırı: reference/cli.md
+      - MCP araçları: reference/mcp-tools.md
+      - Makineden ne çıkar: reference/privacy.md
+      - Desteklenen yığın: reference/supported-stack.md
+      - Karşılaştırma: reference/comparison.md
+      - SSS: reference/faq.md
+      - Sözlük: reference/glossary.md
+      - Klavye kısayolları: reference/shortcuts.md
+      - Proje belgeleri:
+          - Güvenlik politikası: reference/project/security.md
+          - Gizlilik politikası: reference/project/privacy-policy.md
+          - Davranış kuralları: reference/project/code-of-conduct.md
+          - Mimari: reference/project/architecture.md
+          - Erişilebilirlik bildirgesi: reference/project/accessibility.md
+          - Lisans: reference/project/licence.md
+      - Uygulama içi yardım: help/index.md
+  - Insiders:
+      - insiders/index.md
+      - Başlarken: insiders/getting-started.md
+      - Yenilikler: insiders/whats-new.md
+      - Değişiklik günlüğü: insiders/changelog.md
+      - Nasıl güncellenir: insiders/upgrade.md
+      - Sponsor olma: insiders/sponsoring.md
+  - Topluluk:
+      - Katkı:
+          - community/contributing/index.md
+          - Hata bildirme: community/contributing/reporting-a-bug.md
+          - Doküman hatası bildirme: community/contributing/reporting-a-docs-issue.md
+          - Güvenlik açığı bildirme: community/contributing/reporting-a-vulnerability.md
+          - Değişiklik isteme: community/contributing/requesting-a-change.md
+          - Çeviri ekleme: community/contributing/adding-translations.md
+          - Pull request açma: community/contributing/making-a-pull-request.md
+          - Soru sorma: https://github.com/stackvo/stackvo/discussions
+      - Rehberler:
+          - Yeniden üretim hazırlama: community/guides/creating-a-reproduction.md

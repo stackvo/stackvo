@@ -1,0 +1,91 @@
+# The documentation site: https://stackvo.github.io/stackvo/
+#
+# Two MkDocs builds — English into `site/`, Turkish into `site/tr/` — uploaded
+# as one Pages artifact and deployed from `main`. A pull request that touches
+# `docs/` gets the build and not the deploy, which is the check that a page
+# written and not listed, or a link to a page that is not there, fails before
+# it is merged: `--strict` turns both warnings into errors.
+#
+# **Started by hand only, for now.** The site is being written; nothing is
+# published until somebody presses *Run workflow* on the Actions tab. When
+# the content is ready, the `push`/`pull_request` triggers below are
+# uncommented, restricted to `docs/**` so that the application's three-OS CI
+# is not re-run for a corrected sentence in a help document.
+#
+# The Pages source for the repository must be **GitHub Actions**, not a branch
+# (Settings → Pages → Build and deployment → Source). No `gh-pages` branch is
+# created and nothing here pushes.
+
+name: docs
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - docs/**
+  #     - .github/workflows/docs-publish.yml
+  # pull_request:
+  #   paths:
+  #     - docs/**
+  #     - .github/workflows/docs-publish.yml
+  # A published release rebuilds the site so the download links name it
+  # the same day, without waiting for the next docs change.
+  # release:
+  #   types: [published]
+
+permissions:
+  contents: read
+
+# One deploy at a time, and a newer push does not cancel a deploy in flight —
+# a half-uploaded artifact is not a site.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # The whole history: the "last updated" date under each page is
+          # the file's last commit, and a shallow clone has none.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+
+      - run: pip install -r docs/requirements.txt
+
+      # `GITHUB_TOKEN` lets the hook ask the releases API for the latest tag
+      # without the anonymous rate limit; the landing page's download links
+      # are written from it.
+      - name: Build both languages, strictly
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdocs build --strict -f docs/mkdocs.yml
+          mkdocs build --strict -f docs/mkdocs.tr.yml
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

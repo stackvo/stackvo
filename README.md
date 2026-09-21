@@ -145,17 +145,18 @@ Three sentences:
 
 ### 2) Installation
 
-Six installers are built per release, two per platform:
+Ten installers are built per release:
 
 | Platform | Formats | Notes |
 |----------|---------|-------|
 | macOS | `.dmg` | Apple Silicon and Intel |
-| Windows | `.msi`, `.exe` (NSIS) | x64 and ARM64 |
+| Windows | `.exe` (NSIS) | x64 and ARM64 |
 | Linux | `.deb`, `.rpm`, `.AppImage` | x86_64 and aarch64 |
 
-> **No release is published yet.** Today the only route is
-> [building from source](#building-from-source). This section gets download
-> links when the first tag ships.
+Download the one for your machine from the
+[latest release](https://github.com/stackvo/stackvo/releases/latest); the
+[documentation site](https://stackvo.github.io/stackvo/) names it for you.
+Every release publishes `SHA256SUMS` beside its files.
 
 <details>
 <summary><b>Opening a build that is not code-signed</b> (read this if macOS says "damaged")</summary>
@@ -646,7 +647,7 @@ outside the scope. It is not information isolation and is not described as one â
 the machine-wide instruments still answer, because they are about the machine
 rather than about a project.
 
-**Not exposed:** the rest of the mutating surface. 69 of the 344 commands take
+**Not exposed:** the rest of the mutating surface. 68 of the 344 commands take
 an `AppHandle` because they report progress through Tauri's event system, and a
 stdio subprocess has no app to emit into. Decoupling that is a refactor of its
 own; pretending otherwise would mean advertising `project_build` and having it
