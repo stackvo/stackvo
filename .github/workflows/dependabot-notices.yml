@@ -23,6 +23,11 @@
 # The token reaches one step, the push, and nothing before it: `npm ci` and
 # `cargo metadata` run other people's code, and they run without it.
 #
+# The commit is authored as the maintainer whose token pushes it, not as a
+# bot: GitHub lists every commit author on the default branch under
+# *Contributors*, and a generated notice is the maintainer's change, made on
+# the maintainer's behalf, with the maintainer's credentials.
+#
 # Once a person's commit is on the branch Dependabot stops rebasing it, and
 # `@dependabot rebase` rebuilds the branch from scratch — this runs again and
 # pushes again. Without the secret the job fails and says so, which is the
@@ -88,8 +93,8 @@ jobs:
             echo "::error::NOTICE.md needs regenerating and DEPENDABOT_PUSH_TOKEN is not set (Settings → Secrets and variables → Dependabot). Either set it and comment '@dependabot rebase', or check this branch out, run 'npm run notice' and push."
             exit 1
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'Fahrettin Aksoy'
+          git config user.email '1448215+fahrettinaksoy@users.noreply.github.com'
           git add NOTICE.md
           git commit -m "Regenerate NOTICE.md for the packages this pull request bumps"
           git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
