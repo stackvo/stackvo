@@ -7,6 +7,34 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Sponsor button.** `.github/FUNDING.yml` names the organisation's
+  GitHub Sponsors profile, https://github.com/sponsors/stackvo — the place
+  the documentation site's sponsor band already pointed at, now reachable
+  from the repository page too.
+
+- **The documentation site publishes itself.** `docs-publish.yml` ran by
+  hand only; from here it runs on every push to `main` that touches the
+  site's inputs — `docs/`, the workflow, and the root documents the hook
+  mounts — builds on a pull request that touches them (the `--strict` check,
+  before the merge), and rebuilds on a published release so the download
+  links name it the same day. The repository's Pages source is now *GitHub
+  Actions*; it was *Deploy from a branch* on `/docs`, which had Jekyll
+  rendering `docs/README.md` as the front page of
+  https://stackvo.github.io/stackvo/.
+
+- **Dependabot's pull requests regenerate their own notice.** Three of the
+  ten open on 2026-09-21 were red on `supply chain` alone: a bumped lock
+  file named a transitive package `NOTICE.md` did not, and the bot cannot
+  run the generator. `dependabot-notices.yml` now does — on a Dependabot
+  pull request that touches a lock file it runs `npm run notice` and pushes
+  the result to the branch with `DEPENDABOT_PUSH_TOKEN`, a fine-grained
+  token in the Dependabot secrets, because a push with the workflow's own
+  token starts no CI and a commit without CI cannot pass the ruleset. Without
+  the secret it fails and says what to do. And `dependabot.yml` ends every
+  ecosystem in a catch-all group — `npm`, `crates`, `actions`, `mkdocs` —
+  so a Monday is at most seven pull requests and usually three or four,
+  where two Mondays had left ten.
+
 - **A documentation site**, https://stackvo.github.io/stackvo/, built with
   Material for MkDocs from `docs/` in this repository and published by
   `docs-publish.yml` to GitHub Pages — the Pages source must be set to
