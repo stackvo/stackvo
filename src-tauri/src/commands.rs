@@ -10876,9 +10876,7 @@ pub async fn supervisor_apply(
         ));
     };
 
-    let _busy = state
-        .inflight
-        .acquire(format!("supervisor:{name}:apply"))?;
+    let _busy = state.inflight.acquire(format!("supervisor:{name}:apply"))?;
     let target = crate::supervisor::for_project(&name);
 
     let written = target

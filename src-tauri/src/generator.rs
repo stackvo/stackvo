@@ -3454,7 +3454,11 @@ mod tests {
         m.processes = processes;
 
         let files = render_project_config_files(&m, crate::config::DEFAULT_SERVER);
-        let conf = &files.iter().find(|(name, _)| *name == "supervisord.conf").unwrap().1;
+        let conf = &files
+            .iter()
+            .find(|(name, _)| *name == "supervisord.conf")
+            .unwrap()
+            .1;
 
         // The image's own two first, untouched.
         assert!(conf.contains("[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\n"));
@@ -3481,7 +3485,10 @@ mod tests {
         // And the apply path is the same renderer: no supervisord, no config.
         for server in ["apache", "frankenphp", "swoole", "roadrunner"] {
             m.server = Some(server.into());
-            assert!(supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).is_none(), "{server}");
+            assert!(
+                supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).is_none(),
+                "{server}"
+            );
         }
         m.server = Some("nginx".into());
         m.runtime = "node".into();
@@ -3494,7 +3501,10 @@ mod tests {
     fn no_declared_process_leaves_the_supervisord_conf_as_it_was() {
         let m = php_manifest("nginx");
         let with_field = supervisord_conf_for(&m, crate::config::DEFAULT_SERVER).unwrap();
-        assert_eq!(with_field, render_supervisord_conf("nginx", "/usr/sbin/nginx -g 'daemon off;'"));
+        assert_eq!(
+            with_field,
+            render_supervisord_conf("nginx", "/usr/sbin/nginx -g 'daemon off;'")
+        );
     }
 
     #[test]

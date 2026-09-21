@@ -218,7 +218,9 @@ pub fn parse(json: &serde_json::Value) -> (Vec<Process>, Vec<Problem>) {
         if RESERVED.contains(&id.as_str()) {
             problems.push(Problem {
                 path,
-                message: format!("`{id}` is the name of a process the generated image already runs"),
+                message: format!(
+                    "`{id}` is the name of a process the generated image already runs"
+                ),
             });
             continue;
         }
@@ -250,7 +252,10 @@ pub fn parse(json: &serde_json::Value) -> (Vec<Process>, Vec<Problem>) {
             unknown.sort_unstable();
             problems.push(Problem {
                 path: path.clone(),
-                message: format!("`{id}` has a key this reader does not know: {}", unknown.join(", ")),
+                message: format!(
+                    "`{id}` has a key this reader does not know: {}",
+                    unknown.join(", ")
+                ),
             });
         }
 
@@ -294,7 +299,10 @@ pub fn parse(json: &serde_json::Value) -> (Vec<Process>, Vec<Problem>) {
         // A newline in a word is a second line in a config whose grammar is
         // line-oriented — a second directive nobody wrote. Refused rather than
         // escaped, as `site.rs` does for the same reason.
-        if exec.iter().any(|a| a.contains('\n') || a.contains('\r') || a.contains('\0')) {
+        if exec
+            .iter()
+            .any(|a| a.contains('\n') || a.contains('\r') || a.contains('\0'))
+        {
             problems.push(Problem {
                 path,
                 message: format!("`{id}`: a word of `exec` contains a line break"),
@@ -316,16 +324,18 @@ pub fn parse(json: &serde_json::Value) -> (Vec<Process>, Vec<Problem>) {
 
         let replicas = match fields.get("replicas") {
             None => 1,
-            Some(v) => match v.as_u64() {
-                Some(n) if (1..=u64::from(MAX_REPLICAS)).contains(&n) => n as u32,
-                _ => {
-                    problems.push(Problem {
+            Some(v) => {
+                match v.as_u64() {
+                    Some(n) if (1..=u64::from(MAX_REPLICAS)).contains(&n) => n as u32,
+                    _ => {
+                        problems.push(Problem {
                         path,
                         message: format!("`{id}`: `replicas` must be a whole number from 1 to {MAX_REPLICAS}"),
                     });
-                    continue;
+                        continue;
+                    }
                 }
-            },
+            }
         };
 
         let stop_wait = match fields.get("stopWait") {
@@ -537,7 +547,10 @@ mod tests {
             "processes.typo",
             "processes.newline",
         ] {
-            assert!(paths.contains(&expected), "{expected} missing from {paths:?}");
+            assert!(
+                paths.contains(&expected),
+                "{expected} missing from {paths:?}"
+            );
         }
         assert!(problems
             .iter()
@@ -599,10 +612,14 @@ mod tests {
         assert!(text.starts_with("\n[program:"), "{text:?}");
         assert!(text.ends_with("stderr_logfile_maxbytes=0\n"));
         assert!(!text.ends_with("\n\n"));
-        assert!(!text.contains("[program:paused]"), "a paused process is out of the config");
+        assert!(
+            !text.contains("[program:paused]"),
+            "a paused process is out of the config"
+        );
 
-        assert!(text.contains(
-            "[program:queue]\n\
+        assert!(
+            text.contains(
+                "[program:queue]\n\
              command=php artisan queue:work\n\
              directory=/var/www/html\n\
              autostart=true\n\
@@ -613,11 +630,14 @@ mod tests {
              numprocs=3\n\
              process_name=%(program_name)s_%(process_num)02d\n\
              stdout_logfile=/dev/stdout\n"
-        ), "{text}");
+            ),
+            "{text}"
+        );
 
         // One copy: no numprocs, no process_name, default stop wait.
-        assert!(text.contains(
-            "[program:scheduler]\n\
+        assert!(
+            text.contains(
+                "[program:scheduler]\n\
              command=php artisan schedule:work\n\
              directory=/var/www/html\n\
              autostart=true\n\
@@ -626,7 +646,9 @@ mod tests {
              stopasgroup=true\n\
              killasgroup=true\n\
              stdout_logfile=/dev/stdout\n"
-        ), "{text}");
+            ),
+            "{text}"
+        );
         assert_eq!(text.matches("numprocs=").count(), 1);
     }
 
@@ -656,7 +678,11 @@ mod tests {
         let (pending, stale) = drift(&processes, &groups);
 
         assert_eq!(pending, vec!["scheduler"], "paused is not pending");
-        assert_eq!(stale, vec!["by-hand"], "the image's own programs are never stale");
+        assert_eq!(
+            stale,
+            vec!["by-hand"],
+            "the image's own programs are never stale"
+        );
 
         // Nothing declared, nothing extra: quiet.
         let (pending, stale) = drift(&[], &["php-fpm".to_string(), "nginx".to_string()]);

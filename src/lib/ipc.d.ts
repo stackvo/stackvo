@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 161 named types, 341 wrappers, 8 field(s) the
+ * Measured at generation: 161 named types, 342 wrappers, 8 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -3364,6 +3364,10 @@ export interface StackvoApi {
    * Where a FATAL says why. The last N bytes, which is the shape supervisord's own web interface uses; paging back through a log is a separate feature and is not pretended at.
    */
   supervisorLog(name: string, process: string, channel?: 'stdout' | 'stderr', lines?: number): Promise<string>;
+  /**
+   * A process declared in stackvo.json reaches the container's supervisord through the generated config, and the generated config reaches the container at BUILD time — so a worker added to the manifest would otherwise start at the next rebuild and not before. This renders the same config the generator writes (the same function, never the generated directory, which may be older than the file just saved), writes it into the running container through `tee` on standard input, and runs `supervisorctl reread` then `update`, which starts what is new, restarts what changed and stops what is gone while leaving php-fpm and the web server untouched. Every step is an argv; there is no shell.
+   */
+  supervisorApply(name: string): Promise<ProjectSupervisor>;
   /**
    * supervisord reports that a process is up. It has no idea whether the thing inside it is answering — a php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 are all RUNNING, and that is the state somebody is staring at when they open this. One check per process, because a process either answers or it does not.
    */
