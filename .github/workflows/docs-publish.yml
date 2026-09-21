@@ -6,33 +6,48 @@
 # written and not listed, or a link to a page that is not there, fails before
 # it is merged: `--strict` turns both warnings into errors.
 #
-# **Started by hand only, for now.** The site is being written; nothing is
-# published until somebody presses *Run workflow* on the Actions tab. When
-# the content is ready, the `push`/`pull_request` triggers below are
-# uncommented, restricted to `docs/**` so that the application's three-OS CI
-# is not re-run for a corrected sentence in a help document.
+# Published on every push to `main` that touches the site's inputs: `docs/`,
+# this file, and the root documents `docs/hooks/stackvo.py` mounts into the
+# site. Restricted to those paths so that a corrected sentence in a help
+# document does not re-run the application's three-OS CI. A published release
+# rebuilds the site too, so the download links name it the same day. *Run
+# workflow* remains for a rebuild with nothing changed.
 #
 # The Pages source for the repository must be **GitHub Actions**, not a branch
-# (Settings → Pages → Build and deployment → Source). No `gh-pages` branch is
-# created and nothing here pushes.
+# (Settings → Pages → Build and deployment → Source). It was *Deploy from a
+# branch*, `main` `/docs`, until 2026-09-21 — which had Jekyll rendering
+# `docs/README.md` as the site's front page. No `gh-pages` branch is created
+# and nothing here pushes.
 
 name: docs
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - docs/**
-  #     - .github/workflows/docs-publish.yml
-  # pull_request:
-  #   paths:
-  #     - docs/**
-  #     - .github/workflows/docs-publish.yml
-  # A published release rebuilds the site so the download links name it
-  # the same day, without waiting for the next docs change.
-  # release:
-  #   types: [published]
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - .github/workflows/docs-publish.yml
+      - CHANGELOG.md
+      - SECURITY.md
+      - PRIVACY.md
+      - CODE_OF_CONDUCT.md
+      - ARCHITECTURE.md
+      - ACCESSIBILITY.md
+      - LICENSE
+  pull_request:
+    paths:
+      - docs/**
+      - .github/workflows/docs-publish.yml
+      - CHANGELOG.md
+      - SECURITY.md
+      - PRIVACY.md
+      - CODE_OF_CONDUCT.md
+      - ARCHITECTURE.md
+      - ACCESSIBILITY.md
+      - LICENSE
+  release:
+    types: [published]
 
 permissions:
   contents: read

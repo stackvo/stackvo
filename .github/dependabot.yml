@@ -10,6 +10,13 @@
 # Grouped, and weekly rather than daily. An ungrouped daily Dependabot on three
 # ecosystems is a repository nobody reads the notifications for, which is the
 # same outcome as not having it with extra noise attached.
+#
+# Every ecosystem ends in a catch-all group. Dependabot puts a dependency in
+# the first group whose pattern it matches, so the named groups above each
+# catch-all keep their own pull request and everything else shares one.
+# Measured on 2026-09-21 without the catch-alls: ten open pull requests from
+# two Mondays, six of them one package each. With them, a Monday is at most
+# seven pull requests and usually three or four.
 version: 2
 
 updates:
@@ -38,6 +45,12 @@ updates:
           - '@eslint/*'
           - prettier
           - jsdom
+      # Everything else on the minor and patch stream — sass, eslint-plugin-vue,
+      # @playwright/test and their like — in one pull request a week rather than
+      # one per package.
+      npm:
+        patterns:
+          - '*'
     # Majors are not raised here, and this is the second time this file has
     # said something about them — so it says what was measured rather than
     # what sounded right.
@@ -65,11 +78,12 @@ updates:
       # `src-tauri/Cargo.toml`, and the Tauri CLI refuses to build when the two
       # halves are on different minors — so a bot PR bumping only this half
       # cannot go green, ever, and neither can the crate half merged alone.
-      # NOTICE.md is generated too, and the bot cannot regenerate it. Measured
-      # on 3 September 2026: five PRs (#106–#110) for one piece of work, two of
-      # them red on exactly those two grounds. The cargo `tauri` group below is
-      # the single reminder; when it appears, a person moves both halves in one
-      # commit and runs `npm run notice`.
+      # NOTICE.md is generated too, and the bot cannot regenerate it — since
+      # 2026-09-21 `dependabot-notices.yml` does that for it, but the pairing
+      # rule stands. Measured on 3 September 2026: five PRs (#106–#110) for one
+      # piece of work, two of them red on exactly those two grounds. The cargo
+      # `tauri` group below is the single reminder; when it appears, a person
+      # moves both halves in one commit and runs `npm run notice`.
       - dependency-name: '@tauri-apps/*'
 
   - package-ecosystem: cargo
@@ -85,6 +99,10 @@ updates:
         patterns:
           - tauri
           - tauri-*
+      # Every other crate, in one pull request.
+      crates:
+        patterns:
+          - '*'
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
@@ -112,6 +130,11 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 2
+    groups:
+      # Three pins that are read together; one pull request to read them in.
+      mkdocs:
+        patterns:
+          - '*'
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
@@ -136,3 +159,9 @@ updates:
       codeql:
         patterns:
           - github/codeql-action*
+      # Every other action, in one pull request. A bumped SHA is proved by the
+      # run the pull request itself starts, so reading them together costs
+      # nothing that reading them apart did not.
+      actions:
+        patterns:
+          - '*'
