@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 602 Rust crates and 80 npm packages.
+Counted from 604 Rust crates and 80 npm packages.
 
 ## Summary
 
@@ -52,18 +52,18 @@ Counted from 602 Rust crates and 80 npm packages.
 | MIT OR Apache-2.0 | 282 | 6 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |  |
 | MIT OR Apache-2.0 OR Zlib | 3 |  |
-| MIT OR Zlib OR Apache-2.0 | 1 |  |
+| MIT OR Zlib OR Apache-2.0 | 2 |  |
 | MIT/Apache-2.0 | 27 |  |
 | MPL-2.0 | 5 |  |
 | Unicode-3.0 | 18 |  |
 | Unlicense | 1 |  |
 | Unlicense OR MIT | 4 |  |
 | Unlicense/MIT | 2 |  |
-| Zlib | 1 |  |
+| Zlib | 2 |  |
 | Zlib OR Apache-2.0 OR MIT | 20 |  |
-| **Total** | **602** | **80** |
+| **Total** | **604** | **80** |
 
-## Rust crates (602)
+## Rust crates (604)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ Counted from 602 Rust crates and 80 npm packages.
 | block-padding | 0.3.3 | MIT OR Apache-2.0 |
 | block2 | 0.6.2 | MIT |
 | blocking | 1.6.2 | Apache-2.0 OR MIT |
-| bollard | 0.21.0 | Apache-2.0 |
+| bollard | 0.21.1 | Apache-2.0 |
 | bollard-stubs | 1.53.1-rc.29.3.1 | Apache-2.0 |
 | brotli | 8.0.4 | BSD-3-Clause AND MIT |
 | brotli-decompressor | 5.0.3 | BSD-3-Clause/MIT |
@@ -188,7 +188,7 @@ Counted from 602 Rust crates and 80 npm packages.
 | field-offset | 0.3.6 | MIT OR Apache-2.0 |
 | filedescriptor | 0.8.3 | MIT |
 | filetime | 0.2.29 | MIT/Apache-2.0 |
-| flate2 | 1.1.9 | MIT OR Apache-2.0 |
+| flate2 | 1.1.10 | MIT OR Apache-2.0 |
 | fnv | 1.0.7 | Apache-2.0 / MIT |
 | foldhash | 0.2.0 | Zlib |
 | foreign-types | 0.5.0 | MIT/Apache-2.0 |
@@ -197,14 +197,14 @@ Counted from 602 Rust crates and 80 npm packages.
 | form_urlencoded | 1.2.2 | MIT OR Apache-2.0 |
 | fsevent-sys | 4.1.0 | MIT |
 | futures-channel | 0.3.33 | MIT OR Apache-2.0 |
-| futures-core | 0.3.33 | MIT OR Apache-2.0 |
+| futures-core | 0.3.34 | MIT OR Apache-2.0 |
 | futures-executor | 0.3.33 | MIT OR Apache-2.0 |
-| futures-io | 0.3.33 | MIT OR Apache-2.0 |
+| futures-io | 0.3.34 | MIT OR Apache-2.0 |
 | futures-lite | 2.6.1 | Apache-2.0 OR MIT |
-| futures-macro | 0.3.33 | MIT OR Apache-2.0 |
-| futures-sink | 0.3.33 | MIT OR Apache-2.0 |
-| futures-task | 0.3.33 | MIT OR Apache-2.0 |
-| futures-util | 0.3.33 | MIT OR Apache-2.0 |
+| futures-macro | 0.3.34 | MIT OR Apache-2.0 |
+| futures-sink | 0.3.34 | MIT OR Apache-2.0 |
+| futures-task | 0.3.34 | MIT OR Apache-2.0 |
+| futures-util | 0.3.34 | MIT OR Apache-2.0 |
 | gdk | 0.18.2 | MIT |
 | gdk-pixbuf | 0.18.5 | MIT |
 | gdk-pixbuf-sys | 0.18.0 | MIT |
@@ -308,6 +308,7 @@ Counted from 602 Rust crates and 80 npm packages.
 | minimal-lexical | 0.2.1 | MIT/Apache-2.0 |
 | minisign-verify | 0.2.5 | MIT |
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 |
+| miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 |
 | mio | 1.2.2 | MIT |
 | muda | 0.19.3 | Apache-2.0 OR MIT |
 | ndk | 0.9.0 | MIT OR Apache-2.0 |
@@ -506,11 +507,11 @@ Counted from 602 Rust crates and 80 npm packages.
 | tempfile | 3.27.0 | MIT OR Apache-2.0 |
 | tendril | 0.5.1 | MIT OR Apache-2.0 |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 |
-| thiserror | 2.0.19 | MIT OR Apache-2.0 |
+| thiserror | 2.0.20 | MIT OR Apache-2.0 |
 | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 |
-| thiserror-impl | 2.0.19 | MIT OR Apache-2.0 |
+| thiserror-impl | 2.0.20 | MIT OR Apache-2.0 |
 | thread_local | 1.1.10 | MIT OR Apache-2.0 |
-| time | 0.3.54 | MIT OR Apache-2.0 |
+| time | 0.3.55 | MIT OR Apache-2.0 |
 | time-core | 0.1.9 | MIT OR Apache-2.0 |
 | time-macros | 0.2.32 | MIT OR Apache-2.0 |
 | tinystr | 0.8.3 | Unicode-3.0 |
@@ -662,6 +663,7 @@ Counted from 602 Rust crates and 80 npm packages.
 | zerovec | 0.11.6 | Unicode-3.0 |
 | zerovec-derive | 0.11.3 | Unicode-3.0 |
 | zip | 4.6.1 | MIT |
+| zlib-rs | 0.6.8 | Zlib |
 | zmij | 1.0.23 | MIT |
 | zvariant | 4.2.0 | MIT |
 | zvariant | 5.13.1 | MIT |
