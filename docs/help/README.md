@@ -28,17 +28,20 @@ side sheet beside the card rather than a dialog over it: half of what these
 documents say is "this button writes X and restarts Y", and reading that with
 the button hidden behind the panel explaining it is the wrong way round.
 
-The file is read off disk on **every** open — that is the point of keeping the
-documents as files. Correct a sentence here and the next click shows the
-correction, with no rebuild. `bundle.resources` in `tauri.conf.json` carries this
-directory into the installed application.
+The document is fetched on the first open of a run and read from the cache
+after that — that is the point of keeping the documents as files in the
+repository. Correct a sentence here and the next launch shows the correction,
+with no rebuild. Nothing in this directory is copied into the installer.
 
 ## How a document reaches the reader
 
-The copy in this directory is the one that ships, and it is also the one that is
-served: the app pulls `docs/help/<locale>/<topic>.md` from `main` over HTTPS the
-first time a topic is opened in a run, caches it, and falls back to the cache
-and then to the bundled copy when the network says no.
+The copy in this directory is the only copy: the app pulls
+`docs/help/<locale>/<topic>.md` from `main` over HTTPS the first time a topic
+is opened in a run, caches it, and reads the cache when the network says no. A
+topic that has never been fetched on a machine and cannot be fetched now is
+shown as "you are offline" rather than as an older text — there is no bundled
+copy to fall back to, on purpose: it was as old as the build, and it made an
+offline panel look like a working one.
 
 **So a correction pushed to `main` reaches everybody on their next run, whatever
 build they are on.** That is the reason it works this way. What it costs is one

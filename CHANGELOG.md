@@ -7,6 +7,76 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A documentation site**, https://stackvo.github.io/stackvo/, built with
+  Material for MkDocs from `docs/` in this repository and published by
+  `docs-publish.yml` to GitHub Pages — the Pages source must be set to
+  *GitHub Actions* once, by hand. English and Turkish are two MkDocs builds
+  (`mkdocs.yml`, `mkdocs.tr.yml` inheriting it) into one `site/`, joined by
+  the theme's own language switcher; no i18n plugin. The application's help
+  documents are not copied: `docs/hooks/stackvo.py` mounts `docs/help/<locale>`
+  into each build as virtual files under `help/`, titles them from their own
+  heading, writes their navigation grouped by topic prefix and points each
+  edit link at the real file — so the site shows the sentence the app shows,
+  and a new card's document appears with nobody editing a config. The same
+  hook mounts the README's screenshots once for both languages. The front page is a landing page in
+  the theme's own manner — hero, the runtimes it serves, six features chosen
+  as the ones no competitor has, per-OS download cards naming the latest
+  release with direct links to its ten installers, three steps, the
+  comparison table, a `$0` pricing card that says what "free and unfunded"
+  means, eight questions, and a sponsor band — rendered by
+  `docs/overrides/home.html` from each language's front matter. The release
+  tag is resolved at build time by the hook (`GITHUB_TOKEN` in CI, so the
+  anonymous API limit is never the visitor's problem) and the visitor's
+  operating system is named on the hero button in the browser. The
+  installation page links the release that exists rather than promising
+  one; the README's "no release is published yet" is now stale. Getting started is
+  six pages written against what the app does — requirements without a
+  package manager, install per platform with the unsigned-build click, the
+  first run step by step with a "what just happened" table, troubleshooting
+  as six problems with a button each, coming from another tool, and how to
+  remove everything — in both languages. The guide is eleven task pages —
+  projects, services, domains and HTTPS, debugging, mail, snapshots,
+  a branch per environment, sharing and teams, the command line, AI
+  assistants — each written from the app's own help cards and the README,
+  in both languages. The reference is the contracts in plain words — every
+  manifest field with its type and default from `project.schema.json`, the
+  `.env` keys the app reads from `env.schema.json`, every CLI command from
+  the command table in `cli.rs`, the 38 MCP tools from `mcp.rs`, the files
+  the app writes and the network calls it makes from PRIVACY.md, and the
+  FAQ — in both languages. The last two tabs follow the theme's own site:
+  *Insiders* — *Getting started* from a checkout to the pre-push gate, a
+  *Changelog* page that is this file, mounted by the hook, *How to upgrade*
+  and *Sponsoring* — and *Community*, whose *Contributing* index leads to a
+  page each for reporting a bug, a docs issue or a vulnerability, requesting
+  a change, adding a translation and making a pull request, *Asking a
+  question* linking Discussions, and a guide to creating a reproduction in a
+  throwaway `STACKVO_ROOT` workspace; each written from the issue templates,
+  CONTRIBUTING.md, SECURITY.md and SUPPORT.md rather than beside them. The
+  former Support page's "what this project can promise" lives on the
+  Contributing index. What a review against WCAG 2.2 AA and the usual
+  documentation practice found is fixed: every path the pages name in the
+  window is checked against the locale files and the help cards by
+  `tests/docs-labels.spec.js` (four "Settings → Diagnostics" for a card
+  called "Application log", "Doctor" in Turkish pages where the window says
+  "Doktor"); the language switcher and `hreflang` go to the same page in the
+  other language; every page carries its own description and Open Graph
+  tags; the changelog is out of the search index, which it was most of, and
+  releases before the newest are folded; contrast, underlined links in text
+  and 24 px targets meet AA in both schemes; the help cards are listed on
+  their index page rather than filling every sidebar (`navigation.prune`
+  takes the rest); screenshots are 1600 px WebP on fourteen more pages; the
+  repository's SECURITY, PRIVACY, CODE_OF_CONDUCT, ARCHITECTURE,
+  ACCESSIBILITY and LICENSE files are pages; and there is an Insiders index,
+  a What's new page, a glossary, keyboard shortcuts, a recipe each for
+  Laravel, WordPress, Node.js and Python, a "last updated" date under every
+  page and an announcement bar naming the release the pages are ahead of.
+  The README's "no release is published yet" and its `.msi` row are
+  corrected against the release that exists. Builds are
+  strict: a page written and not listed, or a link to a page that is not
+  there, fails the pull request. `npm run docs:serve` / `docs:build` for a
+  Python environment; the theme's Docker image otherwise, as `docs/README.md`
+  shows.
+
 - **The two screenshots the browser could not take** (#101). The worktree
   pane reads no git tree — it asks one IPC question, `worktree_support`, and
   git lives behind that call in Rust — so it is staged the way every other
@@ -67,6 +137,24 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`rustls` 0.23.45**, for RUSTSEC-2026-0285 (CVE-2025-61730): TLS 1.3
+  handshake messages accepted across encryption level boundaries. The
+  `supply chain` job found it the day the advisory was published, on a pull
+  request that touched no Rust; `cargo update -p rustls --precise 0.23.45`
+  in `src-tauri/`, which brings `aws-lc-rs`, `aws-lc-sys` and
+  `rustls-webpki` along.
+
+- **The documentation site no longer asks the releases API from the
+  browser.** An earlier version refetched it after page load so a release
+  published between two site builds still showed as current, and moved the
+  download links and version text to it. CodeQL's `js/xss-through-dom`
+  flagged the fetch()-derived tag reaching an `href` and a text node —
+  correctly: a regex check on the value is not a sanitizer its dataflow
+  analysis recognises, and satisfying the scanner rather than the reason it
+  exists would have meant adding `encodeURIComponent` around an already-safe
+  string. Removed instead of patched around; the links are written once, at
+  build time, from the release `hooks/stackvo.py` resolved.
+
 - **A folder named like a site is adopted as one.** Adoption, and the
   wizard's first suggestion, hung the whole `DEFAULT_TLD_SUFFIX` under the
   folder name, so a park Herd or Valet once served — `api.showtv`,
@@ -94,6 +182,20 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   reported as an orphan rather than deleted.
 
 ### Changed
+
+- **Help documents are fetched, never bundled.** `docs/help` no longer rides
+  inside the installer as `bundle.resources`: that copy was as old as the
+  build, it was the one thing the installer carried that a push to `main`
+  could correct, and it made a panel opened offline indistinguishable from a
+  working one. The two sources that remain are the repository over HTTPS and
+  the cache under the app directory, and a document that has never been
+  pulled on this machine and cannot be pulled now is `NETWORK_ERROR` with a
+  translated hint — the panel says "you are offline", not "not written yet".
+  A 404 is kept apart from every other failure as `NOT_FOUND`, and only a
+  successful pull is remembered for the run, so reconnecting is enough
+  without a restart. `help_doc` no longer takes the app handle, `help.rs`
+  reads the cache through an injectable root, and its tests write their own
+  cache instead of reading the checkout.
 
 - **Tauri plugins move as pairs, by hand.** `plugin-updater` 2.10.1→2.11.0,
   `plugin-notification` 2.3.3→2.4.0, `plugin-dialog` 2.7.2→2.7.3 and

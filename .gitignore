@@ -179,3 +179,12 @@ src-tauri/binaries/
 
 # Vitest 5 writes its own reports here.
 .vitest/
+
+# The documentation site, rendered by `npm run docs:build` from docs/. Both
+# languages land here (English at the root, Turkish under tr/); the Pages
+# workflow uploads it and nothing reads it from the tree.
+/site/
+
+# A Python environment for MkDocs, if one is made beside the checkout.
+.venv/
+__pycache__/

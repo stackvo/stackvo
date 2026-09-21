@@ -1,0 +1,303 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+#
+# The English site. `mkdocs.tr.yml` inherits this file and changes only what
+# Turkish changes: the language, the source directory, the navigation labels.
+#
+# Two things about the layout are deliberate, and `docs/README.md` explains
+# both at length:
+#
+#   * `docs_dir` is `content/en`, not `docs/`. The application's own help
+#     documents live in `docs/help/<locale>/`, are pulled by the running app
+#     from `main`, and are held to a test that fails on any file in there a
+#     card does not open — so the site cannot put an index page beside them.
+#   * `hooks/stackvo.py` mounts `docs/help/<locale>/` into the site under
+#     `help/` and writes its navigation section, so a new card's document
+#     appears here without anybody editing this file.
+#
+# `site_url` matters: the site is a GitHub *project* page and is served under
+# `/stackvo/`. MkDocs writes relative links, so the sub-path costs nothing on
+# ordinary pages, but the 404 page, the sitemap and the language switcher all
+# read this value — and `mkdocs serve` mounts the dev server at the same path
+# so the switcher works locally too.
+
+site_name: StackVo
+site_url: https://stackvo.github.io/stackvo/
+site_description: >-
+  StackVo is a desktop application that manages the local development
+  environment on your machine — one Docker container per project, automatic
+  HTTPS, a real window rather than a web UI.
+site_author: Fahrettin Aksoy
+copyright: Copyright &copy; Fahrettin Aksoy — MIT licensed
+
+repo_url: https://github.com/stackvo/stackvo
+repo_name: stackvo/stackvo
+edit_uri: edit/main/docs/content/en/
+
+docs_dir: content/en
+site_dir: ../site
+
+# `mkdocs build --strict` turns every warning below into a failure: a page
+# written and not listed, a link to a page that is not there.
+# The help documents are listed on help/index.md, not in the navigation.
+not_in_nav: |
+  /help/*.md
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+theme:
+  name: material
+  language: en
+  custom_dir: overrides
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+  # `custom` so that `assets/extra.css` can set the application's own blue
+  # rather than the nearest of the theme's named colours.
+  palette:
+    - media: '(prefers-color-scheme)'
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - content.action.edit
+    - content.code.copy
+    - content.tabs.link
+    - content.code.annotate
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.prune
+    - navigation.tabs
+    - navigation.top
+    - announce.dismiss
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+extra_css:
+  - assets/extra.css
+
+extra:
+  # The language switcher. Absolute paths from the domain root, because the
+  # switcher is rendered on every page and a relative link would point
+  # somewhere different from each of them.
+  alternate:
+    - name: English
+      link: /stackvo/
+      lang: en
+    - name: Türkçe
+      link: /stackvo/tr/
+      lang: tr
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/stackvo/stackvo
+      name: GitHub
+    - icon: material/forum-outline
+      link: https://github.com/stackvo/stackvo/discussions
+      name: Discussions
+    - icon: material/heart-outline
+      link: https://github.com/sponsors/stackvo
+      name: Sponsor
+  # The footer's link columns (`overrides/partials/footer.html`). An `href`
+  # starting with `http` is used as it is; `.#download` is the landing
+  # page's section; anything else is a page path.
+  footer:
+    tagline: A local development environment that is a desktop app. Free, MIT-licensed.
+    columns:
+      - title: Product
+        links:
+          - { label: Download, href: '.#download' }
+          - { label: Getting started, href: getting-started/ }
+          - { label: Supported stack, href: reference/supported-stack/ }
+          - { label: How it compares, href: reference/comparison/ }
+          - { label: Pricing, href: '.#pricing' }
+      - title: Documentation
+        links:
+          - { label: Everyday use, href: guide/everyday-use/ }
+          - { label: In-app help, href: help/ }
+          - { label: Contributing, href: community/contributing/ }
+          - { label: README, href: 'https://github.com/stackvo/stackvo#readme' }
+      - title: Community
+        links:
+          - { label: GitHub, href: 'https://github.com/stackvo/stackvo' }
+          - { label: Discussions, href: 'https://github.com/stackvo/stackvo/discussions' }
+          - { label: Issues, href: 'https://github.com/stackvo/stackvo/issues' }
+          - { label: Sponsor, href: 'https://github.com/sponsors/stackvo' }
+      - title: Project
+        links:
+          - { label: Getting help, href: community/contributing/ }
+          - { label: Security policy, href: 'https://github.com/stackvo/stackvo/blob/main/SECURITY.md' }
+          - { label: Privacy, href: 'https://github.com/stackvo/stackvo/blob/main/PRIVACY.md' }
+          - { label: Changelog, href: insiders/changelog/ }
+          - { label: MIT licence, href: 'https://github.com/stackvo/stackvo/blob/main/LICENSE' }
+  # `hooks/stackvo.py` mounts the repository's root documents (CHANGELOG.md,
+  # SECURITY.md, PRIVACY.md, …) as pages; a non-empty note is written under
+  # each heading (the Turkish build says they are in English).
+  mounted:
+    note: ''
+  # The bar above the header: which release these pages are ahead of.
+  announce:
+    before: 'These pages follow <code>main</code>. The latest release is'
+    after: '—'
+    link: "what's new, and how to upgrade."
+    href: insiders/whats-new/
+    fallback: 'These pages follow <code>main</code>, ahead of the latest release —'
+  # The picture a shared link shows.
+  social_image: https://stackvo.github.io/stackvo/screenshots/dashboard.png
+  # What `hooks/stackvo.py` names the generated help section and its groups.
+  # The keys are the topic-name prefixes in `src/lib/help.js`.
+  help:
+    title: In-app help
+    sections:
+      dashboard: Dashboard tiles
+      pages: Pages
+      panels: Panels
+      project: Project cards
+      settings: Settings cards
+
+plugins:
+  - search:
+      lang: en
+  # "Last updated" under every page, from the file's last commit. Generated
+  # pages have no file, so they are left out; CI checks out the full history
+  # (`fetch-depth: 0`) so the date is the commit's and not the build's.
+  - git-revision-date-localized:
+      type: date
+      fallback_to_build_date: true
+      # A page not committed yet gets the build date with a note, not a
+      # failed `--strict` build: the site is edited before it is committed.
+      strict: false
+      enable_creation_date: false
+      exclude:
+        - insiders/changelog.md
+        - reference/project/*
+
+hooks:
+  - hooks/stackvo.py
+
+# Rebuild `mkdocs serve` when a help document, a shared asset, the hook or a
+# template changes, even though none of them lives under `docs_dir`. Without
+# `overrides` here an edit to `home.html` is not seen until the next restart —
+# which is how a half-finished sponsor section once sat on a running server.
+watch:
+  - help
+  - assets
+  - screenshots
+  - hooks
+  - overrides
+  - ../CHANGELOG.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+# The hand-written pages. The hook fills the `In-app help` entry under
+# Reference with the generated help pages, wherever in the tree it sits.
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Requirements: getting-started/requirements.md
+      - Installation: getting-started/installation.md
+      - First run: getting-started/first-run.md
+      - Troubleshooting: getting-started/troubleshooting.md
+      - Coming from another tool: getting-started/migrating.md
+  - Guide:
+      - guide/index.md
+      - Everyday use: guide/everyday-use.md
+      - Projects: guide/projects.md
+      - Services and databases: guide/services.md
+      - Domains and HTTPS: guide/domains-https.md
+      - Debugging: guide/debugging.md
+      - Mail: guide/mail.md
+      - Snapshots and backups: guide/snapshots.md
+      - A branch per environment: guide/branches.md
+      - Sharing and teams: guide/sharing.md
+      - Command line: guide/cli.md
+      - AI assistants: guide/ai-assistants.md
+      - Recipes:
+          - guide/recipes/index.md
+          - Laravel: guide/recipes/laravel.md
+          - WordPress: guide/recipes/wordpress.md
+          - Node.js: guide/recipes/nodejs.md
+          - Python: guide/recipes/python.md
+  - Reference:
+      - reference/index.md
+      - The manifest: reference/manifest.md
+      - Workspace and files: reference/workspace.md
+      - Settings, .env: reference/settings.md
+      - Command line: reference/cli.md
+      - MCP tools: reference/mcp-tools.md
+      - What leaves the machine: reference/privacy.md
+      - Supported stack: reference/supported-stack.md
+      - How it compares: reference/comparison.md
+      - FAQ: reference/faq.md
+      - Glossary: reference/glossary.md
+      - Keyboard shortcuts: reference/shortcuts.md
+      - Project documents:
+          - Security policy: reference/project/security.md
+          - Privacy policy: reference/project/privacy-policy.md
+          - Code of conduct: reference/project/code-of-conduct.md
+          - Architecture: reference/project/architecture.md
+          - Accessibility statement: reference/project/accessibility.md
+          - Licence: reference/project/licence.md
+      - In-app help: help/index.md
+  - Insiders:
+      - insiders/index.md
+      - Getting started: insiders/getting-started.md
+      - What's new: insiders/whats-new.md
+      - Changelog: insiders/changelog.md
+      - How to upgrade: insiders/upgrade.md
+      - Sponsoring: insiders/sponsoring.md
+  - Community:
+      - Contributing:
+          - community/contributing/index.md
+          - Reporting a bug: community/contributing/reporting-a-bug.md
+          - Reporting a docs issue: community/contributing/reporting-a-docs-issue.md
+          - Reporting a vulnerability: community/contributing/reporting-a-vulnerability.md
+          - Requesting a change: community/contributing/requesting-a-change.md
+          - Adding translations: community/contributing/adding-translations.md
+          - Making a pull request: community/contributing/making-a-pull-request.md
+          - Asking a question: https://github.com/stackvo/stackvo/discussions
+      - Guides:
+          - Creating a reproduction: community/guides/creating-a-reproduction.md

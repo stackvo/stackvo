@@ -11218,19 +11218,13 @@ fn landing_url(root: &std::path::Path) -> String {
 
 /// One help document, as markdown, for the card that asked for it.
 ///
-/// Pulled from the repository once per topic per run, cached for the next time
-/// the machine is offline, and falling back to the copy the app shipped with.
-/// [`crate::help`] holds the order and the reasoning.
-///
-/// The resource directory is resolved here rather than inside that module so it
-/// stays testable without a Tauri handle — its tests read the repository's own
-/// `docs/help`, which is the copy that ships.
+/// Pulled from the repository once per topic per run and cached for the next
+/// time the machine is offline. Nothing ships inside the installer: a document
+/// that was never pulled and cannot be pulled is `NETWORK_ERROR`, which the
+/// panel shows as "you are offline". [`crate::help`] holds the reasoning.
 #[tauri::command]
-pub async fn help_doc(app: AppHandle, topic: String, locale: String) -> Result<String> {
-    use tauri::Manager as _;
-
-    let resources = app.path().resource_dir().ok();
-    crate::help::current(resources, &topic, &locale).await
+pub async fn help_doc(topic: String, locale: String) -> Result<String> {
+    crate::help::current(&topic, &locale).await
 }
 
 /// Whether the page is being served, and what it would say.
