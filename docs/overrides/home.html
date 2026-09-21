@@ -448,31 +448,20 @@
         if (chip) chip.hidden = false;
       }
 
-      // A release newer than the last site build: if the API answers, the
-      // links move to it; if it does not (offline, or the anonymous rate
-      // limit), the links written at build time stand.
-      fetch('https://api.github.com/repos/stackvo/stackvo/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (rel) {
-          // The tag is validated against the shape every release actually
-          // has (`v0.2.0`) before it is used, rather than passed straight
-          // from the response into an href: CodeQL flags any string built
-          // from a fetch() result and assigned to a DOM sink as tainted,
-          // and a same-origin API being trustworthy today does not change
-          // what the sink is. A tag that does not match is treated the same
-          // as no answer — the links built at page load stand.
-          if (!rel || typeof rel.tag_name !== 'string' || !/^v\d+\.\d+\.\d+$/.test(rel.tag_name)) return;
-          var tag = rel.tag_name;
-          var version = tag.replace(/^v/, '');
-          document.querySelectorAll('[data-sv-file]').forEach(function (a) {
-            var file = a.getAttribute('data-sv-file').replace('{v}', version);
-            a.href = 'https://github.com/stackvo/stackvo/releases/download/' + tag + '/' + file;
-          });
-          document.querySelectorAll('[data-sv-version]').forEach(function (el) {
-            el.textContent = tag;
-          });
-        })
-        .catch(function () {});
+      // The download links and the version text are written once, at build
+      // time, from the release the hook resolved (`config.extra.release`).
+      // An earlier version of this block asked the releases API again from
+      // the browser and rewrote the links live, so a release published
+      // between two site builds would still show as current. CodeQL's
+      // js/xss-through-dom correctly does not trust a client-controlled
+      // fetch() result reaching an href or a text node, validated or not —
+      // a regex check on the value is not a sanitizer its dataflow
+      // analysis recognises, and reaching for `encodeURIComponent` to make
+      // it recognise one would be satisfying the scanner rather than the
+      // reason it exists. The site already rebuilds on every push to
+      // `docs/**` and can rebuild again when the release workflow's
+      // `release: published` trigger is turned on (`docs-publish.yml`), so
+      // the gap this closed is short and the fetch is not worth the sink.
     })();
   </script>
 {% endblock %}
