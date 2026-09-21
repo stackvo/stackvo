@@ -41,8 +41,8 @@ the navigation, where a hundred entries were most of every page's sidebar
 appears on the site with nobody editing a config.
 
 The same hook mounts `assets/` and `screenshots/` into both languages, so the
-eleven megabytes of screenshots are checked in once — and the repository's
-the documents at the repository root — `CHANGELOG.md` under Insiders;
+eleven megabytes of screenshots are checked in once. It also mounts the
+documents at the repository root — `CHANGELOG.md` under Insiders;
 `SECURITY.md`, `PRIVACY.md`, `CODE_OF_CONDUCT.md`, `ARCHITECTURE.md`,
 `ACCESSIBILITY.md` and `LICENSE` under Reference › Project documents — in
 both languages, with their relative links pointed at GitHub and a note under
@@ -134,9 +134,13 @@ its own), because the anonymous limit is sixty requests an hour per address
 and a page that asked at every visit would hit it from any office. The URLs
 are then written from the file-name patterns in the front matter
 (`StackVo_{v}_x64.dmg`, `StackVo-{v}-1.x86_64.rpm` …), which is what
-tauri-action names them. In the browser a small script asks the API once
-more and moves the links to a newer release if there is one; a miss leaves
-the built links.
+tauri-action names them. Nothing asks the API again from the browser: an
+earlier version did, to move the links to a release published since the
+last build, and CodeQL's `js/xss-through-dom` flagged the fetch()-derived
+tag reaching an `href` — correctly, since a regex check is not a sanitizer
+its analysis recognises. The gap a rebuild leaves is closed by the site
+rebuilding on every push to `docs/**` and, once the commented-out trigger
+in `docs-publish.yml` is turned on, on every published release.
 
     STACKVO_RELEASE_TAG=v0.2.0 npm run docs:build   # pin it: offline, reproducible
 

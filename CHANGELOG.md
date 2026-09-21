@@ -144,6 +144,16 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   in `src-tauri/`, which brings `aws-lc-rs`, `aws-lc-sys` and
   `rustls-webpki` along.
 
+- **The documentation site no longer asks the releases API from the
+  browser.** An earlier version refetched it after page load so a release
+  published between two site builds still showed as current, and moved the
+  download links and version text to it. CodeQL's `js/xss-through-dom`
+  flagged the fetch()-derived tag reaching an `href` and a text node —
+  correctly: a regex check on the value is not a sanitizer its dataflow
+  analysis recognises, and satisfying the scanner rather than the reason it
+  exists would have meant adding `encodeURIComponent` around an already-safe
+  string. Removed instead of patched around; the links are written once, at
+  build time, from the release `hooks/stackvo.py` resolved.
 
 - **A folder named like a site is adopted as one.** Adoption, and the
   wizard's first suggestion, hung the whole `DEFAULT_TLD_SUFFIX` under the
