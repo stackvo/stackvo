@@ -211,6 +211,13 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The regenerated notice is committed as the maintainer.** The commit
+  `dependabot-notices.yml` pushes was authored as `github-actions[bot]`,
+  which put a bot on the repository's *Contributors* list after its first
+  run. It is the maintainer's change, pushed with the maintainer's token, and
+  is now authored as such. `.claude/settings.json`, a local editor-tooling
+  file carrying one machine's paths, is untracked and ignored.
+
 - **The minor and patch stream, one week's worth in one commit.** vue
   3.5.42→3.5.43, vue-i18n 11.4.10→11.4.12, vuetify 3.13.3→3.13.4,
   @vitejs/plugin-vue 6.0.8→6.0.9, @vitest/coverage-v8 5.0.0→5.0.1, eslint

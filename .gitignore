@@ -188,3 +188,6 @@ src-tauri/binaries/
 # A Python environment for MkDocs, if one is made beside the checkout.
 .venv/
 __pycache__/
+
+# Local editor-tooling settings, with paths from one machine.
+.claude/
