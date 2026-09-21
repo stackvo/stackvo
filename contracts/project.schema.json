@@ -390,6 +390,60 @@
         }
       }
     },
+    "processes": {
+      "type": "object",
+      "maxProperties": 16,
+      "default": {},
+      "description": "OPTIONAL. Long-running processes this project runs UNDER THE SUPERVISORD ALREADY IN ITS CONTAINER, beside php-fpm and the web server — a queue worker, a scheduler, a socket server. Keyed by id, which becomes the `[program:<id>]` name. Read by src-tauri/src/processes.rs and rendered by the generator into the project's own supervisord.conf, which is why this is in the manifest and not a file dropped into the container: that config is REGENERATED ON EVERY REBUILD from what the generator knows, so a program added any other way is gone at the next build. Declared here, a rebuild restores it and a clone gets it. Only nginx and caddy projects run supervisord; for any other server or runtime the block is read, kept and does nothing. A process runs in the project's own container and nowhere else, on the same terms as an `exec` hook. A malformed entry is a WARNING and the others still run.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+        "not": {
+          "enum": [
+            "php-fpm",
+            "nginx",
+            "caddy"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exec"
+        ],
+        "properties": {
+          "exec": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Run inside the project's own container, as an argv ARRAY and never a command string — the rule `commands`, `hooks` and `schedule` follow. supervisord's `command=` is one line it splits with shlex, and every word is quoted on the way in so the split gives back exactly this array; a `%` is doubled so supervisord's own `%(ENV_X)s` expansion never sees one. A process that needs a pipeline is a script, and a script is one argv element. The working directory is /var/www/html."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "OPTIONAL. Absent means on. A paused process stays in the file and out of the daemon's config — pausing by deleting would lose the argv, which is the part that took effort to write."
+          },
+          "replicas": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16,
+            "default": 1,
+            "description": "OPTIONAL. How many copies supervisord runs (`numprocs`). Above one they are named `<id>_00`, `<id>_01`, … in one group called `<id>`, which is the name the pane and `supervisorctl` address them by."
+          },
+          "stopWait": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600,
+            "default": 10,
+            "description": "OPTIONAL. Seconds supervisord waits after SIGTERM before it kills (`stopwaitsecs`). supervisord's own default is ten; a queue worker that must finish the job in hand wants longer."
+          }
+        }
+      }
+    },
     "php": {
       "type": "object",
       "additionalProperties": false,

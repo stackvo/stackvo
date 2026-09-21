@@ -820,6 +820,8 @@ export const api = {
     call('supervisor_control', { name, scope, verb, target, signal }),
   supervisorLog: (name, process, channel, lines) =>
     call('supervisor_log', { name, process, channel, lines }),
+  /** Push the manifest's `processes` into the running daemon, without a rebuild. */
+  supervisorApply: (name) => call('supervisor_apply', { name }),
   /** The probes that answer what RUNNING cannot. One per process. */
   supervisorChecks: (name) => call('supervisor_checks', { name }),
   supervisorCheckSave: (check) => call('supervisor_check_save', { check }),

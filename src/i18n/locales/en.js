@@ -2595,6 +2595,11 @@ export default {
     counts: '{running} of {total} running',
     logToStdout:
       'This process writes its log to the container\u2019s stdout \u2014 see the Logs tab.',
+    pending:
+      'stackvo.json declares {list}, and the daemon is not running it. It will be in the next rebuild; apply it now to start it without one. | stackvo.json declares {list}, and the daemon is not running them. They will be in the next rebuild; apply them now to start them without one.',
+    stale:
+      '{list} is running here and stackvo.json does not declare it. The next rebuild drops it \u2014 add it to `processes` in the manifest to keep it. | {list} are running here and stackvo.json does not declare them. The next rebuild drops them \u2014 add them to `processes` in the manifest to keep them.',
+    apply: 'Apply',
   },
   supervisorCheck: {
     title: 'Health check for {process}',

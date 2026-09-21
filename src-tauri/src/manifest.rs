@@ -317,6 +317,21 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schedule: Vec<crate::cron::Job>,
 
+    /// Long-running processes this project runs under its container's own
+    /// supervisord, beside `php-fpm` and the web server.
+    ///
+    /// Here for the reason `schedule` is, and for one more: the generated
+    /// `supervisord.conf` is rendered from this struct, so a process the
+    /// manifest does not declare is one every rebuild forgets. Whether the
+    /// daemon is actually running what is declared is [`crate::processes`]'s
+    /// business — this states the intent.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::processes::as_declared_map"
+    )]
+    pub processes: Vec<crate::processes::Process>,
+
     /// Commands this project offers next to the built-in ones.
     ///
     /// Here for the same reason `hooks` is: a malformed declaration becomes a
@@ -690,6 +705,19 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         });
     }
 
+    // ---- supervised processes ---------------------------------------------
+    //
+    // Warnings again, and for the same reason: one queue worker with a typo
+    // in it must not stop the web server from being generated.
+    let (processes, process_problems) = crate::processes::parse(json);
+    for problem in process_problems {
+        warnings.push(Finding {
+            code: "PROCESS".into(),
+            path: problem.path,
+            message: problem.message,
+        });
+    }
+
     // ---- declared commands ------------------------------------------
     //
     // Warnings for the same reason hooks are: a project with one unreadable
@@ -778,6 +806,7 @@ pub fn normalize(json: &serde_json::Value, raw: &str, dir_name: &str) -> Manifes
         lang,
         hooks,
         schedule,
+        processes,
         commands,
         sidecars,
         components,
@@ -2096,6 +2125,34 @@ pub fn to_json(manifest: &Manifest) -> String {
         lines.push(format!("  \"schedule\": [\n{}\n  ]", items.join(",\n")));
     }
 
+    // And here, for a process the container's supervisord runs. The loss
+    // would be the worst of the set: a queue worker silently absent from the
+    // next rebuild is exactly the failure this block exists to end.
+    if !manifest.processes.is_empty() {
+        let items: Vec<String> = manifest
+            .processes
+            .iter()
+            .map(|process| {
+                let argv: Vec<String> = process.exec.iter().map(|a| quote(a)).collect();
+                let mut fields = vec![format!("\"exec\": [{}]", argv.join(", "))];
+                // Defaults stay out of the file, on the same terms as a job's
+                // `enabled`: a manifest full of restated defaults is one
+                // nobody reads.
+                if !process.enabled {
+                    fields.push("\"enabled\": false".to_string());
+                }
+                if process.replicas != 1 {
+                    fields.push(format!("\"replicas\": {}", process.replicas));
+                }
+                if process.stop_wait != crate::processes::DEFAULT_STOP_WAIT {
+                    fields.push(format!("\"stopWait\": {}", process.stop_wait));
+                }
+                format!("    {}: {{ {} }}", quote(&process.id), fields.join(", "))
+            })
+            .collect();
+        lines.push(format!("  \"processes\": {{\n{}\n  }}", items.join(",\n")));
+    }
+
     // And here for exactly the reason the hooks block above is: this text
     // is what `project_manifest_write` saves on every form submission, so a
     // field the serialiser does not know about is one that disappears the
@@ -2407,6 +2464,7 @@ mod write_tests {
             warnings: vec![],
             hooks: Default::default(),
             schedule: Vec::new(),
+            processes: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             components: Default::default(),
@@ -2736,6 +2794,7 @@ mod write_tests {
             warnings: vec![],
             hooks: Default::default(),
             schedule: Vec::new(),
+            processes: Vec::new(),
             commands: Default::default(),
             sidecars: Default::default(),
             components: Default::default(),
@@ -2783,6 +2842,53 @@ mod write_tests {
     /// time somebody changed an unrelated setting in the project form — and
     /// the failure is silent, because a job that stopped existing is a job
     /// that stopped running without saying so.
+    /// The same hazard for the block whose loss is the quietest of all: a
+    /// queue worker the serialiser dropped would still be in the daemon until
+    /// the next rebuild, and gone after it, with the manifest looking edited
+    /// by nobody.
+    #[test]
+    fn a_process_block_survives_the_editor_round_trip() {
+        let raw = r#"{
+  "name": "shop",
+  "domain": "shop.loc",
+  "runtime": "php",
+  "server": "nginx",
+  "processes": {
+    "queue": { "exec": ["php", "artisan", "queue:work", "rabbitmq", "--queue=a,b"], "replicas": 2, "stopWait": 30 },
+    "scheduler": { "exec": ["php", "artisan", "schedule:work"], "enabled": false }
+  },
+  "php": {
+    "version": "8.4",
+    "extensions": [
+      "pdo"
+    ]
+  }
+}"#;
+        let first = read_text(raw, "shop");
+        assert_eq!(first.processes.len(), 2, "{:?}", first.warnings);
+
+        let text = to_json(&first);
+        let again = read_text(&text, "shop");
+        assert_eq!(again.processes, first.processes, "{text}");
+
+        // Written as the file spells it, defaults left out.
+        assert!(text.contains(
+            "  \"processes\": {\n    \"queue\": { \"exec\": [\"php\", \"artisan\", \"queue:work\", \"rabbitmq\", \"--queue=a,b\"], \"replicas\": 2, \"stopWait\": 30 },\n    \"scheduler\": { \"exec\": [\"php\", \"artisan\", \"schedule:work\"], \"enabled\": false }\n  }"
+        ), "{text}");
+        // And still last: W-01 holds with the block in front of it.
+        assert!(text.trim_end().ends_with("]\n  }\n}"), "{text}");
+
+        // The IPC shape is the file's shape too, so a save from the form
+        // carries it back unchanged.
+        let posted = serde_json::to_value(&first).unwrap();
+        assert_eq!(
+            posted["processes"]["queue"],
+            serde_json::json!({ "exec": ["php", "artisan", "queue:work", "rabbitmq", "--queue=a,b"], "replicas": 2, "stopWait": 30 })
+        );
+        let back = normalize_spec(&posted, "shop");
+        assert_eq!(back.processes, first.processes);
+    }
+
     #[test]
     fn a_schedule_survives_the_editor_round_trip() {
         let raw = r#"{

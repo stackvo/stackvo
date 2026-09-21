@@ -340,7 +340,7 @@ yan yana çalıştırabilirsiniz.
                    ┌──────────────────────────────┐
    Pencere ────────►│                              │
    (Vue 3)          │   Rust çekirdek              │──► Docker / Compose
-   stackvo CLI ────►│   (130 modül, 348 komut)     │──► Traefik · mkcert · hosts
+   stackvo CLI ────►│   (131 modül, 349 komut)     │──► Traefik · mkcert · hosts
    stackvo-mcp ────►│                              │──► Dosya sistemi (workspace)
    (AI asistanı)    └──────────────────────────────┘
 ```
@@ -627,7 +627,7 @@ proje için cevap vermez. Bu bir bilgi yalıtımı değildir ve öyle anlatılm�
 makine geneli araçlar cevap vermeye devam eder, çünkü onlar bir projeyle değil
 makineyle ilgilidir.
 
-**Sunulmayan:** değiştiren yüzeyin geri kalanı. 344 komutun 68'i bir `AppHandle`
+**Sunulmayan:** değiştiren yüzeyin geri kalanı. 345 komutun 68'i bir `AppHandle`
 alır, çünkü ilerlemeyi Tauri'nin olay sistemi üzerinden bildirirler ve bir stdio
 alt süreci içine olay yayabileceği bir uygulamaya sahip değildir. Bunu ayırmak
 kendi başına bir yeniden yapılandırma; aksini iddia etmek `project_build`'i

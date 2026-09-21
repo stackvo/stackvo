@@ -83,6 +83,7 @@ pub mod policy;
 pub mod ports;
 pub mod preflight;
 pub mod preset;
+pub mod processes;
 pub mod profile;
 pub mod progress;
 pub mod provider;
@@ -501,6 +502,7 @@ pub fn run() {
             commands::supervisor_control,
             commands::supervisor_log,
             commands::supervisor_project,
+            commands::supervisor_apply,
             commands::supervisor_checks,
             commands::supervisor_check_save,
             commands::supervisor_check_remove,

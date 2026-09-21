@@ -3111,6 +3111,16 @@
       "returns": "SupervisorCheck[]",
       "why": "supervisord reports that a process is up. It has no idea whether the thing inside it is answering — a php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 are all RUNNING, and that is the state somebody is staring at when they open this. One check per process, because a process either answers or it does not."
     },
+    "supervisor_apply": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string"
+      },
+      "returns": "ProjectSupervisor",
+      "why": "A process declared in stackvo.json reaches the container's supervisord through the generated config, and the generated config reaches the container at BUILD time — so a worker added to the manifest would otherwise start at the next rebuild and not before. This renders the same config the generator writes (the same function, never the generated directory, which may be older than the file just saved), writes it into the running container through `tee` on standard input, and runs `supervisorctl reread` then `update`, which starts what is new, restarts what changed and stops what is gone while leaving php-fpm and the web server untouched. Every step is an argv; there is no shell.",
+      "notes": "A stopgap by design and reported as one: the image still carries the old config, so a container started fresh from it runs the old config until the next rebuild bakes the new one in. `pending` on the returned ProjectSupervisor is what says whether the two agree. Refuses with CONFLICT when the project's server does not run under supervisord, when the container is not running, or when supervisord rejects the config — naming the line it rejected. Serialised per project against itself."
+    },
     "supervisor_control": {
       "new": true,
       "kind": "mutation",
@@ -4784,6 +4794,7 @@
       "commands": "Record<string, unknown>? — omitted when empty",
       "sidecars": "Record<string, unknown>",
       "schedule": "unknown[]? — commands this project runs on a timer; omitted when empty",
+      "processes": "Record<string, unknown>? — long-running processes the container's own supervisord runs beside php-fpm and the web server, keyed by id in the FILE's spelling ({ exec, enabled?, replicas?, stopWait? }); omitted when empty. In the manifest rather than in the container because the generated supervisord.conf is rewritten on every rebuild, and a program the manifest does not declare is one every rebuild forgets",
       "providers": "Record<string, unknown>? — named places this project's data lives; omitted when empty",
       "components": "Record<string, unknown> — other directories of this repository, each with its own runtime, keyed by id and kept in file order. The third of three declarations that put a container beside a project: `services` is a shared need, `sidecars` is somebody else's image, a component is this repository's own code, built here and routed at its own hostname. Empty on every project written before the field. project_components answers with the resolved form, DeclaredComponent[]",
       "local": "string[]? — omitted when empty",
@@ -5099,7 +5110,9 @@
     },
     "ProjectSupervisor": {
       "reach": "'ok' | 'noSupervisord' | 'noSocket' | 'stopped'",
-      "snapshot": "SupervisorSnapshot?"
+      "snapshot": "SupervisorSnapshot?",
+      "pending": "string[] — process ids stackvo.json declares (and enables) that the daemon is not running: the manifest changed and nothing applied it. Empty unless the daemon answered. supervisor_apply closes it now; a rebuild closes it for good",
+      "stale": "string[] — groups the daemon runs that are neither the image's own programs nor declared: added by hand inside the container, or removed from the manifest. The next rebuild drops them, and this is the sentence that says so beforehand"
     },
     "Provider": {
       "name": "string",

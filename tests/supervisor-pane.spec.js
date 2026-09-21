@@ -92,6 +92,60 @@ beforeEach(() => {
   replies.supervisorControl = true;
 });
 
+describe('what the manifest declares', () => {
+  it('names a declared process the daemon is not running, and applies it on request', async () => {
+    replies.supervisorProject = view({ pending: ['queue', 'scheduler'], stale: [] });
+    // Applying answers with the same view, and the daemon now runs both.
+    replies.supervisorApply = view({
+      pending: [],
+      stale: [],
+      snapshot: {
+        ...view().snapshot,
+        processes: [
+          process(),
+          process({ fullName: 'nginx', name: 'nginx', group: 'nginx', pid: 9 }),
+          process({ fullName: 'queue', name: 'queue', group: 'queue', pid: 12 }),
+          process({ fullName: 'scheduler', name: 'scheduler', group: 'scheduler', pid: 13 }),
+        ],
+        summary: { total: 4, running: 4, stopped: 0, fatal: 0, other: 0, flapping: 0 },
+      },
+    });
+    const pane = mountPane();
+    await flushPromises();
+
+    const banner = pane.find('[data-testid="supervisor-drift"]');
+    expect(banner.exists()).toBe(true);
+    expect(banner.text()).toContain('queue, scheduler');
+    expect(banner.text()).toContain(en.projectSupervisor.apply);
+
+    await banner.find('button').trigger('click');
+    await flushPromises();
+
+    expect(calls).toContainEqual(['supervisorApply', 'shop']);
+    // The banner clears on the daemon's answer, and the rows are the answer.
+    expect(pane.find('[data-testid="supervisor-drift"]').exists()).toBe(false);
+    expect(pane.text()).toContain('4 of 4 running');
+    expect(pane.text()).toContain('scheduler');
+  });
+
+  it('names a running process the manifest does not declare, without a button', async () => {
+    replies.supervisorProject = view({ pending: [], stale: ['by-hand'] });
+    const pane = mountPane();
+    await flushPromises();
+
+    const banner = pane.find('[data-testid="supervisor-drift"]');
+    expect(banner.text()).toContain('by-hand');
+    // Declaring it is a decision, not a click: no apply button for this one.
+    expect(banner.find('button').exists()).toBe(false);
+  });
+
+  it('says nothing when the manifest and the daemon agree', async () => {
+    const pane = mountPane();
+    await flushPromises();
+    expect(pane.find('[data-testid="supervisor-drift"]').exists()).toBe(false);
+  });
+});
+
 describe('what it shows', () => {
   it('lists what the project container is supervising, with nothing configured', async () => {
     const pane = mountPane();

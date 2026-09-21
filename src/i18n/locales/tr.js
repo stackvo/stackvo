@@ -2554,6 +2554,11 @@ export default {
     stopped: 'Container çalışmıyor.',
     counts: '{total} süreçten {running} tanesi çalışıyor',
     logToStdout: 'Bu süreç logunu container’ın stdout’una yazıyor — Loglar sekmesinde.',
+    pending:
+      'stackvo.json {list} sürecini tanımlıyor ama daemon onu çalıştırmıyor. Bir sonraki derlemede yerini alacak; derlemeden başlatmak için şimdi uygulayın. | stackvo.json {list} süreçlerini tanımlıyor ama daemon onları çalıştırmıyor. Bir sonraki derlemede yerlerini alacaklar; derlemeden başlatmak için şimdi uygulayın.',
+    stale:
+      '{list} burada çalışıyor ama stackvo.json onu tanımlamıyor. Bir sonraki derleme onu düşürür — kalmasını istiyorsanız manifestteki `processes` bloğuna ekleyin. | {list} burada çalışıyor ama stackvo.json onları tanımlamıyor. Bir sonraki derleme onları düşürür — kalmalarını istiyorsanız manifestteki `processes` bloğuna ekleyin.',
+    apply: 'Uygula',
   },
   supervisorCheck: {
     title: '{process} için sağlık kontrolü',

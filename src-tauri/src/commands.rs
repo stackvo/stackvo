@@ -363,6 +363,7 @@ pub async fn list_projects(root: &std::path::Path) -> Result<Vec<Project>> {
                         aliases: Vec::new(),
                         lan_share: false,
                         schedule: Vec::new(),
+                        processes: Vec::new(),
                         services: Vec::new(),
                         php: None,
                         node: None,
@@ -10748,6 +10749,17 @@ pub struct ProjectSupervisor {
     pub reach: crate::supervisor::Reach,
     /// Present only when it answered.
     pub snapshot: Option<crate::supervisor::Snapshot>,
+    /// Declared in `stackvo.json`, enabled, and not running in the daemon.
+    ///
+    /// The manifest changed and nothing has applied it: the container runs
+    /// the config baked into its image. `supervisor_apply` closes the gap
+    /// now; a rebuild closes it later. Empty unless the daemon answered.
+    pub pending: Vec<String>,
+    /// Running in the daemon, not one of the image's own programs, and not
+    /// declared — added by hand inside the container, or removed from the
+    /// manifest. The next rebuild drops it, which is the sentence the pane
+    /// needs to say before it happens rather than after.
+    pub stale: Vec<String>,
 }
 
 /// The supervisord inside this project's own container.
@@ -10784,6 +10796,8 @@ pub async fn supervisor_project(
         return Ok(ProjectSupervisor {
             reach,
             snapshot: None,
+            pending: Vec::new(),
+            stale: Vec::new(),
         });
     }
 
@@ -10804,10 +10818,114 @@ pub async fn supervisor_project(
     let mut snapshot = looked?;
     crate::supervisor::attach_checks(&root, &mut snapshot).await;
 
+    // What the manifest says against what the daemon is running. A manifest
+    // that cannot be read declares nothing here rather than failing the pane:
+    // the daemon answered, and that answer is the pane's business first.
+    let declared = workspace::project_dir(&root, &name)
+        .and_then(|dir| crate::manifest::read_effective(&dir.join("stackvo.json"), &name))
+        .map(|m| m.processes)
+        .unwrap_or_default();
+    let groups: Vec<String> = snapshot.processes.iter().map(|p| p.group.clone()).collect();
+    let (pending, stale) = crate::processes::drift(&declared, &groups);
+
     Ok(ProjectSupervisor {
         reach,
         snapshot: Some(snapshot),
+        pending,
+        stale,
     })
+}
+
+/// Where the generated config lives inside the container — the path the
+/// Dockerfile `COPY`s it to and `CMD` names with `-c`.
+const SUPERVISORD_CONF_IN_CONTAINER: &str = "/etc/supervisor/conf.d/supervisord.conf";
+
+/// Push the manifest's supervisord config into the running container and have
+/// the daemon pick it up, without a rebuild.
+///
+/// The config is **rendered here from the manifest by the same function the
+/// generator uses**, never read from the generated directory: the directory
+/// is written on rebuild and may be older than the file somebody just saved,
+/// and the whole point of this command is that the manifest is the source.
+///
+/// Three steps in the container, each an argv and none a shell: `tee` writes
+/// the file from standard input, `supervisorctl reread` parses it, and
+/// `supervisorctl update` starts what is new, restarts what changed and stops
+/// what is gone. `update` touches only the groups whose config changed —
+/// `php-fpm` and the web server stay up through it, because their blocks are
+/// the same bytes they were.
+///
+/// This is a stopgap by design and says so: the container still carries the
+/// old config in its image, and the next *start* from that image runs the
+/// old config until the next rebuild bakes the new one in. The pane's
+/// `pending` list is what tells that story, and it goes quiet after this.
+#[tauri::command]
+pub async fn supervisor_apply(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<ProjectSupervisor> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let manifest = crate::manifest::read_effective(&dir.join("stackvo.json"), &name)?;
+    let default_server = crate::config::Env::load(&root)?.default_server();
+
+    let Some(conf) = crate::generator::supervisord_conf_for(&manifest, &default_server) else {
+        return Err(Error::new(
+            Code::Conflict,
+            format!("{name} runs its server without supervisord, so there is no config to apply"),
+        ));
+    };
+
+    let _busy = state
+        .inflight
+        .acquire(format!("supervisor:{name}:apply"))?;
+    let target = crate::supervisor::for_project(&name);
+
+    let written = target
+        .exec_with(
+            &["tee".to_string(), SUPERVISORD_CONF_IN_CONTAINER.to_string()],
+            Some(&conf),
+        )
+        .await?;
+    if written.code != 0 {
+        let reach = crate::supervisor::classify(&format!("{}{}", written.stdout, written.stderr));
+        return Err(match reach {
+            crate::supervisor::Reach::Stopped => {
+                Error::new(Code::Conflict, format!("{name} is not running"))
+            }
+            _ => Error::new(
+                Code::Conflict,
+                format!(
+                    "could not write {SUPERVISORD_CONF_IN_CONTAINER}: {}",
+                    written.stderr.trim()
+                ),
+            ),
+        });
+    }
+
+    for verb in ["reread", "update"] {
+        let out = target
+            .exec(&["supervisorctl".to_string(), verb.to_string()])
+            .await?;
+        let said = format!("{}{}", out.stdout, out.stderr);
+        // `reread` reports a config it cannot parse as `ERROR: …` and exits
+        // 2; `update` reports a group it could not start the same way. Both
+        // are the reader's problem to see, so the line is the error.
+        if let Some(line) = said.lines().find(|l| l.contains("ERROR")) {
+            return Err(Error::new(
+                Code::Conflict,
+                format!("supervisorctl {verb}: {}", line.trim()),
+            ));
+        }
+        if out.code != 0 {
+            return Err(Error::new(
+                Code::Conflict,
+                format!("supervisorctl {verb} exited {}: {}", out.code, said.trim()),
+            ));
+        }
+    }
+
+    supervisor_project(state, name).await
 }
 
 /// Which processes one control verb applies to.
