@@ -3473,7 +3473,10 @@ mod tests {
         ), "{conf}");
         assert!(conf.contains("stopwaitsecs=30\n"));
         assert!(conf.contains("numprocs=2\nprocess_name=%(program_name)s_%(process_num)02d\n"));
-        assert!(conf.ends_with("stderr_logfile_maxbytes=0\n"));
+        // Its own file, tailable; the image's two still on stdout.
+        assert!(conf.contains("stdout_logfile=/var/log/supervisor-queue_%(process_num)02d.log\n"));
+        assert!(conf.contains("stdout_logfile=/var/log/supervisor-scheduler.log\n"));
+        assert!(conf.contains("[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\nautostart=true\nautorestart=true\nstdout_logfile=/dev/stdout\n"));
         assert!(!conf.ends_with("\n\n"));
 
         // Caddy gets exactly the same block under its own server.

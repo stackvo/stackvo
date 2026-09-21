@@ -822,6 +822,12 @@ export const api = {
     call('supervisor_log', { name, process, channel, lines }),
   /** Push the manifest's `processes` into the running daemon, without a rebuild. */
   supervisorApply: (name) => call('supervisor_apply', { name }),
+  /** One process in full: the daemon's row, the manifest's word, the file's block, /proc's cost. */
+  supervisorProcess: (name, process) => call('supervisor_process', { name, process }),
+  /** The container's own stdout, for the processes that write there. */
+  supervisorStdout: (name, lines) => call('supervisor_stdout', { name, lines }),
+  /** One of the six supervisorctl verbs for the whole daemon; answers with its words. */
+  supervisorDaemon: (name, verb) => call('supervisor_daemon', { name, verb }),
   /** The probes that answer what RUNNING cannot. One per process. */
   supervisorChecks: (name) => call('supervisor_checks', { name }),
   supervisorCheckSave: (check) => call('supervisor_check_save', { check }),

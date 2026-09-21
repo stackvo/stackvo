@@ -156,7 +156,9 @@ offers to apply the config without a rebuild.
 
 Only `nginx` and `caddy` projects run supervisord; for any other server the
 block is kept and does nothing. `php-fpm`, `nginx` and `caddy` are reserved
-ids. Logs go to the container's stdout, which is the Logs tab.
+ids. Each process writes to its own file, `/var/log/supervisor-<id>.log`,
+rotated by supervisord at 10 MB with three kept, stderr folded in; the
+Supervisor pane's Log tab reads it.
 
 Not to be confused with `schedule`, which starts a command on a timer and
 expects it to exit, or with the Workers pane, which runs Laravel's fixed

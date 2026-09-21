@@ -3121,6 +3121,38 @@
       "why": "A process declared in stackvo.json reaches the container's supervisord through the generated config, and the generated config reaches the container at BUILD time — so a worker added to the manifest would otherwise start at the next rebuild and not before. This renders the same config the generator writes (the same function, never the generated directory, which may be older than the file just saved), writes it into the running container through `tee` on standard input, and runs `supervisorctl reread` then `update`, which starts what is new, restarts what changed and stops what is gone while leaving php-fpm and the web server untouched. Every step is an argv; there is no shell.",
       "notes": "A stopgap by design and reported as one: the image still carries the old config, so a container started fresh from it runs the old config until the next rebuild bakes the new one in. `pending` on the returned ProjectSupervisor is what says whether the two agree. Refuses with CONFLICT when the project's server does not run under supervisord, when the container is not running, or when supervisord rejects the config — naming the line it rejected. Serialised per project against itself."
     },
+    "supervisor_process": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string",
+        "process": "string"
+      },
+      "returns": "SupervisorProcessDetail",
+      "why": "The table says RUNNING, a pid and an uptime, and nothing about what the process IS: the command line it was started with, the stop timeout it will be given, how many copies there are, whether the manifest or the image or somebody's hand put it there, and what it is costing. Four sources answered together, each labelled — the daemon's fresh row, the manifest's declaration, the [program:] block as the container's config file actually has it, and /proc for memory, threads and CPU.",
+      "notes": "Asked on demand and never on the poll: at most three docker execs (status, cat of the config, cat over /proc), for the one row somebody opened. `origin` is `image` for php-fpm and the web server, `manifest` for a declared process, `unknown` for one the daemon runs that neither explains — which the next rebuild will drop. `config` is empty when the file has no block for the group. `resources` is absent for a process with no pid; CPU is a lifetime average, the number ps prints as %cpu, because one look cannot honestly give an instant. No shell: every step is an argv."
+    },
+    "supervisor_stdout": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string",
+        "lines": "number?"
+      },
+      "returns": "string",
+      "why": "php-fpm and the web server write to /dev/stdout, which supervisord cannot read back — supervisorctl tail on it is an error, not a log. Their output is the container's, so the sheet's log tab shows that for them: the last N lines of the container's stdout and stderr, every process mixed, which is honestly what stdout is. Read once; the sheet asks again while it is open."
+    },
+    "supervisor_daemon": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "verb": "'status' | 'reread' | 'update' | 'start-all' | 'stop-all' | 'restart-all'"
+      },
+      "returns": "SupervisorDaemonResult",
+      "why": "The six things somebody types at supervisorctl for the daemon as a whole, from a menu on the pane's header, with the daemon's own words shown back — `nginx: stopped`, `queue: added process group`, `ERROR: CANT_REREAD`. A fixed table: the webview sends a verb and never an argument. Not supervisor_control, which answers a boolean and whose restart is a stop-then-start pair; `restart all` here is the daemon's one verb.",
+      "notes": "`ok` is false when any line is a refusal, beside the text rather than instead of it: `stop all` with one process already stopped prints ERROR for that row and stops the rest. A stopped container and a daemon with no socket are errors (CONFLICT). `reread` and `update` without pushing the manifest's config first are for a file edited inside the container by hand — supervisor_apply is the other order. Serialised per project."
+    },
     "supervisor_control": {
       "new": true,
       "kind": "mutation",
@@ -5409,6 +5441,37 @@
       "restarts": "i64",
       "flapping": "bool",
       "check": "SupervisorCheckResult?"
+    },
+    "SupervisorDaemonResult": {
+      "verb": "string",
+      "ok": "bool — no line of the answer is a refusal",
+      "output": "string — what supervisorctl printed, trimmed"
+    },
+    "SupervisorProcessDetail": {
+      "process": "SupervisorProcess — a fresh row from the daemon; restarts and flapping are the watch's and are zero here, the table's row has them",
+      "origin": "'image' | 'manifest' | 'unknown'",
+      "declared": "DeclaredProcess?",
+      "config": "SupervisorConfigEntry[] — the [program:<group>] block in file order; empty when the container's config has no such block",
+      "configPath": "string",
+      "resources": "SupervisorResources? — absent while the process has no pid"
+    },
+    "SupervisorConfigEntry": {
+      "key": "string",
+      "value": "string"
+    },
+    "DeclaredProcess": {
+      "id": "string",
+      "exec": "string[]",
+      "enabled": "bool",
+      "replicas": "u32",
+      "stopWait": "u32",
+      "note": "One entry of the manifest's `processes` block, resolved: the defaults filled in. The file's spelling leaves them out; see project.schema.json."
+    },
+    "SupervisorResources": {
+      "rssKb": "u64 — resident set, VmRSS",
+      "threads": "u64",
+      "cpuSeconds": "f64 — CPU time over the process's whole life",
+      "cpuPercent": "f64 — that time as a share of one core over the same span, ps's %cpu"
     },
     "SupervisorSnapshot": {
       "project": "string",

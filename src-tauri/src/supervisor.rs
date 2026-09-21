@@ -275,6 +275,17 @@ impl Target {
                     verb.push("stderr".to_string());
                 }
                 let out = self.exec(&ctl(verb)).await?;
+                // `supervisorctl tail` writes its refusal to stdout, as one
+                // line, exit 1 — and the common refusal is not a missing
+                // process but a log it cannot read: `/dev/stdout`, where the
+                // image's own programs write. Returned as the text of a log,
+                // that line was shown as if the process had said it.
+                let said = format!("{}{}", out.stdout, out.stderr);
+                if let Some(line) = said.lines().find(|l| l.contains("ERROR (")) {
+                    return Err(Error::new(Code::Unsupported, line.trim().to_string()).with_hint(
+                        "a process writing to /dev/stdout has no log supervisord can read back; the container's own log has it",
+                    ));
+                }
                 // The RPC shape is `[text, offset, overflow]`, and the two
                 // numbers are honestly zero: `supervisorctl tail` has no offset
                 // to report.

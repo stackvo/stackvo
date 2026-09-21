@@ -10840,6 +10840,210 @@ pub async fn supervisor_project(
 /// Dockerfile `COPY`s it to and `CMD` names with `-c`.
 const SUPERVISORD_CONF_IN_CONTAINER: &str = "/etc/supervisor/conf.d/supervisord.conf";
 
+/// One `key=value` of a `[program:]` block, kept as a pair so the file's order
+/// survives the trip to the screen.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupervisorConfigEntry {
+    pub key: String,
+    pub value: String,
+}
+
+/// Everything there is to know about one supervised process.
+///
+/// Four sources, each named so the screen can say where a value came from:
+/// what the daemon reports now, what the manifest declares, what the config
+/// file in the container actually says, and what `/proc` measures.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupervisorProcessDetail {
+    /// A fresh row from the daemon — state, pid, uptime, description.
+    pub process: crate::supervisor::Process,
+    /// `image` for the two programs the generated image always carries,
+    /// `manifest` for one `stackvo.json` declares, `unknown` for one the
+    /// daemon is running that neither explains — added by hand in the
+    /// container, and gone at the next rebuild.
+    pub origin: String,
+    /// The manifest's declaration, when there is one.
+    pub declared: Option<crate::processes::Process>,
+    /// The `[program:<group>]` block as the container's config file has it.
+    /// Empty when the file has no such block — the daemon was told about the
+    /// process some other way.
+    pub config: Vec<SupervisorConfigEntry>,
+    pub config_path: String,
+    /// Memory, threads and CPU, read from `/proc` while the process has a pid.
+    pub resources: Option<crate::processes::Resources>,
+}
+
+/// What one `supervisorctl` verb said.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupervisorDaemonResult {
+    pub verb: String,
+    /// No line of the answer is a refusal. `stop all` on a table with one
+    /// process already stopped prints `ERROR (not running)` for that row and
+    /// stops the rest, so a refusal is a fact about a line and not about the
+    /// verb — which is why this is a flag beside the text rather than an
+    /// error instead of it.
+    pub ok: bool,
+    /// The daemon's own words, as `supervisorctl` printed them.
+    pub output: String,
+}
+
+/// The six things somebody types at `supervisorctl` for the daemon as a whole.
+///
+/// `status`, `reread`, `update`, and `start`/`stop`/`restart` of `all` — a
+/// fixed table, and the webview sends a verb from it and never an argument.
+/// Not routed through `supervisor_control`, for two reasons that are the
+/// same reason: that command answers a boolean, and this exists to show what
+/// the daemon *said* — `nginx: stopped`, `queue: added process group`,
+/// `ERROR: CANT_REREAD` — and `restart all` here is the daemon's own verb, one
+/// command, rather than the stop-then-start pair `supervisor_control` makes.
+///
+/// `reread` and `update` on their own, without pushing the manifest's config
+/// first, are what somebody wants after editing the file inside the container
+/// by hand — `supervisor_apply` is the other order.
+#[tauri::command]
+pub async fn supervisor_daemon(
+    state: State<'_, AppState>,
+    name: String,
+    verb: String,
+) -> Result<SupervisorDaemonResult> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+
+    let argv: &[&str] = match verb.as_str() {
+        "status" => &["status"],
+        "reread" => &["reread"],
+        "update" => &["update"],
+        "start-all" => &["start", "all"],
+        "stop-all" => &["stop", "all"],
+        "restart-all" => &["restart", "all"],
+        other => {
+            return Err(Error::new(
+                Code::InvalidInput,
+                format!("`{other}` is not something to ask supervisorctl for"),
+            ))
+        }
+    };
+
+    let _busy = state
+        .inflight
+        .acquire(format!("supervisor:{name}:daemon"))?;
+    let target = crate::supervisor::for_project(&name);
+    let mut full = vec!["supervisorctl".to_string()];
+    full.extend(argv.iter().map(|s| s.to_string()));
+    let out = target.exec(&full).await?;
+    let text = format!("{}{}", out.stdout, out.stderr);
+
+    // The engine's and the socket's failures are errors; the daemon's own
+    // refusals are the answer. `status` exits 3 with a stopped process in the
+    // table and has answered perfectly well, so the exit code decides nothing.
+    match crate::supervisor::classify(&text) {
+        crate::supervisor::Reach::Ok => {}
+        crate::supervisor::Reach::Stopped => {
+            return Err(Error::new(Code::Conflict, format!("{name} is not running")))
+        }
+        _ => return Err(Error::new(Code::Conflict, text.trim().to_string())),
+    }
+
+    Ok(SupervisorDaemonResult {
+        verb,
+        ok: !text.lines().any(|l| l.contains("ERROR")),
+        output: text.trim().to_string(),
+    })
+}
+
+/// The container's own output, for the processes that write there.
+///
+/// `php-fpm` and the web server log to `/dev/stdout`, which supervisord cannot
+/// read back — `supervisorctl tail` on it is an error, not a log. Their output
+/// is the container's, so the same tab shows that instead: every process's
+/// lines mixed, which is honestly what stdout is. Read once, not followed;
+/// the sheet asks again while it is open, the way it does for a file.
+#[tauri::command]
+pub async fn supervisor_stdout(
+    state: State<'_, AppState>,
+    name: String,
+    lines: Option<u32>,
+) -> Result<String> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    let container = crate::supervisor::for_project(&name).container;
+    engine::logs_tail(&container, lines.unwrap_or(500).clamp(10, 5000), false).await
+}
+
+/// One process, in full.
+///
+/// Three `docker exec`s at most — the status row, one `cat` of the config,
+/// one `cat` over `/proc` — and only when somebody opened the detail, never
+/// on the poll: the table is looked at every five seconds and a screenful of
+/// numbers nobody asked for is a cost paid on every project for the one row
+/// someone is reading.
+#[tauri::command]
+pub async fn supervisor_process(
+    state: State<'_, AppState>,
+    name: String,
+    process: String,
+) -> Result<SupervisorProcessDetail> {
+    let root = state.root()?;
+    let dir = workspace::project_dir(&root, &name)?;
+    let target = crate::supervisor::for_project(&name);
+
+    let row = target
+        .call("supervisor.getProcessInfo", &[serde_json::json!(process)])
+        .await?;
+    let fresh = crate::supervisor::normalize(&row);
+    let group = fresh.group.clone();
+
+    let declared = crate::manifest::read_effective(&dir.join("stackvo.json"), &name)
+        .ok()
+        .and_then(|m| m.processes.into_iter().find(|p| p.id == group));
+    let origin = if crate::processes::RESERVED.contains(&group.as_str()) {
+        "image"
+    } else if declared.is_some() {
+        "manifest"
+    } else {
+        "unknown"
+    };
+
+    let conf = target
+        .exec(&["cat".to_string(), SUPERVISORD_CONF_IN_CONTAINER.to_string()])
+        .await?;
+    let config = crate::processes::program_block(&conf.stdout, &group)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(key, value)| SupervisorConfigEntry { key, value })
+        .collect();
+
+    // A stopped process has no pid and nothing to measure; a pid that went
+    // away between the two calls gives `cat` an error and this an honest None.
+    let resources = if fresh.pid > 0 {
+        let pid = fresh.pid;
+        target
+            .exec(&[
+                "cat".to_string(),
+                format!("/proc/{pid}/status"),
+                format!("/proc/{pid}/stat"),
+                "/proc/uptime".to_string(),
+            ])
+            .await
+            .ok()
+            .and_then(|out| crate::processes::resources_from_proc(&out.stdout))
+    } else {
+        None
+    };
+
+    Ok(SupervisorProcessDetail {
+        process: fresh,
+        origin: origin.to_string(),
+        declared,
+        config,
+        config_path: SUPERVISORD_CONF_IN_CONTAINER.to_string(),
+        resources,
+    })
+}
+
 /// Push the manifest's supervisord config into the running container and have
 /// the daemon pick it up, without a rebuild.
 ///
