@@ -155,7 +155,9 @@ olmayan bir şey tanımlıyorsa yapılandırmayı derlemeden uygulamayı önerir
 
 Yalnızca `nginx` ve `caddy` projeleri supervisord çalıştırır; diğer sunucularda
 blok saklanır ve hiçbir şey yapmaz. `php-fpm`, `nginx` ve `caddy` ayrılmış
-kimliklerdir. Loglar container'ın stdout'una, yani Loglar sekmesine gider.
+kimliklerdir. Her süreç kendi dosyasına yazar: `/var/log/supervisor-<id>.log`,
+supervisord 10 MB'da döndürür ve üç yedek tutar, stderr aynı dosyaya katlanır;
+Supervisor panelinin Log sekmesi bunu okur.
 
 `schedule` ile karıştırmayın: o bir komutu zamanlayıcıyla başlatır ve çıkmasını
 bekler. Workers paneli de Laravel'in sabit işçi komutlarını yan container'larda

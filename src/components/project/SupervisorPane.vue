@@ -3,10 +3,12 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import { stateColor, uptimeOf } from '@/composables/useSupervisors';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import ErrorAlert from '@/components/ErrorAlert.vue';
 import PaneHeader from '@/components/PaneHeader.vue';
 import RemedyAlert from '@/components/project/RemedyAlert.vue';
 import SupervisorCheckDialog from '@/components/project/SupervisorCheckDialog.vue';
+import SupervisorProcessSheet from '@/components/project/SupervisorProcessSheet.vue';
 
 /**
  * The supervisord inside this project's own container.
@@ -116,13 +118,57 @@ async function apply() {
 /** Owned by the dialog, driven from here — this pane owns the rows. */
 const checkDialog = ref(null);
 
-const viewing = ref(null);
-const logText = ref('');
+/**
+ * The detail sheet: the pane hands it the row it is showing, and which tab
+ * to open on — the log button and the info button are the same sheet.
+ */
+const processSheet = ref(null);
 
-async function openLog(process) {
-  viewing.value = process;
-  logText.value = '';
-  logText.value = await api.supervisorLog(props.name, process.fullName, 'stdout', 500);
+/**
+ * The daemon as a whole: what somebody types at `supervisorctl` when the
+ * question is not about one row. A menu on the header, and the daemon's own
+ * answer shown under it, because `queue: added process group` and
+ * `ERROR: CANT_REREAD` are the point of asking.
+ *
+ * Two of the six take the site down — `stop all` and `restart all` stop the
+ * web server and php-fpm with everything else — so those two ask first.
+ */
+const DAEMON_VERBS = [
+  { verb: 'status', icon: 'mdi-format-list-bulleted' },
+  { verb: 'reread', icon: 'mdi-file-refresh-outline' },
+  { verb: 'update', icon: 'mdi-update' },
+  { verb: 'start-all', icon: 'mdi-play' },
+  { verb: 'stop-all', icon: 'mdi-stop', confirm: true },
+  { verb: 'restart-all', icon: 'mdi-restart', confirm: true },
+];
+const daemonResult = ref(null);
+const daemonBusy = ref(null);
+// The verb waiting on a confirmation, and whether the question is up. Two
+// refs and not one: the dialog closes itself *before* it says "confirm", so a
+// verb cleared on close would be gone by the time it was needed.
+const confirming = ref(null);
+const confirmOpen = ref(false);
+
+function ask(entry) {
+  if (entry.confirm) {
+    confirming.value = entry.verb;
+    confirmOpen.value = true;
+  } else {
+    runDaemon(entry.verb);
+  }
+}
+
+async function runDaemon(verb) {
+  daemonBusy.value = verb;
+  error.value = null;
+  try {
+    daemonResult.value = await api.supervisorDaemon(props.name, verb);
+  } catch (e) {
+    error.value = e;
+  } finally {
+    daemonBusy.value = null;
+    await load();
+  }
 }
 </script>
 
@@ -133,9 +179,76 @@ async function openLog(process) {
       icon="mdi-server-network"
       :title="t('projectSupervisor.title')"
       :description="t('projectSupervisor.explain')"
-    />
+    >
+      <template #append>
+        <v-menu v-if="running && reach === 'ok'" location="bottom end">
+          <template #activator="{ props: menu }">
+            <v-btn
+              icon
+              variant="text"
+              v-bind="menu"
+              :loading="!!daemonBusy"
+              :aria-label="t('projectSupervisor.daemon.button')"
+            >
+              <v-icon>mdi-console-line</v-icon>
+              <v-tooltip activator="parent" location="bottom">
+                {{ t('projectSupervisor.daemon.button') }}
+              </v-tooltip>
+            </v-btn>
+          </template>
+          <v-list density="compact" class="px-2 py-2">
+            <v-list-item
+              v-for="entry in DAEMON_VERBS"
+              :key="entry.verb"
+              :disabled="!!daemonBusy"
+              @click="ask(entry)"
+            >
+              <template #prepend>
+                <v-icon>{{ entry.icon }}</v-icon>
+              </template>
+              <v-list-item-title>{{
+                t(`projectSupervisor.daemon.${entry.verb}`)
+              }}</v-list-item-title>
+              <v-list-item-subtitle class="font-mono">
+                supervisorctl {{ entry.verb.replace('-all', ' all') }}
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+      </template>
+    </PaneHeader>
 
     <ErrorAlert v-if="error" :error="error" class="mb-4" />
+
+    <!-- The daemon's answer, in its own words, until it is closed. -->
+    <v-alert
+      v-if="daemonResult"
+      :type="daemonResult.ok ? 'success' : 'warning'"
+      variant="tonal"
+      density="compact"
+      closable
+      class="mb-4"
+      data-testid="supervisor-daemon-result"
+      @click:close="daemonResult = null"
+    >
+      <div class="text-caption font-mono mb-1">
+        supervisorctl {{ daemonResult.verb.replace('-all', ' all') }}
+      </div>
+      <pre class="sup-daemon-output">{{
+        daemonResult.output || t('projectSupervisor.daemon.silent')
+      }}</pre>
+    </v-alert>
+
+    <ConfirmDialog
+      v-model="confirmOpen"
+      :title="confirming ? t(`projectSupervisor.daemon.confirm.${confirming}.title`) : ''"
+      :message="
+        confirming ? t(`projectSupervisor.daemon.confirm.${confirming}.message`, { name }) : ''
+      "
+      :confirm-text="confirming ? t(`projectSupervisor.daemon.${confirming}`) : ''"
+      color="error"
+      @confirm="runDaemon(confirming)"
+    />
 
     <v-alert v-if="!running" type="info" variant="tonal" class="mb-0">
       <div class="text-caption">{{ t('projectSupervisor.needsRunning') }}</div>
@@ -239,6 +352,13 @@ async function openLog(process) {
         <v-btn
           size="small"
           variant="text"
+          icon="mdi-information-outline"
+          :title="t('projectSupervisor.detail.button')"
+          @click="processSheet?.show(process)"
+        />
+        <v-btn
+          size="small"
+          variant="text"
           icon="mdi-restart"
           :loading="busy === `restart:${process.fullName}`"
           :title="t('supervisors.restart')"
@@ -263,46 +383,36 @@ async function openLog(process) {
           variant="text"
           icon="mdi-text-box-outline"
           :title="t('supervisors.log')"
-          @click="openLog(process)"
+          @click="processSheet?.show(process, 'logs')"
         />
       </div>
     </template>
 
     <SupervisorCheckDialog ref="checkDialog" :project="name" @saved="load" />
-
-    <v-dialog v-model="viewing" max-width="900">
-      <v-card v-if="viewing">
-        <v-card-title class="text-body-1">{{ viewing.fullName }}</v-card-title>
-        <v-card-text>
-          <pre v-if="logText" class="sup-log">{{ logText }}</pre>
-          <div v-else class="text-caption text-medium-emphasis">
-            {{ t('projectSupervisor.logToStdout') }}
-          </div>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="viewing = null">{{ t('supervisors.close') }}</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <SupervisorProcessSheet ref="processSheet" :project="name" @changed="load" />
   </v-card>
 </template>
 
 <style scoped>
+.font-mono,
+.sup-daemon-output {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.sup-daemon-output {
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .sup-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 0;
   border-top: 1px solid rgb(var(--v-border-color), var(--v-border-opacity));
-}
-
-.sup-log {
-  max-height: 60vh;
-  overflow: auto;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 </style>

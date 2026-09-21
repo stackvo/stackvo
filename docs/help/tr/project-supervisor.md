@@ -64,9 +64,25 @@ Kalıcı olan tek yol bu. Bu container'daki yapılandırmayı **StackVo üretir*
 
 Birini başlatmak için yeniden derleme gerekmez. Manifest, çalışan daemon'da olmayan bir şey tanımlıyorsa bir uyarı şeridi onu adıyla gösterir ve **Uygula** düğmesi sunar: yapılandırma container'a yazılır, supervisord yeniden okur, yeni olanı başlatır ve `php-fpm` ile web sunucusuna dokunmaz. Tersi de adlandırılır — burada çalışan ama manifestin tanımlamadığı bir süreç — çünkü bir sonraki derleme onu düşürecek ve bunu önceden söylemek sonradan söylemekten iyidir.
 
+## Daemon'ın bütünü
+
+Panel başlığında yardımın yanındaki terminal düğmesi, tek bir satır için değil daemon için `supervisorctl`'dir: **durum**, **yapılandırmayı yeniden oku** (`reread`), **yapılandırma değişikliklerini uygula** (`update`) ve **tümünü başlat / durdur / yeniden başlat**. Daemon'ın kendi yanıtı başlığın altında gösterilir — `queue: added process group`, `nginx: stopped`, `ERROR: CANT_REREAD` — kapatılana kadar; çünkü sormanın amacı o sözlerdir.
+
+Tümünü durdur ve tümünü yeniden başlat önce sorar: `all`, `php-fpm` ve web sunucusunu da kapsar, yani site işçilerle birlikte düşer. Buradaki `reread` ve `update` container'daki yapılandırmayı olduğu gibi okur; önce `stackvo.json`'daki tanımı içeri itmek için panelin ikisi farklı olduğunda gösterdiği Uygula düğmesini kullanın.
+
+## Bir süreç, tüm ayrıntısıyla
+
+Satırdaki bilgi düğmesi süreci açar: daemon'ın şu an bildirdiği, `stackvo.json`'ın onun için tanımladığı, container'daki yapılandırma dosyasındaki `[program:]` bloğunun birebir hali ve maliyeti — yerleşik bellek, thread sayısı ve ömür boyu ortalama olarak CPU, yani `ps`'in `%cpu` diye yazdığı sayı. Her bölüm değerin nereden geldiğiyle etiketlidir; çünkü manifest ile dosya bir derleme ya da uygulama sonrasında aynıdır, arada farklıdır ve hangisinin geçerli olduğu burada görülür.
+
+Adın yanındaki etiket süreci oraya kimin koyduğunu söyler: `php-fpm` ve web sunucusu için **imajdan**, tanımlı olan için **stackvo.json'dan**, ikisinin de açıklamadığı ve daemon'ın çalıştırdığı biri için **tanımsız** — container içinde eklenmiş ve bir sonraki derlemede kaybolacak.
+
+Aynı panelin **Log** sekmesi sürecin logunu kuyruklar ve açıkken izler. Tanımlı bir süreç kendi dosyasına yazar: `/var/log/supervisor-<id>.log`, supervisord 10 MB'da döndürür ve üç yedek tutar. Dosya olmasının nedeni supervisord'un bir cihazı geri okuyamaması: `php-fpm` ve web sunucusu container'ın stdout'una yazar ve `supervisorctl tail` buna `ERROR (unknown error reading log)` der. O ikisi için sekme bunun yerine container'ın kendi çıktısını gösterir — tüm süreçler karışık, stdout zaten budur — ve bunu üstünde söyler.
+
+Buradan süreç durdurulabilir, başlatılabilir, yeniden başlatılabilir ya da sinyal gönderilebilir (`HUP`, `USR1`, `TERM`, …). Stdin göndermek bilerek sunulmaz: daemon'a `supervisorctl` üzerinden ulaşılır ve o bunu yapamaz.
+
 ## Bilinmesi gerekenler
 
 - Burada hiçbir şey elle düzenlenmez. Bir süreci, manifestteki `processes` bloğunu değiştirip uygulayarak ya da yeniden derleyerek değiştirin.
 - Soket, container'ın içinde 0700 modlu bir Unix soketi. Hiçbir şey yayımlanmaz ve hiçbir port açılmaz — ona ulaşmak, zaten o container'da süreç çalıştırabiliyor olmak demektir.
 - Buradan `php-fpm`'i yeniden başlatmak, container'ı yeniden başlatmadan PHP'yi yeniden başlatır: web sunucusu bağlantılarını korur ve tam bir açılışı beklemezsiniz.
-- Bu süreçler loglarını container'ın stdout'una yazar, yani Loglar sekmesine. Buradaki log düğmesi supervisord'un kendi yakaladığını gösterir, ve tam bu yüzden genelde boştur.
+- `php-fpm` ve web sunucusu container'ın stdout'una yazar, yani projenin Loglar sekmesine. Tanımlı bir süreç `/var/log` altında kendi dosyasına yazar; buradaki Log sekmesi onu okur.

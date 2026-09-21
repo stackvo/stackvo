@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 161 named types, 342 wrappers, 8 field(s) the
+ * Measured at generation: 166 named types, 345 wrappers, 8 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -2256,6 +2256,65 @@ export interface SupervisorProcess {
     check?: SupervisorCheckResult;
 }
 
+export interface SupervisorDaemonResult {
+    /** string */
+    verb: string;
+    /** bool — no line of the answer is a refusal */
+    ok: boolean;
+    /** string — what supervisorctl printed, trimmed */
+    output: string;
+}
+
+export interface SupervisorProcessDetail {
+    /**
+     * SupervisorProcess — a fresh row from the daemon; restarts and flapping are the watch's and are zero here, the table's row has them
+     */
+    process: SupervisorProcess;
+    /** 'image' | 'manifest' | 'unknown' */
+    origin: 'image' | 'manifest' | 'unknown';
+    /** DeclaredProcess? */
+    declared?: DeclaredProcess;
+    /**
+     * SupervisorConfigEntry[] — the [program:<group>] block in file order; empty when the container's config has no such block
+     */
+    config: SupervisorConfigEntry[];
+    /** string */
+    configPath: string;
+    /** SupervisorResources? — absent while the process has no pid */
+    resources?: SupervisorResources;
+}
+
+export interface SupervisorConfigEntry {
+    /** string */
+    key: string;
+    /** string */
+    value: string;
+}
+
+export interface DeclaredProcess {
+    /** string */
+    id: string;
+    /** string[] */
+    exec: string[];
+    /** bool */
+    enabled: boolean;
+    /** u32 */
+    replicas: number;
+    /** u32 */
+    stopWait: number;
+}
+
+export interface SupervisorResources {
+    /** u64 — resident set, VmRSS */
+    rssKb: number;
+    /** u64 */
+    threads: number;
+    /** f64 — CPU time over the process's whole life */
+    cpuSeconds: number;
+    /** f64 — that time as a share of one core over the same span, ps's %cpu */
+    cpuPercent: number;
+}
+
 export interface SupervisorSnapshot {
     /** string */
     project: string;
@@ -3368,6 +3427,18 @@ export interface StackvoApi {
    * A process declared in stackvo.json reaches the container's supervisord through the generated config, and the generated config reaches the container at BUILD time — so a worker added to the manifest would otherwise start at the next rebuild and not before. This renders the same config the generator writes (the same function, never the generated directory, which may be older than the file just saved), writes it into the running container through `tee` on standard input, and runs `supervisorctl reread` then `update`, which starts what is new, restarts what changed and stops what is gone while leaving php-fpm and the web server untouched. Every step is an argv; there is no shell.
    */
   supervisorApply(name: string): Promise<ProjectSupervisor>;
+  /**
+   * The table says RUNNING, a pid and an uptime, and nothing about what the process IS: the command line it was started with, the stop timeout it will be given, how many copies there are, whether the manifest or the image or somebody's hand put it there, and what it is costing. Four sources answered together, each labelled — the daemon's fresh row, the manifest's declaration, the [program:] block as the container's config file actually has it, and /proc for memory, threads and CPU.
+   */
+  supervisorProcess(name: string, process: string): Promise<SupervisorProcessDetail>;
+  /**
+   * php-fpm and the web server write to /dev/stdout, which supervisord cannot read back — supervisorctl tail on it is an error, not a log. Their output is the container's, so the sheet's log tab shows that for them: the last N lines of the container's stdout and stderr, every process mixed, which is honestly what stdout is. Read once; the sheet asks again while it is open.
+   */
+  supervisorStdout(name: string, lines?: number): Promise<string>;
+  /**
+   * The six things somebody types at supervisorctl for the daemon as a whole, from a menu on the pane's header, with the daemon's own words shown back — `nginx: stopped`, `queue: added process group`, `ERROR: CANT_REREAD`. A fixed table: the webview sends a verb and never an argument. Not supervisor_control, which answers a boolean and whose restart is a stop-then-start pair; `restart all` here is the daemon's one verb.
+   */
+  supervisorDaemon(name: string, verb: 'status' | 'reread' | 'update' | 'start-all' | 'stop-all' | 'restart-all'): Promise<SupervisorDaemonResult>;
   /**
    * supervisord reports that a process is up. It has no idea whether the thing inside it is answering — a php-fpm out of workers, a queue worker wedged on a lock and a web server serving 502 are all RUNNING, and that is the state somebody is staring at when they open this. One check per process, because a process either answers or it does not.
    */

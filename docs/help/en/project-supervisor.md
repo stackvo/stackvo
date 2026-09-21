@@ -64,9 +64,25 @@ This is the only way that survives. The config in this container is **generated 
 
 A rebuild is not needed to start one. When the manifest declares something the running daemon does not have, a banner names it with an **Apply** button: the config is written into the container and supervisord re-reads it, starting what is new and leaving `php-fpm` and the web server as they were. The reverse is named too — a process running here that the manifest does not declare — because the next rebuild will drop it, and that is better said before than after.
 
+## The daemon as a whole
+
+The terminal button on the pane's header, beside help, is `supervisorctl` for the daemon rather than for one row: **status**, **re-read the config** (`reread`), **apply config changes** (`update`), and **start**, **stop** or **restart all**. The daemon's own answer is shown under the header — `queue: added process group`, `nginx: stopped`, `ERROR: CANT_REREAD` — until it is closed, because those words are the point of asking.
+
+Stop all and restart all ask first: `all` includes `php-fpm` and the web server, so the site goes down with the workers. `reread` and `update` here read whatever config the container holds; to push what `stackvo.json` declares first, use the Apply button the pane shows when the two differ.
+
+## One process in full
+
+The info button on a row opens the process: what the daemon reports now, what `stackvo.json` declares for it, the `[program:]` block exactly as the config file in the container has it, and what it is costing — resident memory, threads, and CPU as a lifetime average, the number `ps` prints as `%cpu`. Each section is labelled by where the value came from, because the manifest and the file agree after a rebuild or an apply and disagree in between, and this is where you see which.
+
+The chip beside the name says who put the process there: **from the image** for `php-fpm` and the web server, **from stackvo.json** for a declared one, and **not declared** for one the daemon is running that neither explains — added inside the container, and gone at the next rebuild.
+
+The **Log** tab of the same sheet tails the process's log and follows it while open. A declared process writes to its own file, `/var/log/supervisor-<id>.log`, rotated by supervisord at 10 MB with three kept — a file, because supervisord cannot read a device back: `php-fpm` and the web server write to the container's stdout, and `supervisorctl tail` on that answers `ERROR (unknown error reading log)`. For those two the tab shows the container's own output instead — every process mixed, which is what stdout is — and says so above it.
+
+From here a process can be stopped, started, restarted, or sent a signal (`HUP`, `USR1`, `TERM`, …). Sending stdin is deliberately not offered: the daemon is reached through `supervisorctl`, which cannot do it.
+
 ## Worth knowing
 
 - Nothing here is edited by hand. Change a process by changing `processes` in the manifest, then apply or rebuild.
 - The socket is a Unix socket inside the container, mode 0700. Nothing is published and no port is opened — reaching it means already being able to run a process in that container.
 - Restarting `php-fpm` here restarts PHP without restarting the container, so the web server keeps its connections and you do not wait for a whole boot.
-- These processes write their logs to the container's stdout, which is the Logs tab. The log button here shows what supervisord itself captured, which is usually empty for exactly that reason.
+- `php-fpm` and the web server write to the container's stdout, which is the project's Logs tab. A declared process writes to its own file under `/var/log`, which the Log tab here reads.

@@ -31,6 +31,27 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   too: a process running that nothing declares, because the next rebuild
   drops it.
 
+- **A supervised process, in full.** The Supervisor pane's rows said RUNNING,
+  a pid and an uptime and nothing about what the process is. The info button
+  on a row now opens it — the daemon's fresh row, the manifest's declaration,
+  the `[program:]` block exactly as the container's config file has it, and
+  `/proc`'s cost: resident memory, threads, and CPU as the lifetime average
+  `ps` prints as `%cpu`. Each section is labelled by its source, and a chip
+  says who put the process there: the image, `stackvo.json`, or nobody, in
+  which case the next rebuild drops it and the sheet says so. Stop, start,
+  restart and a signal picker sit at the bottom, and a second tab tails the
+  log and follows it. `supervisor_process` asks three `docker exec`s on
+  demand and none on the poll. A declared process now writes to its own file,
+  `/var/log/supervisor-<id>.log`, rotated by supervisord at 10 MB with three
+  kept, rather than to `/dev/stdout` — which supervisord cannot read back, so
+  the log button answered `ERROR (unknown error reading log)` for every
+  worker, and answered it as if it were the log. A tail that failed is now an
+  error with the reason, and for the image's two programs the tab shows the
+  container's own output instead, labelled as such. And the pane's header
+  carries `supervisorctl` for the daemon as a whole — status, reread, update,
+  start/stop/restart all — with the daemon's own answer shown back, and a
+  confirmation before the two that take the web server down with the rest.
+
 - **A Sponsor button.** `.github/FUNDING.yml` names the organisation's
   GitHub Sponsors profile, https://github.com/sponsors/stackvo — the place
   the documentation site's sponsor band already pointed at, now reachable

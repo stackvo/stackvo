@@ -102,6 +102,38 @@ pub const DEFAULT_STOP_WAIT: u32 = 10;
 /// hook or a scheduled job.
 pub const WORKDIR: &str = "/var/www/html";
 
+/// Where a declared process writes, one file per process.
+///
+/// **A file, not `/dev/stdout`, and the difference is the log button.** The
+/// image's own two programs write to the container's stdout, which `docker
+/// logs` and the Logs tab show — and which supervisord cannot read back:
+/// `supervisorctl tail` on a device answers `ERROR (unknown error reading
+/// log)`, so the pane could show nothing for them and said so. A queue worker
+/// is the process whose last hundred lines somebody actually opens the pane
+/// for, so its log is a file supervisord owns and can tail, rotated by
+/// supervisord at [`LOG_MAX`] with [`LOG_BACKUPS`] kept, and stderr folded
+/// into it so there is one file to read rather than two to guess between.
+///
+/// Directly under `/var/log` rather than in `/var/log/supervisor/`, because
+/// that directory does not exist in the generated image and supervisord
+/// refuses the *whole* config — web server included — over a log path whose
+/// directory is missing. `/var/log` is there in every image.
+pub const LOG_DIR: &str = "/var/log";
+pub const LOG_MAX: &str = "10MB";
+pub const LOG_BACKUPS: u32 = 3;
+
+/// The log file for a process, or the pattern for its copies.
+///
+/// With replicas the copies are told apart by `%(process_num)02d`, which
+/// supervisord expands per copy, exactly as it does in `process_name`.
+pub fn log_path(id: &str, replicas: u32) -> String {
+    if replicas > 1 {
+        format!("{LOG_DIR}/supervisor-{id}_%(process_num)02d.log")
+    } else {
+        format!("{LOG_DIR}/supervisor-{id}.log")
+    }
+}
+
 /// One declared process.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -404,8 +436,8 @@ pub fn command_line(exec: &[String]) -> String {
 ///
 /// Each block is preceded by one blank line and ends without one, so the
 /// rendered file keeps ending on its last key — which the generator's own
-/// tests hold it to. Logs go to the container's stdout and stderr exactly as
-/// `php-fpm`'s do, so `docker logs` and the Logs tab show them.
+/// tests hold it to. Logs go to a file per process — see [`LOG_DIR`] for why
+/// not the container's stdout.
 ///
 /// `stopasgroup` and `killasgroup` because a declared process is often a
 /// script or an artisan command that forks — `schedule:work` starts a child
@@ -433,12 +465,13 @@ pub fn render(processes: &[Process]) -> String {
                 process.replicas
             ));
         }
-        out.push_str(
-            "stdout_logfile=/dev/stdout\n\
-             stdout_logfile_maxbytes=0\n\
-             stderr_logfile=/dev/stderr\n\
-             stderr_logfile_maxbytes=0\n",
-        );
+        out.push_str(&format!(
+            "stdout_logfile={log}\n\
+             stdout_logfile_maxbytes={LOG_MAX}\n\
+             stdout_logfile_backups={LOG_BACKUPS}\n\
+             redirect_stderr=true\n",
+            log = log_path(&process.id, process.replicas),
+        ));
     }
     out
 }
@@ -475,10 +508,168 @@ pub fn drift(processes: &[Process], groups: &[String]) -> (Vec<String>, Vec<Stri
     (pending, stale)
 }
 
+/// The `[program:<name>]` block of a supervisord config, as key/value pairs
+/// in the order the file has them. `None` when there is no such block.
+///
+/// What the daemon is *actually* running with, read from the file in the
+/// container rather than reconstructed from the manifest — the two agree
+/// after a rebuild or an apply and disagree in between, and the detail view
+/// exists to show which. The grammar is the daemon's own: `;` and `#`
+/// comments, one `key=value` per line, the first `[` after the block ends it.
+pub fn program_block(conf: &str, name: &str) -> Option<Vec<(String, String)>> {
+    let header = format!("[program:{name}]");
+    let mut out = Vec::new();
+    let mut inside = false;
+    let mut found = false;
+    for raw in conf.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') {
+            if inside {
+                break;
+            }
+            inside = line == header;
+            found |= inside;
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            out.push((key.trim().to_string(), value.trim().to_string()));
+        }
+    }
+    found.then_some(out)
+}
+
+/// What one process is costing, read from `/proc` inside the container.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Resources {
+    /// Resident set, in kilobytes — `VmRSS`.
+    pub rss_kb: u64,
+    pub threads: u64,
+    /// CPU time consumed over the process's whole life, in seconds.
+    pub cpu_seconds: f64,
+    /// That time as a percentage of one core over the same span — the number
+    /// `ps` prints as `%cpu`. A lifetime average rather than an instant, which
+    /// is what one look can honestly give.
+    pub cpu_percent: f64,
+}
+
+/// Kernel ticks per second, which is what `/proc/<pid>/stat` counts in.
+///
+/// `USER_HZ` has been 100 on every Linux the kernel ABI has shipped to, and
+/// it is the one constant here that is not read from the container: asking
+/// `getconf CLK_TCK` would be a fourth `exec` for a number that does not vary.
+pub const CLK_TCK: f64 = 100.0;
+
+/// Read one process's cost out of the concatenation of its `/proc/<pid>/status`,
+/// `/proc/<pid>/stat` and `/proc/uptime` — one `cat`, three files.
+///
+/// The three are told apart by shape rather than position: `status` is
+/// `Key:\tvalue` lines, `stat` is the one line with a parenthesised command
+/// name, and `uptime` is two floats. So the order `cat` was given them in is
+/// not load-bearing, and a file that was missing simply leaves its field out.
+pub fn resources_from_proc(text: &str) -> Option<Resources> {
+    let mut rss_kb = None;
+    let mut threads = None;
+    let mut ticks: Option<(f64, f64)> = None; // (utime + stime, starttime)
+    let mut uptime = None;
+
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("VmRSS:") {
+            rss_kb = rest.split_whitespace().next().and_then(|n| n.parse().ok());
+        } else if let Some(rest) = line.strip_prefix("Threads:") {
+            threads = rest.trim().parse().ok();
+        } else if let Some(close) = line.rfind(')') {
+            // stat: `<pid> (<comm>) <state> …` — the command name may hold
+            // spaces and parentheses, so everything is counted from the LAST
+            // closing parenthesis. After it, state is field 3, so utime (14),
+            // stime (15) and starttime (22) sit at 11, 12 and 19.
+            if line.contains(" (") {
+                let fields: Vec<&str> = line[close + 1..].split_whitespace().collect();
+                if fields.len() > 19 {
+                    let utime: f64 = fields[11].parse().ok()?;
+                    let stime: f64 = fields[12].parse().ok()?;
+                    let start: f64 = fields[19].parse().ok()?;
+                    ticks = Some((utime + stime, start));
+                }
+            }
+        } else if uptime.is_none() {
+            let mut floats = line.split_whitespace().map(|f| f.parse::<f64>());
+            if let (Some(Ok(up)), Some(Ok(_))) = (floats.next(), floats.next()) {
+                uptime = Some(up);
+            }
+        }
+    }
+
+    let (used, start) = ticks?;
+    let uptime = uptime?;
+    let cpu_seconds = used / CLK_TCK;
+    let alive = uptime - start / CLK_TCK;
+    let cpu_percent = if alive > 0.0 {
+        (cpu_seconds / alive * 1000.0).round() / 10.0
+    } else {
+        0.0
+    };
+    Some(Resources {
+        rss_kb: rss_kb.unwrap_or(0),
+        threads: threads.unwrap_or(0),
+        cpu_seconds: (cpu_seconds * 100.0).round() / 100.0,
+        cpu_percent,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn reads_one_program_block_out_of_the_daemons_file() {
+        let conf = "[supervisord]\nnodaemon=true\n\n; the image's own\n[program:php-fpm]\ncommand=/usr/local/sbin/php-fpm -F\nautostart=true\n\n[program:queue]\ncommand=php artisan queue:work\n  directory = /var/www/html\n# a comment\nstopwaitsecs=30\n\n[program:nginx]\ncommand=nginx\n";
+        assert_eq!(
+            program_block(conf, "queue").unwrap(),
+            vec![
+                ("command".to_string(), "php artisan queue:work".to_string()),
+                ("directory".to_string(), "/var/www/html".to_string()),
+                ("stopwaitsecs".to_string(), "30".to_string()),
+            ]
+        );
+        // The last block, with nothing after it to end it.
+        assert_eq!(program_block(conf, "nginx").unwrap().len(), 1);
+        // Absent is None, and an empty block is Some(empty).
+        assert!(program_block(conf, "ghost").is_none());
+        assert_eq!(program_block("[program:bare]\n", "bare"), Some(vec![]));
+    }
+
+    /// The lines as a php process in a real project container printed them,
+    /// one `cat` over three files.
+    #[test]
+    fn reads_memory_threads_and_cpu_out_of_proc() {
+        let text = "Name:\tphp\nState:\tS (sleeping)\nVmRSS:\t   58492 kB\nThreads:\t1\n\
+                    10 (php) S 1 10 1 0 -1 4194560 6832 231 5 1 87 27 0 0 20 0 1 0 63607050 104767488 14332 0 0 0 0 0 0 0 0 0 0 0 0 0 0 17 10 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n\
+                    636491.61 7364001.05\n";
+        let r = resources_from_proc(text).unwrap();
+        assert_eq!(r.rss_kb, 58492);
+        assert_eq!(r.threads, 1);
+        // (87 + 27) ticks at 100 Hz.
+        assert_eq!(r.cpu_seconds, 1.14);
+        // Alive for 636491.61 - 636070.50 = 421.11 s → 0.27 % of a core.
+        assert_eq!(r.cpu_percent, 0.3);
+
+        // A command name with spaces and a parenthesis in it does not move
+        // the fields.
+        let odd = text.replace("(php)", "(my (odd) name)");
+        assert_eq!(resources_from_proc(&odd).unwrap().cpu_seconds, 1.14);
+
+        // No stat line, no answer — memory alone is not a cost.
+        assert!(resources_from_proc("VmRSS:\t10 kB\n636491.61 7364001.05\n").is_none());
+    }
 
     fn parsed(block: serde_json::Value) -> (Vec<Process>, Vec<Problem>) {
         parse(&json!({ "name": "shop", "processes": block }))
@@ -610,8 +801,10 @@ mod tests {
         let text = render(&processes);
 
         assert!(text.starts_with("\n[program:"), "{text:?}");
-        assert!(text.ends_with("stderr_logfile_maxbytes=0\n"));
+        assert!(text.ends_with("redirect_stderr=true\n"));
         assert!(!text.ends_with("\n\n"));
+        // A file supervisord can tail, never the device it cannot.
+        assert!(!text.contains("/dev/stdout"), "{text}");
         assert!(
             !text.contains("[program:paused]"),
             "a paused process is out of the config"
@@ -629,7 +822,10 @@ mod tests {
              killasgroup=true\n\
              numprocs=3\n\
              process_name=%(program_name)s_%(process_num)02d\n\
-             stdout_logfile=/dev/stdout\n"
+             stdout_logfile=/var/log/supervisor-queue_%(process_num)02d.log\n\
+             stdout_logfile_maxbytes=10MB\n\
+             stdout_logfile_backups=3\n\
+             redirect_stderr=true\n"
             ),
             "{text}"
         );
@@ -645,7 +841,7 @@ mod tests {
              stopwaitsecs=10\n\
              stopasgroup=true\n\
              killasgroup=true\n\
-             stdout_logfile=/dev/stdout\n"
+             stdout_logfile=/var/log/supervisor-scheduler.log\n"
             ),
             "{text}"
         );
