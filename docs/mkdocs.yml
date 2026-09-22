@@ -90,6 +90,7 @@ theme:
     - navigation.sections
     - navigation.prune
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.top
     - announce.dismiss
     - navigation.tracking
