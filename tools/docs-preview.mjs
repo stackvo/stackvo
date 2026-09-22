@@ -25,10 +25,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, statSync, createReadStream } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join, normalize } from "node:path";
+import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const siteDir = join(root, "site");
 const prefix = "/stackvo";
 const port = Number(process.argv[2]) || 8000;
