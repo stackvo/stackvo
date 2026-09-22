@@ -5,6 +5,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-22
+
 ### Added
 
 - **A project declares the processes its supervisord runs.** An nginx or
@@ -370,6 +372,25 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   times, two minutes apart, but only when npm reports the endpoint error; a
   finding exits on the first attempt as before. The job's timeout grows to
   25 minutes to hold the waiting.
+
+- **`tools/before-push.sh` runs on every push, not just when somebody
+  remembers to.** A `pre-push` git hook (`tools/git-hooks/`, one-time setup
+  per machine with `tools/git-hooks/install.sh` since git does not track
+  `.git/hooks`) runs the same checks CI does before anything leaves the
+  machine, with a `SKIP_BEFORE_PUSH` escape hatch for a deliberate WIP push.
+
+### Security
+
+- **The registry signing key is rotated to one both development machines
+  hold.** `tools/keys.sh check` was permanently red on the second machine
+  because the previous key's private half existed on only one of the two.
+  Generated a new pair with `tools/keys.sh generate` and pinned it in
+  `signing::PINNED` in place of the old one — a hard swap rather than
+  trusting two keys at once, which `an_added_key_is_a_deliberate_act` argues
+  against. Safe here specifically because no installed copy of this app
+  exists outside the two machines it is developed on, so nothing was left
+  pointing at the old key. `registry.json` in the packages repository was
+  re-signed with the new key in the same change.
 
 ## [0.2.0] - 2026-09-02
 
