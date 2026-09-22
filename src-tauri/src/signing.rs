@@ -74,20 +74,23 @@ use serde::{Deserialize, Serialize};
 /// hoped: `tools/keys.sh` is the ceremony, and every sentence that used to say
 /// the chain was open is wrong wherever it survives.
 pub const PINNED: &[&str] = &[
-    // 9B50815ED2A6E796 — the official StackVo package registry.
+    // B3E323AAFEC283C — the official StackVo package registry.
     //
-    // Replaced 256219FF1F9A0F1B, which signed the index once and whose private
-    // half is on a machine this one is not. Rotated rather than recovered
-    // because it could be: v0.1.0 was published carrying **no binaries**, so no
-    // installed copy anywhere pins the old key and nothing refuses anything by
-    // this changing. That window is open exactly until the first release with
-    // an artefact in it, and this is the note saying it was used deliberately
-    // rather than a key being swapped by somebody who had not checked.
+    // Replaced 9B50815ED2A6E796, whose private half existed on one of the two
+    // machines this project is developed on and not the other — every push
+    // from the second machine found `tools/keys.sh check` red for a state
+    // that could not be fixed there. Rotated rather than split across two
+    // pinned keys (the alternative `an_added_key_is_a_deliberate_act` argues
+    // against below) because there is a simpler fix available here that the
+    // general case does not have: no installed copy of this app exists
+    // outside the two machines it is developed on, so there is nothing for a
+    // hard swap to orphan. `registry.json` was re-signed with this key in the
+    // same change.
     //
     // Not added to `RETIRED`: the old key is superseded, not leaked, and
     // listing it there would be this build asserting a compromise nobody
     // observed.
-    "RWSW56bSXoFQm+jNBGKcK6qbvyrG/bMqQ16lHJrhOgAmQUz840qNUYc+",
+    "RWQ8KOyvOjI+C4XzwxDtgmJcKV3vNiePzhaQ0IgQrOgmaCZUioF0Mtet",
 ];
 
 /// Keys this build refuses even when something presents them.

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# The local half of "CI is a second opinion, not the first" (see ci.yml).
+# Installed as .git/hooks/pre-push (see tools/git-hooks/install.sh), this runs
+# `tools/before-push.sh` before anything leaves this machine, so a red run is
+# something you see in a terminal instead of on a pull request.
+#
+# Escape hatch for a deliberate WIP push: SKIP_BEFORE_PUSH=1 git push
+set -uo pipefail
+
+if [ -n "${SKIP_BEFORE_PUSH:-}" ]; then
+  printf '\033[33mbefore-push: skipped (SKIP_BEFORE_PUSH set)\033[0m\n'
+  exit 0
+fi
+
+repo="$(git rev-parse --show-toplevel)"
+exec "$repo/tools/before-push.sh"
