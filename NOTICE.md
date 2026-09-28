@@ -754,7 +754,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | vue | 3.5.43 | MIT |
 | vue-i18n | 11.4.12 | MIT |
 | vue-router | 5.3.1 | MIT |
-| vuetify | 3.13.4 | MIT |
+| vuetify | 3.13.5 | MIT |
 | webpack-virtual-modules | 0.6.2 | MIT |
 
 ## Copyright holders
