@@ -24,17 +24,22 @@ Traefik points at 8000 rather than 80.
 
 | Category | Services |
 | --- | --- |
-| **Databases** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server |
+| **Databases** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server · Qdrant · Neo4j · Memgraph · Nessie |
 | **Cache** | Redis · Memcached · Valkey · Dragonfly |
-| **Queue / messaging** | RabbitMQ · Kafka · Soketi · Beanstalkd |
-| **Search** | Elasticsearch · Kibana · Meilisearch · Typesense · Solr |
+| **Queue / messaging** | RabbitMQ · Kafka · Soketi · Beanstalkd · Karapace · Apicurio Registry · Redpanda Connect · Flink |
+| **Search** | Elasticsearch · Kibana · OpenSearch · OpenSearch Dashboards · Meilisearch · Typesense · Solr |
 | **Storage** | MinIO |
-| **Monitoring** | Grafana · Prometheus · Graylog |
-| **Dev tools** | MailHog · Mailpit · Blackfire |
-| **Admin UIs** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin |
+| **Monitoring** | Grafana · Prometheus · Graylog · OpenTelemetry Collector · Loki · Tempo |
+| **Dev tools** | MailHog · Mailpit · Blackfire · GreenMail · Postal · Icecast · Temporal · Zitadel · Unleash · Vault · OpenBao · Spark · Ollama · MLflow · Label Studio · Argilla · Backstage |
+| **Admin UIs** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin · Temporal UI |
 
 Services are installed as instances: MySQL 8.0 and 8.4 can run side by side,
 and each project connects to the one it asked for.
+
+The catalogue is published separately, in
+[stackvo-service-packages](https://github.com/stackvo/stackvo-service-packages),
+so a service can be added without an app release. This table lists what that
+repository carries today; the catalogue screen is the authority.
 
 <figure markdown>
 ![The catalogue](../screenshots/web/market.webp){ loading=lazy }

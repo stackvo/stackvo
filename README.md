@@ -729,14 +729,14 @@ Traefik points at 8000 rather than 80.
 
 | Category | Services |
 |----------|----------|
-| **Databases** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server |
+| **Databases** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server · Qdrant · Neo4j · Memgraph · Nessie |
 | **Cache** | Redis · Memcached · Valkey · Dragonfly |
-| **Queue / messaging** | RabbitMQ · Kafka · Soketi · Beanstalkd |
-| **Search** | Elasticsearch · Kibana · Meilisearch · Typesense · Solr |
+| **Queue / messaging** | RabbitMQ · Kafka · Soketi · Beanstalkd · Karapace · Apicurio Registry · Redpanda Connect · Flink |
+| **Search** | Elasticsearch · Kibana · OpenSearch · OpenSearch Dashboards · Meilisearch · Typesense · Solr |
 | **Storage** | MinIO |
-| **Monitoring** | Grafana · Prometheus · Graylog |
-| **Dev tools** | MailHog · Mailpit · Blackfire |
-| **Admin UIs** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin |
+| **Monitoring** | Grafana · Prometheus · Graylog · OpenTelemetry Collector · Loki · Tempo |
+| **Dev tools** | MailHog · Mailpit · Blackfire · GreenMail · Postal · Icecast · Temporal · Zitadel · Unleash · Vault · OpenBao · Spark · Ollama · MLflow · Label Studio · Argilla · Backstage |
+| **Admin UIs** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin · Temporal UI |
 
 ### PHP extensions
 

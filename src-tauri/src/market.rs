@@ -291,6 +291,20 @@ pub trait Source {
     fn describe(&self) -> String;
     /// One file, by its path relative to the source's root.
     fn fetch(&self, relative: &str) -> Result<Vec<u8>>;
+
+    /// The caller has verified `relative` and kept it. A source that remembers
+    /// what it served — an HTTP validator, a raw copy — may now persist that.
+    ///
+    /// Until this is called, nothing about the transfer is remembered. A
+    /// validator written at download time vouches for bytes nobody has checked,
+    /// and a refused file whose validator survived is answered `304` forever
+    /// after, from whatever stale copy happens to be on disk.
+    fn accept(&self, _relative: &str) {}
+
+    /// The caller refused `relative`. Forget everything remembered about it, so
+    /// the next fetch is a plain one rather than a question the server will
+    /// answer from a copy that is no longer the right one.
+    fn reject(&self, _relative: &str) {}
 }
 
 /// A directory. Used by the offline bundle and by every test in this module.
@@ -363,6 +377,20 @@ const MOST_BYTES: u64 = 8 * 1024 * 1024;
 pub struct HttpSource {
     base: String,
     etags: PathBuf,
+    /// Index files fetched and not yet accepted: the bytes and the validator
+    /// that came with them. Held in memory only — see [`Source::accept`].
+    pending: std::sync::Mutex<std::collections::BTreeMap<String, Pending>>,
+}
+
+/// A downloaded index file and the validator that came with it, not yet accepted.
+type Pending = (Vec<u8>, Option<String>);
+
+/// The two files whose validity is a verdict rather than a hash lookup: the
+/// index, and the signature over it. Everything else a source serves is checked
+/// against a sha256 the index names, and a stale copy of one of those fails
+/// loudly on its own.
+fn is_index_file(relative: &str) -> bool {
+    matches!(relative, "registry.json" | "registry.json.minisig")
 }
 
 /// The URL somebody pastes, turned into the URL files are actually served from.
@@ -442,6 +470,7 @@ impl HttpSource {
         Ok(Self {
             base,
             etags: dir(root).join("etags.json"),
+            pending: std::sync::Mutex::new(std::collections::BTreeMap::new()),
         })
     }
 
@@ -477,6 +506,78 @@ impl HttpSource {
     fn cached_copy(&self, root_relative: &str) -> Option<Vec<u8>> {
         let path = self.etags.parent()?.join(root_relative);
         std::fs::read(path).ok()
+    }
+
+    /// Where the bytes of an accepted index file are kept, exactly as they were
+    /// served.
+    ///
+    /// Not `market/registry.json`: that file is the index **parsed and written
+    /// back out**, which is the right thing to read from and the wrong thing to
+    /// verify. A signature covers the publisher's bytes, and a re-serialised
+    /// copy is the same catalogue in different bytes.
+    fn index_copy_path(&self, relative: &str) -> Option<PathBuf> {
+        Some(self.etags.parent()?.join("index-cache").join(relative))
+    }
+
+    fn cached_index(&self, relative: &str) -> Option<Vec<u8>> {
+        std::fs::read(self.index_copy_path(relative)?).ok()
+    }
+
+    fn forget_etag(&self, relative: &str) {
+        let Some(mut map) = std::fs::read_to_string(&self.etags).ok().and_then(|t| {
+            serde_json::from_str::<std::collections::BTreeMap<String, String>>(&t).ok()
+        }) else {
+            return;
+        };
+        if map.remove(relative).is_some() {
+            if let Ok(text) = serde_json::to_string_pretty(&map) {
+                let _ = crate::atomic::write(&self.etags, &format!("{text}\n"));
+            }
+        }
+    }
+
+    fn stash(&self, relative: &str, body: &[u8], tag: Option<String>) {
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.insert(relative.to_string(), (body.to_vec(), tag));
+        }
+    }
+
+    fn unstash(&self, relative: &str) -> Option<Pending> {
+        self.pending.lock().ok()?.remove(relative)
+    }
+
+    /// One index file: asked about only when a verified copy of it is on disk.
+    ///
+    /// A validator with no copy behind it is a question the server can answer
+    /// and this machine cannot use — which is exactly the state an older build
+    /// left behind, so the missing copy is also what heals it.
+    fn fetch_index(&self, url: &str, relative: &str) -> Result<Vec<u8>> {
+        let copy = self.cached_index(relative);
+        let tag = copy.as_ref().and_then(|_| self.cached_etag(relative));
+
+        match get(url, tag.as_deref())? {
+            Some((body, tag)) => {
+                self.stash(relative, &body, tag);
+                Ok(body)
+            }
+            None => {
+                // 304: the copy that was accepted is current. Nothing pending.
+                self.unstash(relative);
+                match copy {
+                    Some(body) => Ok(body),
+                    None => {
+                        let (body, tag) = get(url, None)?.ok_or_else(|| {
+                            Error::new(
+                                Code::NetworkError,
+                                format!("{url} answered 304 to a request with no validator"),
+                            )
+                        })?;
+                        self.stash(relative, &body, tag);
+                        Ok(body)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -585,6 +686,10 @@ impl Source for HttpSource {
         checked_relative(relative)?;
         let url = format!("{}/{relative}", self.base);
 
+        if is_index_file(relative) {
+            return self.fetch_index(&url, relative);
+        }
+
         match get(&url, self.cached_etag(relative).as_deref())? {
             Some((body, tag)) => {
                 if let Some(tag) = tag {
@@ -610,6 +715,44 @@ impl Source for HttpSource {
                     Ok(body)
                 }
             },
+        }
+    }
+
+    fn accept(&self, relative: &str) {
+        if !is_index_file(relative) {
+            return;
+        }
+        // A 304 left nothing pending, and what is on disk is already the
+        // accepted copy.
+        let Some((body, tag)) = self.unstash(relative) else {
+            return;
+        };
+        // Best effort, like the validator it protects: failing to remember
+        // costs the next refresh a transfer, never a refresh. The bytes go
+        // first and the validator second, so a validator is never on disk
+        // without the copy it vouches for.
+        let kept = (|| {
+            let text = std::str::from_utf8(&body).ok()?;
+            let path = self.index_copy_path(relative)?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).ok()?;
+            }
+            crate::atomic::write(&path, text).ok()
+        })();
+        match (kept, tag) {
+            (Some(()), Some(tag)) => self.remember_etag(relative, &tag),
+            _ => self.forget_etag(relative),
+        }
+    }
+
+    fn reject(&self, relative: &str) {
+        if !is_index_file(relative) {
+            return;
+        }
+        self.unstash(relative);
+        self.forget_etag(relative);
+        if let Some(path) = self.index_copy_path(relative) {
+            let _ = std::fs::remove_file(path);
         }
     }
 }
@@ -874,13 +1017,19 @@ pub struct Refreshed {
     pub verified_by: Option<String>,
 }
 
-pub fn refresh(
-    root: &Path,
-    source: &dyn Source,
-    trust: Trust,
-    previous: Option<&Registry>,
-) -> Result<Refreshed> {
+/// An index that has been fetched and passed the signature check.
+struct Fetched {
+    bytes: Vec<u8>,
+    verified_by: Option<String>,
+    /// Whether a signature was fetched and held. Decides whether there is a
+    /// signature for the source to accept alongside the index.
+    signed: bool,
+}
+
+/// Fetch the index and the signature over it, and check one against the other.
+fn fetch_verified(source: &dyn Source, trust: Trust) -> Result<Fetched> {
     let mut verified_by: Option<String> = None;
+    let mut signed = false;
     let bytes = source.fetch("registry.json")?;
 
     // The first link of the chain, and the order matters: the bytes are
@@ -922,6 +1071,7 @@ pub fn refresh(
                     "index signature verified"
                 );
                 verified_by = Some(by.id());
+                signed = true;
             }
             // Demanded and absent: the publisher's omission, said plainly.
             Err(missing) if trust == Trust::Signed => return Err(missing),
@@ -949,7 +1099,27 @@ pub fn refresh(
         }
     }
 
-    let registry: Registry = serde_json::from_slice(&bytes).map_err(|e| {
+    Ok(Fetched {
+        bytes,
+        verified_by,
+        signed,
+    })
+}
+
+/// Drop everything the source remembers about the index and its signature.
+fn forget_index(source: &dyn Source) {
+    source.reject("registry.json");
+    source.reject("registry.json.minisig");
+}
+
+/// Parse, check and cache an index that has already passed its signature.
+fn keep_index(
+    root: &Path,
+    source: &dyn Source,
+    fetched: &Fetched,
+    previous: Option<&Registry>,
+) -> Result<Refreshed> {
+    let registry: Registry = serde_json::from_slice(&fetched.bytes).map_err(|e| {
         Error::new(
             Code::InvalidManifest,
             format!("{}: registry.json is unreadable: {e}", source.describe()),
@@ -989,8 +1159,62 @@ pub fn refresh(
 
     Ok(Refreshed {
         registry,
-        verified_by,
+        verified_by: fetched.verified_by.clone(),
     })
+}
+
+pub fn refresh(
+    root: &Path,
+    source: &dyn Source,
+    trust: Trust,
+    previous: Option<&Registry>,
+) -> Result<Refreshed> {
+    // A refusal on signature grounds is retried once, from nothing.
+    //
+    // The two files are fetched separately, and GitHub's raw host caches each
+    // for five minutes on its own clock — so for a few minutes after a publish
+    // an index and a signature from different publishes can arrive together,
+    // and the pair is wrong though both halves are right. A validator or a
+    // cached copy can produce the same pair on this side. Neither is a reason
+    // to tell somebody the publisher changed keys; asking again without any
+    // memory of the last answer is the cheap way to find out, and it is the
+    // only retry here — one that fails twice is a real answer.
+    let fetched = match fetch_verified(source, trust) {
+        Ok(fetched) => fetched,
+        Err(first) if first.code == Code::PermissionDenied => {
+            tracing::warn!(
+                source = %source.describe(),
+                "index refused on signature grounds; retrying without any cached state"
+            );
+            forget_index(source);
+            match fetch_verified(source, trust) {
+                Ok(fetched) => fetched,
+                Err(second) => {
+                    forget_index(source);
+                    return Err(second);
+                }
+            }
+        }
+        Err(other) => return Err(other),
+    };
+
+    let outcome = keep_index(root, source, &fetched, previous);
+
+    match outcome {
+        Ok(done) => {
+            // Only now: parsed, checked, written. What the source remembers
+            // about this transfer is remembered because it was accepted.
+            source.accept("registry.json");
+            if fetched.signed {
+                source.accept("registry.json.minisig");
+            }
+            Ok(done)
+        }
+        Err(e) => {
+            forget_index(source);
+            Err(e)
+        }
+    }
 }
 
 /// The cached index, or `None` when nothing has been fetched.
@@ -2539,5 +2763,223 @@ mod tests {
         let empty = here.join("empty");
         std::fs::create_dir_all(&empty).unwrap();
         assert!(bundle(&LocalSource::new(&from), &empty).is_ok());
+    }
+
+    // ------------------------------------------ what a source may remember
+
+    /// A `Source` that serves a directory and writes down what it was asked.
+    ///
+    /// The refresh's contract with its source is a sequence — fetch, then
+    /// accept or reject — and a sequence is only visible in a log.
+    struct Recording {
+        inner: LocalSource,
+        log: std::sync::Mutex<Vec<String>>,
+        /// Served in place of `registry.json.minisig` when set.
+        signature: Option<Vec<u8>>,
+    }
+
+    impl Recording {
+        fn new(dir: impl Into<PathBuf>) -> Self {
+            Self {
+                inner: LocalSource::new(dir),
+                log: std::sync::Mutex::new(Vec::new()),
+                signature: None,
+            }
+        }
+
+        fn count(&self, entry: &str) -> usize {
+            self.log
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|e| *e == entry)
+                .count()
+        }
+    }
+
+    impl Source for Recording {
+        fn describe(&self) -> String {
+            self.inner.describe()
+        }
+
+        fn fetch(&self, relative: &str) -> Result<Vec<u8>> {
+            self.log.lock().unwrap().push(format!("fetch {relative}"));
+            match (&self.signature, relative) {
+                (Some(signature), "registry.json.minisig") => Ok(signature.clone()),
+                _ => self.inner.fetch(relative),
+            }
+        }
+
+        fn accept(&self, relative: &str) {
+            self.log.lock().unwrap().push(format!("accept {relative}"));
+        }
+
+        fn reject(&self, relative: &str) {
+            self.log.lock().unwrap().push(format!("reject {relative}"));
+        }
+    }
+
+    /// A real signature by the pinned key — over a *different* index than any
+    /// this module publishes. The shape of the failure this change exists for:
+    /// right key, wrong bytes, and the app saying the publisher changed keys.
+    const SIGNATURE_OF_ANOTHER_INDEX: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVROEtPeXZPakkrQzBxd055WEVJcVYreXM4Zy9VWS9kT2s0RTl6OWJuUnA2YmxlaWs4V1JpeEdwallyTUo1eWs5UGo1QUxjZ0xNNGhNTFVXOStXdVhkOWR3V01WSlBqMEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTE2OTE3CWZpbGU6cmVnaXN0cnkuanNvbgpTQ1pmMGRlcEE1VFFUSS9BNUFZYi9PZFBDWUZYR0VHT1V3N1NJQzNHM2pxbENKUGxoTnhBTUY3dGlaajNXK1lrZmRDbHgzWm1UMUYwbnIvb1hYdVhDQT09Cg==";
+
+    /// A refresh that took the index tells its source so — once, for the index
+    /// alone when there was no signature to keep.
+    #[test]
+    fn an_accepted_refresh_tells_the_source_to_remember_it() {
+        let root = scratch("accept");
+        let source = Recording::new(publish(&root, 1));
+
+        refresh(&root, &source, Trust::Unsigned, None).unwrap();
+
+        assert_eq!(source.count("accept registry.json"), 1);
+        assert_eq!(source.count("accept registry.json.minisig"), 0);
+        assert_eq!(source.count("reject registry.json"), 0);
+    }
+
+    /// The reported failure. A signature that does not cover the index is
+    /// retried from nothing, refused again, and **forgotten** — the validator
+    /// that made every later refresh answer `304` from a stale copy is the
+    /// thing that must not survive a refusal.
+    #[test]
+    fn a_refused_index_is_forgotten_and_asked_for_once_more() {
+        let root = scratch("refused");
+        let mut source = Recording::new(publish(&root, 1));
+        source.signature = Some(SIGNATURE_OF_ANOTHER_INDEX.as_bytes().to_vec());
+
+        let err = refresh(&root, &source, Trust::Signed, None).unwrap_err();
+
+        assert_eq!(err.code, Code::PermissionDenied, "{}", err.message);
+        assert_eq!(
+            source.count("fetch registry.json"),
+            2,
+            "a refusal on signature grounds is retried once"
+        );
+        assert_eq!(source.count("accept registry.json"), 0);
+        assert_eq!(source.count("accept registry.json.minisig"), 0);
+        assert!(source.count("reject registry.json") >= 1);
+        assert!(source.count("reject registry.json.minisig") >= 1);
+        assert!(
+            !registry_path(&root).is_file(),
+            "an index that failed verification was cached anyway"
+        );
+    }
+
+    /// Only a verdict about the signature is worth asking twice. A missing
+    /// file or a dead network would otherwise cost two timeouts for one answer.
+    #[test]
+    fn a_failure_that_is_not_about_the_signature_is_not_retried() {
+        let root = scratch("not-retried");
+        let empty = root.join("nothing-here");
+        std::fs::create_dir_all(&empty).unwrap();
+        let source = Recording::new(&empty);
+
+        refresh(&root, &source, Trust::Unsigned, None).unwrap_err();
+
+        assert_eq!(source.count("fetch registry.json"), 1);
+    }
+
+    /// Verified is not the same as accepted. An index that is correctly signed
+    /// and older than the one already held is refused, and what the source
+    /// remembers about it goes with it.
+    #[test]
+    fn an_index_refused_after_verification_is_not_remembered() {
+        let root = scratch("backwards-forgotten");
+        let newer = refresh(
+            &root,
+            &Recording::new(publish(&root, 7)),
+            Trust::Unsigned,
+            None,
+        )
+        .unwrap()
+        .registry;
+
+        let older = scratch("backwards-forgotten-old");
+        let source = Recording::new(publish(&older, 3));
+        refresh(&root, &source, Trust::Unsigned, Some(&newer)).unwrap_err();
+
+        assert_eq!(source.count("accept registry.json"), 0);
+        assert!(source.count("reject registry.json") >= 1);
+    }
+
+    /// Nothing is remembered about a transfer nobody has accepted.
+    #[test]
+    fn an_http_validator_is_not_written_until_the_file_is_accepted() {
+        let root = scratch("http-pending");
+        let source = HttpSource::new(&root, "https://packages.example/stackvo").unwrap();
+
+        source.stash("registry.json", b"{}", Some("\"v1\"".into()));
+        assert_eq!(source.cached_etag("registry.json"), None);
+        assert_eq!(source.cached_index("registry.json"), None);
+
+        source.accept("registry.json");
+        assert_eq!(
+            source.cached_etag("registry.json").as_deref(),
+            Some("\"v1\"")
+        );
+        assert_eq!(
+            source.cached_index("registry.json").as_deref(),
+            Some(&b"{}"[..])
+        );
+    }
+
+    /// What is kept is what was served, byte for byte — not the index parsed
+    /// and written back out, which is the same catalogue in other bytes and
+    /// fails a signature that covers the first.
+    #[test]
+    fn the_copy_kept_is_the_bytes_that_were_served() {
+        let root = scratch("http-bytes");
+        let source = HttpSource::new(&root, "https://packages.example/stackvo").unwrap();
+        let served = b"{  \"sequence\":1,\n\n \"packages\" : [] }\n";
+
+        source.stash("registry.json", served, Some("\"v1\"".into()));
+        source.accept("registry.json");
+
+        assert_eq!(source.cached_index("registry.json").unwrap(), served);
+    }
+
+    /// A refusal erases the validator **and** the copy, so the next fetch is a
+    /// plain one.
+    #[test]
+    fn a_rejected_index_leaves_nothing_to_answer_304_from() {
+        let root = scratch("http-reject");
+        let source = HttpSource::new(&root, "https://packages.example/stackvo").unwrap();
+        source.stash("registry.json", b"{}", Some("\"v1\"".into()));
+        source.accept("registry.json");
+        assert!(source.cached_index("registry.json").is_some());
+
+        source.reject("registry.json");
+
+        assert_eq!(source.cached_etag("registry.json"), None);
+        assert_eq!(source.cached_index("registry.json"), None);
+    }
+
+    /// An older build wrote validators the moment a file arrived and kept no
+    /// copy of what it had served. Such a validator must not be sent: it can
+    /// only be answered with a `304` this machine has nothing to answer.
+    #[test]
+    fn a_validator_left_by_an_older_build_is_not_trusted() {
+        let root = scratch("http-legacy");
+        let source = HttpSource::new(&root, "https://packages.example/stackvo").unwrap();
+        source.remember_etag("registry.json", "\"left-behind\"");
+
+        assert!(source.cached_etag("registry.json").is_some());
+        assert_eq!(
+            source.cached_index("registry.json"),
+            None,
+            "no copy means no conditional request"
+        );
+    }
+
+    /// Package files are checked against a hash the index names and keep the
+    /// behaviour they had.
+    #[test]
+    fn only_the_index_and_its_signature_wait_for_acceptance() {
+        assert!(is_index_file("registry.json"));
+        assert!(is_index_file("registry.json.minisig"));
+        assert!(!is_index_file(
+            "packages/databases/mysql/versions/8.0/manifest.json"
+        ));
     }
 }

@@ -24,17 +24,22 @@ kendisidir ve Traefik 80 yerine 8000'e bakar.
 
 | Kategori | Servisler |
 | --- | --- |
-| **Veritabanı** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server |
+| **Veritabanı** | MySQL · MariaDB · PostgreSQL · MongoDB · Cassandra · ClickHouse · MS SQL Server · Qdrant · Neo4j · Memgraph · Nessie |
 | **Önbellek** | Redis · Memcached · Valkey · Dragonfly |
-| **Kuyruk / mesaj** | RabbitMQ · Kafka · Soketi · Beanstalkd |
-| **Arama** | Elasticsearch · Kibana · Meilisearch · Typesense · Solr |
+| **Kuyruk / mesaj** | RabbitMQ · Kafka · Soketi · Beanstalkd · Karapace · Apicurio Registry · Redpanda Connect · Flink |
+| **Arama** | Elasticsearch · Kibana · OpenSearch · OpenSearch Dashboards · Meilisearch · Typesense · Solr |
 | **Depolama** | MinIO |
-| **İzleme** | Grafana · Prometheus · Graylog |
-| **Geliştirici** | MailHog · Mailpit · Blackfire |
-| **Yönetim arayüzü** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin |
+| **İzleme** | Grafana · Prometheus · Graylog · OpenTelemetry Collector · Loki · Tempo |
+| **Geliştirici** | MailHog · Mailpit · Blackfire · GreenMail · Postal · Icecast · Temporal · Zitadel · Unleash · Vault · OpenBao · Spark · Ollama · MLflow · Label Studio · Argilla · Backstage |
+| **Yönetim arayüzü** | phpMyAdmin · Adminer · pgAdmin · Kafbat · mongo-express · phpCacheAdmin · Temporal UI |
 
 Servisler örnek (instance) olarak kurulur: MySQL 8.0 ve 8.4 yan yana çalışabilir
 ve her proje istediği örneğe bağlanır.
+
+Katalog ayrı bir depoda yayımlanır:
+[stackvo-service-packages](https://github.com/stackvo/stackvo-service-packages).
+Bu sayede bir servis, uygulama sürümü beklemeden eklenebilir. Tablo, o deponun
+bugün taşıdıklarını listeler; asıl kaynak katalog ekranıdır.
 
 <figure markdown>
 ![Katalog](../screenshots/web/market.webp){ loading=lazy }
