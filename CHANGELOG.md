@@ -5,6 +5,33 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **28 services in the catalogue**, published from `stackvo-service-packages`
+  rather than shipped with the app: Qdrant, Neo4j, Memgraph, Nessie,
+  OpenSearch and OpenSearch Dashboards, the OpenTelemetry Collector, Loki,
+  Tempo, Karapace, Apicurio Registry, Redpanda Connect, Flink, Spark,
+  Temporal and its UI, Zitadel, Unleash, Vault, OpenBao, Ollama, MLflow,
+  Label Studio, Argilla, GreenMail, Icecast, Postal and Backstage. The
+  supported-stack reference lists them.
+
+### Fixed
+
+- **"Pull and use" kept refusing a correctly signed catalogue** with "the index
+  is signed, but by none of the keys this machine trusts". The index and its
+  signature are fetched with validators, and the validator was written the
+  moment the index arrived — before anything had checked it. A refusal (the
+  signature published a minute late, or the CDN serving an index and a
+  signature from different publishes) therefore left a validator for an index
+  that was never accepted; every refresh after it was answered `304` and served
+  from whatever older copy was on disk, which can never match a newer
+  signature. The copy was also the index parsed and written back out, not the
+  bytes the signature covers. The source now remembers an index file only
+  after the refresh has accepted it, keeps the bytes exactly as served, drops
+  all of it on a refusal, and asks once more from nothing when a signature
+  check fails. A validator left by an older build has no copy behind it and is
+  not sent, so a machine already stuck recovers on its next refresh.
+
 ## [0.3.0] - 2026-09-22
 
 ### Added
