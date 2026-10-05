@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 604 Rust crates and 80 npm packages.
+Counted from 600 Rust crates and 80 npm packages.
 
 ## Summary
 
@@ -31,7 +31,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | Apache-2.0 AND MIT | 1 |  |
 | Apache-2.0 OR BSL-1.0 | 1 |  |
 | Apache-2.0 OR ISC OR MIT | 3 |  |
-| Apache-2.0 OR MIT | 53 | 1 |
+| Apache-2.0 OR MIT | 50 | 1 |
 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 5 |  |
 | Apache-2.0/MIT | 4 |  |
 | BSD-2-Clause |  | 1 |
@@ -48,30 +48,30 @@ Counted from 604 Rust crates and 80 npm packages.
 | ISC | 5 | 1 |
 | ISC AND (Apache-2.0 OR ISC) | 1 |  |
 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | 1 |  |
-| MIT | 138 | 68 |
+| MIT | 140 | 68 |
 | MIT OR Apache-2.0 | 282 | 6 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |  |
 | MIT OR Apache-2.0 OR Zlib | 3 |  |
 | MIT OR Zlib OR Apache-2.0 | 2 |  |
-| MIT/Apache-2.0 | 27 |  |
+| MIT/Apache-2.0 | 22 |  |
 | MPL-2.0 | 5 |  |
 | Unicode-3.0 | 18 |  |
 | Unlicense | 1 |  |
 | Unlicense OR MIT | 4 |  |
 | Unlicense/MIT | 2 |  |
 | Zlib | 2 |  |
-| Zlib OR Apache-2.0 OR MIT | 20 |  |
-| **Total** | **604** | **80** |
+| Zlib OR Apache-2.0 OR MIT | 22 |  |
+| **Total** | **600** | **80** |
 
-## Rust crates (604)
+## Rust crates (600)
 
 | Package | Version | Licence |
 | --- | --- | --- |
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 |
 | aes | 0.8.4 | MIT OR Apache-2.0 |
 | aho-corasick | 1.1.4 | Unlicense OR MIT |
-| alloc-no-stdlib | 2.0.4 | BSD-3-Clause |
-| alloc-stdlib | 0.2.4 | BSD-3-Clause |
+| alloc-no-stdlib | 3.0.0 | BSD-3-Clause |
+| alloc-stdlib | 0.3.0 | BSD-3-Clause |
 | android_system_properties | 0.1.5 | MIT/Apache-2.0 |
 | anyhow | 1.0.104 | MIT OR Apache-2.0 |
 | arbitrary | 1.4.2 | MIT OR Apache-2.0 |
@@ -91,7 +91,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | atk | 0.18.2 | MIT |
 | atk-sys | 0.18.2 | MIT |
 | atomic-waker | 1.1.2 | Apache-2.0 OR MIT |
-| auto-launch | 0.5.0 | MIT |
+| auto-launch | 0.6.0 | MIT |
 | aws-lc-rs | 1.18.1 | ISC AND (Apache-2.0 OR ISC) |
 | aws-lc-sys | 0.45.0 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) |
 | base64 | 0.21.7 | MIT OR Apache-2.0 |
@@ -107,8 +107,8 @@ Counted from 604 Rust crates and 80 npm packages.
 | blocking | 1.6.2 | Apache-2.0 OR MIT |
 | bollard | 0.21.1 | Apache-2.0 |
 | bollard-stubs | 1.53.1-rc.29.3.1 | Apache-2.0 |
-| brotli | 8.0.4 | BSD-3-Clause AND MIT |
-| brotli-decompressor | 5.0.3 | BSD-3-Clause/MIT |
+| brotli | 9.0.0 | BSD-3-Clause AND MIT |
+| brotli-decompressor | 6.0.1 | BSD-3-Clause/MIT |
 | bs58 | 0.5.1 | MIT/Apache-2.0 |
 | bumpalo | 3.20.3 | MIT OR Apache-2.0 |
 | bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT |
@@ -122,7 +122,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | cargo-platform | 0.1.9 | MIT OR Apache-2.0 |
 | cbc | 0.1.2 | MIT OR Apache-2.0 |
 | cesu8 | 1.1.0 | Apache-2.0/MIT |
-| cfb | 0.7.3 | MIT |
+| cfb | 0.14.0 | MIT |
 | cfg-if | 1.0.4 | MIT OR Apache-2.0 |
 | chacha20 | 0.10.1 | MIT OR Apache-2.0 |
 | chrono | 0.4.45 | MIT OR Apache-2.0 |
@@ -141,10 +141,9 @@ Counted from 604 Rust crates and 80 npm packages.
 | crossbeam-channel | 0.5.16 | MIT OR Apache-2.0 |
 | crossbeam-utils | 0.8.22 | MIT OR Apache-2.0 |
 | crypto-common | 0.1.7 | MIT OR Apache-2.0 |
-| cssparser | 0.36.0 | MPL-2.0 |
-| cssparser-macros | 0.6.1 | MPL-2.0 |
-| ctor | 0.8.0 | Apache-2.0 OR MIT |
-| ctor-proc-macro | 0.0.7 | Apache-2.0 OR MIT |
+| cssparser | 0.37.0 | MPL-2.0 |
+| cssparser-macros | 0.7.1 | MPL-2.0 |
+| ctor | 1.0.13 | Apache-2.0 OR MIT |
 | darling | 0.23.0 | MIT |
 | darling_core | 0.23.0 | MIT |
 | darling_macro | 0.23.0 | MIT |
@@ -157,21 +156,18 @@ Counted from 604 Rust crates and 80 npm packages.
 | derive_more | 2.1.1 | MIT |
 | derive_more-impl | 2.1.1 | MIT |
 | digest | 0.10.7 | MIT OR Apache-2.0 |
-| dirs | 4.0.0 | MIT OR Apache-2.0 |
 | dirs | 6.0.0 | MIT OR Apache-2.0 |
-| dirs-sys | 0.3.7 | MIT OR Apache-2.0 |
+| dirs | 7.0.0 | MIT OR Apache-2.0 |
 | dirs-sys | 0.5.0 | MIT OR Apache-2.0 |
 | dispatch2 | 0.3.1 | Zlib OR Apache-2.0 OR MIT |
 | displaydoc | 0.2.6 | MIT OR Apache-2.0 |
 | dlopen2 | 0.8.2 | MIT |
 | dlopen2_derive | 0.4.3 | MIT |
-| dom_query | 0.27.0 | MIT |
+| dom_query | 0.28.0 | MIT |
 | downcast-rs | 1.2.1 | MIT/Apache-2.0 |
 | dpi | 0.1.2 | Apache-2.0 AND MIT |
 | dtoa | 1.0.11 | MIT OR Apache-2.0 |
 | dtoa-short | 0.3.5 | MPL-2.0 |
-| dtor | 0.3.0 | Apache-2.0 OR MIT |
-| dtor-proc-macro | 0.0.6 | Apache-2.0 OR MIT |
 | dunce | 1.0.5 | CC0-1.0 OR MIT-0 OR Apache-2.0 |
 | dyn-clone | 1.0.20 | MIT OR Apache-2.0 |
 | embed_plist | 1.2.2 | MIT OR Apache-2.0 |
@@ -234,7 +230,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | hex | 0.4.3 | MIT OR Apache-2.0 |
 | hkdf | 0.12.4 | MIT OR Apache-2.0 |
 | hmac | 0.12.1 | MIT OR Apache-2.0 |
-| html5ever | 0.38.0 | MIT OR Apache-2.0 |
+| html5ever | 0.39.0 | MIT OR Apache-2.0 |
 | http | 1.4.2 | MIT OR Apache-2.0 |
 | http-body | 1.1.0 | MIT |
 | http-body-util | 0.1.4 | MIT |
@@ -262,7 +258,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | include_dir_macros | 0.7.4 | MIT |
 | indexmap | 1.9.3 | Apache-2.0 OR MIT |
 | indexmap | 2.14.0 | Apache-2.0 OR MIT |
-| infer | 0.19.0 | MIT |
+| infer | 0.22.0 | MIT |
 | inotify | 0.11.4 | ISC |
 | inotify-sys | 0.1.8 | ISC |
 | inout | 0.1.4 | MIT OR Apache-2.0 |
@@ -279,9 +275,9 @@ Counted from 604 Rust crates and 80 npm packages.
 | jni-sys | 0.4.1 | MIT OR Apache-2.0 |
 | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 |
 | js-sys | 0.3.103 | MIT OR Apache-2.0 |
-| json-patch | 3.0.1 | MIT/Apache-2.0 |
-| jsonptr | 0.6.3 | MIT OR Apache-2.0 |
-| keyboard-types | 0.7.0 | MIT OR Apache-2.0 |
+| json-patch | 4.2.0 | MIT/Apache-2.0 |
+| jsonptr | 0.7.1 | MIT OR Apache-2.0 |
+| keyboard-types | 0.8.3 | MIT OR Apache-2.0 |
 | keyring | 3.6.3 | MIT OR Apache-2.0 |
 | kqueue | 1.2.0 | MIT |
 | kqueue-sys | 1.1.2 | MIT |
@@ -300,7 +296,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | lru-slab | 0.1.2 | MIT OR Apache-2.0 OR Zlib |
 | mac-notification-sys | 0.6.15 | MIT/Apache-2.0 |
 | mach2 | 0.6.0 | BSD-2-Clause OR MIT OR Apache-2.0 |
-| markup5ever | 0.38.0 | MIT OR Apache-2.0 |
+| markup5ever | 0.39.0 | MIT OR Apache-2.0 |
 | matchers | 0.2.0 | MIT |
 | memchr | 2.8.3 | Unlicense OR MIT |
 | memoffset | 0.9.1 | MIT |
@@ -310,12 +306,14 @@ Counted from 604 Rust crates and 80 npm packages.
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 |
 | mio | 1.2.2 | MIT |
-| muda | 0.19.3 | Apache-2.0 OR MIT |
+| muda | 0.20.0 | Apache-2.0 OR MIT |
 | ndk | 0.9.0 | MIT OR Apache-2.0 |
+| ndk-context | 0.1.1 | MIT OR Apache-2.0 |
 | ndk-sys | 0.6.0+11769913 | MIT OR Apache-2.0 |
 | new_debug_unreachable | 1.0.6 | MIT |
 | nix | 0.28.0 | MIT |
 | nix | 0.29.0 | MIT |
+| nix | 0.31.3 | MIT |
 | nom | 7.1.3 | MIT |
 | notify | 8.2.0 | CC0-1.0 |
 | notify-rust | 4.18.0 | MIT OR Apache-2.0 |
@@ -349,6 +347,8 @@ Counted from 604 Rust crates and 80 npm packages.
 | objc2-open-directory | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-osa-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-quartz-core | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
+| objc2-security | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
+| objc2-service-management | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-ui-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-user-notifications | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-web-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
@@ -358,6 +358,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | openssl-probe | 0.2.1 | MIT OR Apache-2.0 |
 | option-ext | 0.2.0 | MPL-2.0 |
 | ordered-stream | 0.2.0 | MIT OR Apache-2.0 |
+| os_info | 3.15.0 | MIT |
 | osakit | 0.3.1 | MIT OR Apache-2.0 |
 | pango | 0.18.3 | MIT |
 | pango-sys | 0.18.0 | MIT |
@@ -404,7 +405,6 @@ Counted from 604 Rust crates and 80 npm packages.
 | rand_pcg | 0.10.2 | MIT OR Apache-2.0 |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib |
 | redox_syscall | 0.5.18 | MIT |
-| redox_users | 0.4.6 | MIT |
 | redox_users | 0.5.2 | MIT |
 | ref-cast | 1.0.26 | MIT OR Apache-2.0 |
 | ref-cast-impl | 1.0.26 | MIT OR Apache-2.0 |
@@ -436,7 +436,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | security-framework | 2.11.1 | MIT OR Apache-2.0 |
 | security-framework | 3.7.0 | MIT OR Apache-2.0 |
 | security-framework-sys | 2.17.0 | MIT OR Apache-2.0 |
-| selectors | 0.36.1 | MPL-2.0 |
+| selectors | 0.38.0 | MPL-2.0 |
 | semver | 1.0.28 | MIT OR Apache-2.0 |
 | serde | 1.0.229 | MIT OR Apache-2.0 |
 | serde_core | 1.0.229 | MIT OR Apache-2.0 |
@@ -466,6 +466,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | siphasher | 1.0.3 | MIT/Apache-2.0 |
 | slab | 0.4.12 | MIT |
 | smallvec | 1.15.2 | MIT OR Apache-2.0 |
+| smappservice-rs | 0.1.3 | MIT |
 | socket2 | 0.6.5 | MIT OR Apache-2.0 |
 | softbuffer | 0.4.8 | MIT OR Apache-2.0 |
 | soup3 | 0.5.0 | MIT |
@@ -475,7 +476,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | string_cache | 0.9.0 | MIT OR Apache-2.0 |
 | strsim | 0.11.1 | MIT |
 | subtle | 2.6.1 | BSD-3-Clause |
-| swift-rs | 1.0.7 | MIT OR Apache-2.0 |
+| swift-rs | 1.0.8 | MIT OR Apache-2.0 |
 | symlink | 0.1.0 | MIT/Apache-2.0 |
 | syn | 1.0.109 | MIT OR Apache-2.0 |
 | syn | 2.0.119 | MIT OR Apache-2.0 |
@@ -486,23 +487,23 @@ Counted from 604 Rust crates and 80 npm packages.
 | system-configuration | 0.7.0 | MIT OR Apache-2.0 |
 | system-configuration-sys | 0.6.0 | MIT OR Apache-2.0 |
 | systemstat | 0.2.7 | Unlicense |
-| tao | 0.35.3 | Apache-2.0 |
-| tao-macros | 0.1.3 | MIT OR Apache-2.0 |
+| tao | 0.37.1 | Apache-2.0 |
+| tao-macros | 0.1.4 | MIT OR Apache-2.0 |
 | tar | 0.4.46 | MIT OR Apache-2.0 |
-| tauri | 2.11.5 | Apache-2.0 OR MIT |
-| tauri-codegen | 2.6.3 | Apache-2.0 OR MIT |
-| tauri-macros | 2.6.3 | Apache-2.0 OR MIT |
-| tauri-plugin-autostart | 2.5.1 | Apache-2.0 OR MIT |
-| tauri-plugin-dialog | 2.7.3 | Apache-2.0 OR MIT |
-| tauri-plugin-fs | 2.5.2 | Apache-2.0 OR MIT |
-| tauri-plugin-notification | 2.4.0 | Apache-2.0 OR MIT |
-| tauri-plugin-opener | 2.5.5 | Apache-2.0 OR MIT |
-| tauri-plugin-process | 2.3.1 | Apache-2.0 OR MIT |
-| tauri-plugin-single-instance | 2.4.4 | Apache-2.0 OR MIT |
-| tauri-plugin-updater | 2.11.0 | Apache-2.0 OR MIT |
-| tauri-runtime | 2.11.3 | Apache-2.0 OR MIT |
-| tauri-runtime-wry | 2.11.4 | Apache-2.0 OR MIT |
-| tauri-utils | 2.9.3 | Apache-2.0 OR MIT |
+| tauri | 2.12.1 | Apache-2.0 OR MIT |
+| tauri-codegen | 2.7.1 | Apache-2.0 OR MIT |
+| tauri-macros | 2.7.1 | Apache-2.0 OR MIT |
+| tauri-plugin-autostart | 2.7.0 | Apache-2.0 OR MIT |
+| tauri-plugin-dialog | 2.8.1 | Apache-2.0 OR MIT |
+| tauri-plugin-fs | 2.6.0 | Apache-2.0 OR MIT |
+| tauri-plugin-notification | 2.5.1 | Apache-2.0 OR MIT |
+| tauri-plugin-opener | 2.7.0 | Apache-2.0 OR MIT |
+| tauri-plugin-process | 2.4.0 | Apache-2.0 OR MIT |
+| tauri-plugin-single-instance | 2.5.2 | Apache-2.0 OR MIT |
+| tauri-plugin-updater | 2.13.1 | Apache-2.0 OR MIT |
+| tauri-runtime | 2.12.1 | Apache-2.0 OR MIT |
+| tauri-runtime-wry | 2.12.1 | Apache-2.0 OR MIT |
+| tauri-utils | 2.10.1 | Apache-2.0 OR MIT |
 | tauri-winrt-notification | 0.7.3 | MIT OR Apache-2.0 |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 |
 | tendril | 0.5.1 | MIT OR Apache-2.0 |
@@ -539,21 +540,16 @@ Counted from 604 Rust crates and 80 npm packages.
 | tracing-core | 0.1.36 | MIT |
 | tracing-log | 0.2.0 | MIT |
 | tracing-subscriber | 0.3.23 | MIT |
-| tray-icon | 0.24.1 | MIT OR Apache-2.0 |
+| tray-icon | 0.25.1 | MIT OR Apache-2.0 |
 | try-lock | 0.2.5 | MIT |
 | typeid | 1.0.3 | MIT OR Apache-2.0 |
 | typenum | 1.20.1 | MIT OR Apache-2.0 |
 | uds_windows | 1.2.1 | MIT |
-| unic-char-property | 0.9.0 | MIT/Apache-2.0 |
-| unic-char-range | 0.9.0 | MIT/Apache-2.0 |
-| unic-common | 0.9.0 | MIT/Apache-2.0 |
-| unic-ucd-ident | 0.9.0 | MIT/Apache-2.0 |
-| unic-ucd-version | 0.9.0 | MIT/Apache-2.0 |
 | unicode-ident | 1.0.24 | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 |
 | untrusted | 0.9.0 | ISC |
 | url | 2.5.8 | MIT OR Apache-2.0 |
-| urlpattern | 0.3.0 | MIT |
+| urlpattern | 0.6.0 | MIT |
 | utf8_iter | 1.0.4 | Apache-2.0 OR MIT |
 | uuid | 1.24.0 | Apache-2.0 OR MIT |
 | valuable | 0.1.1 | MIT |
@@ -573,14 +569,14 @@ Counted from 604 Rust crates and 80 npm packages.
 | webkit2gtk | 2.0.2 | MIT |
 | webkit2gtk-sys | 2.0.2 | MIT |
 | webpki-root-certs | 1.0.9 | CDLA-Permissive-2.0 |
-| webview2-com | 0.38.2 | MIT |
+| webview2-com | 0.39.1 | MIT |
 | webview2-com-macros | 0.8.1 | MIT |
-| webview2-com-sys | 0.38.2 | MIT |
+| webview2-com-sys | 0.39.1 | MIT |
 | winapi | 0.3.9 | MIT/Apache-2.0 |
 | winapi-i686-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 |
 | winapi-util | 0.1.11 | Unlicense OR MIT |
 | winapi-x86_64-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 |
-| window-vibrancy | 0.6.0 | Apache-2.0 OR MIT |
+| window-vibrancy | 0.8.1 | Apache-2.0 OR MIT |
 | windows | 0.61.3 | MIT OR Apache-2.0 |
 | windows | 0.62.2 | MIT OR Apache-2.0 |
 | windows_aarch64_gnullvm | 0.42.2 | MIT OR Apache-2.0 |
@@ -639,7 +635,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | winreg | 0.10.1 | MIT |
 | wit-bindgen | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | writeable | 0.6.3 | Unicode-3.0 |
-| wry | 0.55.1 | Apache-2.0 OR MIT |
+| wry | 0.57.0 | Apache-2.0 OR MIT |
 | x11 | 2.21.0 | MIT |
 | x11-dl | 2.21.0 | MIT |
 | x509-parser | 0.18.1 | MIT OR Apache-2.0 |
@@ -876,6 +872,7 @@ be carried.
 - Copyright (c) 2017 Redox OS Developers
 - Copyright (c) 2017 Robert Grosse
 - Copyright (c) 2017 Sergio Benitez
+- Copyright (c) 2017 Stanislav Tkach
 - Copyright (c) 2017 SysGears
 - Copyright (c) 2017 Ted Driggs
 - Copyright (c) 2017 The Tokio Authors
@@ -959,6 +956,7 @@ be carried.
 - Copyright (c) 2021-2022 The Nushell Project Developers
 - Copyright (c) 2021-2024 Oleksii Raspopov, Kostiantyn Denysov, Anton Verinov
 - Copyright (c) 2021-PRESENT Nuxt Contrib
+- Copyright (c) 2022 - Present Tauri Apps Contributors
 - Copyright (c) 2022 1Password
 - Copyright (c) 2022 Artyom Pavlov
 - Copyright (c) 2022 Bartłomiej Maryńczak
@@ -989,6 +987,7 @@ be carried.
 - Copyright (c) 2024 Zeeshan Ali Khan & zbus contributors
 - Copyright (c) 2024 kazuya kawaguchi
 - Copyright (c) 2025 Alice Maz, Marshall Pierce
+- Copyright (c) 2025 iparaskev
 - Copyright (c) 2025-PRESENT Anthony Fu <https://github.com/antfu> and Kevin Deng <https://github.com/sxzz>
 - Copyright (c) 2026-present Vercel Inc.
 - Copyright (c) [2021] [Marvin Countryman]
@@ -1581,7 +1580,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### MPL-2.0
 
-_As distributed by cssparser@0.36.0 (LICENSE)._
+_As distributed by cssparser@0.37.0 (LICENSE)._
 
 ```
 Mozilla Public License Version 2.0
@@ -1984,7 +1983,7 @@ not find is a notice nobody can check.
 
 **No local text for 6 declared licences:** 0BSD, LGPL-2.1-or-later, LLVM-exception, MIT-0, Unicode-3.0, Unlicense. The identifier is declared by a package whose source is not on the machine that generated this file; the licence still applies in full.
 
-**No licence file found in 55 packages**, usually because the source has not been downloaded for this platform. Their declared licences are in the tables above:
+**No licence file found in 52 packages**, usually because the source has not been downloaded for this platform. Their declared licences are in the tables above:
 
-`alloc-stdlib@0.2.4`, `asn1-rs-impl@0.2.0`, `block2@0.6.2`, `bollard-stubs@1.53.1-rc.29.3.1`, `cesu8@1.1.0`, `dispatch2@0.3.1`, `dlopen2@0.8.2`, `dlopen2_derive@0.4.3`, `include_dir@0.7.4`, `include_dir_macros@0.7.4`, `jni@0.22.4`, `jni-macros@0.22.4`, `jni-sys-macros@0.4.1`, `libappindicator-sys@0.9.0`, `mac-notification-sys@0.6.15`, `ndk@0.9.0`, `ndk-sys@0.6.0+11769913`, `objc2@0.6.4`, `objc2-app-kit@0.3.2`, `objc2-cloud-kit@0.3.2`, `objc2-core-data@0.3.2`, `objc2-core-foundation@0.3.2`, `objc2-core-graphics@0.3.2`, `objc2-core-image@0.3.2`, `objc2-core-location@0.3.2`, `objc2-core-text@0.3.2`, `objc2-encode@4.1.0`, `objc2-exception-helper@0.1.1`, `objc2-foundation@0.3.2`, `objc2-io-kit@0.3.2`, `objc2-io-surface@0.3.2`, `objc2-open-directory@0.3.2`, `objc2-osa-kit@0.3.2`, `objc2-quartz-core@0.3.2`, `objc2-ui-kit@0.3.2`, `objc2-user-notifications@0.3.2`, `objc2-web-kit@0.3.2`, `r-efi@5.3.0`, `r-efi@6.0.0`, `rustls-platform-verifier-android@0.1.1`, `selectors@0.36.1`, `systemstat@0.2.7`, `tao-macros@0.1.3`, `unic-char-property@0.9.0`, `unic-char-range@0.9.0`, `unic-common@0.9.0`, `unic-ucd-ident@0.9.0`, `unic-ucd-version@0.9.0`, `valuable@0.1.1`, `webview2-com@0.38.2`, `webview2-com-macros@0.8.1`, `webview2-com-sys@0.38.2`, `winapi-i686-pc-windows-gnu@0.4.0`, `winapi-x86_64-pc-windows-gnu@0.4.0`, `@vue/devtools-api@6.6.4`
+`alloc-stdlib@0.3.0`, `asn1-rs-impl@0.2.0`, `block2@0.6.2`, `bollard-stubs@1.53.1-rc.29.3.1`, `cesu8@1.1.0`, `dispatch2@0.3.1`, `dlopen2@0.8.2`, `dlopen2_derive@0.4.3`, `include_dir@0.7.4`, `include_dir_macros@0.7.4`, `jni@0.22.4`, `jni-macros@0.22.4`, `jni-sys-macros@0.4.1`, `libappindicator-sys@0.9.0`, `mac-notification-sys@0.6.15`, `ndk@0.9.0`, `ndk-context@0.1.1`, `ndk-sys@0.6.0+11769913`, `objc2@0.6.4`, `objc2-app-kit@0.3.2`, `objc2-cloud-kit@0.3.2`, `objc2-core-data@0.3.2`, `objc2-core-foundation@0.3.2`, `objc2-core-graphics@0.3.2`, `objc2-core-image@0.3.2`, `objc2-core-location@0.3.2`, `objc2-core-text@0.3.2`, `objc2-encode@4.1.0`, `objc2-exception-helper@0.1.1`, `objc2-foundation@0.3.2`, `objc2-io-kit@0.3.2`, `objc2-io-surface@0.3.2`, `objc2-open-directory@0.3.2`, `objc2-osa-kit@0.3.2`, `objc2-quartz-core@0.3.2`, `objc2-security@0.3.2`, `objc2-service-management@0.3.2`, `objc2-ui-kit@0.3.2`, `objc2-user-notifications@0.3.2`, `objc2-web-kit@0.3.2`, `r-efi@5.3.0`, `r-efi@6.0.0`, `rustls-platform-verifier-android@0.1.1`, `selectors@0.38.0`, `systemstat@0.2.7`, `valuable@0.1.1`, `webview2-com@0.39.1`, `webview2-com-macros@0.8.1`, `webview2-com-sys@0.39.1`, `winapi-i686-pc-windows-gnu@0.4.0`, `winapi-x86_64-pc-windows-gnu@0.4.0`, `@vue/devtools-api@6.6.4`
 
