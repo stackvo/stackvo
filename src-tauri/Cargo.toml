@@ -1,6 +1,6 @@
 [package]
 name = "stackvo-desktop"
-version = "0.3.0"
+version = "0.3.1"
 description = "Native desktop app for StackVo"
 # The name on LICENSE. `authors = ["StackVo"]` named the product rather than the
 # copyright holder, so the two files disagreed about who wrote this.
