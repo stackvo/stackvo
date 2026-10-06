@@ -746,7 +746,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | quansync | 0.2.11 | MIT |
 | readdirp | 5.0.0 | MIT |
 | scule | 1.3.0 | MIT |
-| source-map-js | 1.2.1 | BSD-3-Clause |
+| source-map-js | 1.2.2 | BSD-3-Clause |
 | tinyglobby | 0.2.17 | MIT |
 | ufo | 1.6.4 | MIT |
 | unplugin | 3.3.0 | MIT |

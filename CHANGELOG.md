@@ -5,6 +5,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-06
+
 ### Added
 
 - **28 services in the catalogue**, published from `stackvo-service-packages`
