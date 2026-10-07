@@ -918,6 +918,12 @@ fn the_draft_is_read_as_a_whole_before_anybody_publishes_it() {
         step.contains(".version") && step.contains("exit 1"),
         "the draft check does not compare the version or cannot fail"
     );
+    assert!(
+        step.contains("(.id | tostring), .name"),
+        "the draft check looks assets up by name only. A draft's latest.json \
+         points at `releases/assets/<id>`, so every URL reads as missing and a \
+         sound draft is called unpublishable — v0.3.1's was."
+    );
 }
 
 /// An App Store Connect API key replaces the Apple ID when all three halves
