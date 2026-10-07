@@ -1020,7 +1020,13 @@ jobs:
 
           mkdir -p verify
           gh release download "$TAG" --pattern latest.json --dir verify
-          gh release view "$TAG" --json assets --jq '.assets[].name' | sort > verify/assets.txt
+          # Both the id and the name of every asset, because a DRAFT's
+          # `latest.json` points at `.../releases/assets/<id>` and a published
+          # release's at `.../download/<tag>/<name>`; the last path segment is
+          # one or the other. The first run of this check read only names and
+          # called a sound v0.3.1 draft unpublishable.
+          gh api "repos/$GH_REPO/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$TAG\")][0].assets[] | (.id | tostring), .name" | sort > verify/assets.txt
 
           version=$(jq -r .version verify/latest.json)
           [ "$version" = "${TAG#v}" ] || problems="$problems\n- latest.json says version $version, the tag says ${TAG#v}."
