@@ -815,3 +815,131 @@ fn the_matrix_is_six_targets_with_the_arm_rows_on_arm_runners() {
         );
     }
 }
+
+/// v0.3.1: four of six macOS attempts were cancelled at the 90-minute ceiling
+/// while Apple's notary service was still working, and two more died on a
+/// network drop mid-wait. The ceiling is the matrix row's to set, and the macOS
+/// rows set a longer one — and retry once, on macOS only.
+#[test]
+fn the_macos_rows_get_the_time_apple_takes_and_one_retry() {
+    let text = workflow();
+
+    assert!(
+        text.contains("timeout-minutes: ${{ matrix.timeout || 90 }}"),
+        "the build job's ceiling is no longer the matrix row's `timeout`"
+    );
+
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    for target in ["aarch64-apple-darwin", "x86_64-apple-darwin"] {
+        let at = lines
+            .iter()
+            .position(|l| *l == format!("target: {target}"))
+            .unwrap_or_else(|| panic!("`{target}` is no longer in the matrix"));
+        let timeout: u32 = lines[at + 1]
+            .strip_prefix("timeout: ")
+            .unwrap_or_else(|| panic!("`{target}` has no `timeout:` right after it"))
+            .parse()
+            .expect("a number of minutes");
+        assert!(
+            timeout >= 150,
+            "`{target}` is allowed {timeout} minutes. Notarisation took 33 to \
+             72+ minutes on top of a ~20 minute build in v0.3.1; under 150 the \
+             ceiling is a coin flip."
+        );
+    }
+
+    let retry = text
+        .lines()
+        .find(|l| l.trim_start().starts_with("retryAttempts:"))
+        .expect("tauri-action no longer gets `retryAttempts` — one dropped connection while polling Apple costs the whole 40-minute wait");
+    assert!(
+        retry.contains("startsWith(matrix.os, 'macos') && 1 || 0"),
+        "`retryAttempts` is `{}`; it should retry on macOS and nowhere else",
+        retry.trim()
+    );
+}
+
+/// v0.3.1's draft held installers from two commits because the tag was moved
+/// and pushed again, and `tauri-action` found the first run's draft by name.
+#[test]
+fn a_moved_tag_cannot_feed_another_commits_draft() {
+    let text = workflow();
+    let all = steps(&text);
+
+    let preflight = all
+        .iter()
+        .find(|s| s.contains("target_commitish"))
+        .expect("the preflight no longer looks at the draft's commit");
+    assert!(
+        preflight.contains("if: ${{ !inputs.rehearsal }}")
+            && preflight.contains("$GITHUB_SHA")
+            && preflight.contains("exit 1"),
+        "the draft check can run in a rehearsal or cannot fail: {preflight}"
+    );
+
+    let build = all
+        .iter()
+        .find(|s| s.contains("The tag must still point at the commit this run is building"))
+        .expect("the build rows no longer check that the tag has not moved");
+    assert!(
+        build.contains("commits/$TAG") && build.contains("$GITHUB_SHA") && build.contains("exit 1"),
+        "the moved-tag check does not compare the tag's commit with the run's: {build}"
+    );
+}
+
+/// What a person is about to publish is read as a whole before they are asked.
+#[test]
+fn the_draft_is_read_as_a_whole_before_anybody_publishes_it() {
+    let text = workflow();
+    let step = steps(&text)
+        .into_iter()
+        .find(|s| s.contains("The draft must be one commit's work, and complete"))
+        .expect("nothing checks the finished draft any more");
+
+    assert!(
+        step.contains("if: ${{ !inputs.rehearsal }}"),
+        "the draft check runs in a rehearsal, which has no draft"
+    );
+    for platform in [
+        "linux-x86_64",
+        "linux-aarch64",
+        "windows-x86_64",
+        "windows-aarch64",
+        "darwin-x86_64",
+        "darwin-aarch64",
+    ] {
+        assert!(
+            step.contains(platform),
+            "the draft check does not require `{platform}` in latest.json — \
+             an updater with no entry is told it is already current, for ever"
+        );
+    }
+    assert!(
+        step.contains(".version") && step.contains("exit 1"),
+        "the draft check does not compare the version or cannot fail"
+    );
+}
+
+/// An App Store Connect API key replaces the Apple ID when all three halves
+/// exist, and the Apple ID pair is then withheld so it cannot win.
+#[test]
+fn the_notary_api_key_wins_over_the_apple_id_when_it_is_complete() {
+    let text = workflow();
+    let hand = steps(&text)
+        .into_iter()
+        .find(|s| s.contains("$GITHUB_ENV") && s.contains("APPLE_CERTIFICATE"))
+        .expect("no step exports the Apple secrets");
+
+    for name in ["APPLE_API_ISSUER", "APPLE_API_KEY", "APPLE_API_KEY_CONTENT"] {
+        assert!(
+            hand.contains(&format!("{name}: ${{{{ secrets.{name} }}}}")),
+            "the export step cannot see `{name}`"
+        );
+    }
+    assert!(
+        hand.contains("APPLE_API_KEY_PATH=")
+            && hand.contains("[ \"$name\" = APPLE_ID ]")
+            && hand.contains("[ \"$name\" = APPLE_PASSWORD ]"),
+        "with the API key complete, the Apple ID pair must not be exported"
+    );
+}
