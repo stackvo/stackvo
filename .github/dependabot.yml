@@ -82,8 +82,9 @@ updates:
       # 2026-09-21 `dependabot-notices.yml` does that for it, but the pairing
       # rule stands. Measured on 3 September 2026: five PRs (#106–#110) for one
       # piece of work, two of them red on exactly those two grounds. The cargo
-      # `tauri` group below is the single reminder; when it appears, a person
-      # moves both halves in one commit and runs `npm run notice`.
+      # side ignores Tauri minors for the same reason (see below), so neither
+      # half is ever raised alone: a person moves both in one commit and runs
+      # `npm run notice`.
       - dependency-name: '@tauri-apps/*'
 
   - package-ecosystem: cargo
@@ -93,8 +94,9 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
-      # This group is the reminder for the npm half too — see the npm `ignore`
-      # above. Its PR is not merged on its own: the JS packages move with it.
+      # Patch releases of the Tauri crates only — see the `ignore` below. A
+      # patch never changes the minor the CLI compares, so this PR can go green
+      # on its own and is mergeable on that.
       tauri:
         patterns:
           - tauri
@@ -106,6 +108,23 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
+      # No Tauri crate above a patch, for the mirror-image reason of the npm
+      # `ignore` above. This group used to be "the reminder": it raised the
+      # minor bump and a person was meant to move both halves by hand. What it
+      # raised instead, every time, was a red pull request — the crate half
+      # moved, the `@tauri-apps/*` half could not, and the CLI stops with
+      # `Found version mismatched Tauri packages` (#164 on 5 October 2026, and
+      # the 28 September pair before it). A reminder that can only ever fail is
+      # noise that teaches people to ignore the red.
+      #
+      # A Tauri minor is now a person's decision, made on purpose and in one
+      # commit that moves the crates, the npm packages and `NOTICE.md` together
+      # (`npm run notice`). The release notes of each Tauri minor are the thing
+      # to watch for it, not this bot.
+      - dependency-name: tauri
+        update-types: [version-update:semver-minor]
+      - dependency-name: tauri-*
+        update-types: [version-update:semver-minor]
 
   # The workflows themselves. An action pinned to a tag that stops being
   # maintained is the supply-chain hole nobody looks for, because it is not in

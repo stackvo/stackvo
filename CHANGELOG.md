@@ -5,6 +5,27 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The release pipeline survives a slow notary service.** v0.3.1's macOS rows
+  were cancelled at the 90-minute ceiling while Apple was still notarising
+  (33 to 72+ minutes per submission), and two more died on a dropped
+  connection mid-wait. The macOS rows now get 180 minutes and one retry, and
+  can notarise with an App Store Connect API key instead of an Apple ID.
+- **A moved tag can no longer feed another commit's draft.** The preflight,
+  every build row and a new final check compare the tag with the commit the
+  run built, and the final check reads the finished draft — version, a URL and
+  a signature for each of the six platforms in `latest.json`, and the files
+  those URLs name — before anybody is asked to publish it.
+- **Dependabot no longer raises Tauri minors**, which could only ever fail with
+  mismatched Tauri packages. Patch releases still arrive; a minor is a
+  deliberate commit that moves both halves.
+
+### Added
+
+- `RELEASING.md`: the release procedure, what to expect from notarisation, and
+  what to do when the pipeline stops a tag.
+
 ## [0.3.1] - 2026-10-06
 
 ### Added
