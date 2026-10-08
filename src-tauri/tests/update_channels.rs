@@ -277,3 +277,16 @@ fn the_help_and_the_readme_describe_the_beta_channel() {
         );
     }
 }
+
+/// v0.3.1: the `beta` release had been deleted on purpose, and the `channel`
+/// job tried to recreate it at every publish and ended the run red. The
+/// pointer is opt-in, and a beta install without it falls back to stable.
+#[test]
+fn the_beta_pointer_is_opt_in_so_a_shipped_release_never_ends_red_for_it() {
+    let job = channel_job();
+    assert!(
+        job.contains("vars.BETA_CHANNEL == 'on'"),
+        "the `channel` job runs without the `BETA_CHANNEL` opt-in, so a repository \
+         that does not use the beta channel gets a red run after every publish:\n{job}"
+    );
+}

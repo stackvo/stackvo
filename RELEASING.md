@@ -15,7 +15,10 @@ the procedure and the things to expect.
 4. Open the draft. Check the run summary for the red/green of
    _The draft must be one commit's work, and complete_, then run
    `npm run updates:check -- --url <the latest.json asset on the draft>`.
-5. Press **Publish**. The `channel` job then moves the beta pointer.
+5. Press **Publish**. If the beta channel is switched on (repository variable
+   `BETA_CHANNEL=on`, off by default), the `channel` job then moves the beta
+   pointer; otherwise it is skipped and beta installs read the stable
+   `latest.json`.
 
 To try the pipeline without releasing: _Actions → Release → Run workflow_ on
 any branch with **Rehearsal** left on. It builds everything and publishes
