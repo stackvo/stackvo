@@ -7,6 +7,11 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A published release no longer ends with a red run for a beta channel nobody
+  uses.** The `channel` job tried to recreate the deleted `beta` release at
+  every publish and failed with `HTTP 403`; it is now opt-in through the
+  repository variable `BETA_CHANNEL=on`. A beta install without the pointer
+  falls back to the stable manifest.
 - **The release pipeline survives a slow notary service.** v0.3.1's macOS rows
   were cancelled at the 90-minute ceiling while Apple was still notarising
   (33 to 72+ minutes per submission), and two more died on a dropped

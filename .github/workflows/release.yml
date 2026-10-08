@@ -1076,7 +1076,16 @@ jobs:
   # assets cannot be fetched, so a pointer written then would offer beta
   # installs a file they cannot download.
   channel:
-    if: github.event_name == 'release' && !github.event.release.draft
+    # Opt-in, by the repository variable `BETA_CHANNEL` set to `on`. Nobody is
+    # on the beta channel yet, and v0.3.1 showed what an always-on pointer costs
+    # in that state: the `beta` release had been deleted on purpose, the job
+    # tried to recreate it at every publish, and the run ended red with
+    # `HTTP 403: Resource not accessible by integration` on a release that had
+    # shipped correctly. A beta install without `beta.json` falls back to the
+    # stable `latest.json` (see `channel.rs`), so leaving this off loses nothing.
+    # To switch it on: `gh variable set BETA_CHANNEL --body on`, and delete a
+    # leftover `beta` tag first if one exists.
+    if: github.event_name == 'release' && !github.event.release.draft && vars.BETA_CHANNEL == 'on'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
