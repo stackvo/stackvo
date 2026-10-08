@@ -559,6 +559,10 @@ pub struct MailStatus {
     pub available: bool,
     pub kind: Option<Kind>,
     pub service: Option<String>,
+    /// The installed package instance answering as the catcher, when there is
+    /// one. The Mail page switches *this* on; the `.env` flag is only the
+    /// fallback for workspaces that predate instances.
+    pub instance: Option<String>,
     pub enabled: bool,
     pub running: bool,
     /// Where the browser would open it, for the "open outside" escape hatch.
@@ -645,8 +649,69 @@ async fn get(url: &str) -> Result<Value> {
     })
 }
 
+/// The installed instance that is the mail catcher, if the workspace has one.
+///
+/// Packages live in `services/instances.json`, not in `.env`: enabling
+/// `mailpit-v1-30` from the catalogue writes `enabled` there and never touches
+/// `SERVICE_MAILPIT_ENABLE`, its container is `stackvo-mailpit-v1-30` rather
+/// than `stackvo-mailpit`, and its UI port is the one allocated to it (not the
+/// 8025 default). An enabled instance wins, then a primary one, then any.
+fn instance_target(root: &Path) -> Option<(Kind, crate::instances::Instance)> {
+    let table = crate::instances::Table::load(root).ok()?;
+    let mut best: Option<(Kind, &crate::instances::Instance)> = None;
+    for kind in [Kind::Mailpit, Kind::Mailhog] {
+        for instance in table.of_service(kind.service()) {
+            let rank = |i: &crate::instances::Instance| (i.enabled, i.primary);
+            if best.map_or(true, |(_, b)| rank(instance) > rank(b)) {
+                best = Some((kind, instance));
+            }
+        }
+    }
+    best.map(|(kind, instance)| (kind, instance.clone()))
+}
+
+fn instance_base_url(instance: &crate::instances::Instance, kind: Kind) -> String {
+    let port = instance
+        .ports
+        .get("ui")
+        .copied()
+        .unwrap_or_else(|| kind.default_port());
+    format!("http://127.0.0.1:{port}")
+}
+
 /// What the inbox panel needs before it renders anything.
 pub async fn status(root: &Path) -> Result<MailStatus> {
+    if let Some((kind, instance)) = instance_target(root) {
+        let running = crate::engine::inspect(&instance.container())
+            .await
+            .map(|d| d.running)
+            .unwrap_or(false);
+        let base = instance_base_url(&instance, kind);
+        let (total, unread, error) = if running {
+            match get(&format!("{base}{}", kind.list_path(1))).await {
+                Ok(body) => {
+                    let (total, unread) = parse_counts(kind, &body);
+                    (total, unread, None)
+                }
+                Err(e) => (0, None, Some(e.message)),
+            }
+        } else {
+            (0, None, None)
+        };
+        return Ok(MailStatus {
+            available: true,
+            kind: Some(kind),
+            service: Some(kind.service().to_string()),
+            instance: Some(instance.id.clone()),
+            enabled: instance.enabled,
+            running,
+            ui_url: Some(base),
+            total,
+            unread,
+            error,
+        });
+    }
+
     let env = crate::config::Env::load(root)?;
 
     let Some(kind) = detect(&env) else {
@@ -654,6 +719,7 @@ pub async fn status(root: &Path) -> Result<MailStatus> {
             available: false,
             kind: None,
             service: None,
+            instance: None,
             enabled: false,
             running: false,
             ui_url: None,
@@ -688,6 +754,7 @@ pub async fn status(root: &Path) -> Result<MailStatus> {
         available: true,
         kind: Some(kind),
         service: Some(kind.service().to_string()),
+        instance: None,
         enabled,
         running,
         ui_url: Some(base),
@@ -698,6 +765,9 @@ pub async fn status(root: &Path) -> Result<MailStatus> {
 }
 
 fn resolve(root: &Path) -> Result<(Kind, String)> {
+    if let Some((kind, instance)) = instance_target(root) {
+        return Ok((kind, instance_base_url(&instance, kind)));
+    }
     let env = crate::config::Env::load(root)?;
     let kind = detect(&env).ok_or_else(|| {
         Error::new(Code::NotFound, "this checkout has no mail catcher")
