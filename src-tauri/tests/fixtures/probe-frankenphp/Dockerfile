@@ -61,7 +61,9 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install Node.js 20.x
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /tmp/nodesource_setup.sh https://deb.nodesource.com/setup_20.x \
+    && bash /tmp/nodesource_setup.sh \
+    && rm -f /tmp/nodesource_setup.sh \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 

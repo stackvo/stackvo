@@ -8,6 +8,9 @@
 //!
 //! Regenerate with `tools/make-fixtures.sh` if the Bash generator changes; the
 //! diff then shows exactly what changed about the produced images.
+//!
+//! The retry wrappers around `pecl install` and the NodeSource download are a
+//! deliberate divergence from the Bash generator; the fixtures carry them by hand.
 
 use stackvo_desktop_lib::{generator, manifest};
 use std::path::PathBuf;

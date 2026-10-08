@@ -250,7 +250,7 @@ fn pecl_install_block(plan: &Plan) -> String {
     }
 
     let mut out = String::from(
-        "# Install PECL extensions\n# Note: Versions are specified for stability, errors are tolerated\n\n",
+        "# Install PECL extensions\n# Note: Versions are pinned for stability; each install is retried because\n# pecl.php.net occasionally fails to serve package metadata.\n\n",
     );
     for (ext, version) in &plan.pecl {
         let target = match version {
@@ -258,7 +258,12 @@ fn pecl_install_block(plan: &Plan) -> String {
             None => ext.clone(),
         };
         out.push_str("RUN --mount=type=cache,target=/tmp/pear,sharing=locked \\\n");
-        out.push_str(&format!("    pecl install {target} \\\n"));
+        out.push_str(&format!(
+            "    for i in 1 2 3; do pecl install {target} && break; \\\n"
+        ));
+        out.push_str(
+            "      [ \"$i\" = 3 ] && exit 1; echo \"pecl install failed (attempt $i/3), retrying...\"; sleep $((i * 5)); done \\\n",
+        );
         out.push_str(&format!("    && docker-php-ext-enable {ext}\n\n"));
     }
     out
@@ -299,8 +304,10 @@ fn tools_block(tools: &[String], composer_version: &str, nodejs_version: &str) -
             "nodejs" => {
                 out.push_str(&format!("\n# Install Node.js {nodejs_version}.x\n"));
                 out.push_str(&format!(
-                    "RUN curl -fsSL https://deb.nodesource.com/setup_{nodejs_version}.x | bash - \\\n"
+                    "RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /tmp/nodesource_setup.sh https://deb.nodesource.com/setup_{nodejs_version}.x \\\n"
                 ));
+                out.push_str("    && bash /tmp/nodesource_setup.sh \\\n");
+                out.push_str("    && rm -f /tmp/nodesource_setup.sh \\\n");
                 out.push_str("    && apt-get install -y nodejs \\\n");
                 out.push_str("    && rm -rf /var/lib/apt/lists/*\n");
             }
