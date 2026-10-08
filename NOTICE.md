@@ -489,7 +489,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | tao | 0.35.3 | Apache-2.0 |
 | tao-macros | 0.1.3 | MIT OR Apache-2.0 |
 | tar | 0.4.46 | MIT OR Apache-2.0 |
-| tauri | 2.11.5 | Apache-2.0 OR MIT |
+| tauri | 2.11.6 | Apache-2.0 OR MIT |
 | tauri-codegen | 2.6.3 | Apache-2.0 OR MIT |
 | tauri-macros | 2.6.3 | Apache-2.0 OR MIT |
 | tauri-plugin-autostart | 2.5.1 | Apache-2.0 OR MIT |
@@ -498,7 +498,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | tauri-plugin-notification | 2.4.0 | Apache-2.0 OR MIT |
 | tauri-plugin-opener | 2.5.5 | Apache-2.0 OR MIT |
 | tauri-plugin-process | 2.3.1 | Apache-2.0 OR MIT |
-| tauri-plugin-single-instance | 2.4.4 | Apache-2.0 OR MIT |
+| tauri-plugin-single-instance | 2.4.5 | Apache-2.0 OR MIT |
 | tauri-plugin-updater | 2.11.0 | Apache-2.0 OR MIT |
 | tauri-runtime | 2.11.3 | Apache-2.0 OR MIT |
 | tauri-runtime-wry | 2.11.4 | Apache-2.0 OR MIT |
