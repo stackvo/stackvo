@@ -43,9 +43,12 @@ const emit = defineEmits(['update:modelValue', 'confirm']);
 
 const { t } = useI18n();
 
+// `confirm` first, close second. The parent clears what it was asked to
+// confirm when the dialog closes, so closing first leaves the confirm handler
+// with nothing to run — the button then appears to do nothing at all.
 function confirm() {
-  emit('update:modelValue', false);
   emit('confirm');
+  emit('update:modelValue', false);
 }
 </script>
 

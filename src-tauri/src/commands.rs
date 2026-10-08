@@ -8536,6 +8536,7 @@ async fn remove_project_dir(dir: &std::path::Path) -> std::io::Result<()> {
 async fn bulk(app: &AppHandle, phase: Lifecycle) -> Result<Vec<String>> {
     let containers = engine::stackvo_containers().await?;
     let mut touched = Vec::new();
+    let mut failed = Vec::new();
 
     for (id, info) in containers {
         // Skip work that would be a no-op anyway.
@@ -8554,14 +8555,38 @@ async fn bulk(app: &AppHandle, phase: Lifecycle) -> Result<Vec<String>> {
             _ => engine::restart_container(&id).await,
         };
 
-        if result.is_ok() {
-            events::emit(
-                app,
-                &format!("service:{}", phase.done),
-                SubjectEvent::service(&id).running(phase.running_after),
-            );
-            touched.push(id);
+        match result {
+            Ok(()) => {
+                events::emit(
+                    app,
+                    &format!("service:{}", phase.done),
+                    SubjectEvent::service(&id).running(phase.running_after),
+                );
+                touched.push(id);
+            }
+            Err(e) => {
+                tracing::warn!(container = %id, error = %e.message, "bulk action failed");
+                failed.push(id);
+            }
         }
+    }
+
+    // Named after the sweep rather than at the first one: a container that
+    // would not stop is not a reason to leave the rest running. But it is
+    // reported — answering `Ok` with a shorter list left the toolbar looking
+    // as though nothing had happened and nothing to say why.
+    if !failed.is_empty() {
+        failed.sort();
+        return Err(Error::new(
+            Code::Conflict,
+            format!(
+                "{} of {} containers could not be {}: {}",
+                failed.len(),
+                failed.len() + touched.len(),
+                phase.done,
+                failed.join(", ")
+            ),
+        ));
     }
 
     Ok(touched)
