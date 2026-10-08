@@ -1120,6 +1120,10 @@ export interface MailStatus {
     kind: 'mailhog' | 'mailpit' | null;
     /** string? */
     service?: string;
+    /**
+     * string? — the installed package instance acting as the catcher; the Mail page enables or starts this one
+     */
+    instance?: string;
     /** bool */
     enabled: boolean;
     /** bool */

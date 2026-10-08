@@ -4792,6 +4792,7 @@
       "available": "bool",
       "kind": "'mailhog'|'mailpit'|null",
       "service": "string?",
+      "instance": "string? — the installed package instance acting as the catcher; the Mail page enables or starts this one",
       "enabled": "bool",
       "running": "bool",
       "uiUrl": "string?",

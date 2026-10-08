@@ -92,7 +92,17 @@ async function activate() {
   activating.value = true;
   error.value = null;
   try {
-    await api.serviceEnable(catcher.value);
+    const id = status.value?.instance;
+    if (id) {
+      // Installed from the catalogue: switch that instance on, or just start it
+      // when it is already marked on and only the container is down.
+      if (status.value?.enabled) await api.instanceStart(id);
+      else await api.instanceEnable(id);
+    } else {
+      // Nothing installed yet — the catalogue is where a catcher comes from.
+      await router.push('/market');
+      return;
+    }
     await load();
   } catch (e) {
     error.value = e;
