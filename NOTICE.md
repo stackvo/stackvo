@@ -289,7 +289,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | lazy_static | 1.5.0 | MIT OR Apache-2.0 |
 | libappindicator | 0.9.0 | Apache-2.0 OR MIT |
 | libappindicator-sys | 0.9.0 | Apache-2.0 OR MIT |
-| libc | 0.2.189 | MIT OR Apache-2.0 |
+| libc | 0.2.190 | MIT OR Apache-2.0 |
 | libdbus-sys | 0.2.7 | Apache-2.0/MIT |
 | libloading | 0.7.4 | ISC |
 | libredox | 0.1.18 | MIT |
@@ -507,9 +507,9 @@ Counted from 604 Rust crates and 80 npm packages.
 | tempfile | 3.27.0 | MIT OR Apache-2.0 |
 | tendril | 0.5.1 | MIT OR Apache-2.0 |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 |
-| thiserror | 2.0.20 | MIT OR Apache-2.0 |
+| thiserror | 2.0.21 | MIT OR Apache-2.0 |
 | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 |
-| thiserror-impl | 2.0.20 | MIT OR Apache-2.0 |
+| thiserror-impl | 2.0.21 | MIT OR Apache-2.0 |
 | thread_local | 1.1.10 | MIT OR Apache-2.0 |
 | time | 0.3.55 | MIT OR Apache-2.0 |
 | time-core | 0.1.9 | MIT OR Apache-2.0 |
@@ -517,7 +517,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | tinystr | 0.8.3 | Unicode-3.0 |
 | tinyvec | 1.12.0 | Zlib OR Apache-2.0 OR MIT |
 | tinyvec_macros | 0.1.1 | MIT OR Apache-2.0 OR Zlib |
-| tokio | 1.53.1 | MIT |
+| tokio | 1.53.2 | MIT |
 | tokio-macros | 2.7.1 | MIT |
 | tokio-rustls | 0.26.4 | MIT OR Apache-2.0 |
 | tokio-util | 0.7.19 | MIT |
