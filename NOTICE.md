@@ -680,10 +680,10 @@ Counted from 604 Rust crates and 80 npm packages.
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
 | @babel/parser | 7.29.8 | MIT |
 | @babel/types | 7.29.8 | MIT |
-| @intlify/core-base | 11.4.12 | MIT |
-| @intlify/devtools-types | 11.4.12 | MIT |
-| @intlify/message-compiler | 11.4.12 | MIT |
-| @intlify/shared | 11.4.12 | MIT |
+| @intlify/core-base | 11.4.13 | MIT |
+| @intlify/devtools-types | 11.4.13 | MIT |
+| @intlify/message-compiler | 11.4.13 | MIT |
+| @intlify/shared | 11.4.13 | MIT |
 | @jridgewell/gen-mapping | 0.3.13 | MIT |
 | @jridgewell/remapping | 2.3.5 | MIT |
 | @jridgewell/resolve-uri | 3.1.2 | MIT |
@@ -752,9 +752,9 @@ Counted from 604 Rust crates and 80 npm packages.
 | unplugin | 3.3.0 | MIT |
 | unplugin-utils | 0.3.2 | MIT |
 | vue | 3.5.43 | MIT |
-| vue-i18n | 11.4.12 | MIT |
+| vue-i18n | 11.4.13 | MIT |
 | vue-router | 5.3.1 | MIT |
-| vuetify | 3.13.4 | MIT |
+| vuetify | 3.13.5 | MIT |
 | webpack-virtual-modules | 0.6.2 | MIT |
 
 ## Copyright holders
