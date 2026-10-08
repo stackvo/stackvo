@@ -662,7 +662,7 @@ fn instance_target(root: &Path) -> Option<(Kind, crate::instances::Instance)> {
     for kind in [Kind::Mailpit, Kind::Mailhog] {
         for instance in table.of_service(kind.service()) {
             let rank = |i: &crate::instances::Instance| (i.enabled, i.primary);
-            if best.map_or(true, |(_, b)| rank(instance) > rank(b)) {
+            if best.is_none_or(|(_, b)| rank(instance) > rank(b)) {
                 best = Some((kind, instance));
             }
         }
