@@ -34,18 +34,22 @@ RUN docker-php-ext-install pdo_mysql
 RUN docker-php-ext-install mbstring curl zip gd intl bcmath
 
 # Install PECL extensions
-# Note: Versions are specified for stability, errors are tolerated
+# Note: Versions are pinned for stability; each install is retried because
+# pecl.php.net occasionally fails to serve package metadata.
 
 RUN --mount=type=cache,target=/tmp/pear,sharing=locked \
-    pecl install igbinary-3.2.16 \
+    for i in 1 2 3; do pecl install igbinary-3.2.16 && break; \
+      [ "$i" = 3 ] && exit 1; echo "pecl install failed (attempt $i/3), retrying..."; sleep $((i * 5)); done \
     && docker-php-ext-enable igbinary
 
 RUN --mount=type=cache,target=/tmp/pear,sharing=locked \
-    pecl install redis-6.3.0 \
+    for i in 1 2 3; do pecl install redis-6.3.0 && break; \
+      [ "$i" = 3 ] && exit 1; echo "pecl install failed (attempt $i/3), retrying..."; sleep $((i * 5)); done \
     && docker-php-ext-enable redis
 
 RUN --mount=type=cache,target=/tmp/pear,sharing=locked \
-    pecl install xdebug-3.4.0 \
+    for i in 1 2 3; do pecl install xdebug-3.4.0 && break; \
+      [ "$i" = 3 ] && exit 1; echo "pecl install failed (attempt $i/3), retrying..."; sleep $((i * 5)); done \
     && docker-php-ext-enable xdebug
 
 
@@ -78,7 +82,9 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install Node.js 20.x
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /tmp/nodesource_setup.sh https://deb.nodesource.com/setup_20.x \
+    && bash /tmp/nodesource_setup.sh \
+    && rm -f /tmp/nodesource_setup.sh \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 

@@ -253,13 +253,23 @@ pub async fn run_operation(
                 .cloned()
                 .collect::<Vec<_>>()
                 .join("\n");
-            let message = format!(
-                "{program} exited with code {}",
-                output
-                    .code
-                    .map(|c| c.to_string())
-                    .unwrap_or_else(|| "?".into())
-            );
+            let code = output
+                .code
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "?".into());
+            // The banner alone ("docker exited with code 1") sends people to the
+            // log file; the line that names the failing step is right here.
+            let reason = output
+                .lines
+                .iter()
+                .rev()
+                .map(|l| l.trim())
+                .find(|l| l.starts_with("failed to solve") || l.starts_with("ERROR"))
+                .map(|l| crate::logging::redact(l).into_owned());
+            let message = match reason {
+                Some(r) => format!("{program} exited with code {code}: {r}"),
+                None => format!("{program} exited with code {code}"),
+            };
 
             // The tail is what makes a failed build diagnosable after the fact,
             // and it is subprocess output — the one source that can carry a
@@ -970,6 +980,24 @@ mod tests {
                 .and_then(|v| v.as_u64())
                 .is_some(),
             "durationMs is what the UI shows when the operation ends"
+        );
+    }
+
+    /// The banner shown in the UI must name the failing step, not just the code.
+    #[tokio::test]
+    async fn a_docker_style_failure_line_reaches_the_error_message() {
+        let sink = progress::Recording::new();
+        let (program, args) = node(
+            "console.log('failed to solve: process \"pecl install redis\" did not complete'); process.exit(1)",
+        );
+
+        let error = run_operation(&sink, operation(program, &args, &cwd()))
+            .await
+            .expect_err("exit 1 must not read as success");
+        assert!(
+            error.message.contains("pecl install redis"),
+            "{}",
+            error.message
         );
     }
 
