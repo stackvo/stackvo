@@ -14,8 +14,12 @@ the procedure and the things to expect.
    publishes by itself.
 4. Open the draft. Check the run summary for the red/green of
    _The draft must be one commit's work, and complete_, then run
-   `npm run updates:check -- --url <the latest.json asset on the draft>`.
-5. Press **Publish**. If the beta channel is switched on (repository variable
+   `npm run updates:check -- --draft vX.Y.Z`. It reads the draft's `latest.json`
+   through the API with your `gh` login — a draft's assets answer 404 to any
+   plain address, so `--url` cannot do this.
+5. Press **Publish**, then `npm run updates:check` with no arguments: that asks
+   the live `releases/latest` address every installed copy asks. It can lag
+   the publish by a few seconds. If the beta channel is switched on (repository variable
    `BETA_CHANNEL=on`, off by default), the `channel` job then moves the beta
    pointer; otherwise it is skipped and beta installs read the stable
    `latest.json`.

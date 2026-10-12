@@ -4,7 +4,8 @@
  * ```sh
  * npm run updates:check                    # the endpoint in tauri.conf.json
  * npm run updates:check -- --channel beta  # the beta channel's beta.json
- * npm run updates:check -- --url <url>     # a draft's asset, before publishing
+ * npm run updates:check -- --url <url>     # any published manifest by address
+ * npm run updates:check -- --draft v0.3.2  # a draft, through the API, before publishing
  * ```
  *
  * The beta endpoint is not in `tauri.conf.json`. It is derived from the stable
@@ -57,6 +58,7 @@
  * "could not ask" is the failure mode this file was written against.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -90,6 +92,24 @@ const STABLE_SUFFIX = '/releases/latest/download/latest.json';
 export function betaEndpoint(stable) {
   if (typeof stable !== 'string' || !stable.endsWith(STABLE_SUFFIX)) return null;
   return `${stable.slice(0, -STABLE_SUFFIX.length)}/releases/download/beta/beta.json`;
+}
+
+/**
+ * `owner/repo` out of the stable endpoint, or `null` when it is not GitHub's
+ * shape. The draft check talks to the API, which wants the repository rather
+ * than a download address, and this is the one place the name is spelled.
+ */
+export function repositoryOf(stable) {
+  if (typeof stable !== 'string') return null;
+  const match = stable.match(
+    /^https:\/\/github\.com\/([^/]+\/[^/]+)\/releases\/latest\/download\/latest\.json$/
+  );
+  return match ? match[1] : null;
+}
+
+/** The manifest a channel's release carries, in the names `release.yml` writes. */
+export function manifestName(channel = 'stable') {
+  return channel === 'beta' ? 'beta.json' : 'latest.json';
 }
 
 /**
@@ -233,11 +253,122 @@ export function diagnose(status, endpoint, channel = 'stable') {
       `releases with \`releaseDraft: true\`. This one is worth knowing because it survives a ` +
       `fully green run: six green targets, every artifact built and signed, and this URL still ` +
       `404 until somebody presses Publish.\n\n` +
-      `To check a draft's manifest before publishing, take the asset URL off the release page:\n` +
-      `  npm run updates:check -- --url <that url>`
+      `To check a draft's manifest before publishing, go through the API — GitHub serves a ` +
+      `draft's assets only to an authenticated client, so its address answers 404 whatever ` +
+      `is there:\n` +
+      `  npm run updates:check -- --draft <tag>`
     );
   }
   return `${status} — the endpoint did not answer with the manifest`;
+}
+
+/**
+ * A token for the API: `GITHUB_TOKEN` if the caller set one, else whatever
+ * `gh auth login` left behind. `null` when there is neither, and the draft
+ * check says so rather than asking anonymously and reporting the 404 it would
+ * get for any draft.
+ */
+function token() {
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+  try {
+    const out = execFileSync('gh', ['auth', 'token'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A release's manifest through the API, drafts included.
+ *
+ * Three things the plain fetch cannot do, and the reason v0.3.2's check was
+ * done by hand: a draft is absent from `releases/tags/<tag>` and present only
+ * in the list; its assets are served only to an authenticated client; and the
+ * bytes come as a redirect to a signed storage address that must be fetched
+ * **without** the token, or storage refuses the request for carrying two
+ * credentials. So the redirect is followed by hand.
+ *
+ * Exit 2 for "could not ask", exit 1 for "asked, and the answer is no" — the
+ * same split `main` keeps for the plain endpoint.
+ */
+async function releaseManifest(repository, tag, channel) {
+  const auth = token();
+  if (!auth) {
+    console.error(
+      'no token: a draft is readable only by an authenticated client. Run `gh auth login` ' +
+        'or set GITHUB_TOKEN.\n\nThis is not a verdict on the release. Nothing was measured.'
+    );
+    process.exit(2);
+  }
+  const headers = {
+    Authorization: `Bearer ${auth}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  let list;
+  try {
+    list = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=30`, {
+      headers,
+    });
+  } catch (error) {
+    console.error(`could not reach the API: ${error.message}`);
+    console.error('\nThis is not a verdict on the release. Nothing was measured.');
+    process.exit(2);
+  }
+  if (!list.ok) {
+    console.error(`the API answered ${list.status} for ${repository}'s releases`);
+    console.error('\nThis is not a verdict on the release. Nothing was measured.');
+    process.exit(2);
+  }
+  const releases = await list.json();
+  const release = releases.find((r) => r.tag_name === tag);
+  if (!release) {
+    console.error(
+      `no release — draft or published — is tagged ${tag} among the ${releases.length} newest ` +
+        `on ${repository}. The Release workflow creates the draft; has its run finished?`
+    );
+    process.exit(1);
+  }
+
+  const name = manifestName(channel);
+  const assets = release.assets ?? [];
+  const asset = assets.find((a) => a.name === name);
+  if (!asset) {
+    console.error(
+      `release ${tag} (${release.draft ? 'draft' : 'published'}) carries ${assets.length} ` +
+        `asset(s) and none is ${name}. tauri-action writes it after the last build row ` +
+        `succeeds, so a matrix that is still running or failed leaves it absent.`
+    );
+    process.exit(1);
+  }
+
+  // The bytes: a 302 to storage, followed without the token.
+  const located = await fetch(asset.url, {
+    headers: { ...headers, Accept: 'application/octet-stream' },
+    redirect: 'manual',
+  });
+  let body = located;
+  if (located.status >= 300 && located.status < 400) {
+    const target = located.headers.get('location');
+    body = await fetch(target, { redirect: 'follow' });
+  }
+  if (!body.ok) {
+    console.error(`the asset ${name} on ${tag} answered ${body.status}`);
+    console.error('\nThis is not a verdict on the release. Nothing was measured.');
+    process.exit(2);
+  }
+  let manifest;
+  try {
+    manifest = await body.json();
+  } catch {
+    console.error(`${name} on ${tag} is not JSON`);
+    process.exit(1);
+  }
+  return { manifest, release, assets: assets.length };
 }
 
 async function main() {
@@ -250,6 +381,35 @@ async function main() {
   const conf = JSON.parse(read('src-tauri/tauri.conf.json'));
   const { endpoint: configured, version } = declared(conf, channel);
   const endpoint = valueOf('--url') ?? configured;
+  const draft = valueOf('--draft');
+
+  if (draft) {
+    // A draft, by tag, through the API. The repository is read off the stable
+    // endpoint rather than typed, so a fork checks its own releases.
+    const repository = repositoryOf(declared(conf, 'stable').endpoint);
+    if (!repository) {
+      console.error(
+        "the stable endpoint in tauri.conf.json is not GitHub's releases/latest/download/" +
+          'latest.json, so there is no repository to ask for a draft on.'
+      );
+      process.exit(1);
+    }
+    const platforms = platformsFrom(read('.github/workflows/release.yml'));
+    console.log(`asking the API for ${manifestName(channel)} on release ${draft} of ${repository}`);
+    console.log(`expecting ${version} for ${platforms.join(', ')}\n`);
+
+    const { manifest, release, assets } = await releaseManifest(repository, draft, channel);
+    console.log(`release ${draft} is ${release.draft ? 'a draft' : 'published'}, ${assets} assets`);
+    const problems = inspect(manifest, { platforms, version, channel });
+    if (problems.length) {
+      console.error(`\nthe manifest is there and the updater cannot use it:\n`);
+      for (const problem of problems) console.error(`  · ${problem}\n`);
+      process.exit(1);
+    }
+    console.log(`it offers ${manifest.version} for all ${platforms.length} platforms,`);
+    console.log(`each with a url and a signature (channel: ${manifest.channel ?? 'stable'}).`);
+    return;
+  }
 
   if (!endpoint) {
     console.error(

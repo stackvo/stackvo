@@ -18,11 +18,30 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   fails now undoes what it wrote: the flag goes back off, any half-made
   container is removed, and the row offers Enable again rather than a Start
   that cannot work. The named volume is untouched either way.
+- **`npm run updates:check` can read a draft.** `--draft vX.Y.Z` fetches the
+  draft's manifest through the API with the `gh` login; the `--url` form could
+  never do this, because GitHub serves a draft's assets only to an
+  authenticated client and answers 404 to everyone else — which `RELEASING.md`
+  was telling people to run. v0.3.2's draft was checked by hand for that
+  reason.
 
 ## [0.3.2] - 2026-10-12
 
 ### Fixed
 
+- **Start all, stop all and restart all did nothing.** The confirmation dialog
+  closed before it confirmed, and the toolbar clears the action it was asked
+  about when the dialog closes — so the handler ran with nothing to run.
+  Containers that fail during a bulk action are now collected and reported
+  rather than skipped in silence.
+- **A transient PECL or NodeSource outage no longer fails the whole build**
+  with a bare `docker exited with code 1`. Each `pecl install` is retried up to
+  three times, the NodeSource setup script is downloaded with curl retries
+  rather than piped into bash, and docker's "failed to solve" line is carried
+  into the error so the banner names the failing step.
+- **The Mail page can enable the catcher again.** It called a function that
+  no longer existed; it now finds Mailpit or MailHog through package instances
+  and starts the one it finds.
 - **A published release no longer ends with a red run for a beta channel nobody
   uses.** The `channel` job tried to recreate the deleted `beta` release at
   every publish and failed with `HTTP 403`; it is now opt-in through the
