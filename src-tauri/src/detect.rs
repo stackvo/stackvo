@@ -64,8 +64,19 @@ pub struct Fingerprint {
     pub node_scripts: Vec<String>,
     /// `go.mod` — a marker only a Go module has.
     pub go_mod: bool,
+    /// The `go` directive of `go.mod`, as `major.minor` — the minimum
+    /// toolchain the module asks for (`go 1.25.0` reads as `1.25`). A floor,
+    /// not a choice: newer Go compiles it, so it only ever raises the version
+    /// a project is put on and never lowers it. See [`Detected::runtime_floor`].
+    pub go_directive: Option<String>,
     /// `Cargo.toml` — only Rust.
     pub cargo_toml: bool,
+    /// The keys of `Cargo.toml`'s `[dependencies]` table — the one place a
+    /// Rust project names the framework it is built on. `loco-rs` is Loco.
+    pub cargo_deps: Vec<String>,
+    /// `craft` at the root — Masonite's command runner, and nothing else puts
+    /// a file of that name there. The Django of its `manage.py`.
+    pub craft: bool,
     /// `Gemfile` — only Ruby.
     pub gemfile: bool,
     /// `vendor/bin/pint` — Pint installed, not merely Laravel present.
@@ -153,6 +164,20 @@ pub struct Detected {
     pub document_root: Option<String>,
     pub php_version: Option<String>,
     pub node_version: Option<String>,
+    /// The least the folder's runtime may be, where something states it:
+    /// the `go` directive of `go.mod`, or a framework's own documented
+    /// requirement (AdonisJS asks for Node 24, Masonite 5 for Python 3.10).
+    /// Unlike the two above it is read strictly as a floor — `detected_spec`
+    /// puts the project on the higher of the workspace's setting and this,
+    /// and never lower. Rust is never floored: its image floats on a major
+    /// tag, which is newer than any floor a crate could state.
+    pub runtime_floor: Option<String>,
+    /// A start command the framework needs instead of the runtime's default,
+    /// for the lang runtimes (node has [`Self::node_start`]). Masonite is
+    /// started by its own `craft serve`, Loco by its binary's `start`
+    /// subcommand; `python main.py` and `cargo run --release` would run
+    /// nothing or print a usage line.
+    pub lang_start: Option<String>,
     pub node_port: Option<u16>,
     pub node_start: Option<String>,
     pub confidence: Confidence,
@@ -226,7 +251,7 @@ fn document_root(print: &Fingerprint) -> Option<String> {
 /// `tests/scaffold_coverage.rs`, so a template with nothing to detect it — or a
 /// detection with no way to create the thing it detects — has to be declared as
 /// a gap rather than simply being one.
-pub const FRAMEWORKS: [&str; 20] = [
+pub const FRAMEWORKS: [&str; 23] = [
     "statamic",
     "prestashop",
     "laravel",
@@ -246,7 +271,12 @@ pub const FRAMEWORKS: [&str; 20] = [
     "sveltekit",
     "astro",
     "nestjs",
+    "adonisjs",
     "vite",
+    // The lang runtimes' frameworks: a name here means a start command the
+    // runtime's default would get wrong, not a document root.
+    "masonite",
+    "loco",
 ];
 
 /// Read a fingerprint and say what should run it.
@@ -281,6 +311,8 @@ pub fn infer(print: &Fingerprint) -> Detected {
         document_root: Some(doc.to_string()),
         php_version: php_version.clone(),
         node_version: None,
+        runtime_floor: None,
+        lang_start: None,
         node_port: None,
         node_start: None,
         confidence,
@@ -367,13 +399,29 @@ pub fn infer(print: &Fingerprint) -> Detected {
     // the generic composer/package heuristics, because a Go or Rust repository
     // never carries `artisan` but often carries a `package.json` for tooling —
     // scored generically, it would adopt as a node project that cannot start.
-    let lang = |runtime: &'static str, confidence: Confidence, evidence: &str| Detected {
-        framework: None,
+    // A lang runtime, with the three things a framework on top of one can add:
+    // its name, the command that starts it, and the least its runtime may be.
+    // The plain runtimes pass `None` for all three; a Go module's floor is
+    // read off its own `go.mod` whichever way it was reached.
+    let lang = |framework: Option<&'static str>,
+                runtime: &'static str,
+                start: Option<&str>,
+                floor: Option<&str>,
+                confidence: Confidence,
+                evidence: &str| Detected {
+        framework,
         runtime,
         server: None, // a lang runtime has no web server to choose
         document_root: None,
         php_version: None,
         node_version: None,
+        runtime_floor: floor.map(str::to_string).or_else(|| {
+            // Only a Go module has a directive to read, and only the Go
+            // runtime can act on it; the other runtimes' floors are not
+            // written anywhere this reads.
+            (runtime == "go").then(|| print.go_directive.clone()).flatten()
+        }),
+        lang_start: start.map(str::to_string),
         node_port: None,
         node_start: None,
         confidence,
@@ -385,7 +433,7 @@ pub fn infer(print: &Fingerprint) -> Detected {
     // map and nothing else reads it, so a repository carrying one has already
     // committed. Node would not resolve its imports at all.
     if print.deno_config {
-        return lang("deno", Confidence::Certain, "deno.json / deno.lock");
+        return lang(None, "deno", None, None, Confidence::Certain, "deno.json / deno.lock");
     }
     // Bun only when nothing says npm. A Bun project's `package.json` is a Node
     // project's `package.json`; the lockfile is the only difference, and a
@@ -394,25 +442,57 @@ pub fn infer(print: &Fingerprint) -> Detected {
     // so it falls through to the node heuristics below, which is the answer
     // that was right before Bun was an option.
     if print.bun_lock && !print.npm_lock {
-        return lang("bun", Confidence::Certain, "bun.lock / bunfig.toml");
+        return lang(None, "bun", None, None, Confidence::Certain, "bun.lock / bunfig.toml");
     }
     if print.go_mod {
-        return lang("go", Confidence::Certain, "go.mod");
+        return lang(None, "go", None, None, Confidence::Certain, "go.mod");
+    }
+    // Loco before the plain Cargo.toml rule it would otherwise fall into. Its
+    // binary is a CLI — `cargo run --release` with no arguments prints usage
+    // and exits — so the start command is the `start` subcommand, bound where
+    // Traefik can reach it and on the port the Rust runtime is given. No
+    // floor: the Rust image floats on `rust:1`, newer than any crate's MSRV.
+    if print.cargo_toml && has(&print.cargo_deps, "loco-rs") {
+        return lang(
+            Some("loco"),
+            "rust",
+            Some("cargo run --release -- start --binding 0.0.0.0 --port 8080"),
+            None,
+            Confidence::Certain,
+            "Cargo.toml (loco-rs)",
+        );
     }
     if print.cargo_toml {
-        return lang("rust", Confidence::Certain, "Cargo.toml");
+        return lang(None, "rust", None, None, Confidence::Certain, "Cargo.toml");
     }
     if print.gemfile {
-        return lang("ruby", Confidence::Certain, "Gemfile");
+        return lang(None, "ruby", None, None, Confidence::Certain, "Gemfile");
     }
     if print.manage_py {
-        return lang("python", Confidence::Certain, "manage.py");
+        return lang(None, "python", None, None, Confidence::Certain, "manage.py");
+    }
+    // Masonite's `craft` is to it what `manage.py` is to Django: the runner
+    // only that framework puts at the root. `craft serve` is its server, on
+    // 127.0.0.1:8000 unless told otherwise, so both are told. Masonite 5
+    // documents Python 3.10 as its least.
+    if print.craft {
+        return lang(
+            Some("masonite"),
+            "python",
+            Some("python craft serve -b 0.0.0.0 -p 8000"),
+            Some("3.10"),
+            Confidence::Certain,
+            "craft",
+        );
     }
     // Weaker than the Django marker: a composer.json beside it means a PHP
     // repo that happens to ship a Python tool, and PHP wins below.
     if print.python_deps && !print.composer_json {
         return lang(
+            None,
             "python",
+            None,
+            None,
             Confidence::Likely,
             "requirements.txt / pyproject.toml",
         );
@@ -462,6 +542,8 @@ pub fn infer(print: &Fingerprint) -> Detected {
         document_root: None,
         php_version: None,
         node_version: node_version.clone(),
+        runtime_floor: None,
+        lang_start: None,
         node_port: Some(port),
         node_start: Some(start.to_string()),
         confidence,
@@ -469,28 +551,39 @@ pub fn infer(print: &Fingerprint) -> Detected {
     };
 
     if print.package_json && !print.composer_json {
-        for (package, name, port) in [
-            ("next", "next", 3000u16),
-            ("nuxt", "nuxt", 3000),
-            ("@remix-run/dev", "remix", 3000),
-            ("@sveltejs/kit", "sveltekit", 5173),
-            ("astro", "astro", 4321),
-            ("@nestjs/core", "nestjs", 3000),
-            ("vite", "vite", 5173),
+        // (package, framework, port, the least Node it documents). AdonisJS
+        // sits above `vite`, which its starter kits carry as a dev dependency
+        // and which would otherwise answer first.
+        for (package, name, port, floor) in [
+            ("next", "next", 3000u16, None),
+            ("nuxt", "nuxt", 3000, None),
+            ("@remix-run/dev", "remix", 3000, None),
+            ("@sveltejs/kit", "sveltekit", 5173, None),
+            ("astro", "astro", 4321, None),
+            ("@nestjs/core", "nestjs", 3000, None),
+            ("@adonisjs/core", "adonisjs", 3333, Some("24")),
+            ("vite", "vite", 5173, None),
         ] {
             if has(&print.node_dependencies, package) {
-                let start = if has(&print.node_scripts, "start") {
+                // AdonisJS's `start` script is `node bin/server.js`, the
+                // production entry that exists only after `node ace build`;
+                // its dev server is `dev`, like the frameworks that have no
+                // `start` at all. Everything else keeps the rule: a `start`
+                // script is what the author meant by "run this".
+                let start = if has(&print.node_scripts, "start") && name != "adonisjs" {
                     "npm run start"
                 } else {
                     "npm run dev"
                 };
-                return node(
+                let mut out = node(
                     Some(name),
                     port,
                     start,
                     Confidence::Certain,
                     vec!["package.json".into()],
                 );
+                out.runtime_floor = floor.map(str::to_string);
+                return out;
             }
         }
     }
@@ -535,11 +628,64 @@ pub fn infer(print: &Fingerprint) -> Detected {
         document_root: Some("public".into()),
         php_version: None,
         node_version: None,
+        runtime_floor: None,
+        lang_start: None,
         node_port: None,
         node_start: None,
         confidence: Confidence::Guess,
         evidence: Vec::new(),
     }
+}
+
+/// Is `a` an older version line than `b`, comparing dotted numeric parts
+/// (`8.2` < `8.10`, `1.9` < `1.25`)? A string comparison says the opposite
+/// of both, which is why this exists. Anything non-numeric compares as zero
+/// and a missing part as zero, so `1.25` and `1.25.0` are equal.
+pub fn version_lt(a: &str, b: &str) -> bool {
+    let parts = |v: &str| -> Vec<u64> {
+        v.trim()
+            .split('.')
+            .map(|p| p.trim().parse::<u64>().unwrap_or(0))
+            .collect()
+    };
+    let (a, b) = (parts(a), parts(b));
+    let len = a.len().max(b.len());
+    for i in 0..len {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x < y;
+        }
+    }
+    false
+}
+
+/// The crate names under `[dependencies]` in a `Cargo.toml`, and nothing from
+/// `[dev-dependencies]`: a framework is what the binary links, and a crate
+/// that only the tests pull in is not what the project runs on.
+pub fn cargo_dependencies(cargo_toml: &str) -> Vec<String> {
+    cargo_toml
+        .parse::<toml_edit::DocumentMut>()
+        .ok()
+        .and_then(|doc| {
+            doc.get("dependencies")
+                .and_then(|d| d.as_table())
+                .map(|table| table.iter().map(|(k, _)| k.to_string()).collect())
+        })
+        .unwrap_or_default()
+}
+
+/// The `go` directive of a `go.mod`, as `major.minor`.
+///
+/// `go 1.25.0` is what `go mod init` writes since 1.21 and `go 1.23` what
+/// older files carry; both are read as a two-part floor because that is what
+/// the `golang` image tags are. A `toolchain` line is deliberately ignored —
+/// it names what the author last built with, not what the module needs.
+pub fn go_directive(go_mod: &str) -> Option<String> {
+    go_mod
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("go ").map(str::trim))
+        .and_then(first_version)
 }
 
 // ------------------------------------------------------------------- I/O
@@ -784,6 +930,7 @@ pub fn fingerprint(dir: &Path) -> Fingerprint {
         html_dir: dir.join("html").is_dir(),
         go_mod: dir.join("go.mod").is_file(),
         cargo_toml: dir.join("Cargo.toml").is_file(),
+        craft: dir.join("craft").is_file(),
         gemfile: dir.join("Gemfile").is_file(),
         bin_rails: dir.join("bin").join("rails").is_file(),
         manage_py: dir.join("manage.py").is_file(),
@@ -833,6 +980,20 @@ pub fn fingerprint(dir: &Path) -> Fingerprint {
                 .collect();
             print.node_scripts = package.scripts.keys().cloned().collect();
             print.node_constraint = package.engines.get("node").cloned();
+        }
+    }
+
+    if print.go_mod {
+        if let Ok(text) = std::fs::read_to_string(dir.join("go.mod")) {
+            print.go_directive = go_directive(&text);
+        }
+    }
+
+    // Only the dependency names; a malformed manifest narrows the answer to
+    // "a Rust project" rather than failing the scan, like composer.json.
+    if print.cargo_toml {
+        if let Ok(text) = std::fs::read_to_string(dir.join("Cargo.toml")) {
+            print.cargo_deps = cargo_dependencies(&text);
         }
     }
 
@@ -1238,6 +1399,122 @@ mod tests {
     }
 
     #[test]
+    fn versions_compare_numerically_not_lexically() {
+        assert!(version_lt("8.2", "8.10"));
+        assert!(version_lt("1.9", "1.25"));
+        assert!(version_lt("1.23", "1.25"));
+        assert!(!version_lt("1.27", "1.25"));
+        assert!(!version_lt("1.25", "1.25.0"));
+        assert!(!version_lt("1.25.0", "1.25"));
+        assert!(!version_lt("8.4", "8.2"));
+    }
+
+    #[test]
+    fn the_go_directive_is_read_as_a_two_part_floor() {
+        // What `go mod init` writes today, what older files carry, and what
+        // must be ignored: a toolchain line names a build, not a need.
+        assert_eq!(
+            go_directive("module goravel\n\ngo 1.25.0\n\ntoolchain go1.27.2\n").as_deref(),
+            Some("1.25")
+        );
+        assert_eq!(go_directive("module app\n\ngo 1.23\n").as_deref(), Some("1.23"));
+        assert_eq!(go_directive("module app\n"), None);
+        // `godebug` and friends start with `go` too and are not the directive.
+        assert_eq!(go_directive("module app\n\ngodebug x=1\n"), None);
+    }
+
+    #[test]
+    fn a_go_module_carries_its_directive_and_nothing_else_does() {
+        let print = Fingerprint {
+            go_mod: true,
+            go_directive: Some("1.25".into()),
+            ..Default::default()
+        };
+        assert_eq!(infer(&print).runtime_floor.as_deref(), Some("1.25"));
+
+        // The same field on a non-Go fingerprint is noise and stays unread.
+        let print = Fingerprint {
+            cargo_toml: true,
+            go_directive: Some("1.25".into()),
+            ..Default::default()
+        };
+        assert_eq!(infer(&print).runtime_floor, None);
+    }
+
+    /// The three frameworks on lang runtimes, each with the one thing the
+    /// runtime's default would get wrong about it.
+    #[test]
+    fn frameworks_on_lang_runtimes_bring_their_start_command_and_floor() {
+        // Loco: the binary is a CLI, so `cargo run --release` alone prints
+        // usage. Bound to all interfaces on the Rust runtime's port.
+        let loco = Fingerprint {
+            cargo_toml: true,
+            cargo_deps: s(&["loco-rs", "tokio", "serde"]),
+            ..Default::default()
+        };
+        let out = infer(&loco);
+        assert_eq!(out.framework, Some("loco"));
+        assert_eq!(out.runtime, "rust");
+        assert_eq!(
+            out.lang_start.as_deref(),
+            Some("cargo run --release -- start --binding 0.0.0.0 --port 8080")
+        );
+        assert_eq!(out.runtime_floor, None, "rust floats on its major tag");
+
+        // Any other crate is still just a Rust project.
+        let rocket = Fingerprint {
+            cargo_toml: true,
+            cargo_deps: s(&["rocket"]),
+            ..Default::default()
+        };
+        assert_eq!(infer(&rocket).framework, None);
+        assert_eq!(infer(&rocket).lang_start, None);
+
+        // Masonite: `craft serve`, told to bind and which port; Python 3.10.
+        let masonite = Fingerprint {
+            craft: true,
+            python_deps: true,
+            ..Default::default()
+        };
+        let out = infer(&masonite);
+        assert_eq!(out.framework, Some("masonite"));
+        assert_eq!(out.runtime, "python");
+        assert_eq!(
+            out.lang_start.as_deref(),
+            Some("python craft serve -b 0.0.0.0 -p 8000")
+        );
+        assert_eq!(out.runtime_floor.as_deref(), Some("3.10"));
+
+        // AdonisJS: the kit has a `start` script and it is the production
+        // entry, so the dev server is still the answer; Node 24 at least.
+        let mut adonis = node_print("@adonisjs/core");
+        adonis.node_dependencies.push("vite".into());
+        adonis.node_scripts.push("start".into());
+        let out = infer(&adonis);
+        assert_eq!(out.framework, Some("adonisjs"));
+        assert_eq!(out.node_port, Some(3333));
+        assert_eq!(out.node_start.as_deref(), Some("npm run dev"));
+        assert_eq!(out.runtime_floor.as_deref(), Some("24"));
+    }
+
+    #[test]
+    fn cargo_dependencies_are_read_from_the_dependencies_table_only() {
+        let toml = r#"
+[package]
+name = "app"
+
+[dependencies]
+loco-rs = { version = "1" }
+serde = "1"
+
+[dev-dependencies]
+insta = "1"
+"#;
+        assert_eq!(cargo_dependencies(toml), s(&["loco-rs", "serde"]));
+        assert!(cargo_dependencies("not = toml = at all").is_empty());
+    }
+
+    #[test]
     fn a_bare_nvmrc_major_is_kept() {
         let print = Fingerprint {
             package_json: true,
@@ -1542,6 +1819,25 @@ TYPESENSE_HOST=search
             ("astro", node_print("astro"), None),
             ("nestjs", node_print("@nestjs/core"), None),
             ("vite", node_print("vite"), None),
+            ("adonisjs", node_print("@adonisjs/core"), None),
+            (
+                "masonite",
+                Fingerprint {
+                    craft: true,
+                    python_deps: true,
+                    ..Default::default()
+                },
+                None,
+            ),
+            (
+                "loco",
+                Fingerprint {
+                    cargo_toml: true,
+                    cargo_deps: s(&["loco-rs"]),
+                    ..Default::default()
+                },
+                None,
+            ),
         ];
 
         for (name, print, root) in &shapes {

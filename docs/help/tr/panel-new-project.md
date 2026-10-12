@@ -56,6 +56,12 @@ Bu yüzden şablon seçildiğinde formdaki çalışma ortamı alanları gizlenir
 
 İlk çalıştırma kurucu imajını indirir. Birkaç dakika sürebilir.
 
+Her şablon çatının **en son sürümünü** kurar. Go şablonları (Goravel, Gin, Echo) bunu oluşturma anında `go mod tidy` ile çözer; `go.mod` ve `go.sum` diskinize sabitlenmiş olarak iner, tıpkı PHP şablonlarında `composer.lock`'un indiği gibi.
+
+Projenin konulduğu çalışma ortamı, o sürümün istediğinin altına hiç düşmez. Bir Go projesi, çalışma alanının varsayılan Go sürümü ile `go.mod` içindeki `go` yönergesinden yüksek olanıyla derlenir (Goravel 1.18, 1.25 ister); AdonisJS ve Masonite de belgeledikleri tabanları (Node 24, Python 3.10) aynı şekilde taşır. Kurulan `composer.json`'ın gerektirdiğinin altında seçilen bir PHP sürümü reddedilmez, o tabana yükseltilir (Laravel 12, 8.2 ister); üstündeyse seçiminiz geçerlidir.
+
+Masonite, AdonisJS ve Loco, çalışma ortamının varsayılan komutuyla değil kendi komutlarıyla başlatılır — `craft serve`, `npm run dev` ve Loco ikilisinin `start` alt komutu — ve tespit bunları manifeste sizin yerinize yazar.
+
 Tespit edilen değerler sonradan proje ayarlarından değiştirilebilir.
 
 ## Git deposundan çek

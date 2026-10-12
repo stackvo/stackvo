@@ -7664,11 +7664,17 @@ pub async fn project_adopt(
 
     // Detection fills the form; it does not bypass validation. An adopted
     // project has to satisfy exactly the contract a created one does.
+    //
+    // The PHP floor is kept from detection even when a spec was handed in:
+    // it is what the code on disk asks for, and the override below is not
+    // allowed under it whichever way the spec arrived.
+    let detected = detect::detect(&dir);
+    let php_floor = detected.php_version.clone();
     let mut spec = match spec {
         Some(spec) => spec,
         None => detected_spec(
             &name,
-            &detect::detect(&dir),
+            &detected,
             &Env::load(&root)?,
             &crate::certs::suffix(&root),
         ),
@@ -7687,7 +7693,28 @@ pub async fn project_adopt(
             spec["server"] = serde_json::json!(server.trim());
         }
         if let Some(version) = overrides.php_version.filter(|v| !v.trim().is_empty()) {
-            spec["php"]["version"] = serde_json::json!(version.trim());
+            // The form chose a version before the installer ran, and what the
+            // installer wrote is the newest release of the framework — which
+            // says in its `composer.json` the PHP it needs. A choice below
+            // that floor is raised to it rather than refused: refusing would
+            // throw away a finished install over a field the user could not
+            // have known the answer to, and a Laravel on PHP 8.1 that
+            // builds and then fatals on first request is worse than either.
+            // Above the floor the choice stands.
+            let chosen = version.trim();
+            let version = match php_floor.as_deref() {
+                Some(floor) if detect::version_lt(chosen, floor) => {
+                    tracing::info!(
+                        project = %name,
+                        chosen,
+                        floor,
+                        "the PHP version chosen is below what the installed code requires; using the floor"
+                    );
+                    floor
+                }
+                _ => chosen,
+            };
+            spec["php"]["version"] = serde_json::json!(version);
         }
         if let Some(extensions) = overrides.extensions {
             spec["php"]["extensions"] = serde_json::json!(extensions);
@@ -8178,15 +8205,22 @@ fn detected_spec(
     });
 
     if detected.runtime == "node" {
+        // What the folder says beats the setting — a `package.json` naming a
+        // version is a declaration, and the setting is only the answer for a
+        // folder that made none. A floor the framework documents (AdonisJS:
+        // Node 24) raises that answer and never lowers it.
+        let version = detected.node_version.clone().unwrap_or_else(|| {
+            let setting = env
+                .get("SUPPORTED_LANGUAGES_NODEJS_DEFAULT")
+                .map(str::to_string)
+                .unwrap_or_else(|| "24".into());
+            match detected.runtime_floor.as_deref() {
+                Some(floor) if detect::version_lt(&setting, floor) => floor.to_string(),
+                _ => setting,
+            }
+        });
         spec["node"] = serde_json::json!({
-            // What the folder says beats the setting — a `package.json` naming
-            // a version is a declaration, and the setting is only the answer
-            // for a folder that made none.
-            "version": detected
-                .node_version
-                .clone()
-                .or_else(|| env.get("SUPPORTED_LANGUAGES_NODEJS_DEFAULT").map(str::to_string))
-                .unwrap_or_else(|| "22".into()),
+            "version": version,
             "install": "npm install",
             "start": detected.node_start.clone().unwrap_or_else(|| "npm run dev".into()),
             "port": detected.node_port.unwrap_or(3000),
@@ -8195,15 +8229,50 @@ fn detected_spec(
         // The ecosystem defaults, written out so the adopted manifest is
         // explicit about what it will run rather than relying on the reader
         // knowing them.
+        //
+        // The version is the setting's default — unless the module's own
+        // `go` directive asks for more, in which case the directive wins. The
+        // other way round from PHP, where a `composer.json` constraint is
+        // read *as* the version: a `go` directive is a floor by definition
+        // and newer Go compiles older modules, so the higher of the two is
+        // always right. Goravel 1.18 writes `go 1.25.0`; a workspace whose
+        // setting still says 1.23 would otherwise build it on a toolchain
+        // that has to download the one it needs on every image build.
+        //
+        // "The setting" is the workspace's, read the same way the PHP and node
+        // branches read theirs: `lang_defaults` quotes the *compiled* table,
+        // and a `.env` that moved `SUPPORTED_LANGUAGES_GO_DEFAULT` is a
+        // decision this must not read past. Only the three runtimes whose
+        // table default is their real default take it from here; Rust, Bun
+        // and Deno keep the literals `lang_defaults` explains beside them.
+        let key = match detected.runtime {
+            "python" => Some("SUPPORTED_LANGUAGES_PYTHON_DEFAULT"),
+            "go" => Some("SUPPORTED_LANGUAGES_GO_DEFAULT"),
+            "ruby" => Some("SUPPORTED_LANGUAGES_RUBY_DEFAULT"),
+            _ => None,
+        };
+        let setting = key
+            .and_then(|key| env.get(key))
+            .filter(|v| !v.trim().is_empty())
+            .map(|v| v.trim().to_string())
+            .unwrap_or(defaults.version);
+        let version = match detected.runtime_floor.as_deref() {
+            Some(floor) if detect::version_lt(&setting, floor) => floor.to_string(),
+            _ => setting,
+        };
         let mut block = serde_json::Map::new();
-        block.insert("version".into(), serde_json::json!(defaults.version));
+        block.insert("version".into(), serde_json::json!(version));
         if let Some(install) = defaults.install {
             block.insert("install".into(), serde_json::json!(install));
         }
         if let Some(build) = defaults.build {
             block.insert("build".into(), serde_json::json!(build));
         }
-        block.insert("start".into(), serde_json::json!(defaults.start));
+        // A framework's own start command over the ecosystem's: Masonite is
+        // served by `craft`, Loco by its binary's `start` subcommand, and the
+        // defaults would run nothing (no `main.py`) or print usage.
+        let start = detected.lang_start.clone().unwrap_or(defaults.start);
+        block.insert("start".into(), serde_json::json!(start));
         block.insert("port".into(), serde_json::json!(defaults.port));
         spec[detected.runtime] = serde_json::Value::Object(block);
     } else {
@@ -9175,58 +9244,63 @@ pub async fn project_scaffold(
     let operation_id = events::next_operation_id("scaffold");
     let sink = events::sink(&app);
 
-    // A template either runs an installer or is written directly. The six
-    // written ones — Gin, Echo, Flask, FastAPI, Sinatra, Rocket — have no
-    // scaffolder in their ecosystem, and pulling an image to write thirty
-    // lines would be a download for nothing. Their dependencies are installed
-    // by the project's own Dockerfile, for the container's platform.
-    let outcome =
-        match crate::scaffold::run_args(template, &dir.display().to_string(), user.as_deref()) {
-            Some(args) => {
-                runner::run_operation(
-                    &sink,
-                    runner::Operation {
-                        operation_id: &operation_id,
-                        subject: &name,
-                        progress_event: "scaffold:progress",
-                        finished_event: "scaffold:done",
-                        program: "docker",
-                        args: &args,
-                        cwd: &root,
-                        env: &[],
-                    },
-                )
-                .await
-            }
-            None => {
-                let written = crate::scaffold::write_files(template, &dir);
-                let ok = written.is_ok();
-                if let Ok(files) = &written {
-                    for file in files {
-                        sink.emit(
-                            "scaffold:progress",
-                            events::ProgressEvent {
-                                operation_id: operation_id.clone(),
-                                subject: name.clone(),
-                                line: format!("wrote {file}"),
-                            },
-                        );
-                    }
-                }
-                sink.emit(
-                    "scaffold:done",
-                    events::FinishedEvent {
-                        operation_id: operation_id.clone(),
-                        subject: name.clone(),
-                        success: ok,
-                        duration_ms: 0,
-                        error: written.as_ref().err().map(|e| e.message.clone()),
-                        log_path: None,
-                    },
-                );
-                written.map(|_| ())
-            }
-        };
+    // A template runs an installer, is written directly, or both in that
+    // order. The written ones — Gin, Echo, Flask, FastAPI, Sinatra, Rocket —
+    // have no scaffolder in their ecosystem, and pulling an image to write
+    // thirty lines would be a download for nothing. Their dependencies are
+    // installed by the project's own Dockerfile, for the container's platform
+    // — except the two Go ones, whose `go mod tidy` runs here so the newest
+    // release of each framework is resolved and pinned into `go.mod` on the
+    // host, the way `composer create-project` leaves a `composer.lock`.
+    let written = crate::scaffold::write_files(template, &dir);
+    if let Ok(files) = &written {
+        for file in files {
+            sink.emit(
+                "scaffold:progress",
+                events::ProgressEvent {
+                    operation_id: operation_id.clone(),
+                    subject: name.clone(),
+                    line: format!("wrote {file}"),
+                },
+            );
+        }
+    }
+    let run = crate::scaffold::run_args(template, &dir.display().to_string(), user.as_deref());
+    let outcome = match (written, run) {
+        (Ok(_), Some(args)) => {
+            runner::run_operation(
+                &sink,
+                runner::Operation {
+                    operation_id: &operation_id,
+                    subject: &name,
+                    progress_event: "scaffold:progress",
+                    finished_event: "scaffold:done",
+                    program: "docker",
+                    args: &args,
+                    cwd: &root,
+                    env: &[],
+                },
+            )
+            .await
+        }
+        // Nothing to run, or nothing left to run for: the write was the
+        // whole operation, or the write failed and the run would only have
+        // tidied files that are not there.
+        (written, _) => {
+            sink.emit(
+                "scaffold:done",
+                events::FinishedEvent {
+                    operation_id: operation_id.clone(),
+                    subject: name.clone(),
+                    success: written.is_ok(),
+                    duration_ms: 0,
+                    error: written.as_ref().err().map(|e| e.message.clone()),
+                    log_path: None,
+                },
+            );
+            written.map(|_| ())
+        }
+    };
 
     if outcome.is_err() {
         // A failed install that wrote nothing should not leave a husk that
@@ -14377,6 +14451,8 @@ mod migrate_tests {
             document_root: Some("public".into()),
             php_version: Some("8.2".into()),
             node_version: Some("20".into()),
+            runtime_floor: None,
+            lang_start: None,
             node_port: Some(3000),
             node_start: Some("npm run dev".into()),
             confidence: detect::Confidence::Likely,
@@ -14501,6 +14577,60 @@ mod migrate_tests {
 
         let spec = detected_spec("shop", &found, &env, SUFFIX);
         assert_eq!(spec["php"]["version"], "7.4");
+    }
+
+    /// Go reads the other way round from PHP, and deliberately: a `go`
+    /// directive is the *minimum* toolchain, and newer Go compiles older
+    /// modules, so the higher of the setting and the directive is always the
+    /// right answer. Goravel 1.18 writes `go 1.25.0`; a workspace still set to
+    /// 1.23 must not build it on 1.23, and a workspace on 1.27 must not be
+    /// dragged down to 1.25 by it.
+    #[test]
+    fn a_go_module_is_built_on_the_higher_of_the_setting_and_its_directive() {
+        let mut found = detected("go");
+        found.runtime_floor = Some("1.25".into());
+
+        let old = Env::parse("SUPPORTED_LANGUAGES_GO_DEFAULT=1.23\n");
+        let spec = detected_spec("api", &found, &old, SUFFIX);
+        assert_eq!(spec["go"]["version"], "1.25", "the directive is a floor");
+
+        let new = Env::parse("SUPPORTED_LANGUAGES_GO_DEFAULT=1.27\n");
+        let spec = detected_spec("api", &found, &new, SUFFIX);
+        assert_eq!(spec["go"]["version"], "1.27", "the floor is not a ceiling");
+
+        // A module that states nothing gets the setting, as before.
+        let spec = detected_spec("api", &detected("go"), &old, SUFFIX);
+        assert_eq!(spec["go"]["version"], "1.23");
+        parse_spec(&spec, "api").expect("the adopted spec must validate");
+    }
+
+    /// The same rule where a framework, not a file, states the floor — and
+    /// where the folder's own declaration still outranks both.
+    #[test]
+    fn a_framework_floor_raises_the_node_setting_but_not_a_declared_version() {
+        let env = Env::parse("SUPPORTED_LANGUAGES_NODEJS_DEFAULT=22\n");
+
+        // AdonisJS documents Node 24; a workspace on 22 does not get to run it there.
+        let mut adonis = detected("node");
+        adonis.node_version = None;
+        adonis.runtime_floor = Some("24".into());
+        let spec = detected_spec("web", &adonis, &env, SUFFIX);
+        assert_eq!(spec["node"]["version"], "24");
+
+        // An `.nvmrc` is the author's decision and is kept, floor or no floor.
+        adonis.node_version = Some("22".into());
+        let spec = detected_spec("web", &adonis, &env, SUFFIX);
+        assert_eq!(spec["node"]["version"], "22");
+
+        // And a framework on a lang runtime brings its own start command,
+        // with the ecosystem's install and build untouched.
+        let mut masonite = detected("python");
+        masonite.runtime_floor = Some("3.10".into());
+        masonite.lang_start = Some("python craft serve -b 0.0.0.0 -p 8000".into());
+        let spec = detected_spec("site", &masonite, &settings(), SUFFIX);
+        assert_eq!(spec["python"]["start"], "python craft serve -b 0.0.0.0 -p 8000");
+        assert_eq!(spec["python"]["install"], "pip install --no-cache-dir -r requirements.txt");
+        parse_spec(&spec, "site").expect("the adopted spec must validate");
     }
 
     /// The two routes to "a new project" have to produce the same hostname.

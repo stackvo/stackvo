@@ -56,6 +56,12 @@ This is why the runtime fields are hidden once a template is chosen: they have n
 
 The first run downloads the installer image. Give it a few minutes.
 
+Every template installs the framework's **newest release**. The Go templates (Goravel, Gin, Echo) resolve it with `go mod tidy` at creation, so `go.mod` and `go.sum` land on your disk already pinned, the way `composer.lock` does for a PHP template.
+
+The runtime the project is put on is never below what that release asks for. A Go project is built on the higher of the workspace's default Go and the `go` directive in its `go.mod` (Goravel 1.18 asks for 1.25); AdonisJS and Masonite carry the floors they document (Node 24, Python 3.10) the same way. A PHP version chosen below what the installed `composer.json` requires is raised to that floor rather than refused (Laravel 12 asks for 8.2); above it, your choice stands.
+
+Masonite, AdonisJS and Loco are started by their own commands rather than the runtime's default — `craft serve`, `npm run dev`, and the Loco binary's `start` — which detection writes into the manifest for you.
+
 The detected values can be changed afterwards in the project's settings.
 
 ## Clone from git

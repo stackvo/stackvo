@@ -73,8 +73,10 @@ use Outcome::{Framework, RuntimeOnly};
 /// say which template produced it. The six written templates (Gin, Echo, Flask,
 /// FastAPI, Sinatra, Rocket) are recognised by their **runtime** marker —
 /// `go.mod`, `requirements.txt`, `Gemfile`, `Cargo.toml` — which is all a
-/// two-file hello world has to offer and all the generator needs.
-const TEMPLATES: [(&str, Outcome); 29] = [
+/// two-file hello world has to offer and all the generator needs. Goravel is
+/// a full skeleton and still a Go module first: the same marker, with the
+/// `go` directive it carries read as the floor the project is built on.
+const TEMPLATES: [(&str, Outcome); 33] = [
     ("laravel", Framework("laravel")),
     ("wordpress", Framework("wordpress")),
     ("symfony", Framework("symfony")),
@@ -92,6 +94,7 @@ const TEMPLATES: [(&str, Outcome); 29] = [
     ("svelte", Framework("sveltekit")),
     ("astro", Framework("astro")),
     ("nest", Framework("nestjs")),
+    ("adonisjs", Framework("adonisjs")),
     // Vite's own templates. Detection reads `vite` from the dependency list and
     // stops there, which is as far as the tree goes: a Vue and a React project
     // created this way differ only in the contents of `src/`.
@@ -116,6 +119,15 @@ const TEMPLATES: [(&str, Outcome); 29] = [
         "rails",
         RuntimeOnly("`Gemfile` gives the ruby runtime; `bin/rails` is fingerprinted and is what the rails-specific affordances key off, but it is not a framework name"),
     ),
+    (
+        "goravel",
+        RuntimeOnly("the skeleton is a Go module like any other — `go.mod` gives the go runtime, and its `go 1.25.0` directive is read as the floor the project is put on; nothing in the tree says `goravel` in a way a rule could key off without matching every module that imports the framework"),
+    ),
+    // Named rather than runtime-only because each needs a start command the
+    // runtime's default would get wrong — which is the whole reason detection
+    // learned their markers.
+    ("masonite", Framework("masonite")),
+    ("loco", Framework("loco")),
     ("gin", RuntimeOnly("written template: `go.mod`, and a Go module is the answer")),
     ("echo", RuntimeOnly("written template: `go.mod`, and a Go module is the answer")),
     ("flask", RuntimeOnly("written template: `requirements.txt` gives the python runtime")),

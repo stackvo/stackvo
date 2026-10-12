@@ -465,6 +465,14 @@ export interface Detected {
     phpVersion?: string;
     /** string? */
     nodeVersion?: string;
+    /**
+     * string? — the least the folder's runtime may be, where something states it: the `go` directive of go.mod as major.minor, or a framework's own documented requirement (AdonisJS → Node 24, Masonite 5 → Python 3.10). Read strictly as a floor, the other way round from phpVersion: adoption builds on the higher of the workspace's setting and this, never lower, and a version the folder itself declares (.nvmrc) still wins. Rust is never floored — its image floats on a major tag
+     */
+    runtimeFloor?: string;
+    /**
+     * string? — a start command the framework needs instead of the lang runtime's default: Masonite's `python craft serve -b 0.0.0.0 -p 8000`, Loco's `cargo run --release -- start --binding 0.0.0.0 --port 8080`. Node frameworks use nodeStart
+     */
+    langStart?: string;
     /** number? */
     nodePort?: number;
     /** string? */
@@ -3284,7 +3292,7 @@ export interface StackvoApi {
   /**
    * The create half of P0-1 (detection/adoption shipped first). Runs the framework's own installer in a throwaway container — composer create-project, wp-cli, create-next-app — so nothing is installed on the host and only the bind-mounted project directory survives.
    */
-  projectScaffold(name: string, template: 'laravel' | 'symfony' | 'cakephp' | 'yii' | 'codeigniter' | 'laminas' | 'slim' | 'wordpress' | 'drupal' | 'prestashop' | 'statamic' | 'typo3' | 'tina' | 'nextjs' | 'nuxt' | 'vue' | 'react' | 'svelte' | 'astro' | 'nest' | 'angular' | 'django' | 'rails' | 'gin' | 'echo' | 'flask' | 'fastapi' | 'sinatra' | 'rocket'): Promise<OperationId>;
+  projectScaffold(name: string, template: 'laravel' | 'symfony' | 'cakephp' | 'yii' | 'codeigniter' | 'laminas' | 'slim' | 'wordpress' | 'drupal' | 'prestashop' | 'statamic' | 'typo3' | 'tina' | 'nextjs' | 'nuxt' | 'vue' | 'react' | 'svelte' | 'astro' | 'nest' | 'angular' | 'django' | 'rails' | 'goravel' | 'masonite' | 'adonisjs' | 'loco' | 'gin' | 'echo' | 'flask' | 'fastapi' | 'sinatra' | 'rocket'): Promise<OperationId>;
   /**
    * The clone option is hidden without it. A webview cannot answer "is a program installed", and the answer has to survive an app launched from the Dock, which inherits launchd's PATH rather than a login shell's — the same class of fact that made $LANG useless for locale detection.
    */
