@@ -5,6 +5,8 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-12
+
 ### Fixed
 
 - **A published release no longer ends with a red run for a beta channel nobody
