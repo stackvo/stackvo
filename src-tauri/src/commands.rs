@@ -14628,8 +14628,14 @@ mod migrate_tests {
         masonite.runtime_floor = Some("3.10".into());
         masonite.lang_start = Some("python craft serve -b 0.0.0.0 -p 8000".into());
         let spec = detected_spec("site", &masonite, &settings(), SUFFIX);
-        assert_eq!(spec["python"]["start"], "python craft serve -b 0.0.0.0 -p 8000");
-        assert_eq!(spec["python"]["install"], "pip install --no-cache-dir -r requirements.txt");
+        assert_eq!(
+            spec["python"]["start"],
+            "python craft serve -b 0.0.0.0 -p 8000"
+        );
+        assert_eq!(
+            spec["python"]["install"],
+            "pip install --no-cache-dir -r requirements.txt"
+        );
         parse_spec(&spec, "site").expect("the adopted spec must validate");
     }
 

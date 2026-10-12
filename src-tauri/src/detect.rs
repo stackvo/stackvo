@@ -419,7 +419,9 @@ pub fn infer(print: &Fingerprint) -> Detected {
             // Only a Go module has a directive to read, and only the Go
             // runtime can act on it; the other runtimes' floors are not
             // written anywhere this reads.
-            (runtime == "go").then(|| print.go_directive.clone()).flatten()
+            (runtime == "go")
+                .then(|| print.go_directive.clone())
+                .flatten()
         }),
         lang_start: start.map(str::to_string),
         node_port: None,
@@ -433,7 +435,14 @@ pub fn infer(print: &Fingerprint) -> Detected {
     // map and nothing else reads it, so a repository carrying one has already
     // committed. Node would not resolve its imports at all.
     if print.deno_config {
-        return lang(None, "deno", None, None, Confidence::Certain, "deno.json / deno.lock");
+        return lang(
+            None,
+            "deno",
+            None,
+            None,
+            Confidence::Certain,
+            "deno.json / deno.lock",
+        );
     }
     // Bun only when nothing says npm. A Bun project's `package.json` is a Node
     // project's `package.json`; the lockfile is the only difference, and a
@@ -442,7 +451,14 @@ pub fn infer(print: &Fingerprint) -> Detected {
     // so it falls through to the node heuristics below, which is the answer
     // that was right before Bun was an option.
     if print.bun_lock && !print.npm_lock {
-        return lang(None, "bun", None, None, Confidence::Certain, "bun.lock / bunfig.toml");
+        return lang(
+            None,
+            "bun",
+            None,
+            None,
+            Confidence::Certain,
+            "bun.lock / bunfig.toml",
+        );
     }
     if print.go_mod {
         return lang(None, "go", None, None, Confidence::Certain, "go.mod");
@@ -651,7 +667,10 @@ pub fn version_lt(a: &str, b: &str) -> bool {
     let (a, b) = (parts(a), parts(b));
     let len = a.len().max(b.len());
     for i in 0..len {
-        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        let (x, y) = (
+            a.get(i).copied().unwrap_or(0),
+            b.get(i).copied().unwrap_or(0),
+        );
         if x != y {
             return x < y;
         }
@@ -1417,7 +1436,10 @@ mod tests {
             go_directive("module goravel\n\ngo 1.25.0\n\ntoolchain go1.27.2\n").as_deref(),
             Some("1.25")
         );
-        assert_eq!(go_directive("module app\n\ngo 1.23\n").as_deref(), Some("1.23"));
+        assert_eq!(
+            go_directive("module app\n\ngo 1.23\n").as_deref(),
+            Some("1.23")
+        );
         assert_eq!(go_directive("module app\n"), None);
         // `godebug` and friends start with `go` too and are not the directive.
         assert_eq!(go_directive("module app\n\ngodebug x=1\n"), None);

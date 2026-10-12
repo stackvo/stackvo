@@ -697,7 +697,12 @@ pub fn run_args(template: Template, host_dir: &str, user: Option<&str>) -> Optio
         args.push("HOME=/tmp".into());
     }
 
-    args.push(image.into());
+    // Through the policy, like every other image this app hands to `docker
+    // run`: a managed machine with `registryPrefix` set cannot reach Docker
+    // Hub, and an installer that tried would fail with a network error about
+    // a registry nobody named. `tests/policy_claims.rs` sweeps for exactly
+    // this omission.
+    args.push(crate::policy::run_image(image));
     args.extend(command.iter().map(|s| s.to_string()));
     Some(args)
 }
@@ -927,15 +932,27 @@ mod tests {
                 .map(|(_, v)| *v)
                 .unwrap_or_else(|| panic!("config::SETTINGS names {key}"))
         };
-        assert_eq!(GO_IMAGE, format!("golang:{}", setting("SUPPORTED_LANGUAGES_GO_DEFAULT")));
-        assert_eq!(NODE_IMAGE, format!("node:{}", setting("SUPPORTED_LANGUAGES_NODEJS_DEFAULT")));
+        assert_eq!(
+            GO_IMAGE,
+            format!("golang:{}", setting("SUPPORTED_LANGUAGES_GO_DEFAULT"))
+        );
+        assert_eq!(
+            NODE_IMAGE,
+            format!("node:{}", setting("SUPPORTED_LANGUAGES_NODEJS_DEFAULT"))
+        );
         assert_eq!(
             PYTHON_IMAGE,
-            format!("python:{}-slim", setting("SUPPORTED_LANGUAGES_PYTHON_DEFAULT"))
+            format!(
+                "python:{}-slim",
+                setting("SUPPORTED_LANGUAGES_PYTHON_DEFAULT")
+            )
         );
         assert_eq!(
             RUST_IMAGE,
-            format!("rust:{}", crate::manifest::lang_defaults("rust").unwrap().version)
+            format!(
+                "rust:{}",
+                crate::manifest::lang_defaults("rust").unwrap().version
+            )
         );
         for (t, image) in [
             (Template::Goravel, GO_IMAGE),
@@ -962,13 +979,21 @@ mod tests {
             "pip install --quiet masonite-framework",
             "masonite new . --no-input --no-venv --no-git --no-serve --preset=none --db=sqlite",
         ] {
-            assert!(line.contains(step), "masonite install lacks `{step}`: {line}");
+            assert!(
+                line.contains(step),
+                "masonite install lacks `{step}`: {line}"
+            );
         }
-        assert!(!line.contains("pip install masonite "), "the `masonite` package is the unmaintained 4.x");
+        assert!(
+            !line.contains("pip install masonite "),
+            "the `masonite` package is the unmaintained 4.x"
+        );
 
         // AdonisJS: the three questions the kit asks, each answered, into `.`.
         let line = run_args(Template::Adonisjs, "/x", None).unwrap().join(" ");
-        assert!(line.contains("npm create adonisjs@latest . -- --kit=hypermedia --db=sqlite --auth-guard=session"));
+        assert!(line.contains(
+            "npm create adonisjs@latest . -- --kit=hypermedia --db=sqlite --auth-guard=session"
+        ));
 
         // Loco: a writable cargo home, the CLI built, the wizard bypassed, and
         // the directory it insists on creating moved into the mount.
@@ -994,8 +1019,14 @@ mod tests {
                 .find(|(name, _)| *name == "go.mod")
                 .map(|(_, body)| *body)
                 .unwrap();
-            assert!(!go_mod.contains("require"), "{t:?} pins a version: {go_mod}");
-            assert!(go_mod.contains("go 1.25"), "{t:?} states the floor Gin and Echo ask for");
+            assert!(
+                !go_mod.contains("require"),
+                "{t:?} pins a version: {go_mod}"
+            );
+            assert!(
+                go_mod.contains("go 1.25"),
+                "{t:?} states the floor Gin and Echo ask for"
+            );
             let line = run_args(t, "/x", None).unwrap().join(" ");
             assert!(line.ends_with("go mod tidy"), "{t:?} is not tidied: {line}");
         }
@@ -1016,9 +1047,15 @@ mod tests {
             "go run . artisan key:generate",
             "rm -rf .git .github Dockerfile docker-compose.yml",
         ] {
-            assert!(line.contains(step), "goravel install lacks `{step}`: {line}");
+            assert!(
+                line.contains(step),
+                "goravel install lacks `{step}`: {line}"
+            );
         }
-        assert!(!line.contains("rm -rf .git*"), "the ignore file must survive");
+        assert!(
+            !line.contains("rm -rf .git*"),
+            "the ignore file must survive"
+        );
     }
 
     #[test]
@@ -1066,7 +1103,9 @@ mod tests {
             Template::Sinatra,
             Template::Rocket,
         ] {
-            let files = t.files().unwrap_or_else(|| panic!("{t:?} should be written"));
+            let files = t
+                .files()
+                .unwrap_or_else(|| panic!("{t:?} should be written"));
             let body: String = files.iter().map(|(_, c)| *c).collect();
             assert!(body.contains("0.0.0.0"), "{t:?} does not bind to 0.0.0.0");
 
