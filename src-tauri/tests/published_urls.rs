@@ -52,7 +52,17 @@ fn read(relative: &str) -> String {
 /// adding a fourth is a decision somebody writes down — which is what happened
 /// with the second and third: `spx.rs` was written, this test failed, and the
 /// reason had to be typed out before it passed. `tooling.rs` went the same way.
-const OTHER_REPOSITORIES: [(&str, &str); 4] = [
+const OTHER_REPOSITORIES: [(&str, &str); 5] = [
+    (
+        "goravel/goravel",
+        "the Goravel application skeleton, which has no installer package to call: the \
+         framework's own documentation installs it by cloning this repository, and \
+         scaffold.rs runs that clone — shallow, default branch — in the throwaway installer \
+         container. Not pinned, by the same reasoning as RoadRunner: the point of the \
+         template is the newest release, and the address moving would change what is \
+         installed rather than refuse to. Bounded to the moment a user asks for a Goravel \
+         project",
+    ),
     (
         "roadrunner-server/roadrunner",
         "RoadRunner's own install script, curled inside the Dockerfile `generator.rs` writes \

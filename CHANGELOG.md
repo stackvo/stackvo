@@ -28,6 +28,37 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Goravel** in the Go group of the new-project panel. It installs the way its
+  documentation says — a shallow clone of the skeleton, `go mod tidy`,
+  `.env.example` copied and the application key generated — on the toolchain
+  image the project then builds from, with `APP_HOST`/`APP_PORT` rewritten to
+  `0.0.0.0:8080` so Traefik can reach it. The skeleton's own `Dockerfile` and
+  `docker-compose.yml` are dropped because StackVo writes the project's.
+- **Every template installs the framework's newest release, and never on a
+  runtime below what it asks for.** The Gin and Echo templates used to pin
+  `v1.10.0` and `v4.12.0` in a hand-written `go.mod` — a Go `require` line is
+  an exact version frozen when typed, and Gin sat there while 1.12.0 shipped.
+  They now write no version at all and run `go mod tidy` at creation, so the
+  newest release lands pinned in `go.mod` and `go.sum` on the host the way
+  `composer.lock` does; Echo is the v5 module path. Detection reads the `go`
+  directive out of `go.mod` and adoption builds on the higher of the
+  workspace's default Go and that floor (Goravel 1.18 asks for ≥ 1.25); a PHP
+  version chosen in the form below what the installed `composer.json` requires
+  is raised to that floor rather than refused (Laravel 12 asks for ≥ 8.2).
+- **Masonite, AdonisJS and Loco** beside Goravel, one application skeleton per
+  lang runtime: `masonite new` on the Python image, `npm create adonisjs@latest`
+  on the Node image and `cargo install loco && loco new` on the Rust image, each
+  with every wizard question answered on the command line. Detection learned
+  their markers (`craft`, `@adonisjs/core`, `loco-rs`) because each needs a
+  start command the runtime's default would get wrong — Masonite's
+  `craft serve`, AdonisJS's dev server over its production `start` script,
+  Loco's `start` subcommand — and AdonisJS and Masonite carry their documented
+  floors (Node 24, Python 3.10) the same way a Go module carries its `go`
+  directive.
+- **Go 1.24 to 1.27** in the offered versions, defaulting to 1.27; **Node 24
+  and 25**, defaulting to 24, the active LTS line. Every installer that runs
+  on a runtime image now runs on the image a project of that runtime builds
+  from, which a test holds to the settings.
 - `RELEASING.md`: the release procedure, what to expect from notarisation, and
   what to do when the pipeline stops a tag.
 

@@ -32,7 +32,7 @@ const form = ref(blankForm());
  */
 const template = ref('empty');
 /**
- * Which group is expanded. Twenty-nine templates in one column was a scroll
+ * Which group is expanded. Thirty-three templates in one column was a scroll
  * with no landmarks; as an accordion the panel opens to six headings, and the
  * chosen one is named on its heading so a closed panel still answers "what did
  * I pick".
@@ -52,11 +52,11 @@ const TEMPLATE_GROUPS = [
   { key: 'cms', items: ['wordpress', 'drupal', 'prestashop', 'statamic', 'typo3', 'tina'] },
   {
     key: 'node',
-    items: ['nextjs', 'nuxt', 'vue', 'react', 'svelte', 'astro', 'nest', 'angular'],
+    items: ['nextjs', 'nuxt', 'vue', 'react', 'svelte', 'astro', 'nest', 'angular', 'adonisjs'],
   },
-  { key: 'python', items: ['django', 'fastapi', 'flask'] },
-  { key: 'go', items: ['gin', 'echo'] },
-  { key: 'other', items: ['rails', 'sinatra', 'rocket'] },
+  { key: 'python', items: ['django', 'masonite', 'fastapi', 'flask'] },
+  { key: 'go', items: ['goravel', 'gin', 'echo'] },
+  { key: 'other', items: ['rails', 'sinatra', 'loco', 'rocket'] },
 ];
 /**
  * Which runtime each template installs.
@@ -89,13 +89,17 @@ const TEMPLATE_RUNTIME = {
   astro: 'node',
   nest: 'node',
   angular: 'node',
+  adonisjs: 'node',
   django: 'python',
+  masonite: 'python',
   fastapi: 'python',
   flask: 'python',
+  goravel: 'go',
   gin: 'go',
   echo: 'go',
   rails: 'ruby',
   sinatra: 'ruby',
+  loco: 'rust',
   rocket: 'rust',
 };
 const TEMPLATE_ICONS = {
@@ -123,6 +127,10 @@ const TEMPLATE_ICONS = {
   tina: 'mdi-note-edit-outline',
   angular: 'mdi-angular',
   typo3: 'mdi-alpha-t-box-outline',
+  goravel: 'mdi-language-go',
+  masonite: 'mdi-wall',
+  adonisjs: 'mdi-alpha-a-box-outline',
+  loco: 'mdi-train',
   gin: 'mdi-glass-cocktail',
   echo: 'mdi-radio-tower',
   flask: 'mdi-flask-outline',
@@ -135,7 +143,7 @@ const TEMPLATE_ICONS = {
  *
  * A pseudo-template rather than a fourth control, because it answers the same
  * question the others do — what fills the directory — and a separate toggle
- * beside a list of twenty-nine choices would be a second place to look for
+ * beside a list of thirty-three choices would be a second place to look for
  * one answer.
  */
 const CLONE = 'git';
@@ -204,7 +212,7 @@ async function load() {
     gitAvailable.value = await api.gitAvailable().catch(() => false);
     catalog.value = await api.catalogGet();
     form.value.phpVersion = catalog.value.runtimes.find((r) => r.id === 'php')?.default ?? '8.4';
-    form.value.nodeVersion = catalog.value.runtimes.find((r) => r.id === 'node')?.default ?? '22';
+    form.value.nodeVersion = catalog.value.runtimes.find((r) => r.id === 'node')?.default ?? '24';
     form.value.server = catalog.value.defaultServer;
     // A new project starts from the default set, minus anything the default
     // PHP version cannot build.

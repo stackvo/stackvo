@@ -117,7 +117,7 @@ export const LANG_DEFAULTS = {
     port: 8000,
   },
   go: {
-    version: '1.23',
+    version: '1.27',
     install: '',
     build: 'go build -o /app/server .',
     start: '/app/server',

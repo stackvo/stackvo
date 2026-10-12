@@ -84,14 +84,22 @@ pub const SETTINGS: [(&str, &str); 36] = [
     ("SUPPORTED_LANGUAGES_PHP_EXTENSIONS_DEFAULT", "mbstring,tokenizer,xml,ctype,json,openssl,pdo,pdo_mysql,pdo_pgsql,pdo_sqlite,fileinfo,curl,zip,gd,imagick,intl,sodium,bcmath,redis,opcache,memcached,mongodb,swoole,soap,dom,filter,hash,pcntl,session,xmlreader,xmlwriter,xdebug"),
     ("SUPPORTED_LANGUAGES_PYTHON_VERSIONS", "2.7,3.5,3.6,3.7,3.8,3.9,3.10,3.11,3.12,3.13,3.14"),
     ("SUPPORTED_LANGUAGES_PYTHON_DEFAULT", "3.14"),
-    ("SUPPORTED_LANGUAGES_GO_VERSIONS", "1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.20,1.21,1.22,1.23"),
-    ("SUPPORTED_LANGUAGES_GO_DEFAULT", "1.23"),
+    // Through 1.27 (the current release, October 2026) and defaulting to it:
+    // the newest Gin, Echo and Goravel each ask for Go ≥ 1.25, and a default
+    // below a framework's floor is a project that builds on a toolchain it
+    // will then download a newer one from. `scaffold::GO_IMAGE` is held equal
+    // to this default by a test.
+    ("SUPPORTED_LANGUAGES_GO_VERSIONS", "1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.20,1.21,1.22,1.23,1.24,1.25,1.26,1.27"),
+    ("SUPPORTED_LANGUAGES_GO_DEFAULT", "1.27"),
     ("SUPPORTED_LANGUAGES_RUBY_VERSIONS", "2.4,2.5,2.6,2.7,3.0,3.1,3.2,3.3"),
     ("SUPPORTED_LANGUAGES_RUBY_DEFAULT", "3.3"),
     ("SUPPORTED_LANGUAGES_RUST_VERSIONS", "1.70,1.72,1.74,1.75,1.76,1.78,1.80,1.81,1.82,1.83,1.84"),
     ("SUPPORTED_LANGUAGES_RUST_DEFAULT", "1.84"),
-    ("SUPPORTED_LANGUAGES_NODEJS_VERSIONS", "16,18,20,21,22,23"),
-    ("SUPPORTED_LANGUAGES_NODEJS_DEFAULT", "22"),
+    // 24 is the active LTS line (since October 2025) and what AdonisJS now
+    // asks for at least; 22 is in maintenance. `scaffold::NODE_IMAGE` is held
+    // equal to this default by a test.
+    ("SUPPORTED_LANGUAGES_NODEJS_VERSIONS", "16,18,20,21,22,23,24,25"),
+    ("SUPPORTED_LANGUAGES_NODEJS_DEFAULT", "24"),
     // Stack-shaping choices. Editable in Settings; absent from a fresh `.env`
     // because the default is the answer almost everyone keeps.
     ("DEFAULT_TLD_SUFFIX", DEFAULT_TLD_SUFFIX),

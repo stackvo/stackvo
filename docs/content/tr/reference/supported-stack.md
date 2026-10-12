@@ -7,9 +7,9 @@ StackVo'nun bir konteynere koyabildiği her çalışma zamanı, web sunucusu, ve
 | Dil | Sürümler | Varsayılan |
 | --- | --- | --- |
 | **PHP** | 5.6 · 7.0–7.4 · 8.0–8.5 | 8.4 |
-| **Node.js** | 16 · 18 · 20 · 21 · 22 · 23 | 22 |
+| **Node.js** | 16 · 18 · 20 · 21 · 22 · 23 · 24 · 25 | 24 |
 | **Python** | 2.7 · 3.5–3.14 | 3.14 |
-| **Go** | 1.11–1.23 | 1.23 |
+| **Go** | 1.11–1.27 | 1.27 |
 | **Ruby** | 2.4–3.3 | 3.3 |
 | **Rust** | 1.70–1.84 | 1.84 |
 
