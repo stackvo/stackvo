@@ -852,6 +852,37 @@ fn settle(
     }
 }
 
+/// Whether the container for `id` exists at all, running or not.
+///
+/// A 404 is the answer, not an error: the caller asks precisely because it
+/// does not know. Anything else is a fault. A daemon that could not be reached
+/// knows nothing about the subject, and a caller that read "unreachable" as
+/// "absent" would go on to create a second one.
+pub async fn container_exists(id: &str) -> Result<bool> {
+    use bollard::query_parameters::InspectContainerOptions;
+    let name = container_name(id);
+    let docker = connect()?;
+
+    match docker
+        .inspect_container(&name, None::<InspectContainerOptions>)
+        .await
+    {
+        Ok(_) => Ok(true),
+        Err(err) => {
+            let action = crate::daemon::Action::Inspect;
+            match crate::daemon::classify(action, status_of(&err)) {
+                crate::daemon::Verdict::NotFound => Ok(false),
+                verdict => Err(crate::daemon::error(
+                    action,
+                    &name,
+                    verdict,
+                    &err.to_string(),
+                )),
+            }
+        }
+    }
+}
+
 pub async fn start_container(id: &str) -> Result<()> {
     use bollard::query_parameters::StartContainerOptions;
     let name = container_name(id);

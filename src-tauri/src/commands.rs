@@ -16932,35 +16932,11 @@ pub async fn instance_apply_settings(
         }
         table.save(&root)?;
 
-        generate(&app, &root, &operation_id, "projects_and_services").await?;
-
-        let mut args = runner::compose_base_args(&root);
-        args.extend(runner::profile_args("custom", std::slice::from_ref(&id))?);
-        args.extend([
-            "up".into(),
-            "-d".into(),
-            "--no-build".into(),
-            // Without this, compose recreates only when it sees the compose
-            // file change. A setting that lands in a rendered config file the
-            // container mounts leaves the compose file identical, and the old
-            // container would be left running with the old value.
-            "--force-recreate".into(),
-        ]);
-
-        runner::run_operation(
-            &events::sink(&app),
-            runner::Operation {
-                operation_id: &operation_id,
-                subject: &id,
-                progress_event: "instance:progress",
-                finished_event: "instance:enabled",
-                program: "docker",
-                args: &args,
-                cwd: &root,
-                env: &[],
-            },
-        )
-        .await
+        // Recreate, not just up. Without it compose recreates only when it
+        // sees the compose file change. A setting that lands in a rendered
+        // config file the container mounts leaves the compose file identical,
+        // and the old container would be left running with the old value.
+        instance_up(&app, &root, &id, &operation_id, "instance:enabled", true).await
     }
     .await;
 
@@ -16974,11 +16950,137 @@ pub async fn instance_apply_settings(
     outcome.map(|_| operation_id)
 }
 
+/// What Start has to do, given what is there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartPlan {
+    /// The container exists: `docker start`, the same call a project gets.
+    StartContainer,
+    /// The instance is on but has no container: compose has to create it.
+    CreateContainer,
+}
+
+/// Decide between starting a container and creating one.
+///
+/// `docker start` needs a container, and an enabled instance does not always
+/// have one. The first enable is the one that pulls the image, and a pull cut
+/// off halfway (the network, a closed app, a cancelled prompt) leaves the table
+/// saying "on" with nothing behind it. The row then shows a Start button that
+/// can only ever answer "container not found", with a hint about building a
+/// project that does not exist. Compose is the thing that creates containers,
+/// so for exactly that state Start finishes what enable began.
+///
+/// Only for an enabled instance. A disabled one is not in the compose file, so
+/// compose would refuse it by name, and the refusal every listener already
+/// understands is the one the plain start produces.
+fn start_plan(enabled: bool, container_exists: bool) -> StartPlan {
+    if enabled && !container_exists {
+        StartPlan::CreateContainer
+    } else {
+        StartPlan::StartContainer
+    }
+}
+
+#[cfg(test)]
+mod start_plan_tests {
+    use super::{start_plan, StartPlan};
+
+    #[test]
+    fn an_enabled_instance_with_no_container_is_created() {
+        assert_eq!(start_plan(true, false), StartPlan::CreateContainer);
+    }
+
+    #[test]
+    fn an_existing_container_is_started_whatever_the_table_says() {
+        assert_eq!(start_plan(true, true), StartPlan::StartContainer);
+        assert_eq!(start_plan(false, true), StartPlan::StartContainer);
+    }
+
+    #[test]
+    fn a_disabled_instance_is_not_created_behind_the_tables_back() {
+        assert_eq!(start_plan(false, false), StartPlan::StartContainer);
+    }
+}
+
+/// Regenerate and bring one instance's profile up.
+///
+/// The one sequence that produces a container for an instance, shared by
+/// enable, settings and a start that found nothing to start. The regenerate
+/// comes first for the reason `service_enable` gives: the compose file has to
+/// describe the container before compose is asked to create it.
+///
+/// `finished_event` is the caller's, because the operations store closes a
+/// row on whichever finished event the runner emits and the name is what the
+/// user pressed, not what happened underneath.
+async fn instance_up(
+    app: &AppHandle,
+    root: &std::path::Path,
+    id: &str,
+    operation_id: &str,
+    finished_event: &str,
+    force_recreate: bool,
+) -> Result<()> {
+    generate(app, root, operation_id, "projects_and_services").await?;
+
+    let mut args = runner::compose_base_args(root);
+    args.extend(runner::profile_args(
+        "custom",
+        std::slice::from_ref(&id.to_string()),
+    )?);
+    args.extend(["up".into(), "-d".into(), "--no-build".into()]);
+    if force_recreate {
+        args.push("--force-recreate".into());
+    }
+
+    runner::run_operation(
+        &events::sink(app),
+        runner::Operation {
+            operation_id,
+            subject: id,
+            progress_event: "instance:progress",
+            finished_event,
+            program: "docker",
+            args: &args,
+            cwd: root,
+            env: &[],
+        },
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn instance_start(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let _busy = state.inflight.acquire(format!("instance:{id}"))?;
-    instance_of(&state.root()?, &id)?;
-    lifecycle(&events::sink(&app), "instance", &id, events::START).await
+    let root = state.root()?;
+    let instance = instance_of(&root, &id)?;
+
+    // Checked with the engine rather than inferred from the table: the table
+    // knows what was asked for, only the daemon knows what exists.
+    let exists = engine::container_exists(&id).await?;
+    if start_plan(instance.enabled, exists) == StartPlan::StartContainer {
+        return lifecycle(&events::sink(&app), "instance", &id, events::START).await;
+    }
+
+    let operation_id = events::next_operation_id("start");
+    events::emit(&app, "instance:starting", SubjectEvent::service(&id));
+
+    let outcome = instance_up(&app, &root, &id, &operation_id, "instance:started", false).await;
+
+    match &outcome {
+        // The same tail enable has, for the same reason: this is the enable
+        // that never finished, and the name has to resolve once the service
+        // is up. Warn-only, as there.
+        Ok(()) => {
+            if let Err(e) = sync_service_host(&root, &instance.service, true).await {
+                tracing::warn!(instance = %id, error = %e.message, "hosts entry not updated");
+            }
+        }
+        Err(e) => events::emit(
+            &app,
+            "instance:error",
+            SubjectEvent::service(&id).error(e.message.clone()),
+        ),
+    }
+    outcome
 }
 
 #[tauri::command]
@@ -17024,26 +17126,7 @@ pub async fn instance_enable(
         }
         table.save(&root)?;
 
-        generate(&app, &root, &operation_id, "projects_and_services").await?;
-
-        let mut args = runner::compose_base_args(&root);
-        args.extend(runner::profile_args("custom", std::slice::from_ref(&id))?);
-        args.extend(["up".into(), "-d".into(), "--no-build".into()]);
-
-        runner::run_operation(
-            &events::sink(&app),
-            runner::Operation {
-                operation_id: &operation_id,
-                subject: &id,
-                progress_event: "instance:progress",
-                finished_event: "instance:enabled",
-                program: "docker",
-                args: &args,
-                cwd: &root,
-                env: &[],
-            },
-        )
-        .await
+        instance_up(&app, &root, &id, &operation_id, "instance:enabled", false).await
     }
     .await;
 

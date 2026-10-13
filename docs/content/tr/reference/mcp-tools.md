@@ -53,7 +53,7 @@ sunulur.
 | `stackvo_project_stop` | Bir projenin konteynerini durdurur. Tekrarlanabilir. | proje |
 | `stackvo_project_restart` | Bir projeyi durdurup başlatır. | proje |
 | `stackvo_xdebug_set` | Bir projede adım adım hata ayıklamayı açar ya da kapatır. | proje |
-| `stackvo_service_start` | Bir servis örneğini başlatır — `redis`, değil `redis-7-2`. | yığın |
+| `stackvo_service_start` | Bir servis örneğini başlatır — `redis`, değil `redis-7-2`. Açık olup konteyneri hiç oluşmamış bir örnek önce oluşturulur. | yığın |
 | `stackvo_service_stop` | Bir örneği durdurur. Hiçbir şey silinmez. | yığın |
 | `stackvo_service_restart` | Bir örneği yeniden başlatır. | yığın |
 | `stackvo_snapshot_take` | Bir veritabanını adlı snapshot'a döker. Dosya ekler, bir şey değiştirmez. | yığın |

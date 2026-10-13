@@ -781,8 +781,10 @@ pub const TOOLS: &[Tool] = &[
         command: "instance_start",
         also: &[],
         description: "Start one service instance — `redis-7-2`, not `redis`. Idempotent. Takes \
-                      an id from stackvo_service_instances; a service that is switched off has no \
-                      container to start and must be enabled from the app first.",
+                      an id from stackvo_service_instances. An enabled instance whose container \
+                      was never created (an enable cut off mid-pull) is created and started; a \
+                      service that is switched off has no container to start and must be \
+                      enabled from the app first.",
         writes: true,
         project_arg: None,
         schema: instance_arg,

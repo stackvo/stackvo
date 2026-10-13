@@ -5,6 +5,17 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Start no longer fails with "container not found" on a service that was
+  never created.** An enable cut off while the image was still pulling left
+  the instance table saying "on" with no container behind it, and the Start
+  button could then only answer `container stackvo-mongo-8-3 not found` with
+  a hint about building a project that does not exist. Start now asks the
+  engine whether the container is there and, for an enabled instance that has
+  none, regenerates and brings its compose profile up instead — the same
+  sequence enable runs, finished from where it stopped.
+
 ## [0.3.2] - 2026-10-12
 
 ### Fixed

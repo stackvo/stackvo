@@ -53,7 +53,7 @@ offered.
 | `stackvo_project_stop` | Stop one project's container. Idempotent. | project |
 | `stackvo_project_restart` | Stop and start one project. | project |
 | `stackvo_xdebug_set` | Turn step debugging on or off for one project. | project |
-| `stackvo_service_start` | Start one service instance — `redis-7-2`, not `redis`. | stack |
+| `stackvo_service_start` | Start one service instance — `redis-7-2`, not `redis`. An enabled instance with no container yet is created first. | stack |
 | `stackvo_service_stop` | Stop one instance. Nothing is deleted. | stack |
 | `stackvo_service_restart` | Restart one instance. | stack |
 | `stackvo_snapshot_take` | Dump one database into a named snapshot. Adds a file, changes nothing. | stack |
