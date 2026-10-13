@@ -14,7 +14,10 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   a hint about building a project that does not exist. Start now asks the
   engine whether the container is there and, for an enabled instance that has
   none, regenerates and brings its compose profile up instead — the same
-  sequence enable runs, finished from where it stopped.
+  sequence enable runs, finished from where it stopped. And an enable that
+  fails now undoes what it wrote: the flag goes back off, any half-made
+  container is removed, and the row offers Enable again rather than a Start
+  that cannot work. The named volume is untouched either way.
 
 ## [0.3.2] - 2026-10-12
 
