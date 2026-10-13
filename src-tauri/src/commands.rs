@@ -17136,6 +17136,34 @@ pub async fn instance_enable(
             "instance:error",
             SubjectEvent::service(&id).error(e.message.clone()),
         );
+        // The flag was written before the work, because the generator reads
+        // it; the work failed, so the flag is undone. Without this a pull that
+        // timed out left the table saying "on" with no container behind it,
+        // and the row then offered a Start that could only fail. Only when
+        // this call is what switched it on: an enable of an instance that was
+        // already on has nothing to undo.
+        //
+        // Compose may have got as far as creating the container before the
+        // start failed (a port in use, say). It goes, the same way `disable`
+        // takes it: once the flag is off the next regenerate writes it out of
+        // the compose file, and a container nothing describes is nobody's.
+        // The named volume stays, as it does on disable.
+        if !instance.enabled {
+            let _ = engine::stop_container(&id).await;
+            let _ = engine::remove_container(&id).await;
+            let undone = async {
+                let mut table = crate::instances::Table::load(&root)?;
+                if let Some(row) = table.instances.iter_mut().find(|i| i.id == id) {
+                    row.enabled = false;
+                }
+                table.save(&root)?;
+                generate(&app, &root, &operation_id, "projects_and_services").await
+            }
+            .await;
+            if let Err(e) = undone {
+                tracing::warn!(instance = %id, error = %e.message, "enable not rolled back");
+            }
+        }
     }
     // The name has to resolve while the service is on and stop resolving when
     // it is not. Keyed on the SERVICE rather than the instance because a
