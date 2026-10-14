@@ -7,6 +7,8 @@ import {
   platformsFrom,
   declared,
   betaEndpoint,
+  repositoryOf,
+  manifestName,
 } from '../tools/check-updater-endpoint.mjs';
 
 /**
@@ -113,7 +115,10 @@ describe('the diagnosis for a 404', () => {
     expect(text).toContain('count them');
     expect(text).toContain('releaseDraft: true');
     expect(text).toContain('presses Publish');
-    expect(text).toContain('--url');
+    // The way out of the draft case is the API, not an address: a draft's
+    // assets answer 404 to any plain URL, so pointing people at `--url` was
+    // pointing them at the same 404.
+    expect(text).toContain('--draft');
     expect(text).not.toContain('likeliest');
   });
 });
@@ -222,5 +227,34 @@ describe('the channel a manifest belongs to', () => {
     expect(text).toContain('latest.json second');
     expect(text).toContain('channel');
     expect(text).not.toContain('releaseDraft');
+  });
+});
+
+describe('the draft check, which goes through the API', () => {
+  it('reads the repository off the stable endpoint rather than spelling it', () => {
+    expect(
+      repositoryOf('https://github.com/stackvo/stackvo/releases/latest/download/latest.json')
+    ).toBe('stackvo/stackvo');
+    // A fork checks its own releases without editing the tool.
+    expect(
+      repositoryOf('https://github.com/someone/fork/releases/latest/download/latest.json')
+    ).toBe('someone/fork');
+  });
+
+  it('has no repository for an endpoint that is not GitHub releases', () => {
+    expect(repositoryOf('https://updates.example.com/latest.json')).toBeNull();
+    expect(repositoryOf(undefined)).toBeNull();
+  });
+
+  it('asks for the file each channel publishes', () => {
+    expect(manifestName('stable')).toBe('latest.json');
+    expect(manifestName()).toBe('latest.json');
+    expect(manifestName('beta')).toBe('beta.json');
+  });
+
+  it('tells a 404 reader to go through the API rather than paste a draft address', () => {
+    const text = diagnose(404, 'https://x/latest.json');
+    expect(text).toContain('--draft <tag>');
+    expect(text).not.toContain('take the asset URL off the release page');
   });
 });
