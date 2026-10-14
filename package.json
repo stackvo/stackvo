@@ -78,16 +78,16 @@
     "@xterm/xterm": "^6.0.0",
     "pinia": "^4.0.3",
     "vue": "^3.5.43",
-    "vue-i18n": "^11.4.13",
-    "vue-router": "^5.3.1",
-    "vuetify": "^3.13.5"
+    "vue-i18n": "^11.4.14",
+    "vue-router": "^5.4.0",
+    "vuetify": "^3.13.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@tauri-apps/cli": "^2.11.4",
-    "@vitejs/plugin-vue": "^6.0.9",
+    "@vitejs/plugin-vue": "^6.0.10",
     "@vitest/coverage-v8": "^5.0.3",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/test-utils": "^2.5.1",
