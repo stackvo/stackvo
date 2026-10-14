@@ -442,7 +442,7 @@ Counted from 604 Rust crates and 80 npm packages.
 | serde_core | 1.0.229 | MIT OR Apache-2.0 |
 | serde_derive | 1.0.229 | MIT OR Apache-2.0 |
 | serde_derive_internals | 0.29.1 | MIT OR Apache-2.0 |
-| serde_json | 1.0.151 | MIT OR Apache-2.0 |
+| serde_json | 1.0.152 | MIT OR Apache-2.0 |
 | serde_repr | 0.1.21 | MIT OR Apache-2.0 |
 | serde_spanned | 0.6.9 | MIT OR Apache-2.0 |
 | serde_spanned | 1.1.1 | MIT OR Apache-2.0 |
