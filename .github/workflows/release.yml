@@ -167,7 +167,7 @@ jobs:
       # the signature and out of `tauri.conf.json`'s public key. Equal, or
       # nothing builds. Both are minisign boxes, and both put the 8-byte key id
       # at bytes 2–9 of their base64 payload's second line.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: ${{ !inputs.rehearsal }}
         with:
           node-version: 22
@@ -322,7 +322,7 @@ jobs:
         working-directory: src-tauri
         run: rustup target add ${{ matrix.target }}
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -434,7 +434,7 @@ jobs:
         # `if: failure()` would skip the upload on exactly the run whose log is
         # hardest to reach.
         if: ${{ !cancelled() && steps.suite.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-${{ matrix.target }}
           path: test-${{ matrix.target }}.log
@@ -598,7 +598,7 @@ jobs:
 
       - name: Attach the SBOM to the release
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom
           path: sbom/
@@ -796,7 +796,7 @@ jobs:
       # red tick from an upload with nothing to upload.
       - name: Keep the rehearsal bundles
         if: ${{ always() && inputs.rehearsal }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rehearsal-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
@@ -897,7 +897,7 @@ jobs:
           node tools/checksum-artifacts.mjs | tee "checksums/SHA256SUMS-${{ matrix.target }}.txt"
 
       - name: Attach the checksums
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: checksums-${{ matrix.target }}
           path: checksums/
@@ -947,7 +947,7 @@ jobs:
     steps:
       - name: Rehearsal — merge what the six rows hashed
         if: ${{ inputs.rehearsal }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: checksums-*
           path: checksums
@@ -960,7 +960,7 @@ jobs:
           test -s SHA256SUMS.txt
       - name: Rehearsal — keep it, there is no release to attach it to
         if: ${{ inputs.rehearsal }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: SHA256SUMS
           path: SHA256SUMS.txt
