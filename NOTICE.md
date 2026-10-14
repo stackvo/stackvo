@@ -740,7 +740,7 @@ Counted from 604 Rust crates and 87 npm packages.
 | magic-string-ast | 1.0.3 | MIT |
 | mlly | 1.8.2 | MIT |
 | muggle-string | 0.4.1 | MIT |
-| nanoid | 3.3.18 | MIT |
+| nanoid | 3.3.20 | MIT |
 | nostics | 1.3.0 | MIT |
 | pathe | 2.0.3 | MIT |
 | perfect-debounce | 2.1.0 | MIT |
@@ -749,7 +749,7 @@ Counted from 604 Rust crates and 87 npm packages.
 | pinia | 4.0.3 | MIT |
 | pkg-types | 1.3.1 | MIT |
 | pkg-types | 2.3.2 | MIT |
-| postcss | 8.5.28 | MIT |
+| postcss | 8.5.29 | MIT |
 | quansync | 0.2.11 | MIT |
 | readdirp | 5.0.0 | MIT |
 | scule | 1.3.0 | MIT |
