@@ -680,7 +680,7 @@ Counted from 604 Rust crates and 87 npm packages.
 | @babel/helper-string-parser | 8.0.6 | MIT |
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
 | @babel/helper-validator-identifier | 8.0.6 | MIT |
-| @babel/parser | 7.29.8 | MIT |
+| @babel/parser | 7.29.9 | MIT |
 | @babel/parser | 8.0.7 | MIT |
 | @babel/types | 7.29.8 | MIT |
 | @babel/types | 8.0.6 | MIT |
@@ -704,19 +704,19 @@ Counted from 604 Rust crates and 87 npm packages.
 | @tauri-apps/plugin-updater | 2.11.0 | MIT OR Apache-2.0 |
 | @types/estree | 1.0.9 | MIT |
 | @vue-macros/common | 3.1.4 | MIT |
-| @vue/compiler-core | 3.5.43 | MIT |
-| @vue/compiler-dom | 3.5.43 | MIT |
-| @vue/compiler-sfc | 3.5.43 | MIT |
-| @vue/compiler-ssr | 3.5.43 | MIT |
+| @vue/compiler-core | 3.5.44 | MIT |
+| @vue/compiler-dom | 3.5.44 | MIT |
+| @vue/compiler-sfc | 3.5.44 | MIT |
+| @vue/compiler-ssr | 3.5.44 | MIT |
 | @vue/devtools-api | 6.6.4 | MIT |
 | @vue/devtools-api | 8.2.1 | MIT |
 | @vue/devtools-kit | 8.2.1 | MIT |
 | @vue/devtools-shared | 8.2.1 | MIT |
-| @vue/reactivity | 3.5.43 | MIT |
-| @vue/runtime-core | 3.5.43 | MIT |
-| @vue/runtime-dom | 3.5.43 | MIT |
-| @vue/server-renderer | 3.5.43 | MIT |
-| @vue/shared | 3.5.43 | MIT |
+| @vue/reactivity | 3.5.44 | MIT |
+| @vue/runtime-core | 3.5.44 | MIT |
+| @vue/runtime-dom | 3.5.44 | MIT |
+| @vue/server-renderer | 3.5.44 | MIT |
+| @vue/shared | 3.5.44 | MIT |
 | @xterm/addon-fit | 0.11.0 | MIT |
 | @xterm/xterm | 6.0.0 | MIT |
 | acorn | 8.17.0 | MIT |
@@ -746,7 +746,7 @@ Counted from 604 Rust crates and 87 npm packages.
 | perfect-debounce | 2.1.0 | MIT |
 | picocolors | 1.1.1 | ISC |
 | picomatch | 4.0.7 | MIT |
-| pinia | 4.0.3 | MIT |
+| pinia | 4.1.0 | MIT |
 | pkg-types | 1.3.1 | MIT |
 | pkg-types | 2.3.2 | MIT |
 | postcss | 8.5.29 | MIT |
@@ -758,10 +758,10 @@ Counted from 604 Rust crates and 87 npm packages.
 | ufo | 1.6.4 | MIT |
 | unplugin | 3.4.0 | MIT |
 | unplugin-utils | 0.3.2 | MIT |
-| vue | 3.5.43 | MIT |
+| vue | 3.5.44 | MIT |
 | vue-i18n | 11.4.14 | MIT |
 | vue-router | 5.4.0 | MIT |
-| vuetify | 3.13.6 | MIT |
+| vuetify | 3.13.7 | MIT |
 | webpack-virtual-modules | 0.6.2 | MIT |
 
 ## Copyright holders
