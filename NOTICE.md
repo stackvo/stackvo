@@ -442,7 +442,7 @@ Counted from 604 Rust crates and 87 npm packages.
 | serde_core | 1.0.229 | MIT OR Apache-2.0 |
 | serde_derive | 1.0.229 | MIT OR Apache-2.0 |
 | serde_derive_internals | 0.29.1 | MIT OR Apache-2.0 |
-| serde_json | 1.0.152 | MIT OR Apache-2.0 |
+| serde_json | 1.0.154 | MIT OR Apache-2.0 |
 | serde_repr | 0.1.21 | MIT OR Apache-2.0 |
 | serde_spanned | 0.6.9 | MIT OR Apache-2.0 |
 | serde_spanned | 1.1.1 | MIT OR Apache-2.0 |
@@ -517,7 +517,7 @@ Counted from 604 Rust crates and 87 npm packages.
 | tinystr | 0.8.3 | Unicode-3.0 |
 | tinyvec | 1.12.0 | Zlib OR Apache-2.0 OR MIT |
 | tinyvec_macros | 0.1.1 | MIT OR Apache-2.0 OR Zlib |
-| tokio | 1.53.2 | MIT |
+| tokio | 1.53.3 | MIT |
 | tokio-macros | 2.7.1 | MIT |
 | tokio-rustls | 0.26.4 | MIT OR Apache-2.0 |
 | tokio-util | 0.7.19 | MIT |
