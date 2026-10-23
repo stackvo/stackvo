@@ -184,10 +184,17 @@ mod tests {
     fn only_the_missing_entries_are_added_once_each() {
         let out = augmented(
             Some(OsStr::new("/usr/bin:/usr/local/bin")),
-            &[p("/usr/local/bin"), p("/opt/homebrew/bin"), p("/opt/homebrew/bin")],
+            &[
+                p("/usr/local/bin"),
+                p("/opt/homebrew/bin"),
+                p("/opt/homebrew/bin"),
+            ],
         )
         .unwrap();
-        assert_eq!(out, OsString::from("/usr/bin:/usr/local/bin:/opt/homebrew/bin"));
+        assert_eq!(
+            out,
+            OsString::from("/usr/bin:/usr/local/bin:/opt/homebrew/bin")
+        );
     }
 
     #[test]

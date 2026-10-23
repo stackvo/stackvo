@@ -20,7 +20,7 @@ Three parts, in the order a request travels:
 | Part                                | Where                | Size                    |
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | [`src/`](src/)                         | 38k lines               |
-| Back end — Rust, 131 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
+| Back end — Rust, 132 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
 | The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 352 commands, 73 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
@@ -68,7 +68,7 @@ an accident of how it was first written:
 
 ### 3.1 Layers
 
-`src-tauri/src/` is flat — 131 modules, no subdirectories — but it is not
+`src-tauri/src/` is flat — 132 modules, no subdirectories — but it is not
 unstructured. There are four bands, and the dependency arrows only ever point
 downward:
 
@@ -83,8 +83,8 @@ downward:
       │                     mail, xdebug, profile, preset, migrate, worktree, …
       │                     one subject each; no Tauri types
       ▼
-  platform           6.6k   engine (Docker), runner, elevate, pty, watcher,
-      │                     applog, atomic, paths, appdir, git
+  platform           6.8k   engine (Docker), runner, elevate, pty, watcher,
+      │                     applog, atomic, paths, appdir, hostpath, git
       ▼
   primitives         2.3k   error, events, progress, hints, inflight, logging,
                             crash, contracts
@@ -136,7 +136,7 @@ in both directions.
 | Credentials    | `secrets`, `leaks`                                                                 | Where a password lives, and where one is that nobody moved                                                                                                                                           |
 | The fleet      | `policy`, `compliance`                                                             | What an administrator decided for a machine this app does not own, and whether any of it is actually holding here                                                                                     |
 | The record     | `audit`, `undo`                                                                    | What was done that somebody has to account for, and — for the acts an assistant asked for — what would put each one back, worked out before it ran                                                    |
-| The app itself | `workspace`, `preset`, `config`, `locale`, `watcher`, `tray`, `menu`, `mcp`, `cli` | Where things live, sharing that setup, and the three surfaces other than the window: the tray, the MCP server and `stackvo`                                                                          |
+| The app itself | `workspace`, `preset`, `config`, `locale`, `watcher`, `hostpath`, `tray`, `menu`, `mcp`, `cli` | Where things live, sharing that setup, and the three surfaces other than the window: the tray, the MCP server and `stackvo`                                                                          |
 | Assistants     | `agents`, `rules`, `agentctx`, `ide`, `grant`                                      | Registering the MCP server with the clients on this machine, writing the rules that say when to use it, the context file an agent inside a container reads, the debug configuration an IDE needs, and what one assistant is allowed to do — which tools, which project, for how long |
 
 ### 3.3 State
@@ -328,7 +328,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (131 modules, 352 commands) come from
+covers `README.md`; the counts above (132 modules, 352 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 
