@@ -473,8 +473,8 @@ pub async fn write(root: Option<&Path>, dest: &Path) -> Result<Bundle> {
     let file = std::fs::File::create(dest)
         .map_err(|e| Error::io(format!("creating {}", dest.display()), e))?;
     let mut zip = zip::ZipWriter::new(file);
-    let options: zip::write::FileOptions<'_, ()> =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
 
     let readme = readme(&entries);
     let io = |e: std::io::Error| Error::io(format!("writing {}", dest.display()), e);
@@ -683,7 +683,7 @@ mod tests {
         {
             let file = std::fs::File::create(&zipped).unwrap();
             let mut writer = zip::ZipWriter::new(file);
-            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            let options: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default();
             writer.start_file("about.txt", options).unwrap();
             writer
                 .write_all(
@@ -705,7 +705,7 @@ mod tests {
         {
             let file = std::fs::File::create(&older).unwrap();
             let mut writer = zip::ZipWriter::new(file);
-            let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            let options: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default();
             writer.start_file("about.txt", options).unwrap();
             writer
                 .write_all(
@@ -835,7 +835,7 @@ mod tests {
         let mut archive = zip::ZipArchive::new(file).expect("the file is a readable zip");
 
         let names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
 
         for required in [

@@ -40,6 +40,17 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   was telling people to run. v0.3.2's draft was checked by hand for that
   reason.
 
+### Security
+
+- **zip 4 → 9, rustls 0.23.46, rustls-webpki 0.103.16, webpki-root-certs
+  1.0.11, tokio 1.54.** Ten RustSec advisories against the previous
+  versions, all published after the last dependency bump; `cargo deny` fails
+  on every one, which is what was holding every open pull request red. The
+  diagnostics bundle writer and reader moved to zip 9's API. The one copy of
+  zip 4 left is `tauri-plugin-updater`'s, compiled only on Windows and used on
+  an archive it has already signature-checked; its three advisories are
+  ignored in `deny.toml` with that reason, to come out when the plugin moves.
+
 ## [0.3.2] - 2026-10-12
 
 ### Fixed
