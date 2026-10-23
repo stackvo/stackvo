@@ -7,6 +7,21 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The macOS build no longer reports Docker Compose missing on a machine
+  that has it.** An app opened from Finder, the Dock or Spotlight inherits
+  launchd's `PATH` — `/usr/bin:/bin:/usr/sbin:/sbin` — and `docker` is not
+  on it: Docker Desktop links it into `/usr/local/bin`, Homebrew into
+  `/opt/homebrew/bin`, OrbStack into `~/.orbstack/bin`. The engine row was
+  green because it is reached over the socket; the compose row spawns
+  `docker` and could not, so every `.dmg` install stopped at the gate with
+  "update Docker Desktop" and nothing to update. `cargo tauri dev` runs
+  from a terminal and never saw it. The app now appends the directories
+  these tools are installed into to its own `PATH` at launch, before any
+  thread starts, and only those that exist and are not already there — a
+  terminal launch is unchanged. The same fix reaches every other place the
+  app runs `docker`, `git` or `mkcert`. And the compose row now says when
+  `docker` itself could not be run, rather than telling that person to
+  update a plugin they do not have.
 - **Start no longer fails with "container not found" on a service that was
   never created.** An enable cut off while the image was still pulling left
   the instance table saying "on" with no container behind it, and the Start

@@ -982,6 +982,14 @@ export default {
       windows:
         'Uygulama compose profilleri kullanıyor; bunlar v2 ile geldi. Docker Desktop’ı güncelleyin.',
     },
+    composeMissingHint: {
+      macos:
+        'docker komutunun kendisi çalıştırılamadı — eski bir Compose değil, hiç CLI yok. Docker Desktop onu /usr/local/bin’e, OrbStack ~/.orbstack/bin’e bağlar; Docker uygulamasını bir kez açın ki komut satırını kursun, sonra yeniden denetleyin.',
+      linux:
+        'docker komutunun kendisi çalıştırılamadı — eski bir Compose değil, hiç CLI yok. docker-ce’yi docker-compose-plugin ile birlikte kurun ya da ikilinin bulunduğu dizini PATH’e ekleyin.',
+      windows:
+        'docker komutunun kendisi çalıştırılamadı — eski bir Compose değil, hiç CLI yok. Docker Desktop kurulurken PATH’e ekler; kurulumu onarın, sonra oturumu kapatıp açın.',
+    },
 
     network: 'Paylaşılan Docker ağı',
     networkHint: {

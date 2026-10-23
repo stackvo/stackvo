@@ -51,6 +51,7 @@ pub mod handover;
 pub mod help;
 pub mod hints;
 pub mod hooks;
+pub mod hostpath;
 pub mod hosts;
 pub mod ide;
 pub mod idle;
@@ -140,16 +141,31 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // First, before the log itself: `logging::init` can fail, and a panic
-    // inside it would otherwise be the one crash with nowhere to be recorded.
-    // The hook needs no subscriber — it writes its report with `fs::write`,
-    // and `logging::dir()` is a path, not state that `init` sets up.
+    // Before everything, including the logger: this writes the process
+    // environment, and the logger is the first thing here to start a thread.
+    // A Dock launch has launchd's four-directory `PATH`, on which `docker` does
+    // not exist; `hostpath` is why the requirements gate stopped telling
+    // people with Docker Desktop installed that Compose was missing.
+    let path_added = hostpath::install();
+
+    // Then the crash hook, before the log itself: `logging::init` can fail,
+    // and a panic inside it would otherwise be the one crash with nowhere to
+    // be recorded. The hook needs no subscriber — it writes its report with
+    // `fs::write`, and `logging::dir()` is a path, not state that `init` sets
+    // up.
     crash::install();
 
-    // Before anything else: a failure during plugin setup is exactly the kind
-    // that used to leave no trace. Held for the process lifetime — dropping the
-    // guard stops the writer and discards whatever is buffered.
+    // A failure during plugin setup is exactly the kind that used to leave no
+    // trace. Held for the process lifetime — dropping the guard stops the
+    // writer and discards whatever is buffered.
     let _log_guard = logging::init();
+
+    if !path_added.is_empty() {
+        tracing::info!(
+            added = ?path_added,
+            "tool directories appended to PATH for this launch"
+        );
+    }
 
     // After the log, so the move has somewhere to be recorded, and before the
     // first command can read a preference: the folders these live in were named
