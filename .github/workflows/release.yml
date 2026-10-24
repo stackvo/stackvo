@@ -175,6 +175,21 @@ jobs:
       - name: Install the CLI that signs
         if: ${{ !inputs.rehearsal }}
         run: npm ci
+      # The release page's notes are CHANGELOG.md's section for this version,
+      # and the bump commit is what writes the heading. A tag whose version has
+      # no section is a release with nothing to say; asked here, where it costs
+      # one runner a second, rather than found on the draft after six have
+      # built. v0.3.3's draft was found empty that way, installers and all.
+      - name: The changelog has a section for this version
+        if: ${{ !inputs.rehearsal }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! node tools/release-notes.mjs "$TAG" > /dev/null; then
+            echo "::error file=CHANGELOG.md::no \"## [${TAG#v}]\" section. The version bump writes that heading over the Unreleased entries; without it the release has no notes. Add it, delete the tag, and tag again."
+            exit 1
+          fi
+          echo "CHANGELOG.md has a section for ${TAG#v}; it becomes the release notes."
       - name: The signing key must sign, and with the key the app trusts
         if: ${{ !inputs.rehearsal }}
         env:
@@ -604,6 +619,23 @@ jobs:
           path: sbom/
           if-no-files-found: error
 
+      # The notes `tauri-action` writes into the draft below — the changelog's
+      # section for this version, which `preflight` has already confirmed is
+      # there. Multi-line, so through a heredoc into `$GITHUB_OUTPUT`; the
+      # delimiter is one no changelog line will ever be.
+      - name: Release notes, from the changelog
+        if: ${{ !inputs.rehearsal }}
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          {
+            echo "body<<STACKVO_RELEASE_NOTES_END"
+            node tools/release-notes.mjs "$TAG"
+            echo "STACKVO_RELEASE_NOTES_END"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         id: tauri
         env:
@@ -685,6 +717,11 @@ jobs:
           # The tag, not `StackVo <tag>`: the page already names the repository,
           # and v0.1.0 was titled by its tag by hand.
           releaseName: ${{ !inputs.rehearsal && github.ref_name || '' }}
+          # The changelog's section, from the step above. Empty in a rehearsal,
+          # where the step does not run and nothing is drafted anyway. The
+          # draft is created by whichever of the six rows gets there first, and
+          # every row computes the same text from the same commit.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           # ---------------------------------------------------- the tag rule
           #
