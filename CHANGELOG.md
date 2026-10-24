@@ -7,6 +7,14 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The command palette button's accessible name now includes the keys
+  printed on it.** The button in the bar shows `⌘K` (or `Ctrl+K`) and was
+  named "Command palette" alone, so its visible text was not part of its
+  name — WCAG 2.5.3, which axe-core 4.14 began checking by default
+  (`label-content-name-mismatch`, serious), and the reason the browser
+  accessibility run went red on every page the moment Dependabot proposed
+  that version. A voice-control user who says what they can read on the
+  button is now understood.
 - **The macOS build no longer reports Docker Compose missing on a machine
   that has it.** An app opened from Finder, the Dock or Spotlight inherits
   launchd's `PATH` — `/usr/bin:/bin:/usr/sbin:/sbin` — and `docker` is not
