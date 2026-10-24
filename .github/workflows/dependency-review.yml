@@ -75,5 +75,18 @@ jobs:
             CC0-1.0, BSL-1.0, Unlicense, CDLA-Permissive-2.0,
             BlueOak-1.0.0, Python-2.0
 
+          # One dependency the licence list does not cover, named rather than
+          # the list widened: `Swatinem/rust-cache` is LGPL-3.0. It has cached
+          # every Rust build here since August and the gate above arrived in
+          # September, so the first bump of it since then was the first time
+          # the two met — and the check refused a two-line version bump over a
+          # licence that was already in every workflow. The list says what may
+          # ship in the application. This action ships nothing: it runs on the
+          # CI machine, restores a cache directory, and is in no artifact a
+          # person installs. LGPL's obligations attach to distribution, and
+          # a workflow step is not distributed. Stays pinned by name so a
+          # second LGPL arrival is still a decision, not a precedent.
+          allow-dependencies-licenses: pkg:githubactions/Swatinem/rust-cache
+
           # The findings in the pull request, rather than in a log nobody opens.
           comment-summary-in-pr: on-failure

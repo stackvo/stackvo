@@ -50,6 +50,15 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The dependency review no longer refuses a `Swatinem/rust-cache` bump
+  over its licence.** The action is LGPL-3.0; it has cached every Rust build
+  here since August and the licence gate arrived in September, so the first
+  bump since then was the first time the two met, and a two-line version
+  change went red. The allow-list says what may ship in the application,
+  and this action ships nothing — it runs on the CI machine and is in no
+  artifact anyone installs. It is now named as an exception, by package,
+  rather than the list being widened: a second LGPL arrival is still a
+  decision.
 - **`tools/before-push.sh` now says when `Cargo.lock` has gone backwards,
   and which crates.** Four crates were found committed at the versions a
   security bump had moved them off the day before; nobody had typed them. A
