@@ -7,6 +7,21 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The macOS build no longer reports Docker Compose missing on a machine
+  that has it.** An app opened from Finder, the Dock or Spotlight inherits
+  launchd's `PATH` — `/usr/bin:/bin:/usr/sbin:/sbin` — and `docker` is not
+  on it: Docker Desktop links it into `/usr/local/bin`, Homebrew into
+  `/opt/homebrew/bin`, OrbStack into `~/.orbstack/bin`. The engine row was
+  green because it is reached over the socket; the compose row spawns
+  `docker` and could not, so every `.dmg` install stopped at the gate with
+  "update Docker Desktop" and nothing to update. `cargo tauri dev` runs
+  from a terminal and never saw it. The app now appends the directories
+  these tools are installed into to its own `PATH` at launch, before any
+  thread starts, and only those that exist and are not already there — a
+  terminal launch is unchanged. The same fix reaches every other place the
+  app runs `docker`, `git` or `mkcert`. And the compose row now says when
+  `docker` itself could not be run, rather than telling that person to
+  update a plugin they do not have.
 - **Start no longer fails with "container not found" on a service that was
   never created.** An enable cut off while the image was still pulling left
   the instance table saying "on" with no container behind it, and the Start
@@ -24,6 +39,29 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   authenticated client and answers 404 to everyone else — which `RELEASING.md`
   was telling people to run. v0.3.2's draft was checked by hand for that
   reason.
+
+### Changed
+
+- **`tools/before-push.sh` no longer blocks a push over an advisory the
+  branch did not cause.** `cargo deny` and `npm audit` compare the lockfiles
+  with a database that moves daily, so the same commit went red between one
+  push and the next. Of the last hundred CI runs, seven of the ten red ones
+  were that job, on branches that had changed no lockfile. The two supply
+  steps now fail the run only when the branch touched a manifest, a lockfile
+  or `deny.toml`; otherwise the failure is printed in yellow, listed as
+  failing on main too, and the push goes through. CI's `supply chain` job is
+  unchanged and still gates the merge.
+
+### Security
+
+- **zip 4 → 9, rustls 0.23.46, rustls-webpki 0.103.16, webpki-root-certs
+  1.0.11, tokio 1.54.** Ten RustSec advisories against the previous
+  versions, all published after the last dependency bump; `cargo deny` fails
+  on every one, which is what was holding every open pull request red. The
+  diagnostics bundle writer and reader moved to zip 9's API. The one copy of
+  zip 4 left is `tauri-plugin-updater`'s, compiled only on Windows and used on
+  an archive it has already signature-checked; its three advisories are
+  ignored in `deny.toml` with that reason, to come out when the plugin moves.
 
 ## [0.3.2] - 2026-10-12
 

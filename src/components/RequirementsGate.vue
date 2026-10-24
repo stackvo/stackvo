@@ -104,6 +104,21 @@ const isBlocked = (requirement) => requirement.state === 'unknown';
 const isActionable = (r) => (r.state === 'fail' || r.state === 'warn') && r.fixable;
 const hasHint = (r) => r.state === 'fail' || r.state === 'warn';
 
+/**
+ * Which instructions a failed row shows.
+ *
+ * The compose row fails two different ways, and the back end tells them apart
+ * by whether it has a version to show: a version below 2 is an old plugin,
+ * and the hint says to update. No version at all means `docker` itself could
+ * not be run — a machine with no CLI, or one where it lives somewhere this app
+ * does not look — and "update Docker Desktop" sends that person to fix the
+ * wrong thing.
+ */
+const hintKey = (r) =>
+  r.id === 'compose' && !r.detail
+    ? `preflight.composeMissingHint.${os.value}`
+    : `preflight.${r.id}Hint.${os.value}`;
+
 /** Domains with no line in the hosts file, from the `hosts` requirement. */
 const hostsOpen = ref(false);
 const missingDomains = ref([]);
@@ -215,7 +230,7 @@ async function recheck() {
             <!-- Instructions only where they are needed, and only the ones that
                  apply to this operating system. -->
             <div v-if="hasHint(r)" class="text-caption mt-1">
-              {{ t(`preflight.${r.id}Hint.${os}`) }}
+              {{ t(hintKey(r)) }}
             </div>
             <div v-else-if="isBlocked(r)" class="text-caption text-medium-emphasis mt-1">
               {{ t('preflight.blocked') }}

@@ -1002,6 +1002,14 @@ export default {
         'The app drives compose profiles, which arrived in v2. Install the docker-compose-plugin package.',
       windows: 'The app drives compose profiles, which arrived in v2. Update Docker Desktop.',
     },
+    composeMissingHint: {
+      macos:
+        'The docker command itself could not be run — not an old Compose, no CLI at all. Docker Desktop links it into /usr/local/bin, OrbStack into ~/.orbstack/bin; open the Docker app once so it installs its command line, then re-check.',
+      linux:
+        'The docker command itself could not be run — not an old Compose, no CLI at all. Install docker-ce together with docker-compose-plugin, or put the directory the binary lives in on PATH.',
+      windows:
+        'The docker command itself could not be run — not an old Compose, no CLI at all. Docker Desktop adds it to PATH when it installs; repair the installation, then sign out and back in.',
+    },
 
     network: 'Shared Docker network',
     networkHint: {

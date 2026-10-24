@@ -19,10 +19,25 @@ yanked = "deny"
 # dependency of ours going unmaintained is a different matter and still fails.
 unmaintained = "workspace"
 
-# Deliberately empty. An advisory should be dealt with, not waved through by a
+# Meant to be empty. An advisory should be dealt with, not waved through by a
 # list nobody revisits. Add an id here only with a comment saying why it does
-# not apply.
-ignore = []
+# not apply, and when it can come out.
+#
+# The three zip entries are one case. Our own `zip` is on 9, which fixes them;
+# the copy they still match is zip 4.6.1, pinned by `tauri-plugin-updater`
+# 2.11.0 and compiled only on Windows, where the plugin unpacks the update it
+# downloaded. The advisories are about extracting an *attacker-controlled*
+# archive — setuid bits, symlinks escaping the destination — and the updater
+# verifies the archive's minisign signature against the public key in
+# `tauri.conf.json` before it extracts anything, so an archive it unpacks is
+# one this project's release key signed. Remove these when the updater moves
+# to zip 9 (watch `cargo deny check` — it reports an ignore that no longer
+# matches anything).
+ignore = [
+  { id = "RUSTSEC-2026-0367", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction" },
+  { id = "RUSTSEC-2026-0368", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction" },
+  { id = "RUSTSEC-2026-0369", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction" },
+]
 
 [bans]
 multiple-versions = "warn"
