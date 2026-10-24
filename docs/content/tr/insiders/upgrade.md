@@ -5,7 +5,9 @@ bildiriminin ilk cevabıdır. Aynı yere varan iki yol.
 
 ## Uygulamadan
 
-**Ayarlar → Güncellemeler** yeni sürüm olup olmadığını kontrol eder ve kurar.
+StackVo açılışta da bir kez bakar ve yeni bir sürüm varsa pencerenin altında
+bir satırla söyler; satır aynı sayfaya götürür. **Ayarlar → Güncellemeler**
+yeni sürüm olup olmadığını kontrol eder ve kurar.
 Güncelleme, uygulamaya derlenmiş bir minisign anahtarıyla doğrulanır;
 doğrulamayı geçemeyen paket kurulmaz. Kurulum uygulamayı kapatır.
 Konteynerleriniz çalışmaya devam eder; onları pencere değil Docker yönetir.

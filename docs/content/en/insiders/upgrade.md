@@ -5,7 +5,9 @@ most bug reports. Two ways, ending in the same place.
 
 ## From the app
 
-**Settings → Updates** checks for a new version and installs it. The update
+StackVo also looks once, when it starts, and says so in a line at the
+bottom of the window when a newer release exists; the line leads to the
+same page. **Settings → Updates** checks for a new version and installs it. The update
 is verified against a minisign key compiled into the app; a package that
 fails the check is not installed. Installing closes the app. Your containers
 keep running — Docker manages them, not the window.

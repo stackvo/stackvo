@@ -3710,6 +3710,11 @@ export default {
     open: 'Show me',
   },
 
+  update: {
+    notice: 'StackVo {version} is available.',
+    open: 'Open updates',
+  },
+
   tour: {
     step: 'Step {n} of {of}',
     skip: 'Skip',

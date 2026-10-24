@@ -5,6 +5,23 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-24
+
+### Added
+
+- **The app says, once per launch, that a newer release exists.** The update
+  check lived in Settings alone — it ran when that page was opened and
+  nowhere else — so an install whose owner never opened Settings was never
+  told. 0.2.0 had three successors, the first a security fix, before any copy
+  of it that stayed on the dashboard heard of one. The shell now asks the
+  same endpoint once after the boot and shows the version in a line at the
+  bottom of the window; the line opens Settings, where the check runs again
+  and Install is. Offline is silent, a build without a public key never
+  asks, and the channel preference travels with the check so a stable
+  install is not told about a beta. Every copy of 0.2.0 still learns only
+  when Settings is opened; nothing shipped can be changed after the fact,
+  which is the reason this exists from here on.
+
 ### Fixed
 
 - **The macOS icon fills its Dock slot like every other app's.** It sat on
