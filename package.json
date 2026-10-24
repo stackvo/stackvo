@@ -76,11 +76,11 @@
     "@vue/devtools-api": "^8.2.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "pinia": "^4.0.3",
-    "vue": "^3.5.43",
-    "vue-i18n": "^11.4.14",
+    "pinia": "^4.1.0",
+    "vue": "^3.5.44",
+    "vue-i18n": "^11.4.16",
     "vue-router": "^5.4.0",
-    "vuetify": "^3.13.6"
+    "vuetify": "^3.13.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
