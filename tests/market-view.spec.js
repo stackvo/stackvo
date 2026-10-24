@@ -395,6 +395,39 @@ describe('the market page', () => {
     expect(page.vm.opened).toEqual(['category:cache']);
   });
 
+  /// The tree holds what is on screen and nothing else.
+  ///
+  /// Vuetify renders every node it is given and re-renders all of them on a
+  /// toggle; with the real catalogue that was 222 rows for a page showing
+  /// twenty, and half a second of main thread per click. A closed branch is
+  /// handed an empty list — still an array, so it opens — and gets its
+  /// children the moment it is in `opened`.
+  it('gives children only to the branches that are open', async () => {
+    api.marketCatalog.mockResolvedValue([...CATALOG, REDIS]);
+
+    const page = mountPage();
+    await flushPromises();
+
+    const byId = () => Object.fromEntries(page.vm.visibleTree.map((c) => [c.id, c]));
+    expect(byId()['category:databases'].children.map((s) => s.id)).toEqual(['service:mysql']);
+    expect(byId()['category:cache'].children).toEqual([]);
+    // The service is listed, closed: no versions yet.
+    expect(byId()['category:databases'].children[0].children).toEqual([]);
+
+    page.vm.opened = ['category:databases', 'service:mysql'];
+    await flushPromises();
+    // 5.7 is end-of-life and folded away by default; the data tree still has it.
+    expect(byId()['category:databases'].children[0].children.map((v) => v.title)).toEqual([
+      '9.4',
+      '8.0',
+    ]);
+    expect(page.vm.catalogueTree[0].children[0].children.length).toBeGreaterThanOrEqual(2);
+
+    page.vm.opened = [];
+    await flushPromises();
+    expect(page.vm.visibleTree.every((c) => c.children.length === 0)).toBe(true);
+  });
+
   /// The handover panel says the problem once.
   ///
   /// It said it twice: a paragraph explaining that the version would not be
@@ -560,6 +593,10 @@ describe('the market page', () => {
 
     const page = mountPage();
     await flushPromises();
+    // Opened, as a reader would: a closed branch draws nothing (see
+    // `visibleTree`), and what this guards is the row being there to open.
+    page.vm.opened = ['category:databases', 'service:mysql'];
+    await flushPromises();
     expect(page.text()).toContain('5.7');
   });
 
@@ -578,6 +615,9 @@ describe('the market page', () => {
   /// visible before the click rather than after it.
   it('offers no uninstall for a version an instance is using', async () => {
     const page = mountPage();
+    await flushPromises();
+    // The version rows exist once their service is open (see `visibleTree`).
+    page.vm.opened = ['category:databases', 'service:mysql'];
     await flushPromises();
 
     // By accessible name, not by text: the action buttons are glyphs with the

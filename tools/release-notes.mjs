@@ -34,12 +34,25 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPOSITORY = 'https://github.com/stackvo/stackvo';
 
 /**
+ * Is this line the heading of `version`'s section?
+ *
+ * A string comparison, not a regular expression built from the version: a tag
+ * name is input, and input belongs in a pattern only after every character a
+ * pattern reads specially has been escaped — which is a list to keep, and a
+ * thing CodeQL asks about. `## [0.3.3]` followed by a space or the end of
+ * the line, and nothing else, is the whole test.
+ */
+function isHeadingFor(line, version) {
+  const prefix = `## [${version}]`;
+  return line === prefix || line.startsWith(`${prefix} `);
+}
+
+/**
  * The body of `## [version]`'s section, trimmed, or null when there is none.
  */
 export function sectionFor(changelog, version) {
   const lines = changelog.split('\n');
-  const heading = new RegExp(`^## \\[${version.replace(/[.+-]/g, '\\$&')}\\]`);
-  const start = lines.findIndex((line) => heading.test(line));
+  const start = lines.findIndex((line) => isHeadingFor(line, version));
   if (start === -1) return null;
   let end = lines.findIndex((line, i) => i > start && /^## \[/.test(line));
   if (end === -1) end = lines.length;
@@ -52,11 +65,8 @@ export function sectionFor(changelog, version) {
 
 /** The heading's date, `## [0.3.3] - 2026-10-24` → `2026-10-24`, or null. */
 export function dateFor(changelog, version) {
-  const heading = new RegExp(
-    `^## \\[${version.replace(/[.+-]/g, '\\$&')}\\] - (\\d{4}-\\d{2}-\\d{2})`,
-    'm'
-  );
-  return heading.exec(changelog)?.[1] ?? null;
+  const heading = changelog.split('\n').find((line) => isHeadingFor(line, version));
+  return /^## \[[^\]]+\] - (\d{4}-\d{2}-\d{2})/.exec(heading ?? '')?.[1] ?? null;
 }
 
 /** The notes as the release page shows them: the section and a link back. */

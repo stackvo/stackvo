@@ -96,6 +96,38 @@ const catalogueTree = computed(() =>
 );
 
 /**
+ * The same tree with only the open branches carrying children — what the
+ * treeview is actually handed.
+ *
+ * Vuetify's treeview renders every node it is given, open or not — a closed
+ * branch is hidden, not absent — and re-renders all of it on every toggle.
+ * With the published catalogue (61 services, 175 versions) that was 222 rows
+ * and nine thousand DOM nodes on a page showing twenty, each row with its
+ * tooltips and buttons, and a click on a category held the main thread for
+ * half a second while the whole tree was drawn again. Measured in Chromium
+ * against the real index: 1.9 s to the page, 460–680 ms per toggle.
+ *
+ * So a closed node is handed an empty `children`: still an array, so the
+ * toggle shows and the node opens, and the moment it is in `opened` this
+ * recomputes with its real children. The tree only ever holds what is on
+ * screen, and a toggle re-renders a screenful rather than the catalogue.
+ * `catalogueTree` above stays whole, for everything that reads the data
+ * rather than draws it.
+ */
+const visibleTree = computed(() => {
+  const open = new Set(opened.value);
+  return catalogueTree.value.map((category) => ({
+    ...category,
+    children: !open.has(category.id)
+      ? []
+      : category.children.map((service) => ({
+          ...service,
+          children: open.has(service.id) ? service.children : [],
+        })),
+  }));
+});
+
+/**
  * The instance whose settings are open.
  *
  * Here rather than on the Services page: what a service is configured with is a
@@ -777,7 +809,7 @@ function supportLabel(version) {
             <div class="pane-scroll">
               <v-treeview
                 v-model:opened="opened"
-                :items="catalogueTree"
+                :items="visibleTree"
                 item-value="id"
                 item-title="title"
                 density="compact"

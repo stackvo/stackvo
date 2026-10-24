@@ -7,6 +7,18 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Catalogue opens and its tree folds without a pause.** Vuetify's
+  treeview renders every node it is given, open or not, and re-renders all
+  of them on every toggle; with the published catalogue — 61 services, 175
+  versions — that was 222 rows and nine thousand DOM nodes behind a page
+  showing twenty, each with its tooltips and buttons, and a click on a
+  category held the window for half a second while the whole tree was
+  drawn again. Measured in Chromium against the real index: 1.9 s to the
+  page and 460–680 ms per toggle before, 0.4 s and about 100 ms after. The
+  tree is now handed only the open branches' children; a closed node keeps
+  an empty list, so it still opens, and gets its rows the moment it is in
+  `opened`. The Rust side was not the cost — the four commands the page
+  asks answer in under three milliseconds together.
 - **The documentation site names the release that was just published.**
   `docs-publish.yml` rebuilds on every publish so the download cards name
   the new version the same day; v0.3.3's rebuild started two seconds after
