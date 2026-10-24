@@ -752,7 +752,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | pinia | 4.0.3 | MIT |
 | pkg-types | 1.3.1 | MIT |
 | pkg-types | 2.3.2 | MIT |
-| postcss | 8.5.29 | MIT |
+| postcss | 8.5.31 | MIT |
 | quansync | 0.2.11 | MIT |
 | readdirp | 5.0.0 | MIT |
 | scule | 1.3.0 | MIT |
