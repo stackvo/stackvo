@@ -7,6 +7,14 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The command palette button's accessible name now includes the keys
+  printed on it.** The button in the bar shows `⌘K` (or `Ctrl+K`) and was
+  named "Command palette" alone, so its visible text was not part of its
+  name — WCAG 2.5.3, which axe-core 4.14 began checking by default
+  (`label-content-name-mismatch`, serious), and the reason the browser
+  accessibility run went red on every page the moment Dependabot proposed
+  that version. A voice-control user who says what they can read on the
+  button is now understood.
 - **The macOS build no longer reports Docker Compose missing on a machine
   that has it.** An app opened from Finder, the Dock or Spotlight inherits
   launchd's `PATH` — `/usr/bin:/bin:/usr/sbin:/sbin` — and `docker` is not
@@ -42,6 +50,22 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`tools/before-push.sh` now says when `Cargo.lock` has gone backwards,
+  and which crates.** Four crates were found committed at the versions a
+  security bump had moved them off the day before; nobody had typed them. A
+  branch switch and a pull had rewritten the lockfile twice in a second, an
+  editor's `cargo metadata` woken by the first write finished after the
+  second and wrote its stale resolution back, and the commit took the file
+  along. The hook refused the push with "supply · deny FAILED" and "supply ·
+  notice FAILED" — true, and not a word about which file. A new step ahead
+  of those two, `lock · no downgrade`, compares each crate's version with
+  the merge base, names the ones that went down, says what most likely
+  happened and prints the one line that puts the base lockfile back. With
+  `Cargo.toml` changed on the branch the same list is printed as
+  information, since pinning below a broken release is a manifest change.
+  A workspace setting, `.vscode/settings.json`, passes `--locked` to
+  rust-analyzer's cargo so the clobber cannot happen from that editor
+  again.
 - **`tools/before-push.sh` no longer blocks a push over an advisory the
   branch did not cause.** `cargo deny` and `npm audit` compare the lockfiles
   with a database that moves daily, so the same commit went red between one

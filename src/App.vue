@@ -751,12 +751,17 @@ onUnmounted(() => {
              `--v-btn-height + 4px` at comfortable density and a text button
              plain `--v-btn-height`, so this sat four pixels shorter than its
              neighbours and read as slightly sunken. -->
+        <!-- The keys are the visible text, so they are in the name as well:
+             a widget whose visible text is not part of its accessible name
+             fails WCAG 2.5.3 (axe `label-content-name-mismatch`, serious,
+             on by default since axe-core 4.14) — somebody who speaks "click
+             ⌘K" at the thing they can see would be ignored. -->
         <v-btn
           variant="tonal"
           elevation="0"
           class="mr-2 bar-pill"
           prepend-icon="mdi-console-line"
-          :aria-label="t('palette.title')"
+          :aria-label="`${t('palette.title')} ${paletteKeys}`"
           @click="paletteOpen = true"
         >
           {{ paletteKeys }}

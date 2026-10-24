@@ -1,0 +1,11 @@
+{
+  // rust-analyzer re-runs `cargo metadata` the moment Cargo.lock changes on
+  // disk, and a branch switch followed by a pull changes it twice in a second.
+  // The run woken by the first write read the OLD lockfile, and when it
+  // finished it wrote that resolution back over the NEW one — four crates
+  // quietly back at the versions a security bump had just moved them off, in
+  // the next commit, caught only by the pre-push hook. `--locked` makes that
+  // write an error instead: cargo refuses to touch a lockfile that no longer
+  // matches what it resolved, and rust-analyzer reloads on the next change.
+  "rust-analyzer.cargo.extraArgs": ["--locked"]
+}
