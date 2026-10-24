@@ -57,6 +57,7 @@ trap 'rmdir "$lock" 2>/dev/null || true' EXIT
 
 failed=()
 skipped=()
+advisory=()
 
 # Exit 3 means "this machine cannot answer this", and it is not a failure.
 #
@@ -86,6 +87,58 @@ step() {
   fi
 }
 
+# A fourth colour, for the two checks whose answer changes without the tree.
+#
+# `cargo deny` and `npm audit` compare the lockfiles against an advisory
+# database that moves every day. The same commit is green on Monday and red on
+# Thursday because somebody published a RustSec entry in between — and this
+# script, run before a push that touched no dependency, then refuses the push
+# over it. Measured over the last hundred CI runs: seven of the ten red ones
+# were this job, every one on a branch that had not changed a lockfile. The
+# push gets blocked, the fix belongs on a dependency branch, and the person
+# learns to type SKIP_BEFORE_PUSH=1 — which skips the thirteen checks that
+# *are* about their change.
+#
+# So: when this branch has touched a lockfile, a manifest or `deny.toml`, the
+# check is a check and fails the run — the dependency change is what is being
+# pushed, and this is its review. When it has not, the same failure is printed
+# in yellow, listed at the end as something that is failing on main too, and
+# does not hold the push. CI's `supply chain` job stays red either way; it is
+# the gate for merging, this is the gate for pushing, and only one of those
+# should care about the calendar.
+#
+# The base is `origin/main`'s merge point, or the first commit when there is no
+# remote yet; with neither answer the check stays strict, because "could not
+# tell" must not become "waved through".
+dependencies_changed() {
+  local base
+  base="$(git merge-base HEAD origin/main 2>/dev/null)" \
+    || base="$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -n1)" \
+    || return 0
+  [ -n "$base" ] || return 0
+  ! git diff --quiet "$base" -- \
+    src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/deny.toml \
+    package.json package-lock.json
+}
+
+supply_step() {
+  if dependencies_changed; then
+    step "$@"
+    return
+  fi
+  local name="$1"
+  shift
+  printf '\n\033[1m▸ %s\033[0m\n' "$name"
+  local status=0
+  "$@" || status=$?
+  if [ "$status" -eq 0 ]; then
+    printf '\033[32m  ok\033[0m\n'
+  else
+    printf '\033[33m  failing, and not because of this branch — no lockfile changed here\033[0m\n'
+    advisory+=("$name")
+  fi
+}
+
 step "rust · format"        bash -c 'cd src-tauri && cargo fmt --check'
 step "rust · clippy"        bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
 step "rust · tests"         bash -c 'cd src-tauri && cargo test --tests'
@@ -103,8 +156,8 @@ step "front end · build"    npm run --silent build
 # opening line is "everything CI will ask, asked here first" has to be true or
 # it is worse than absent — people stop reading the runs.
 step "front end · bundle"   npm run --silent bundle:budget
-step "supply · audit"       npm audit --omit=dev --audit-level=moderate
-step "supply · deny"        bash -c 'cd src-tauri && cargo deny check'
+supply_step "supply · audit" npm audit --omit=dev --audit-level=moderate
+supply_step "supply · deny"  bash -c 'cd src-tauri && cargo deny check'
 step "supply · notice"      npm run --silent notice:check
 # Not what CI asks — CI cannot see the keys — but the same instinct, and the one
 # check whose failure is unrecoverable rather than inconvenient: a private key
@@ -161,6 +214,14 @@ if [ ${#skipped[@]} -ne 0 ]; then
   printf '\033[33m%d check(s) this machine cannot answer:\033[0m\n' "${#skipped[@]}"
   printf '  %s\n' "${skipped[@]}"
   printf '\n'
+fi
+
+if [ ${#advisory[@]} -ne 0 ]; then
+  printf '\033[33m%d check(s) failing for reasons outside this branch:\033[0m\n' "${#advisory[@]}"
+  printf '  %s\n' "${advisory[@]}"
+  printf 'The advisory database moved and no lockfile changed here. CI will say the\n'
+  printf 'same on every open pull request; the fix is a dependency bump on its own\n'
+  printf 'branch, not a change to this one.\n\n'
 fi
 
 if [ ${#failed[@]} -eq 0 ]; then

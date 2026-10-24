@@ -40,6 +40,18 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   was telling people to run. v0.3.2's draft was checked by hand for that
   reason.
 
+### Changed
+
+- **`tools/before-push.sh` no longer blocks a push over an advisory the
+  branch did not cause.** `cargo deny` and `npm audit` compare the lockfiles
+  with a database that moves daily, so the same commit went red between one
+  push and the next. Of the last hundred CI runs, seven of the ten red ones
+  were that job, on branches that had changed no lockfile. The two supply
+  steps now fail the run only when the branch touched a manifest, a lockfile
+  or `deny.toml`; otherwise the failure is printed in yellow, listed as
+  failing on main too, and the push goes through. CI's `supply chain` job is
+  unchanged and still gates the merge.
+
 ### Security
 
 - **zip 4 → 9, rustls 0.23.46, rustls-webpki 0.103.16, webpki-root-certs

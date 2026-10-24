@@ -148,7 +148,11 @@ pub fn install() -> Vec<PathBuf> {
     added
 }
 
-#[cfg(test)]
+// Unix only, like the behaviour: on Windows `install` returns before touching
+// anything, and these assertions spell paths the way unix does — `:` between
+// entries and `/usr/local/bin` as an absolute path, which Windows disagrees with
+// on both counts.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
