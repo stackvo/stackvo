@@ -877,3 +877,57 @@ describe('the command palette shortcut', () => {
     expect(document.querySelector('.palette-input')).toBe(null);
   });
 });
+
+/**
+ * A newer release is said once, at launch, without anybody opening Settings.
+ *
+ * The check used to live in Settings alone; an install whose owner stayed on
+ * the dashboard never heard of a release. `updates.spec.js` covers what
+ * `checkForUpdate` decides; this covers that the shell asks, and says.
+ */
+const updaterCheck = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/plugin-updater', () => ({ check: (...a) => updaterCheck(...a) }));
+vi.mock('@tauri-apps/plugin-process', () => ({ relaunch: vi.fn() }));
+
+describe('the launch-time update notice', () => {
+  // The file's own `beforeEach` has mounted a shell by now, and its boot is
+  // still awaiting; a stub set here is in place by the time that boot asks.
+  // One shell, so a count of one means one check.
+  beforeEach(() => {
+    updaterCheck.mockReset();
+    updaterCheck.mockResolvedValue({
+      available: true,
+      version: '9.9.9',
+      currentVersion: '0.3.3',
+      rawJson: { version: '9.9.9' },
+      downloadAndInstall: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    delete calls.updater_status;
+  });
+
+  it('names the version when the build can verify updates', async () => {
+    calls.updater_status = () => ({ configured: true });
+    await flushPromises();
+    await flushPromises();
+
+    expect(updaterCheck).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain(
+      i18n.global.t('update.notice', { version: '9.9.9' })
+    );
+    expect(document.body.textContent).toContain(i18n.global.t('update.open'));
+  });
+
+  it('does not ask at all when no public key is compiled in', async () => {
+    // `updater_status` answers null here, as every unstubbed command does.
+    await flushPromises();
+    await flushPromises();
+
+    expect(updaterCheck).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain(
+      i18n.global.t('update.notice', { version: '9.9.9' })
+    );
+  });
+});

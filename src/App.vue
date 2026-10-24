@@ -14,6 +14,7 @@ import { setLocale } from '@/i18n';
 import { api, asList } from '@/lib/ipc';
 import { listenAll, REFRESH_TRIGGERS } from '@/lib/events';
 import { runtimeLook } from '@/lib/manifest';
+import { channelOf, checkForUpdate, updatesConfigured } from '@/lib/updates';
 import OperationConsole from '@/components/OperationConsole.vue';
 import { toasts } from '@/lib/toast';
 import { notify } from '@/lib/notify';
@@ -226,6 +227,32 @@ async function seenCrashes() {
 async function openDiagnostics() {
   await seenCrashes();
   router.push({ name: 'Settings', query: { tab: 'doctor' } }).catch(() => {});
+}
+
+/**
+ * A newer release, found once at launch and said once.
+ *
+ * The check lived in Settings alone: it ran when that page was opened and
+ * nowhere else, so an install whose owner never opened Settings never heard
+ * of a release — 0.2.0 had three successors before anyone running it was
+ * told, and the first was a security bump. This asks the same endpoint the
+ * Settings page asks, once, after the boot, and says the version in a line
+ * at the bottom; the line leads to Settings, where the check runs again and
+ * Install is. Offline is silent (`checkForUpdate` returns null), an
+ * unconfigured build never asks, and the channel preference travels with the
+ * check so a stable install is not told about a beta.
+ */
+const updateFound = ref(null);
+
+async function noticeUpdate() {
+  if (!(await updatesConfigured())) return;
+  const found = await checkForUpdate({ channel: channelOf(prefs.value) }).catch(() => null);
+  if (found && !disposed) updateFound.value = found.version;
+}
+
+function openUpdates() {
+  updateFound.value = null;
+  router.push({ name: 'Settings' }).catch(() => {});
 }
 
 const showCloseDialog = ref(false);
@@ -492,6 +519,8 @@ onMounted(async () => {
   // that alone produced forty unhandled render errors in one run.
   crashes.value = asList(await api.crashReports().catch(() => []));
   await loadPrefs().catch(() => {});
+  // Not awaited: a network round trip has no business holding the shell.
+  noticeUpdate();
 
   metrics.start();
   if (app.hasWorkspace) inventory.loadAll();
@@ -1262,6 +1291,24 @@ onUnmounted(() => {
           <v-btn size="small" variant="tonal" @click="openDiagnostics">
             {{ t('crash.open') }}
           </v-btn>
+        </template>
+      </v-alert>
+    </v-snackbar>
+
+    <!-- A release this install has not got, said once per launch. The
+         Settings page already finds it; this is for the person who does not
+         open Settings — see `noticeUpdate`. -->
+    <v-snackbar :model-value="!!updateFound" color="transparent" location="bottom" timeout="-1">
+      <v-alert
+        type="info"
+        variant="tonal"
+        density="compact"
+        closable
+        @click:close="updateFound = null"
+      >
+        <div class="text-body-2">{{ t('update.notice', { version: updateFound }) }}</div>
+        <template #append>
+          <v-btn size="small" variant="tonal" @click="openUpdates">{{ t('update.open') }}</v-btn>
         </template>
       </v-alert>
     </v-snackbar>

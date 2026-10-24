@@ -3670,6 +3670,11 @@ export default {
     open: 'Göster',
   },
 
+  update: {
+    notice: 'StackVo {version} hazır.',
+    open: 'Güncellemeleri aç',
+  },
+
   tour: {
     step: 'Adım {n} / {of}',
     skip: 'Atla',
