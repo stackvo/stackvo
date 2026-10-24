@@ -7,11 +7,15 @@ the procedure and the things to expect.
 ## Cutting a release
 
 1. Bump the version on a branch (`package.json`, `src-tauri/tauri.conf.json`,
-   `src-tauri/Cargo.toml`), merge it, and wait for `main` to go green.
+   `src-tauri/Cargo.toml`) and write `## [X.Y.Z] - <date>` over the
+   `Unreleased` entries in `CHANGELOG.md` — that section becomes the release
+   notes, and `preflight` stops a tag whose version has none
+   (`node tools/release-notes.mjs X.Y.Z` shows what the page will get). Merge
+   it, and wait for `main` to go green.
 2. Tag the commit you mean — **the merge commit on `main`, after the merge** —
    and push the tag. A tag with a hyphen (`v0.4.0-beta.1`) is a pre-release.
-3. The `Release` workflow builds six targets and leaves a **draft**. It never
-   publishes by itself.
+3. The `Release` workflow builds six targets and leaves a **draft**, its notes
+   already filled from the changelog. It never publishes by itself.
 4. Open the draft. Check the run summary for the red/green of
    _The draft must be one commit's work, and complete_, then run
    `npm run updates:check -- --draft vX.Y.Z`. It reads the draft's `latest.json`

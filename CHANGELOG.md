@@ -5,6 +5,41 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Catalogue opens and its tree folds without a pause.** Vuetify's
+  treeview renders every node it is given, open or not, and re-renders all
+  of them on every toggle; with the published catalogue — 61 services, 175
+  versions — that was 222 rows and nine thousand DOM nodes behind a page
+  showing twenty, each with its tooltips and buttons, and a click on a
+  category held the window for half a second while the whole tree was
+  drawn again. Measured in Chromium against the real index: 1.9 s to the
+  page and 460–680 ms per toggle before, 0.4 s and about 100 ms after. The
+  tree is now handed only the open branches' children; a closed node keeps
+  an empty list, so it still opens, and gets its rows the moment it is in
+  `opened`. The Rust side was not the cost — the four commands the page
+  asks answer in under three milliseconds together.
+- **The documentation site names the release that was just published.**
+  `docs-publish.yml` rebuilds on every publish so the download cards name
+  the new version the same day; v0.3.3's rebuild started two seconds after
+  Publish, asked `releases/latest`, and the API still answered v0.3.2 — so
+  the site spent the release day naming the old one. On a publish the tag
+  is in the event, and the build now hands it to the hook as
+  `STACKVO_RELEASE_TAG` instead of asking; a push or a pull request still
+  asks the API, as before.
+
+### Added
+
+- **The release page's notes come from the changelog.** `release.yml` handed
+  `tauri-action` a title and no body, so every draft opened with an empty
+  notes field and the notes were typed into the form before Publish —
+  v0.3.3's draft was found empty with all 24 installers already on it, while
+  this file had the whole section under the heading the version bump writes.
+  `tools/release-notes.mjs` prints that section, with a link back to the
+  heading; the build rows pass it as `releaseBody`, and `preflight` asks for
+  it first, so a tag whose version has no section stops before six runners
+  are spent rather than after.
+
 ## [0.3.3] - 2026-10-24
 
 ### Added

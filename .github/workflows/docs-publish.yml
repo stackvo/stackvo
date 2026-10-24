@@ -82,6 +82,13 @@ jobs:
       - name: Build both languages, strictly
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # On a publish, the tag is in the event; `releases/latest` is not
+          # there yet. v0.3.3's publish started this run two seconds later,
+          # the hook asked the API, the API still said v0.3.2, and the site
+          # named the old release on the day of the new one. The hook takes
+          # this over the API when it is set; on a push or a pull request it
+          # is empty and the API is asked as before.
+          STACKVO_RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           mkdocs build --strict -f docs/mkdocs.yml
           mkdocs build --strict -f docs/mkdocs.tr.yml
