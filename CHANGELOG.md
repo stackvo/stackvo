@@ -7,6 +7,16 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The macOS icon fills its Dock slot like every other app's.** It sat on
+  a grey tile, smaller than its neighbours, in the Dock, Launchpad and the
+  Finder. Apple's icon is a 1024 canvas with an 824 rounded square in the
+  middle — VS Code's and PhpStorm's measure exactly that — and macOS 26
+  draws anything else as a legacy icon on a system backing. StackVo's
+  `.icns` was the full-bleed square the other platforms want, so it was
+  exactly the shape macOS does not. The `.icns` is now built from a
+  1024 source in Apple's geometry (`icons/icon-macos.png`, made by
+  `tools/mac-icon.py` from `icon.png`); Windows, Linux and the tray keep
+  the edge-to-edge square, which is their convention.
 - **The command palette button's accessible name now includes the keys
   printed on it.** The button in the bar shows `⌘K` (or `Ctrl+K`) and was
   named "Command palette" alone, so its visible text was not part of its
