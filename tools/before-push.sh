@@ -156,6 +156,16 @@ step "front end · build"    npm run --silent build
 # opening line is "everything CI will ask, asked here first" has to be true or
 # it is worse than absent — people stop reading the runs.
 step "front end · bundle"   npm run --silent bundle:budget
+# Before the two supply checks, because when a lockfile has gone backwards they
+# fail — truthfully, and without naming the file. Four crates were found
+# committed at the versions a security bump had moved them off the day before:
+# a branch switch and a pull rewrote `Cargo.lock` twice in a second, an editor's
+# `cargo metadata` woken by the first write finished after the second and put
+# its stale resolution back, and the commit took the file along. The hook said
+# "supply · deny FAILED, supply · notice FAILED" and the person read it as the
+# hook being difficult. This says which crates, what happened, and the one
+# line that fixes it. `tools/lock-downgrades.mjs` has the full account.
+step "lock · no downgrade"  node tools/lock-downgrades.mjs
 supply_step "supply · audit" npm audit --omit=dev --audit-level=moderate
 supply_step "supply · deny"  bash -c 'cd src-tauri && cargo deny check'
 step "supply · notice"      npm run --silent notice:check
