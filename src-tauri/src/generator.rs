@@ -2642,6 +2642,28 @@ fn project_manifests(
     out
 }
 
+/// Remove the empty directory Docker leaves where a generated file belongs.
+///
+/// A container that bind-mounts a file whose source is missing gets a
+/// directory made in its place — Docker's doing, not compose's. It happens
+/// whenever the workspace has been deleted while an old `stackvo-*` container
+/// with `restart: unless-stopped` is still around: the daemon restarts it, and
+/// `generated/traefik/traefik.yml` comes back as a directory that the write
+/// below fails on with "Is a directory".
+///
+/// Only an empty directory is removed. One with something in it was not left
+/// by Docker, and the write is allowed to fail on it rather than lose it.
+fn clear_bind_mount_placeholder(path: &std::path::Path) -> std::io::Result<()> {
+    let is_dir = std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir());
+    if !is_dir {
+        return Ok(());
+    }
+    match std::fs::read_dir(path)?.next() {
+        None => std::fs::remove_dir(path),
+        Some(_) => Ok(()),
+    }
+}
+
 pub fn write_generated(
     root: &std::path::Path,
     scope: &str,
@@ -2672,6 +2694,8 @@ pub fn write_generated(
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
         }
+        clear_bind_mount_placeholder(&f.path)
+            .map_err(|e| Error::io(format!("clearing {}", f.path.display()), e))?;
         std::fs::write(&f.path, &f.content)
             .map_err(|e| Error::io(format!("writing {}", f.path.display()), e))?;
         on_file(&f.label);
@@ -2755,6 +2779,39 @@ mod tests {
         // it is read rather than invented.
         crate::instances::Table::default().save(&root).unwrap();
         assert!(service_source(&root).is_ok());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The directory Docker makes for a missing bind-mount source.
+    ///
+    /// Seen on a reinstall: the old Traefik container was restarted before the
+    /// first generate, `generated/traefik/traefik.yml` came back as an empty
+    /// directory, and the bootstrap stopped at its first step.
+    #[test]
+    fn an_empty_directory_in_place_of_a_generated_file_is_cleared() {
+        let root = std::env::temp_dir().join(format!(
+            "stackvo-placeholder-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let empty = root.join("traefik.yml");
+        std::fs::create_dir_all(&empty).unwrap();
+        clear_bind_mount_placeholder(&empty).unwrap();
+        assert!(!empty.exists(), "the empty directory is removed");
+        std::fs::write(&empty, "entryPoints: {}\n").unwrap();
+
+        // A file is left alone, and so is a directory with something in it.
+        clear_bind_mount_placeholder(&empty).unwrap();
+        assert!(empty.is_file());
+
+        let full = root.join("dynamic");
+        std::fs::create_dir_all(&full).unwrap();
+        std::fs::write(full.join("keep.yml"), "").unwrap();
+        clear_bind_mount_placeholder(&full).unwrap();
+        assert!(full.join("keep.yml").is_file());
 
         let _ = std::fs::remove_dir_all(&root);
     }
