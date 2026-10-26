@@ -217,6 +217,22 @@ mod tests {
         assert_eq!(redis.pecl_versions["8.1"], "6.0.2");
     }
 
+    /// igbinary 3.2.16 includes `ext/standard/php_smart_string.h`, which PHP
+    /// 8.5 removed, so every 8.5 image with redis in it failed to build.
+    /// 3.2.17RC1 is the first release that drops the include. Xdebug was the
+    /// next step to fail on the same image: 8.5 support arrived in 3.5.0.
+    #[test]
+    fn pecl_pins_build_on_php_8_5() {
+        let extensions = &php_extensions().extensions;
+        let igbinary = &extensions["igbinary"];
+        assert_eq!(igbinary.pecl_versions["8.5"], "3.2.17RC1");
+        assert_eq!(igbinary.pecl_versions["9.0"], "3.2.17RC1");
+        assert_eq!(igbinary.pecl_versions["default"], "3.2.16");
+        let xdebug = &extensions["xdebug"];
+        assert_eq!(xdebug.pecl_versions["8.4"], "3.4.0");
+        assert_eq!(xdebug.pecl_versions["8.5"], "3.5.3");
+    }
+
     #[test]
     fn the_service_catalog_has_thirty_three_entries() {
         // Was 25, and the number is a record rather than a rule: it counted the
