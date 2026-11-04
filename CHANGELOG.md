@@ -7,6 +7,16 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A PHP 8.5 project that asks for `redis` or `igbinary` gets an image.**
+  PHP 8.5 removed `ext/standard/php_smart_string.h`, and igbinary 3.2.16 —
+  the one pin the extension contract carried — still includes it, so the
+  very first `pecl install` in the Dockerfile ended in "No such file or
+  directory", the build failed, and the project page kept saying it had
+  never been built. `redis` pulls `igbinary` in first, so a manifest that
+  never named igbinary hit it too. The contract now pins 3.2.17RC1 on 8.5
+  and 9.0: the release igbinary published for 8.5 and, a year on, still
+  the only one past 3.2.16 on PECL; earlier PHP keeps 3.2.16. Confirmed by
+  building `api.elections` (8.5, nginx, redis) end to end with the new pin.
 - **The Catalogue opens and its tree folds without a pause.** Vuetify's
   treeview renders every node it is given, open or not, and re-renders all
   of them on every toggle; with the published catalogue — 61 services, 175
