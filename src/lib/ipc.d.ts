@@ -3758,7 +3758,7 @@ export interface StackvoApi {
   /**
    * The write half of two verify findings. `phpVersion` says composer.json resolves to a PHP the manifest does not name and `phpExtension` says it requires an extension the manifest does not build in; both repairs were a sentence telling somebody which line of which file to edit, and the sentence was right every time — which is what makes it a button.
    */
-  projectPhpSet(name: string, version?: string, add_extensions?: string[]): Promise<VerifyReport>;
+  projectPhpSet(name: string, version?: string, addExtensions?: string[]): Promise<VerifyReport>;
   /**
    * git bisect moves the code and nothing else. Three months ago the project declared PHP 8.3 and locked redis at 7.0; this machine runs 8.4 and 7.2 — so every step through that range runs OLD CODE AGAINST A NEW ENVIRONMENT and the commit the search finally accuses may be innocent. Nothing in this category does anything about that because nothing in this category knows what environment a commit wanted. This app does: stackvo.json has always travelled with the repository and, since project_lock, stackvo.lock does too — and both are readable AT A REVISION without touching the working tree.
    */
