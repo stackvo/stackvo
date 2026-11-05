@@ -3241,6 +3241,15 @@ export default {
       domain: 'hosts dosyasında {subject}',
       phpVersion: 'composer.json’un istediği PHP ({subject})',
       phpExtension: 'composer.json’un gerektirdiği {subject} uzantısı',
+      phpSupported: 'Bu kurulumun derleyebildiği bir sürüm olarak PHP {subject}',
+      extensions: '{subject} projesinin PHP uzantıları',
+      extensionRemoved: 'Bu PHP’de {subject} uzantısı',
+      extensionNeedsNewer: 'Bu PHP’de {subject} uzantısı',
+      extensionUnknown: '{subject} uzantısı',
+      extensionUnsupported: '{subject} uzantısı',
+      documentRoot: 'Belge kökü, {subject}',
+      context: 'Proje dizinindeki {subject}',
+      xdebugConfig: 'Proje dizinindeki {subject}',
     },
     fix: {
       manifest: 'Doğrulamadan geçmiyor. Sorunlar yukarıda listeleniyor.',
@@ -3262,6 +3271,31 @@ export default {
         'composer.json ile stackvo.json farklı PHP sürümleri söylüyor. İmaj yine de derleniyor ve composer install konteynerin içinde bir platform gereksinimi hatasıyla düşüyor — o hata PHP’yi adıyla söylüyor ama değiştirilmesi gereken dosyayı söylemiyor. stackvo.json’daki php.version satırını değiştirip yeniden derleyin.',
       phpExtension:
         'composer.json onu gerektiriyor, stackvo.json onu imaja koymuyor; yani composer install konteynerin içinde düşüyor. php.extensions’a ekleyip yeniden derleyin.',
+      phpSupported:
+        'Bu kurulumun o sürüm için imajı yok, dolayısıyla derleme başlayamıyor. Derleyebildiği sürümler sağda; proje ayarlarından birini seçin.',
+      extensionRemoved:
+        'PHP onu bu projenin hedeflediği sürümden önce kaldırdı. Derleme onu sessizce düşürüyor ve kod daha sonra tanımsız bir fonksiyonla patlıyor. Kaldırın, ya da daha eski bir PHP hedefleyin.',
+      extensionNeedsNewer:
+        'Projenin hedeflediğinden daha yeni bir PHP istiyor, dolayısıyla derlenmeyecek. php.version’ı yükseltin ya da kaldırın.',
+      extensionUnknown:
+        'Uzantı kataloğunun bilmediği bir ad; onun için derlenecek bir şey yok — çoğunlukla bir yazım hatası. Kaldırın, sonra yazımı kontrol edin.',
+      extensionUnsupported:
+        'Katalog onu biliyor ama henüz bir kurulum yolu yok. Bir yol gelene kadar kaldırın.',
+      documentRoot:
+        'stackvo.json projede olmayan bir dizini adlandırıyor; sunucu her şeye 404 dönecek. Dizini oluşturun ya da document_root’u değiştirin.',
+      context:
+        'Konteynerin içinde çalışan bir asistanın yığını bulmak için okuduğu dosya. Yok ya da yığının gerisinde; yeniden üretmek onu yazar.',
+      xdebugConfig:
+        'Dosya orada ama ayrıştırılamıyor; içine yazılan mod konteynerin aldığı mod değil. Xdebug bölümünden bir mod seçin; dosyayı yeniden yazar.',
+    },
+    repair: {
+      build: 'Derle',
+      regenerate: 'Yeniden üret',
+      remove: 'stackvo.json’dan kaldır',
+      setVersion: 'php.version’ı {version} yap',
+      addExtension: 'php.extensions’a ekle',
+      settings: 'Ayarları aç',
+      hosts: 'hosts kaydını düzelt',
     },
     lock: 'stackvo.lock yaz',
     lockExplain:

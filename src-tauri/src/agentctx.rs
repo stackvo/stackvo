@@ -198,6 +198,41 @@ pub fn write(project_dir: &Path, context: &Context) -> Result<()> {
     crate::atomic::write(&dir.join(FILE), &format!("{text}\n"))
 }
 
+/// How the file on disk stands against what a regenerate would write now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Freshness {
+    /// The file says what a regenerate would say.
+    Current,
+    /// Never written: the project predates the file, or nothing has been
+    /// generated since it was adopted.
+    Missing,
+    /// Written by an older stack or an older shape — a service came or went,
+    /// the domain moved, the schema grew a field. An agent reading it is being
+    /// told yesterday's addresses.
+    Stale,
+    /// There, and not JSON this app wrote. A regenerate replaces it.
+    Unreadable,
+}
+
+/// Hold `<project>/.stackvo/context.json` against `fresh`.
+///
+/// A value comparison rather than a byte one, so a file somebody ran through a
+/// formatter still reads as current: the question is whether an agent reading
+/// it would be told the truth, not how it is indented.
+pub fn freshness(project_dir: &Path, fresh: &Context) -> Freshness {
+    let path = project_dir.join(DIR).join(FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Freshness::Missing;
+    };
+    let Ok(on_disk) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Freshness::Unreadable;
+    };
+    match serde_json::to_value(fresh) {
+        Ok(wanted) if wanted == on_disk => Freshness::Current,
+        _ => Freshness::Stale,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,6 +335,47 @@ mod tests {
         let back: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(back["kind"], "stackvo.agent-context");
         assert_eq!(back["project"], "shop");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The four states the verify report tells apart, from the file alone.
+    #[test]
+    fn freshness_reads_the_file_the_way_an_agent_would() {
+        let root = empty_root();
+        let project = root.join("shop");
+        std::fs::create_dir_all(&project).unwrap();
+        let ctx = build(&root, &manifest("php")).unwrap();
+
+        assert_eq!(freshness(&project, &ctx), Freshness::Missing);
+
+        write(&project, &ctx).unwrap();
+        assert_eq!(freshness(&project, &ctx), Freshness::Current);
+
+        // Reformatted is still current: the comparison is over values.
+        let path = project.join(DIR).join(FILE);
+        let compact = serde_json::to_string(
+            &serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&path).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(&path, compact).unwrap();
+        assert_eq!(freshness(&project, &ctx), Freshness::Current);
+
+        // The stack moved on — here, the domain — and the file did not.
+        let moved = build(
+            &root,
+            &crate::manifest::normalize(
+                &serde_json::json!({ "name": "shop", "domain": "shop.test", "runtime": "php" }),
+                "",
+                "shop",
+            ),
+        )
+        .unwrap();
+        assert_eq!(freshness(&project, &moved), Freshness::Stale);
+
+        std::fs::write(&path, "not json").unwrap();
+        assert_eq!(freshness(&project, &ctx), Freshness::Unreadable);
+
         let _ = std::fs::remove_dir_all(&root);
     }
 }

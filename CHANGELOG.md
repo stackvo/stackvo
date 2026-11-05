@@ -40,6 +40,25 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The project's own check names what the build would trip over, and
+  each line carries its repair.** "Check my setup" held the machine to the
+  repository — services, lock, domain, image — and said nothing about the
+  repository's own PHP line: a `php.version` this install has no image for,
+  an extension PHP removed or the catalogue never heard of, a document root
+  the project does not have, a `.stackvo/context.json` that is missing or
+  behind the stack, an `xdebug.json` that will not parse. `api.elections`
+  failed its build on PHP 8.5 with the compiler's output as the only
+  explanation and the page saying "never built". The report now has those
+  lines, and the sentence beside a failed line has become the button that
+  answers it wherever the app already knew how: build, regenerate, the
+  doctor's extension removal, the settings sheet, the hosts dialog, and a
+  new `project_php_set` that writes the PHP version `composer.json` resolves
+  to or adds the extension it requires. Nothing is done on discovery, and a
+  line nobody can act on from here — a service to install, a lock to
+  re-lock — keeps its sentence. What the check still cannot say is whether
+  a pinned PECL release compiles on that PHP: the catalogue says it does,
+  and only the build can contradict it. `stackvo verify` prints the same
+  lines, through the same gatherer as the pane.
 - **The release page's notes come from the changelog.** `release.yml` handed
   `tauri-action` a title and no body, so every draft opened with an empty
   notes field and the notes were typed into the form before Publish —

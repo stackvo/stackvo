@@ -86,6 +86,11 @@ pub struct Check {
     /// reads the same in every language.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// The value a repair would write, when the line has one — the PHP
+    /// version `composer.json` resolves to. Machine-readable where `detail`
+    /// is a sentence, so a button does not have to parse prose.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 /// Everything the declaration asked for, answered.
@@ -125,6 +130,19 @@ pub struct Declared<'a> {
     /// this is the Laravel half of the question and a Go project has no
     /// opinion about PHP.
     pub platform: Option<&'a Platform>,
+    /// The PHP versions this install can build an image for, from
+    /// `SUPPORTED_LANGUAGES_PHP_VERSIONS`. Empty when `.env` could not be
+    /// read, which switches the check off rather than failing every version
+    /// over a different problem.
+    pub php_versions: &'a [String],
+    /// `.stackvo/context.json` against what a regenerate would write now.
+    pub context: crate::agentctx::Freshness,
+    /// `.stackvo/xdebug.json`: `None` absent — the defaults, and fine —
+    /// `Some(false)` there and not readable.
+    pub xdebug_config_readable: Option<bool>,
+    /// Whether `document_root` names a directory that exists. `None` when the
+    /// manifest names none, or the caller did not look.
+    pub document_root_exists: Option<bool>,
 }
 
 /// The `require` block's demands on the platform, rather than on packages.
@@ -205,24 +223,30 @@ fn platform_checks(platform: &Platform, manifest: &Manifest) -> Vec<Check> {
 
     if let Some(constraint) = &platform.php {
         let wanted = crate::detect::first_version(constraint);
+        let state = match &wanted {
+            None => State::Unknown,
+            Some(wanted) if *wanted == php.version => State::Ok,
+            Some(_) => State::Different,
+        };
         out.push(Check {
             id: "phpVersion",
             subject: constraint.clone(),
-            state: match &wanted {
-                None => State::Unknown,
-                Some(wanted) if *wanted == php.version => State::Ok,
-                Some(_) => State::Different,
-            },
+            state,
             // Both numbers, always — including on a pass. "8.3 asked, 8.3 given"
             // is what makes the line worth reading rather than a green tick
             // whose subject nobody can reconstruct.
-            detail: Some(match wanted {
+            detail: Some(match &wanted {
                 Some(wanted) => format!(
                     "composer.json wants {wanted}, stackvo.json gives {}",
                     php.version
                 ),
                 None => format!("stackvo.json gives {}", php.version),
             }),
+            // The version a repair would write, and only when there is
+            // something to repair: a button reads this, and `detail` is prose.
+            target: (state == State::Different)
+                .then(|| wanted.clone())
+                .flatten(),
         });
     }
 
@@ -239,8 +263,151 @@ fn platform_checks(platform: &Platform, manifest: &Manifest) -> Vec<Check> {
                 subject: extension.clone(),
                 state: State::Missing,
                 detail: Some("required by composer.json".to_string()),
+                target: None,
             });
         }
+    }
+
+    out
+}
+
+/// The manifest's own PHP line, against what this install can build.
+///
+/// ## The failure this catches
+///
+/// Every other check holds the *machine* to the repository. This holds the
+/// repository to the machine's catalogue: a `php.version` this install has no
+/// image for, an extension the catalogue has never heard of, one PHP removed,
+/// one that needs a newer PHP, one with no install path. Without this line
+/// every one of them ends the same way — a build that fails at
+/// `docker-php-ext-install` or `pecl install`, with the compiler's output as
+/// the only explanation and nothing on the page naming the line of
+/// `stackvo.json` that caused it.
+///
+/// ## One row per fault, and one row when there is none
+///
+/// Fifteen green rows for fifteen extensions is a list nobody reads, so a
+/// clean selection collapses to one `extensions` row that says how many were
+/// held against which PHP. A fault is a row of its own, named, because the
+/// repair is per extension and the name is the whole of it.
+///
+/// ## What is deliberately not here
+///
+/// Whether the pinned PECL release *compiles* on that PHP. The catalogue says
+/// it does and this reads the catalogue; the day the catalogue is wrong — as
+/// it was for igbinary 3.2.16 on PHP 8.5 — only the build can say so.
+fn manifest_checks(declared: &Declared) -> Vec<Check> {
+    use std::cmp::Ordering;
+
+    let mut out = Vec::new();
+    let manifest = declared.manifest;
+
+    if let Some(php) = &manifest.php {
+        if !declared.php_versions.is_empty() {
+            let supported = declared.php_versions.iter().any(|v| v == &php.version);
+            out.push(Check {
+                id: "phpSupported",
+                subject: php.version.clone(),
+                state: if supported {
+                    State::Ok
+                } else {
+                    State::Different
+                },
+                // The versions that ARE buildable, because "not supported" on
+                // its own sends somebody to look the list up.
+                detail: (!supported).then(|| declared.php_versions.join(", ")),
+                target: None,
+            });
+        }
+
+        let matrix = &crate::contracts::php_extensions().extensions;
+        let mut faults = 0;
+        for name in &php.extensions {
+            let (id, detail) = match matrix.get(&name.to_ascii_lowercase()) {
+                None => ("extensionUnknown", None),
+                Some(spec) => {
+                    let removed = spec.removed_in.as_deref().filter(|removed| {
+                        crate::contracts::cmp_php_version(&php.version, removed) != Ordering::Less
+                    });
+                    let too_old = spec.min_php.as_deref().filter(|min| {
+                        crate::contracts::cmp_php_version(&php.version, min) == Ordering::Less
+                    });
+                    if let Some(removed) = removed {
+                        (
+                            "extensionRemoved",
+                            Some(format!("removed in PHP {removed}")),
+                        )
+                    } else if let Some(min) = too_old {
+                        (
+                            "extensionNeedsNewer",
+                            Some(format!("needs PHP {min} or newer")),
+                        )
+                    } else if spec.install == "special" {
+                        ("extensionUnsupported", None)
+                    } else {
+                        continue;
+                    }
+                }
+            };
+            faults += 1;
+            out.push(Check {
+                id,
+                subject: name.clone(),
+                state: State::Different,
+                detail,
+                target: None,
+            });
+        }
+        // A name the catalogue does not know never reaches `php.extensions`:
+        // `normalize` records it as an error and drops it from the list, so
+        // it is read back from the findings. Still a row — the build this
+        // manifest asked for is not the build it gets.
+        for finding in &manifest.errors {
+            if finding.code != "UNKNOWN_EXTENSION" && finding.code != "C-14" {
+                continue;
+            }
+            let Some(name) = finding
+                .path
+                .strip_prefix("php.extensions[")
+                .and_then(|rest| rest.strip_suffix(']'))
+            else {
+                continue;
+            };
+            faults += 1;
+            out.push(Check {
+                id: "extensionUnknown",
+                subject: name.to_string(),
+                state: State::Different,
+                detail: None,
+                target: None,
+            });
+        }
+        if faults == 0 {
+            out.push(Check {
+                id: "extensions",
+                subject: manifest.name.clone(),
+                state: State::Ok,
+                detail: Some(format!(
+                    "{} extensions build on PHP {}",
+                    php.extensions.len(),
+                    php.version
+                )),
+                target: None,
+            });
+        }
+    }
+
+    // Only when the manifest names one and the caller looked. A project that
+    // names no document root serves from its own directory and has nothing to
+    // be missing.
+    if let (Some(root), Some(exists)) = (&manifest.document_root, declared.document_root_exists) {
+        out.push(Check {
+            id: "documentRoot",
+            subject: root.clone(),
+            state: if exists { State::Ok } else { State::Missing },
+            detail: None,
+            target: None,
+        });
     }
 
     out
@@ -267,7 +434,13 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
             State::Different
         },
         detail: None,
+        target: None,
     });
+
+    // The repository's own PHP line, before the machine is asked about
+    // anything: a version this install cannot build makes every row below it
+    // about a build that will not start.
+    checks.extend(manifest_checks(declared));
 
     for service in &declared.manifest.services {
         // The lock's answer when it has one, the presence answer otherwise.
@@ -295,6 +468,7 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
                     subject: entry.service.clone(),
                     state: State::Different,
                     detail: Some(format!("locked at {}, no longer declared", entry.version)),
+                    target: None,
                 });
             }
         }
@@ -316,6 +490,7 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
             State::Missing
         },
         detail: None,
+        target: None,
     });
 
     checks.push(Check {
@@ -327,7 +502,43 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
             State::Ok
         },
         detail: None,
+        target: None,
     });
+
+    // The file this app writes into the project for an agent working inside
+    // the container. Held like the generated tree, because it is one: derived
+    // from the manifest and the instance table, and wrong the moment either
+    // moves without a regenerate.
+    {
+        use crate::agentctx::Freshness;
+        checks.push(Check {
+            id: "context",
+            subject: format!("{}/{}", crate::agentctx::DIR, crate::agentctx::FILE),
+            state: match declared.context {
+                Freshness::Current => State::Ok,
+                Freshness::Missing => State::Missing,
+                Freshness::Stale | Freshness::Unreadable => State::Different,
+            },
+            detail: match declared.context {
+                Freshness::Stale => Some("behind the stack".to_string()),
+                Freshness::Unreadable => Some("not JSON this app wrote".to_string()),
+                _ => None,
+            },
+            target: None,
+        });
+    }
+
+    // Absent is the defaults, and fine. Present and unreadable is a mode
+    // somebody chose that the container is not getting.
+    if declared.xdebug_config_readable == Some(false) {
+        checks.push(Check {
+            id: "xdebugConfig",
+            subject: format!("{}/{}", crate::phpini::CONFIG_DIR, crate::xdebug::MODE_FILE),
+            state: State::Different,
+            detail: None,
+            target: None,
+        });
+    }
 
     // Only when the manifest names one. A project with no domain has not
     // failed to configure it; it has not asked for one.
@@ -341,6 +552,7 @@ pub fn verify(declared: &Declared, instances: &Table, catalogue: &[String]) -> R
                 State::Missing
             },
             detail: None,
+            target: None,
         });
     }
 
@@ -396,6 +608,7 @@ fn locked_check(locked: &crate::lock::Locked, instances: &Table) -> Check {
         subject: locked.service.to_string(),
         state,
         detail,
+        target: None,
     }
 }
 
@@ -431,6 +644,7 @@ fn service_check(service: &str, instances: &Table, catalogue: &[String]) -> Chec
                 State::Unknown
             },
             detail: None,
+            target: None,
         };
     }
 
@@ -443,6 +657,7 @@ fn service_check(service: &str, instances: &Table, catalogue: &[String]) -> Chec
             subject: service.to_string(),
             state: State::Ok,
             detail: Some(on.version.clone()),
+            target: None,
         },
         None => Check {
             id: "serviceOff",
@@ -455,6 +670,7 @@ fn service_check(service: &str, instances: &Table, catalogue: &[String]) -> Chec
                     .collect::<Vec<_>>()
                     .join(", "),
             ),
+            target: None,
         },
     }
 }
@@ -487,6 +703,11 @@ mod tests {
             domain_configured: true,
             lock: None,
             platform: None,
+            // Off: the tests that ask about the version list switch it on.
+            php_versions: &[],
+            context: crate::agentctx::Freshness::Current,
+            xdebug_config_readable: None,
+            document_root_exists: None,
         }
     }
 
@@ -874,5 +1095,202 @@ mod tests {
 
         let report = verify(&d, &table(&[]), &catalogue());
         assert!(!report.checks.iter().any(|c| c.id.starts_with("php")));
+    }
+
+    fn supported() -> Vec<String> {
+        ["8.3", "8.4", "8.5"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    /// A `php.version` this install has no image for is the first thing to
+    /// say: every row under it would be about a build that cannot start.
+    #[test]
+    fn a_php_version_this_install_cannot_build_is_named_with_the_ones_it_can() {
+        let versions = supported();
+        let m = php_manifest("8.6", &["mbstring"]);
+        let d = Declared {
+            php_versions: &versions,
+            ..declared(&m)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+
+        assert_eq!(state_of(&report, "phpSupported", "8.6"), State::Different);
+        assert_eq!(
+            report
+                .checks
+                .iter()
+                .find(|c| c.id == "phpSupported")
+                .and_then(|c| c.detail.clone()),
+            Some("8.3, 8.4, 8.5".to_string())
+        );
+        assert!(!report.ready);
+
+        let m = php_manifest("8.4", &["mbstring"]);
+        let d = Declared {
+            php_versions: &versions,
+            ..declared(&m)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert_eq!(state_of(&report, "phpSupported", "8.4"), State::Ok);
+    }
+
+    /// With no list to hold it against the question is not asked — rather than
+    /// every version failing because `.env` could not be read.
+    #[test]
+    fn without_a_version_list_the_php_line_is_not_judged() {
+        let m = php_manifest("8.6", &["mbstring"]);
+        let report = verify(&declared(&m), &table(&[]), &catalogue());
+        assert!(report.checks.iter().all(|c| c.id != "phpSupported"));
+    }
+
+    /// One row per extension that cannot be built on the PHP the manifest
+    /// names, each saying why — because the repair is per extension.
+    #[test]
+    fn an_extension_the_php_line_cannot_carry_is_a_row_of_its_own() {
+        let m = php_manifest("8.4", &["mbstring", "imap", "nonsense"]);
+        let report = verify(&declared(&m), &table(&[]), &catalogue());
+
+        assert_eq!(
+            state_of(&report, "extensionRemoved", "imap"),
+            State::Different
+        );
+        assert_eq!(
+            report
+                .checks
+                .iter()
+                .find(|c| c.id == "extensionRemoved")
+                .and_then(|c| c.detail.clone()),
+            Some("removed in PHP 8.2".to_string())
+        );
+        assert_eq!(
+            state_of(&report, "extensionUnknown", "nonsense"),
+            State::Different
+        );
+        // mbstring is fine and is not a row: the faults are what there is to
+        // read, and the summary row is for a list with none.
+        assert!(report.checks.iter().all(|c| c.subject != "mbstring"));
+        assert!(report.checks.iter().all(|c| c.id != "extensions"));
+        assert!(!report.ready);
+    }
+
+    /// A clean selection is one line, not fifteen: it says how many were held
+    /// against which PHP, so "it checked" and "it did not" look different.
+    #[test]
+    fn a_clean_extension_list_collapses_to_one_row() {
+        let m = php_manifest("8.4", &["mbstring", "curl"]);
+        let report = verify(&declared(&m), &table(&[]), &catalogue());
+
+        assert_eq!(state_of(&report, "extensions", "shop"), State::Ok);
+        assert_eq!(
+            report
+                .checks
+                .iter()
+                .find(|c| c.id == "extensions")
+                .and_then(|c| c.detail.clone()),
+            Some("2 extensions build on PHP 8.4".to_string())
+        );
+    }
+
+    /// The file this app writes for an agent inside the container is held
+    /// like the generated tree, which is what it is.
+    #[test]
+    fn the_agent_context_is_checked_like_the_generated_tree() {
+        use crate::agentctx::Freshness;
+        let m = manifest(&[], None);
+        let subject = ".stackvo/context.json";
+
+        for (freshness, state) in [
+            (Freshness::Current, State::Ok),
+            (Freshness::Missing, State::Missing),
+            (Freshness::Stale, State::Different),
+            (Freshness::Unreadable, State::Different),
+        ] {
+            let d = Declared {
+                context: freshness,
+                ..declared(&m)
+            };
+            let report = verify(&d, &table(&[]), &catalogue());
+            assert_eq!(
+                state_of(&report, "context", subject),
+                state,
+                "{freshness:?}"
+            );
+        }
+
+        // xdebug.json: absent is the defaults and no row; present and
+        // unreadable is a row, because the mode somebody wrote is not the
+        // mode the container gets.
+        let report = verify(&declared(&m), &table(&[]), &catalogue());
+        assert!(report.checks.iter().all(|c| c.id != "xdebugConfig"));
+        let d = Declared {
+            xdebug_config_readable: Some(false),
+            ..declared(&m)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert_eq!(
+            state_of(&report, "xdebugConfig", ".stackvo/xdebug.json"),
+            State::Different
+        );
+        assert!(!report.ready);
+    }
+
+    /// A document root the manifest names and the directory does not have.
+    #[test]
+    fn a_document_root_that_is_not_there_is_missing_and_an_unnamed_one_is_not_asked_about() {
+        let with_root = crate::manifest::normalize(
+            &serde_json::json!({ "name": "shop", "runtime": "php", "document_root": "public" }),
+            "",
+            "shop",
+        );
+        let d = Declared {
+            document_root_exists: Some(false),
+            ..declared(&with_root)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert_eq!(state_of(&report, "documentRoot", "public"), State::Missing);
+        assert!(!report.ready);
+
+        let d = Declared {
+            document_root_exists: Some(true),
+            ..declared(&with_root)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+        assert_eq!(state_of(&report, "documentRoot", "public"), State::Ok);
+
+        let without = manifest(&[], None);
+        let report = verify(&declared(&without), &table(&[]), &catalogue());
+        assert!(report.checks.iter().all(|c| c.id != "documentRoot"));
+    }
+
+    /// The version composer.json resolves to travels as a value, not only
+    /// inside a sentence — a button writes it, and a button cannot parse prose.
+    #[test]
+    fn the_php_version_composer_wants_travels_as_a_target_only_when_it_differs() {
+        let platform = Platform {
+            php: Some("^8.3".into()),
+            extensions: vec![],
+        };
+
+        let m = php_manifest("8.2", &[]);
+        let d = Declared {
+            platform: Some(&platform),
+            ..declared(&m)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+        let row = report.checks.iter().find(|c| c.id == "phpVersion").unwrap();
+        assert_eq!(row.state, State::Different);
+        assert_eq!(row.target.as_deref(), Some("8.3"));
+
+        let m = php_manifest("8.3", &[]);
+        let d = Declared {
+            platform: Some(&platform),
+            ..declared(&m)
+        };
+        let report = verify(&d, &table(&[]), &catalogue());
+        let row = report.checks.iter().find(|c| c.id == "phpVersion").unwrap();
+        assert_eq!(row.state, State::Ok);
+        assert!(row.target.is_none());
     }
 }

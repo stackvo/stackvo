@@ -2093,42 +2093,9 @@ pub async fn run(parsed: &Parsed, sink: &dyn ProgressSink, style: &Style) -> Res
 
         Action::Verify => {
             let name = &parsed.args[0];
-            let projects = crate::commands::list_projects(&root).await?;
-            let project = projects
-                .into_iter()
-                .find(|p| &p.name == name)
-                .ok_or_else(|| Error::not_found(format!("project {name}")))?;
-
-            let catalogue: Vec<String> = crate::contracts::env_schema()
-                .service_catalog()
-                .into_iter()
-                .map(|(id, _)| id)
-                .collect();
-
-            let lock = crate::lock::read(std::path::Path::new(&project.path))?;
-
-            // The Laravel half of the same question, read from the project's
-            // own `composer.json`. Absent for a project that has none, which is
-            // most of them — a Go project has no opinion about PHP.
-            let platform =
-                std::fs::read_to_string(std::path::Path::new(&project.path).join("composer.json"))
-                    .ok()
-                    .map(|text| crate::verify::platform_of(&text));
-
-            value(json!(crate::verify::verify(
-                &crate::verify::Declared {
-                    name: &project.name,
-                    manifest: &project.manifest,
-                    manifest_valid: project.manifest_valid,
-                    built: project.built,
-                    generated_stale: project.generated_stale,
-                    domain_configured: project.domain_configured,
-                    lock: lock.as_ref(),
-                    platform: platform.as_ref(),
-                },
-                &crate::instances::Table::load(&root).unwrap_or_default(),
-                &catalogue,
-            )))
+            // The same gathering the desktop command does, so the terminal and
+            // the pane cannot disagree about which lines a project is held to.
+            value(json!(crate::commands::verify_project(&root, name).await?))
         }
 
         // The write half. Deliberately here rather than folded into `verify`

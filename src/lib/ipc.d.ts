@@ -8,9 +8,20 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 166 named types, 345 wrappers, 8 field(s) the
+ * Measured at generation: 167 named types, 346 wrappers, 8 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
+
+export interface VerifyReport {
+    /** string */
+    project: string;
+    /**
+     * Array<{ id: string, subject: string, state: 'ok' | 'missing' | 'different' | 'unknown', detail?: string, target?: string }>
+     */
+    checks: Record<string, unknown>[];
+    /** boolean */
+    ready: boolean;
+}
 
 export interface AdoptBatch {
     /** string? — the single generate this batch ran; absent when it had nothing to generate */
@@ -3739,11 +3750,15 @@ export interface StackvoApi {
   /**
    * Every tool in this category does the setting-up half of onboarding and none does the checking half — which is the question somebody actually has an hour after cloning: not "how do I set this up" but "I did set it up; why does it still not work?". The repository already declares what it needs; what was missing was the sentence back.
    */
-  projectVerify(name: string): Promise<Record<string, unknown>>;
+  projectVerify(name: string): Promise<VerifyReport>;
   /**
    * stackvo.json declares what a project needs AROUND it — "services": ["redis", "mysql"] — and names no versions, which is right: a repository should not have to guess what the person cloning it will have installed. verify.rs wrote the cost of that down in as many words: two machines can both satisfy `redis` while running 7.0 and 7.2, so a version the declaration does not pin was reported as ok with the version found beside it rather than called a match nothing checked. This is the file that closes it — the same division every ecosystem settled on, the manifest is intent and the lock is fact, and both belong in the repository because the second is what makes the first reproducible.
    */
   projectLock(name: string): Promise<Record<string, unknown>>;
+  /**
+   * The write half of two verify findings. `phpVersion` says composer.json resolves to a PHP the manifest does not name and `phpExtension` says it requires an extension the manifest does not build in; both repairs were a sentence telling somebody which line of which file to edit, and the sentence was right every time — which is what makes it a button.
+   */
+  projectPhpSet(name: string, version?: string, add_extensions?: string[]): Promise<VerifyReport>;
   /**
    * git bisect moves the code and nothing else. Three months ago the project declared PHP 8.3 and locked redis at 7.0; this machine runs 8.4 and 7.2 — so every step through that range runs OLD CODE AGAINST A NEW ENVIRONMENT and the commit the search finally accuses may be innocent. Nothing in this category does anything about that because nothing in this category knows what environment a commit wanted. This app does: stackvo.json has always travelled with the repository and, since project_lock, stackvo.lock does too — and both are readable AT A REVISION without touching the working tree.
    */

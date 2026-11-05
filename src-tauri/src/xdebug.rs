@@ -214,6 +214,18 @@ pub fn read_mode(root: &Path, name: &str) -> Mode {
     read_config(root, name).mode
 }
 
+/// Whether `.stackvo/xdebug.json` is there and readable.
+///
+/// `None` when there is no file, which is the ordinary state and means the
+/// defaults rather than anything wrong. `Some(false)` is the one case worth a
+/// line on the verify report: a file is there, [`read_config`] is quietly
+/// falling back to the defaults, and the mode somebody wrote into it is not the
+/// mode the container gets.
+pub fn config_file_readable(root: &Path, name: &str) -> Option<bool> {
+    let text = std::fs::read_to_string(mode_path(root, name)).ok()?;
+    Some(serde_json::from_str::<ModeConfig>(&text).is_ok())
+}
+
 /// Where the generated ini is mounted inside the container.
 ///
 /// `zzz-` rather than `zz-`: PHP parses `conf.d` alphabetically and last wins,

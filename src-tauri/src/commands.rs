@@ -12399,12 +12399,25 @@ pub async fn project_verify(
     name: String,
 ) -> Result<crate::verify::Report> {
     let root = state.root()?;
+    verify_project(&root, &name).await
+}
 
-    // Through the list rather than reading the manifest here, because four of
-    // the five facts this compares are computed there — built, stale, the
-    // domain, and whether the manifest validated at all — and a second
-    // derivation of any of them would be a second answer to the same question.
-    let project = list_projects(&root)
+/// Everything [`crate::verify::verify`] is handed, gathered once.
+///
+/// Shared by the command above and `stackvo verify`, so the terminal and the
+/// pane hold a project to the same lines. Through `list_projects` rather than
+/// reading the manifest here, because four of the facts this compares are
+/// computed there — built, stale, the domain, and whether the manifest
+/// validated at all — and a second derivation of any of them would be a second
+/// answer to the same question.
+///
+/// What is read here and nowhere else is small and local: the `.env` version
+/// list, `.stackvo/context.json` against what a regenerate would write,
+/// whether `.stackvo/xdebug.json` parses, and whether the document root is a
+/// directory. None of it touches the engine, so the report survives Docker
+/// being down — which is when somebody is reading it.
+pub async fn verify_project(root: &std::path::Path, name: &str) -> Result<crate::verify::Report> {
+    let project = list_projects(root)
         .await?
         .into_iter()
         .find(|p| p.name == name)
@@ -12416,19 +12429,39 @@ pub async fn project_verify(
         .map(|(id, _category)| id)
         .collect();
 
+    let dir = std::path::Path::new(&project.path);
+
     // A lock that will not parse is not silently ignored. Somebody wrote that
     // file and is entitled to be told it is not being used — reading it as
     // "no lock" would answer a weaker question than the one they asked and look
     // identical on screen.
-    let lock = crate::lock::read(std::path::Path::new(&project.path))?;
+    let lock = crate::lock::read(dir)?;
 
     // The Laravel half of the same question, read from the project's own
     // `composer.json`. Absent for a project that has none, which is most of
     // them — a Go project has no opinion about PHP.
-    let platform =
-        std::fs::read_to_string(std::path::Path::new(&project.path).join("composer.json"))
-            .ok()
-            .map(|text| crate::verify::platform_of(&text));
+    let platform = std::fs::read_to_string(dir.join("composer.json"))
+        .ok()
+        .map(|text| crate::verify::platform_of(&text));
+
+    // Empty when `.env` cannot be read, which switches the version check off
+    // rather than failing every version over a different problem.
+    let php_versions = Env::load(root)
+        .map(|env| env.list("SUPPORTED_LANGUAGES_PHP_VERSIONS"))
+        .unwrap_or_default();
+
+    // What a regenerate would write, held against what is there. If it cannot
+    // be built there is nothing to hold the file against, and a finding
+    // invented from that would be about this call rather than the project.
+    let context = crate::agentctx::build(root, &project.manifest)
+        .map(|fresh| crate::agentctx::freshness(dir, &fresh))
+        .unwrap_or(crate::agentctx::Freshness::Current);
+
+    let document_root_exists = project
+        .manifest
+        .document_root
+        .as_deref()
+        .map(|sub| dir.join(sub).is_dir());
 
     Ok(crate::verify::verify(
         &crate::verify::Declared {
@@ -12440,10 +12473,104 @@ pub async fn project_verify(
             domain_configured: project.domain_configured,
             lock: lock.as_ref(),
             platform: platform.as_ref(),
+            php_versions: &php_versions,
+            context,
+            xdebug_config_readable: crate::xdebug::config_file_readable(root, name),
+            document_root_exists,
         },
-        &crate::instances::Table::load(&root).unwrap_or_default(),
+        &crate::instances::Table::load(root).unwrap_or_default(),
         &catalogue,
     ))
+}
+
+/// Change the manifest's PHP line the way a verify finding asks: the version,
+/// the extensions, or both.
+///
+/// The write half of two findings. `phpVersion` says `composer.json` resolves
+/// to a PHP the manifest does not name; `phpExtension` says it requires an
+/// extension the manifest does not build in. Both repairs were a sentence
+/// telling somebody which line of which file to edit, and the sentence was
+/// right every time — which is what makes it a button.
+///
+/// Through `manifest::read_committed` and `manifest::write`, the path
+/// `doctor_drop_extension` takes: the committed file, never the overlay, so a
+/// repair cannot carry this machine's overrides into the team's manifest. A
+/// version this install does not build is refused rather than written — the
+/// next verify would only say so, and a repair that creates the finding beside
+/// it is not one. Nothing is rebuilt: the image is now behind the manifest,
+/// and the report this returns says so on its `built` line.
+#[tauri::command]
+pub async fn project_php_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    version: Option<String>,
+    add_extensions: Option<Vec<String>>,
+) -> Result<crate::verify::Report> {
+    let root = state.root()?;
+
+    // The same guard the doctor's manifest edit takes: a write races the
+    // watcher, and two repairs pressed quickly must not interleave.
+    let _busy = state.inflight.acquire("doctor")?;
+
+    let file = workspace::project_dir(&root, &name)?.join("stackvo.json");
+    let mut manifest = manifest::read_committed(&file, &name)?;
+    let php = manifest
+        .php
+        .as_mut()
+        .ok_or_else(|| Error::new(Code::Unsupported, format!("{name} has no PHP block")))?;
+
+    let mut changed = false;
+
+    if let Some(version) = version
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+    {
+        let supported = Env::load(&root)
+            .map(|env| env.list("SUPPORTED_LANGUAGES_PHP_VERSIONS"))
+            .unwrap_or_default();
+        if !supported.is_empty() && !supported.contains(&version) {
+            return Err(Error::new(
+                Code::InvalidInput,
+                format!(
+                    "PHP {version} is not one this install builds ({})",
+                    supported.join(", ")
+                ),
+            ));
+        }
+        if php.version != version {
+            php.version = version;
+            changed = true;
+        }
+    }
+
+    for extension in add_extensions.unwrap_or_default() {
+        // Spelled the way the manifest spells them, and never twice.
+        let extension = extension.trim().to_ascii_lowercase();
+        if extension.is_empty()
+            || php
+                .extensions
+                .iter()
+                .any(|have| have.eq_ignore_ascii_case(&extension))
+        {
+            continue;
+        }
+        php.extensions.push(extension);
+        changed = true;
+    }
+
+    // Already as asked is not an error: the state the caller wanted is the
+    // state on disk, and the fresh report below is the whole of the answer.
+    if changed {
+        manifest::write(&file, &manifest)?;
+        events::emit(
+            &app,
+            "manifest:changed",
+            serde_json::json!({ "project": name, "reason": "php-set" }),
+        );
+    }
+
+    verify_project(&root, &name).await
 }
 
 /// Write down what this project is actually running against.
