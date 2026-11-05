@@ -218,6 +218,17 @@ mod tests {
     }
 
     #[test]
+    fn igbinary_pins_the_85_capable_release_on_php_85_and_later() {
+        // PHP 8.5 dropped ext/standard/php_smart_string.h, which igbinary
+        // 3.2.16 still includes; a project on 8.5 failed at `pecl install`
+        // with "No such file or directory" and never got an image.
+        let igbinary = &php_extensions().extensions["igbinary"];
+        assert_eq!(igbinary.pecl_versions["8.5"], "3.2.17RC1");
+        assert_eq!(igbinary.pecl_versions["9.0"], "3.2.17RC1");
+        assert_eq!(igbinary.pecl_versions["default"], "3.2.16");
+    }
+
+    #[test]
     fn the_service_catalog_has_thirty_three_entries() {
         // Was 25, and the number is a record rather than a rule: it counted the
         // template directories that shipped inside the binary. (The original

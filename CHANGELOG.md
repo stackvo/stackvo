@@ -7,6 +7,16 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A PHP 8.5 project that asks for `redis` or `igbinary` gets an image.**
+  PHP 8.5 removed `ext/standard/php_smart_string.h`, and igbinary 3.2.16 —
+  the one pin the extension contract carried — still includes it, so the
+  very first `pecl install` in the Dockerfile ended in "No such file or
+  directory", the build failed, and the project page kept saying it had
+  never been built. `redis` pulls `igbinary` in first, so a manifest that
+  never named igbinary hit it too. The contract now pins 3.2.17RC1 on 8.5
+  and 9.0: the release igbinary published for 8.5 and, a year on, still
+  the only one past 3.2.16 on PECL; earlier PHP keeps 3.2.16. Confirmed by
+  building `api.elections` (8.5, nginx, redis) end to end with the new pin.
 - **The Catalogue opens and its tree folds without a pause.** Vuetify's
   treeview renders every node it is given, open or not, and re-renders all
   of them on every toggle; with the published catalogue — 61 services, 175
@@ -39,6 +49,21 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   heading; the build rows pass it as `releaseBody`, and `preflight` asks for
   it first, so a tag whose version has no section stops before six runners
   are spent rather than after.
+
+### Security
+
+- **`cargo deny` passes again: async-executor 1.14.1, and a fourth zip 4
+  advisory ignored with the other three.** Two things arrived in the
+  registry after the last green run on `main` and failed the supply-chain
+  job of every pull request. `async-executor` 1.14.0, reached through
+  `zbus` by three Tauri plugins, was yanked on 2026-11-02 and 1.14.1 is its
+  replacement. RUSTSEC-2026-0429 is a process abort in zip 4's
+  `ZipArchive::extract` on a symlink entry with an absurd declared size; the
+  only zip 4 in the tree is still `tauri-plugin-updater`'s, Windows-only
+  and run on an archive whose minisign signature it has already checked, so
+  it joins the three entries already ignored for that reason. The updater
+  moved to zip 9 in 2.14.1, which also needs a newer tauri core, so that
+  refresh is left to its own change and retires all four ignores.
 
 ## [0.3.3] - 2026-10-24
 

@@ -3729,6 +3729,13 @@ mod tests {
 
         let on_81 = resolve("8.1", &exts(&["redis"]), false).unwrap();
         assert_eq!(on_81.pecl[1].1.as_deref(), Some("6.0.2"));
+
+        // igbinary rides in as redis's dependency; on 8.5 it must be the
+        // release that no longer includes the header 8.5 removed.
+        let on_85 = resolve("8.5", &exts(&["redis"]), false).unwrap();
+        assert_eq!(on_85.pecl[0].0, "igbinary");
+        assert_eq!(on_85.pecl[0].1.as_deref(), Some("3.2.17RC1"));
+        assert_eq!(on_84.pecl[0].1.as_deref(), Some("3.2.16"));
     }
 
     #[test]

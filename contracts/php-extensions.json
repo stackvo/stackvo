@@ -80,7 +80,7 @@
     "gmp":         { "install": "core", "packages": ["libgmp-dev"] },
     "hash":        { "install": "builtin", "packages": [] },
     "iconv":       { "install": "builtin", "packages": [] },
-    "igbinary":    { "install": "pecl", "packages": [], "peclVersions": { "default": "3.2.16" } },
+    "igbinary":    { "install": "pecl", "packages": [], "peclVersions": { "8.5": "3.2.17RC1", "9.0": "3.2.17RC1", "default": "3.2.16" }, "note": "PHP 8.5 removed ext/standard/php_smart_string.h; 3.2.16 still includes it and fails to compile there. 3.2.17RC1 (2025-11-27) is the first release that builds on 8.5 and the only one PECL has published since, so 8.5+ pins the RC until a stable 3.2.17 lands." },
     "imagick": {
       "install": "pecl",
       "packages": ["libmagickwand-dev"],
