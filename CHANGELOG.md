@@ -50,6 +50,21 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   it first, so a tag whose version has no section stops before six runners
   are spent rather than after.
 
+### Security
+
+- **`cargo deny` passes again: async-executor 1.14.1, and a fourth zip 4
+  advisory ignored with the other three.** Two things arrived in the
+  registry after the last green run on `main` and failed the supply-chain
+  job of every pull request. `async-executor` 1.14.0, reached through
+  `zbus` by three Tauri plugins, was yanked on 2026-11-02 and 1.14.1 is its
+  replacement. RUSTSEC-2026-0429 is a process abort in zip 4's
+  `ZipArchive::extract` on a symlink entry with an absurd declared size; the
+  only zip 4 in the tree is still `tauri-plugin-updater`'s, Windows-only
+  and run on an archive whose minisign signature it has already checked, so
+  it joins the three entries already ignored for that reason. The updater
+  moved to zip 9 in 2.14.1, which also needs a newer tauri core, so that
+  refresh is left to its own change and retires all four ignores.
+
 ## [0.3.3] - 2026-10-24
 
 ### Added
