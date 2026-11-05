@@ -1165,6 +1165,16 @@ export const api = {
    */
   projectLock: (name) => call('project_lock', { name }),
   /**
+   * Change the manifest's PHP line the way a verify finding asks — the version
+   * composer.json resolves to, an extension it requires — and come back with
+   * the report re-run.
+   *
+   * Writes the committed file through the path the doctor's extension removal
+   * takes; nothing is rebuilt, and the returned report's `built` line says so.
+   */
+  projectPhpSet: (name, { version, addExtensions } = {}) =>
+    call('project_php_set', { name, version, addExtensions }),
+  /**
    * `git bisect`, with the environment the commit was written against.
    *
    * Read when the pane opens and after every step, never polled: a bisect only

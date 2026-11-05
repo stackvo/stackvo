@@ -3281,6 +3281,15 @@ export default {
       domain: '{subject} in the hosts file',
       phpVersion: 'The PHP composer.json asks for ({subject})',
       phpExtension: 'The {subject} extension, required by composer.json',
+      phpSupported: 'PHP {subject}, as a version this install builds',
+      extensions: 'The PHP extensions of {subject}',
+      extensionRemoved: 'The {subject} extension, on this PHP',
+      extensionNeedsNewer: 'The {subject} extension, on this PHP',
+      extensionUnknown: 'The {subject} extension',
+      extensionUnsupported: 'The {subject} extension',
+      documentRoot: 'The document root, {subject}',
+      context: '{subject} in the project directory',
+      xdebugConfig: '{subject} in the project directory',
     },
     fix: {
       manifest: 'It does not validate. The problems are listed above.',
@@ -3302,6 +3311,31 @@ export default {
         'composer.json and stackvo.json name different PHP versions. The image builds anyway and composer install then fails inside the container with a platform requirement error — which names PHP and does not name the file to change. Change the php.version line in stackvo.json and rebuild.',
       phpExtension:
         'composer.json requires it and stackvo.json does not build it in, so composer install fails inside the container. Add it to php.extensions and rebuild.',
+      phpSupported:
+        'This install has no image for that version, so the build cannot start. The versions it does build are on the right; pick one in the project settings.',
+      extensionRemoved:
+        'PHP removed it before the version this project targets. The build drops it without a word and the code fails later with an undefined function. Remove it, or target an older PHP.',
+      extensionNeedsNewer:
+        'It needs a newer PHP than the project targets, so it will not compile. Raise php.version, or remove it.',
+      extensionUnknown:
+        'Not a name the extension catalogue knows, so nothing can be built for it — a typo, most often. Remove it, then check the spelling.',
+      extensionUnsupported:
+        'The catalogue knows it and has no install path for it yet. Remove it until there is one.',
+      documentRoot:
+        'stackvo.json names a directory the project does not have, so the server answers 404 for everything. Create it, or change document_root.',
+      context:
+        'The file an assistant working inside the container reads to find the stack. Missing or behind the stack; a regenerate writes it.',
+      xdebugConfig:
+        'The file is there and does not parse, so the mode written in it is not the mode the container gets. Pick a mode in the Xdebug pane; it rewrites the file.',
+    },
+    repair: {
+      build: 'Build',
+      regenerate: 'Regenerate',
+      remove: 'Remove from stackvo.json',
+      setVersion: 'Set php.version to {version}',
+      addExtension: 'Add to php.extensions',
+      settings: 'Open settings',
+      hosts: 'Fix the hosts entry',
     },
     lock: 'Write stackvo.lock',
     lockExplain:

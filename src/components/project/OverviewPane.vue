@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/lib/ipc';
 import { useCopyTick } from '@/composables/useCopyTick';
+import { useOperationsStore } from '@/stores/operations';
 import PaneHeader from '@/components/PaneHeader.vue';
 
 /**
@@ -118,6 +119,120 @@ async function lock() {
 }
 
 const CHECK_STATE = { ok: 'success', missing: 'error', different: 'warning', unknown: 'info' };
+
+/**
+ * The repair beside a line, where there is one.
+ *
+ * Every entry is an act the app already knows how to do, behind the command
+ * it already does it with: a build, a regenerate, the doctor's extension
+ * removal, the manifest's PHP line, the settings sheet, the hosts dialog.
+ * Nothing here is new machinery, and nothing is automatic — a line names a
+ * problem and offers the one button that answers it, and the person presses
+ * it. The lines without an entry keep their sentence: a missing service is
+ * installed from the Market, a lock is re-locked beside it, and a missing
+ * document root is the project's own code.
+ *
+ * `long` marks the two that return before they finish. Their button stays
+ * busy on the operation's own flag — the project for a build, the generate
+ * scope for a regenerate — and the report is re-asked on its falling edge,
+ * the way RemedyAlert does it, because that is the first instant the answer
+ * can have changed.
+ */
+const ops = useOperationsStore();
+const REMOVE = {
+  label: 'remove',
+  icon: 'mdi-minus-circle-outline',
+  run: (project, check) => api.doctorDropExtension(project.name, check.subject),
+};
+const REGENERATE = {
+  label: 'regenerate',
+  icon: 'mdi-refresh',
+  long: 'projects',
+  run: () => api.generateRun('projects'),
+};
+const REPAIRS = {
+  built: {
+    label: 'build',
+    icon: 'mdi-hammer-wrench',
+    long: 'project',
+    run: (project) => api.projectBuild(project.name),
+  },
+  generated: REGENERATE,
+  context: REGENERATE,
+  extensionRemoved: REMOVE,
+  extensionNeedsNewer: REMOVE,
+  extensionUnknown: REMOVE,
+  extensionUnsupported: REMOVE,
+  phpVersion: {
+    label: 'setVersion',
+    icon: 'mdi-pencil-outline',
+    // Only when the report resolved the constraint to a version: a `^8`
+    // comes back unknown with no target, and there is nothing to write.
+    when: (check) => Boolean(check.target),
+    run: (project, check) => api.projectPhpSet(project.name, { version: check.target }),
+  },
+  phpExtension: {
+    label: 'addExtension',
+    icon: 'mdi-plus-circle-outline',
+    run: (project, check) => api.projectPhpSet(project.name, { addExtensions: [check.subject] }),
+  },
+  phpSupported: { label: 'settings', icon: 'mdi-tune-variant', run: () => emit('settings') },
+  domain: { label: 'hosts', icon: 'mdi-dns-outline', run: () => emit('fixHosts') },
+};
+
+function repairFor(check) {
+  if (check.state === 'ok') return null;
+  const repair = REPAIRS[check.id];
+  if (!repair || (repair.when && !repair.when(check))) return null;
+  return repair;
+}
+
+const rowKey = (check) => `${check.id}:${check.subject}`;
+/** The row whose repair is running; one at a time, because two can share a cause. */
+const repairing = ref(null);
+const repairError = ref(null);
+
+// The long repairs are busy on a subject the operations store tracks.
+const longBusy = computed(() => ops.isBusy(props.project?.name) || ops.isBusy('projects'));
+
+async function repair(check) {
+  const act = repairFor(check);
+  if (!act) return;
+  repairing.value = rowKey(check);
+  repairError.value = null;
+  try {
+    const answer = await act.run(props.project, check);
+    if (act.long) {
+      // Returned on start. Marked here rather than waiting for the start
+      // event, so the button cannot be pressed twice in the round trip; the
+      // falling edge of the flag re-asks the report and clears the row.
+      ops.markBusy(act.long === 'project' ? props.project.name : 'projects', true);
+      return;
+    }
+    if (answer && Array.isArray(answer.checks)) {
+      // The write half comes back with the report already re-run.
+      verification.value = answer;
+    } else {
+      await verify();
+    }
+    repairing.value = null;
+  } catch (e) {
+    repairError.value = e;
+    repairing.value = null;
+  }
+}
+
+watch(longBusy, (now, was) => {
+  if (was && !now) {
+    repairing.value = null;
+    if (verification.value) verify();
+  }
+});
+
+function repairBusy(check) {
+  const act = repairFor(check);
+  return repairing.value === rowKey(check) || Boolean(act?.long && longBusy.value);
+}
 const CHECK_ICON = {
   ok: 'mdi-check-circle-outline',
   missing: 'mdi-close-circle-outline',
@@ -422,11 +537,46 @@ const CHECK_ICON = {
           <v-list-item-subtitle v-if="check.state !== 'ok'" class="text-caption">
             {{ t(`verify.fix.${check.id}`) }}
           </v-list-item-subtitle>
-          <template v-if="check.detail" #append>
-            <span class="text-caption text-medium-emphasis">{{ check.detail }}</span>
+          <!-- The facts, and beside them the one act that answers the line.
+               Nothing is done on discovery: a build is minutes, a regenerate
+               rewrites the tree, and a manifest edit lands in the repository. -->
+          <template v-if="check.detail || repairFor(check)" #append>
+            <div class="d-flex align-center ga-2 flex-wrap justify-end">
+              <span v-if="check.detail" class="text-caption text-medium-emphasis">
+                {{ check.detail }}
+              </span>
+              <v-btn
+                v-if="repairFor(check)"
+                size="x-small"
+                variant="tonal"
+                :color="CHECK_STATE[check.state]"
+                :prepend-icon="repairFor(check).icon"
+                :loading="repairBusy(check)"
+                :disabled="Boolean(repairing) || longBusy"
+                :data-test="`verify-repair-${check.id}`"
+                @click="repair(check)"
+              >
+                {{ t(`verify.repair.${repairFor(check).label}`, { version: check.target }) }}
+              </v-btn>
+            </div>
           </template>
         </v-list-item>
       </v-list>
+
+      <!-- The refusal against the list that prompted it, not in a banner at
+           the top of a scrolled tab. -->
+      <v-alert
+        v-if="repairError"
+        type="error"
+        variant="tonal"
+        density="compact"
+        class="mt-2 text-caption"
+        closable
+        data-test="verify-repair-error"
+        @click:close="repairError = null"
+      >
+        {{ repairError.message }}
+      </v-alert>
     </template>
 
     <!-- Every value read above is a field in stackvo.json, so the way to change

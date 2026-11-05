@@ -765,6 +765,7 @@ pub fn run() {
             commands::system_accent,
             commands::project_verify,
             commands::project_lock,
+            commands::project_php_set,
             commands::projects_build_all,
             commands::capture_status,
             commands::capture_arm,

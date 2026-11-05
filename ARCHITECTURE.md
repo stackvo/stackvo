@@ -21,7 +21,7 @@ Three parts, in the order a request travels:
 | ----------------------------------- | -------------------- | ----------------------- |
 | Front end — Vue 3, Vuetify 3, Pinia | [`src/`](src/)                         | 38k lines               |
 | Back end — Rust, 132 modules        | [`src-tauri/src/`](src-tauri/src/)     | 76k lines               |
-| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 352 commands, 73 events |
+| The boundary between them           | [`contracts/ipc.json`](contracts/ipc.json) | 353 commands, 73 events |
 
 The two halves never share a type. They share a **contract**, and §5 is about
 why that is a deliberate cost rather than an omission.
@@ -216,7 +216,7 @@ rejections".
 
 ## 5. The contract
 
-[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 348 commands, 73
+[`contracts/ipc.json`](contracts/ipc.json) is the specification of the boundary: 353 commands, 73
 events, 97 named types, 3 error shapes, and — for most entries — a `why`.
 
 It is a **hand-maintained document, not generated code**, and that is the
@@ -328,7 +328,7 @@ first draft named a module as weakly tested that was 94% covered, and counted 33
 of something there were 60 of.
 
 So the checkable claims here are checked. `src-tauri/tests/readme_claims.rs`
-covers `README.md`; the counts above (132 modules, 352 commands) come from
+covers `README.md`; the counts above (132 modules, 353 commands) come from
 `contract_agreement.rs` and from the module list itself, and
 a claim that drifts fails a test rather than aging quietly.
 
