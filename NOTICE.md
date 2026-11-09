@@ -48,7 +48,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | ISC | 5 | 1 |
 | ISC AND (Apache-2.0 OR ISC) | 1 |  |
 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | 1 |  |
-| MIT | 140 | 75 |
+| MIT | 139 | 75 |
 | MIT OR Apache-2.0 | 283 | 6 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |  |
 | MIT OR Apache-2.0 OR Zlib | 3 |  |
@@ -60,7 +60,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | Unlicense OR MIT | 4 |  |
 | Unlicense/MIT | 2 |  |
 | Zlib | 2 |  |
-| Zlib OR Apache-2.0 OR MIT | 20 |  |
+| Zlib OR Apache-2.0 OR MIT | 21 |  |
 | **Total** | **607** | **87** |
 
 ## Rust crates (607)
@@ -188,14 +188,13 @@ Counted from 607 Rust crates and 87 npm packages.
 | field-offset | 0.3.6 | MIT OR Apache-2.0 |
 | filedescriptor | 0.8.3 | MIT |
 | filetime | 0.2.29 | MIT/Apache-2.0 |
-| flate2 | 1.1.10 | MIT OR Apache-2.0 |
+| flate2 | 1.1.11 | MIT OR Apache-2.0 |
 | fnv | 1.0.7 | Apache-2.0 / MIT |
 | foldhash | 0.2.0 | Zlib |
 | foreign-types | 0.5.0 | MIT/Apache-2.0 |
 | foreign-types-macros | 0.2.4 | MIT/Apache-2.0 |
 | foreign-types-shared | 0.3.1 | MIT/Apache-2.0 |
 | form_urlencoded | 1.2.2 | MIT OR Apache-2.0 |
-| fsevent-sys | 4.1.0 | MIT |
 | futures-channel | 0.3.33 | MIT OR Apache-2.0 |
 | futures-core | 0.3.34 | MIT OR Apache-2.0 |
 | futures-executor | 0.3.33 | MIT OR Apache-2.0 |
@@ -318,7 +317,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | nix | 0.29.0 | MIT |
 | nix | 0.31.3 | MIT |
 | nom | 7.1.3 | MIT |
-| notify | 8.2.0 | CC0-1.0 |
+| notify | 8.2.1 | CC0-1.0 |
 | notify-rust | 4.18.0 | MIT OR Apache-2.0 |
 | notify-types | 2.1.0 | MIT OR Apache-2.0 |
 | ntapi | 0.4.3 | Apache-2.0 OR MIT |
@@ -341,6 +340,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | objc2-core-graphics | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-core-image | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-core-location | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
+| objc2-core-services | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-core-text | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-encode | 4.1.0 | MIT |
 | objc2-exception-helper | 0.1.1 | Zlib OR Apache-2.0 OR MIT |
@@ -542,7 +542,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | tracing-subscriber | 0.3.23 | MIT |
 | tray-icon | 0.24.1 | MIT OR Apache-2.0 |
 | try-lock | 0.2.5 | MIT |
-| typed-path | 0.12.4 | MIT OR Apache-2.0 |
+| typed-path | 0.13.0 | MIT OR Apache-2.0 |
 | typeid | 1.0.3 | MIT OR Apache-2.0 |
 | typenum | 1.20.1 | MIT OR Apache-2.0 |
 | uds_windows | 1.2.1 | MIT |
@@ -665,7 +665,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | zerovec | 0.11.6 | Unicode-3.0 |
 | zerovec-derive | 0.11.3 | Unicode-3.0 |
 | zip | 4.6.1 | MIT |
-| zip | 9.0.5 | MIT |
+| zip | 9.4.1 | MIT |
 | zlib-rs | 0.6.8 | Zlib |
 | zmij | 1.0.23 | MIT |
 | zvariant | 4.2.0 | MIT |
@@ -824,7 +824,6 @@ be carried.
 - Copyright (c) 2015 Jonathan Reem
 - Copyright (c) 2015 Keegan McAllister
 - Copyright (c) 2015 Markus Westerlind
-- Copyright (c) 2015 Pierre Baillet
 - Copyright (c) 2015 Steven Allen
 - Copyright (c) 2015 Steven Fackler
 - Copyright (c) 2015 The Rust Project Developers
@@ -1994,7 +1993,7 @@ not find is a notice nobody can check.
 
 **No local text for 6 declared licences:** 0BSD, LGPL-2.1-or-later, LLVM-exception, MIT-0, Unicode-3.0, Unlicense. The identifier is declared by a package whose source is not on the machine that generated this file; the licence still applies in full.
 
-**No licence file found in 55 packages**, usually because the source has not been downloaded for this platform. Their declared licences are in the tables above:
+**No licence file found in 56 packages**, usually because the source has not been downloaded for this platform. Their declared licences are in the tables above:
 
-`alloc-stdlib@0.2.4`, `asn1-rs-impl@0.2.0`, `block2@0.6.2`, `bollard-stubs@1.53.1-rc.29.3.1`, `cesu8@1.1.0`, `dispatch2@0.3.1`, `dlopen2@0.8.2`, `dlopen2_derive@0.4.3`, `include_dir@0.7.4`, `include_dir_macros@0.7.4`, `jni@0.22.4`, `jni-macros@0.22.4`, `jni-sys-macros@0.4.1`, `libappindicator-sys@0.9.0`, `mac-notification-sys@0.6.15`, `ndk@0.9.0`, `ndk-sys@0.6.0+11769913`, `objc2@0.6.4`, `objc2-app-kit@0.3.2`, `objc2-cloud-kit@0.3.2`, `objc2-core-data@0.3.2`, `objc2-core-foundation@0.3.2`, `objc2-core-graphics@0.3.2`, `objc2-core-image@0.3.2`, `objc2-core-location@0.3.2`, `objc2-core-text@0.3.2`, `objc2-encode@4.1.0`, `objc2-exception-helper@0.1.1`, `objc2-foundation@0.3.2`, `objc2-io-kit@0.3.2`, `objc2-io-surface@0.3.2`, `objc2-open-directory@0.3.2`, `objc2-osa-kit@0.3.2`, `objc2-quartz-core@0.3.2`, `objc2-ui-kit@0.3.2`, `objc2-user-notifications@0.3.2`, `objc2-web-kit@0.3.2`, `r-efi@5.3.0`, `r-efi@6.0.0`, `rustls-platform-verifier-android@0.1.1`, `selectors@0.36.1`, `systemstat@0.2.7`, `tao-macros@0.1.3`, `unic-char-property@0.9.0`, `unic-char-range@0.9.0`, `unic-common@0.9.0`, `unic-ucd-ident@0.9.0`, `unic-ucd-version@0.9.0`, `valuable@0.1.1`, `webview2-com@0.38.2`, `webview2-com-macros@0.8.1`, `webview2-com-sys@0.38.2`, `winapi-i686-pc-windows-gnu@0.4.0`, `winapi-x86_64-pc-windows-gnu@0.4.0`, `@vue/devtools-api@6.6.4`
+`alloc-stdlib@0.2.4`, `asn1-rs-impl@0.2.0`, `block2@0.6.2`, `bollard-stubs@1.53.1-rc.29.3.1`, `cesu8@1.1.0`, `dispatch2@0.3.1`, `dlopen2@0.8.2`, `dlopen2_derive@0.4.3`, `include_dir@0.7.4`, `include_dir_macros@0.7.4`, `jni@0.22.4`, `jni-macros@0.22.4`, `jni-sys-macros@0.4.1`, `libappindicator-sys@0.9.0`, `mac-notification-sys@0.6.15`, `ndk@0.9.0`, `ndk-sys@0.6.0+11769913`, `objc2@0.6.4`, `objc2-app-kit@0.3.2`, `objc2-cloud-kit@0.3.2`, `objc2-core-data@0.3.2`, `objc2-core-foundation@0.3.2`, `objc2-core-graphics@0.3.2`, `objc2-core-image@0.3.2`, `objc2-core-location@0.3.2`, `objc2-core-services@0.3.2`, `objc2-core-text@0.3.2`, `objc2-encode@4.1.0`, `objc2-exception-helper@0.1.1`, `objc2-foundation@0.3.2`, `objc2-io-kit@0.3.2`, `objc2-io-surface@0.3.2`, `objc2-open-directory@0.3.2`, `objc2-osa-kit@0.3.2`, `objc2-quartz-core@0.3.2`, `objc2-ui-kit@0.3.2`, `objc2-user-notifications@0.3.2`, `objc2-web-kit@0.3.2`, `r-efi@5.3.0`, `r-efi@6.0.0`, `rustls-platform-verifier-android@0.1.1`, `selectors@0.36.1`, `systemstat@0.2.7`, `tao-macros@0.1.3`, `unic-char-property@0.9.0`, `unic-char-range@0.9.0`, `unic-common@0.9.0`, `unic-ucd-ident@0.9.0`, `unic-ucd-version@0.9.0`, `valuable@0.1.1`, `webview2-com@0.38.2`, `webview2-com-macros@0.8.1`, `webview2-com-sys@0.38.2`, `winapi-i686-pc-windows-gnu@0.4.0`, `winapi-x86_64-pc-windows-gnu@0.4.0`, `@vue/devtools-api@6.6.4`
 
