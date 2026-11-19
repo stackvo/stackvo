@@ -23,7 +23,7 @@ unmaintained = "workspace"
 # list nobody revisits. Add an id here only with a comment saying why it does
 # not apply, and when it can come out.
 #
-# The four zip entries are one case. Our own `zip` is on 9, which fixes them;
+# The six zip entries are one case. Our own `zip` is on 9, which fixes them;
 # the copy they still match is zip 4.6.1, pinned by `tauri-plugin-updater`
 # 2.11.0 and compiled only on Windows, where the plugin unpacks the update it
 # downloaded. The advisories are about extracting an *attacker-controlled*
@@ -40,6 +40,8 @@ ignore = [
   { id = "RUSTSEC-2026-0368", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction" },
   { id = "RUSTSEC-2026-0369", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction" },
   { id = "RUSTSEC-2026-0429", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction. An abort on a symlink entry with an absurd declared size; same archive, same signature check" },
+  { id = "RUSTSEC-2026-0545", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction. Unchecked AES authentication code; the update archive is not password-encrypted, so the AES reader never runs" },
+  { id = "RUSTSEC-2026-0548", reason = "zip 4 reached only via tauri-plugin-updater on Windows; the archive is signature-verified before extraction. Local-header names that differ from the central directory; same archive, same signature check" },
 ]
 
 [bans]
