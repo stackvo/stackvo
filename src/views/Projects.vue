@@ -1696,8 +1696,7 @@ onUnmounted(() => teardown?.());
                 >
               </template>
               <div class="text-caption">
-                <strong>{{ t('projectsView.noDnsRecord') }}</strong
-                ><br />
+                <strong>{{ t('projectsView.noDnsRecord') }}</strong><br />
                 {{ t('projectsView.addToHosts') }}<br />
                 <code>127.0.0.1 {{ item.domain }}</code>
               </div>
@@ -1710,8 +1709,7 @@ onUnmounted(() => teardown?.());
                 <v-icon v-bind="props" color="error" size="small">mdi-file-alert</v-icon>
               </template>
               <div class="text-caption">
-                <strong>{{ t('projects.invalidManifest') }}</strong
-                ><br />
+                <strong>{{ t('projects.invalidManifest') }}</strong><br />
                 <span v-for="(issue, i) in item.manifest.errors" :key="i">
                   {{ issue.code }} {{ issue.path }} — {{ issue.message }}<br />
                 </span>

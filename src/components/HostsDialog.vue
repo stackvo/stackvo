@@ -107,8 +107,7 @@ watch([() => props.modelValue, () => props.add.join('\n')], ([open]) => open && 
             class="diff-line"
             :class="{ 'diff-added': row.added }"
           >
-            <span class="diff-marker">{{ row.added ? '+' : ' ' }}</span
-            >{{ row.line }}
+            <span class="diff-marker">{{ row.added ? '+' : ' ' }}</span>{{ row.line }}
           </div>
         </div>
 
