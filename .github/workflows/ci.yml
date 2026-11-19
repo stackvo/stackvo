@@ -255,16 +255,21 @@ jobs:
           node-version: 22
           cache: npm
 
-      # `webkit2gtk-driver` is the WebDriver server `tauri-driver` proxies to —
-      # it is a separate package from the webkit runtime the app links against,
-      # and its absence is the single most likely reason a first run fails.
+      # The WebDriver server `tauri-driver` proxies to is a separate package
+      # from the webkit runtime the app links against, and its absence is the
+      # single most likely reason a first run fails. Ubuntu 26.04, which
+      # `ubuntu-latest` became in November 2026, renamed it from
+      # `webkit2gtk-driver` to `webkitgtk-webdriver` and dropped the old name;
+      # 24.04 has only the old one. Asking for the new name first keeps the
+      # job working on either image.
       # `xvfb` because the app opens a window and a runner has no display.
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libssl-dev libdbus-1-dev \
-            webkit2gtk-driver xvfb
+            librsvg2-dev patchelf libssl-dev libdbus-1-dev xvfb
+          sudo apt-get install -y webkitgtk-webdriver \
+            || sudo apt-get install -y webkit2gtk-driver
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
