@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 607 Rust crates and 87 npm packages.
+Counted from 607 Rust crates and 90 npm packages.
 
 ## Summary
 
@@ -48,7 +48,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | ISC | 5 | 1 |
 | ISC AND (Apache-2.0 OR ISC) | 1 |  |
 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | 1 |  |
-| MIT | 139 | 75 |
+| MIT | 139 | 78 |
 | MIT OR Apache-2.0 | 283 | 6 |
 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |  |
 | MIT OR Apache-2.0 OR Zlib | 3 |  |
@@ -61,7 +61,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | Unlicense/MIT | 2 |  |
 | Zlib | 2 |  |
 | Zlib OR Apache-2.0 OR MIT | 21 |  |
-| **Total** | **607** | **87** |
+| **Total** | **607** | **90** |
 
 ## Rust crates (607)
 
@@ -675,22 +675,22 @@ Counted from 607 Rust crates and 87 npm packages.
 | zvariant_utils | 2.1.0 | MIT |
 | zvariant_utils | 3.5.0 | MIT |
 
-## npm packages (87)
+## npm packages (90)
 
 | Package | Version | Licence |
 | --- | --- | --- |
-| @babel/helper-string-parser | 7.29.7 | MIT |
+| @babel/helper-string-parser | 7.29.14 | MIT |
 | @babel/helper-string-parser | 8.0.6 | MIT |
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
 | @babel/helper-validator-identifier | 8.0.6 | MIT |
-| @babel/parser | 7.29.9 | MIT |
+| @babel/parser | 7.29.14 | MIT |
 | @babel/parser | 8.0.7 | MIT |
-| @babel/types | 7.29.8 | MIT |
+| @babel/types | 7.29.14 | MIT |
 | @babel/types | 8.0.6 | MIT |
-| @intlify/core-base | 11.4.16 | MIT |
-| @intlify/devtools-types | 11.4.16 | MIT |
-| @intlify/message-compiler | 11.4.16 | MIT |
-| @intlify/shared | 11.4.16 | MIT |
+| @intlify/core-base | 11.4.19 | MIT |
+| @intlify/devtools-types | 11.4.19 | MIT |
+| @intlify/message-compiler | 11.4.19 | MIT |
+| @intlify/shared | 11.4.19 | MIT |
 | @jridgewell/gen-mapping | 0.3.13 | MIT |
 | @jridgewell/remapping | 2.3.5 | MIT |
 | @jridgewell/resolve-uri | 3.1.2 | MIT |
@@ -698,6 +698,7 @@ Counted from 607 Rust crates and 87 npm packages.
 | @jridgewell/trace-mapping | 0.3.31 | MIT |
 | @material/material-color-utilities | 0.4.0 | Apache-2.0 |
 | @mdi/font | 7.4.47 | Apache-2.0 |
+| @rolldown/pluginutils | 1.0.1 | MIT |
 | @tauri-apps/api | 2.11.1 | Apache-2.0 OR MIT |
 | @tauri-apps/plugin-autostart | 2.5.1 | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-dialog | 2.7.3 | MIT OR Apache-2.0 |
@@ -707,19 +708,19 @@ Counted from 607 Rust crates and 87 npm packages.
 | @tauri-apps/plugin-updater | 2.11.0 | MIT OR Apache-2.0 |
 | @types/estree | 1.0.9 | MIT |
 | @vue-macros/common | 3.1.4 | MIT |
-| @vue/compiler-core | 3.5.44 | MIT |
-| @vue/compiler-dom | 3.5.44 | MIT |
-| @vue/compiler-sfc | 3.5.44 | MIT |
-| @vue/compiler-ssr | 3.5.44 | MIT |
+| @vue/compiler-core | 3.5.45 | MIT |
+| @vue/compiler-dom | 3.5.45 | MIT |
+| @vue/compiler-sfc | 3.5.45 | MIT |
+| @vue/compiler-ssr | 3.5.45 | MIT |
 | @vue/devtools-api | 6.6.4 | MIT |
 | @vue/devtools-api | 8.2.1 | MIT |
 | @vue/devtools-kit | 8.2.1 | MIT |
 | @vue/devtools-shared | 8.2.1 | MIT |
-| @vue/reactivity | 3.5.44 | MIT |
-| @vue/runtime-core | 3.5.44 | MIT |
-| @vue/runtime-dom | 3.5.44 | MIT |
-| @vue/server-renderer | 3.5.44 | MIT |
-| @vue/shared | 3.5.44 | MIT |
+| @vue/reactivity | 3.5.45 | MIT |
+| @vue/runtime-core | 3.5.45 | MIT |
+| @vue/runtime-dom | 3.5.45 | MIT |
+| @vue/server-renderer | 3.5.45 | MIT |
+| @vue/shared | 3.5.45 | MIT |
 | @xterm/addon-fit | 0.11.0 | MIT |
 | @xterm/xterm | 6.0.0 | MIT |
 | acorn | 8.17.0 | MIT |
@@ -727,9 +728,9 @@ Counted from 607 Rust crates and 87 npm packages.
 | ast-kit | 3.0.0 | MIT |
 | ast-walker-scope | 0.10.0 | MIT |
 | birpc | 2.9.0 | MIT |
-| chokidar | 5.0.0 | MIT |
+| chokidar | 6.0.0 | MIT |
 | confbox | 0.1.8 | MIT |
-| confbox | 0.3.1 | MIT |
+| confbox | 0.3.2 | MIT |
 | csstype | 3.2.3 | MIT |
 | entities | 7.0.1 | BSD-2-Clause |
 | estree-walker | 2.0.2 | MIT |
@@ -738,8 +739,9 @@ Counted from 607 Rust crates and 87 npm packages.
 | fdir | 6.5.0 | MIT |
 | hookable | 5.5.3 | MIT |
 | local-pkg | 1.2.1 | MIT |
+| local-pkg | 2.0.0 | MIT |
 | magic-string | 0.30.21 | MIT |
-| magic-string | 1.4.3 | MIT |
+| magic-string | 1.4.5 | MIT |
 | magic-string-ast | 1.0.3 | MIT |
 | mlly | 1.8.2 | MIT |
 | muggle-string | 0.4.1 | MIT |
@@ -752,18 +754,19 @@ Counted from 607 Rust crates and 87 npm packages.
 | pinia | 4.1.0 | MIT |
 | pkg-types | 1.3.1 | MIT |
 | pkg-types | 2.3.2 | MIT |
-| postcss | 8.5.31 | MIT |
+| postcss | 8.5.32 | MIT |
 | quansync | 0.2.11 | MIT |
-| readdirp | 5.0.0 | MIT |
+| quansync | 1.0.0 | MIT |
+| readdirp | 5.1.1 | MIT |
 | scule | 1.3.0 | MIT |
 | source-map-js | 1.2.2 | BSD-3-Clause |
 | tinyglobby | 0.2.17 | MIT |
 | ufo | 1.6.4 | MIT |
-| unplugin | 3.4.0 | MIT |
+| unplugin | 3.7.0 | MIT |
 | unplugin-utils | 0.3.2 | MIT |
-| vue | 3.5.44 | MIT |
-| vue-i18n | 11.4.16 | MIT |
-| vue-router | 5.4.0 | MIT |
+| vue | 3.5.45 | MIT |
+| vue-i18n | 11.4.19 | MIT |
+| vue-router | 5.5.1 | MIT |
 | vuetify | 3.13.7 | MIT |
 | webpack-virtual-modules | 0.6.2 | MIT |
 
@@ -1000,6 +1003,7 @@ be carried.
 - Copyright (c) 2025 Alice Maz, Marshall Pierce
 - Copyright (c) 2025-PRESENT Anthony Fu <https://github.com/antfu> and Kevin Deng <https://github.com/sxzz>
 - Copyright (c) 2026-present Vercel Inc.
+- Copyright (c) 2026-present, rolldown/plugins repository contributors
 - Copyright (c) [2021] [Marvin Countryman]
 - Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
 - Copyright 2013 Andrey Sitnik <andrey@sitnik.es>
