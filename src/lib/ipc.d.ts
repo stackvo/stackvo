@@ -8,7 +8,7 @@
  * not exist. There is no compiler in this project and this does not add one —
  * `tools/generate-types.mjs` says what that would take and why it is separate.
  *
- * Measured at generation: 167 named types, 346 wrappers, 8 field(s) the
+ * Measured at generation: 169 named types, 348 wrappers, 8 field(s) the
  * contract's prose could not be read as a type (typed `unknown`).
  */
 
@@ -2127,6 +2127,32 @@ export interface SidecarVolume {
     volume: string;
 }
 
+export interface SiteMount {
+    /** string — relative to the project's directory (../cbglib) or absolute */
+    source: string;
+    /** string — absolute path inside the container (/var/www/cbglib) */
+    target: string;
+    /** bool — true when omitted */
+    readOnly: boolean;
+}
+
+export interface SiteMountRow {
+    /** string */
+    source: string;
+    /** string */
+    target: string;
+    /** bool */
+    readOnly: boolean;
+    /** string? — the host directory it resolves to here, when it resolves */
+    resolved?: string;
+    /**
+     * bool — saved from this app on this machine for exactly this source, target and mode; only approved rows are mounted
+     */
+    approved: boolean;
+    /** string? — why it cannot be mounted here, when it cannot */
+    error?: string;
+}
+
 export interface SiteSettings {
     /** Record<string, string> */
     env: Record<string, unknown>;
@@ -3060,6 +3086,14 @@ export interface StackvoApi {
    * Whole document rather than per key: three settings in one small file, and three commands over one document is three chances for it and the screen to disagree - the same reasoning routes_save gives. MUST refuse a key that is not a POSIX variable name and a value carrying a line break: the overlay is YAML, where a newline in a scalar ends it and everything after is read as configuration somebody else wrote. Regenerates, because the directory listing lands in a GENERATED server config while the variables and the agent land in a compose overlay - two different paths for one save.
    */
   siteSave(name: string, env: Record<string, unknown>, directoryListing: boolean, sshAgent: boolean): Promise<SiteSettings>;
+  /**
+   * The host directories a project asks to have mounted beside /var/www/html - a shared library checked out next to it, loaded by a relative path such as ../cbglib. Kept in .stackvo/site.json, which travels with a clone, so a mount there is a request rather than a decision: each row says where it resolves on THIS machine, whether it can be mounted at all, and whether it was approved here. Only approved rows reach the compose overlay.
+   */
+  siteMounts(name: string): Promise<SiteMountRow[]>;
+  /**
+   * Replaces the list and approves every entry on this machine, in <root>/site-mounts.json - a file no repository can write. This is the consent gate the manifest's refusal of host paths is waiting for. Separate from site_save so that saving a variable can never approve a mount that arrived in a clone. MUST refuse the whole list when any entry does not resolve: a source must be an existing directory inside the projects root after symlinks, neither the root nor the project itself; a target must be an absolute container path outside /var/www/html and the image's system directories, and no two entries may share one. Re-renders the site overlay; nothing generated depends on it.
+   */
+  siteMountsSave(name: string, mounts: SiteMount[]): Promise<SiteMountRow[]>;
   /**
    * A bind mount costs 2-3x a named volume on metadata and writes, which is the measured reason a Docker workflow feels slow on macOS and Windows. This lists the directories worth moving off the host filesystem for one project, whether each is currently in a volume, how big that volume is, and whether the host still has a copy for an editor to index. Suggestions describe the project in front of them — vendor for PHP, storage/framework and bootstrap/cache when it is a Laravel, node_modules when there is a package.json — and are never applied on their own.
    */

@@ -2867,6 +2867,25 @@
       "args": {},
       "returns": "Service[]"
     },
+    "site_mounts": {
+      "new": true,
+      "kind": "query",
+      "args": {
+        "name": "string"
+      },
+      "returns": "SiteMountRow[]",
+      "why": "The host directories a project asks to have mounted beside /var/www/html - a shared library checked out next to it, loaded by a relative path such as ../cbglib. Kept in .stackvo/site.json, which travels with a clone, so a mount there is a request rather than a decision: each row says where it resolves on THIS machine, whether it can be mounted at all, and whether it was approved here. Only approved rows reach the compose overlay."
+    },
+    "site_mounts_save": {
+      "new": true,
+      "kind": "mutation",
+      "args": {
+        "name": "string",
+        "mounts": "SiteMount[]"
+      },
+      "returns": "SiteMountRow[]",
+      "why": "Replaces the list and approves every entry on this machine, in <root>/site-mounts.json - a file no repository can write. This is the consent gate the manifest's refusal of host paths is waiting for. Separate from site_save so that saving a variable can never approve a mount that arrived in a clone. MUST refuse the whole list when any entry does not resolve: a source must be an existing directory inside the projects root after symlinks, neither the root nor the project itself; a target must be an absolute container path outside /var/www/html and the image's system directories, and no two entries may share one. Re-renders the site overlay; nothing generated depends on it."
+    },
     "site_save": {
       "new": true,
       "kind": "mutation",
@@ -5381,6 +5400,19 @@
       "name": "string — the handle the manifest gave it",
       "path": "string — where it is mounted inside the container",
       "volume": "string — what `docker volume ls` calls it"
+    },
+    "SiteMount": {
+      "source": "string — relative to the project's directory (../cbglib) or absolute",
+      "target": "string — absolute path inside the container (/var/www/cbglib)",
+      "readOnly": "bool — true when omitted"
+    },
+    "SiteMountRow": {
+      "source": "string",
+      "target": "string",
+      "readOnly": "bool",
+      "resolved": "string? — the host directory it resolves to here, when it resolves",
+      "approved": "bool — saved from this app on this machine for exactly this source, target and mode; only approved rows are mounted",
+      "error": "string? — why it cannot be mounted here, when it cannot"
     },
     "SiteSettings": {
       "env": "Record<string, string>",

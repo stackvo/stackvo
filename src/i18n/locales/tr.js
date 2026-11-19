@@ -261,6 +261,21 @@ export default {
     sshAgentHint:
       'composer install ve git pull konteynerin içinden özel depolara ulaşabilir; imaja hiçbir anahtar kopyalanmadan. O konteynerde çalışan her şey, konteyner ayakta olduğu sürece anahtarlarınızla imzalayabilir.',
     sshAgentNone: 'Bu makinede çalışan bir SSH ajanı yok, iletilecek bir şey de yok.',
+    mountsTitle: 'Host dizinleri',
+    mountsExplain:
+      'Bu projenin yanındaki bir dizini — ../cbglib gibi bir yolla yüklenen ortak bir kütüphaneyi — konteynerin içinde görünür kılar. Yalnızca projeler klasörünüzün içindeki dizinler bağlanabilir.',
+    mountSource: 'Kaynak (bu makinede)',
+    mountTarget: 'Konteynerdeki yol',
+    mountReadOnly: 'Salt okunur',
+    addMount: 'Dizin ekle',
+    removeMount: 'Bu dizini kaldır',
+    saveMounts: 'Kaydet ve onayla',
+    mountApproved: '{path} dizininden bağlanıyor',
+    mountNotApproved: '{path} dizinine çözülüyor ama bu makinede onaylanmadı — bağlanmıyor.',
+    mountsPending:
+      'Bu proje, bu makinede onaylanmamış host dizinleri istiyor — büyük olasılıkla depoyla birlikte geldiler. Kontrol edin, bağlamak için kaydedin.',
+    mountsConsent:
+      'Kaydetmek, listedeki her dizini bu makinede onaylar. Konteyner yeniden oluşturulunca geçerli olur.',
   },
   worktree: {
     auth: {

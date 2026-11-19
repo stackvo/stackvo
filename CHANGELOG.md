@@ -46,6 +46,19 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A project can mount a directory that sits beside it.** A project that
+  loads a shared library by a relative path such as `../cbglib` found
+  nothing there, because the container only sees `/var/www/html`. The Site
+  pane now lists host directories from `.stackvo/site.json` and mounts
+  them next to the project, read-only by default. `site.json` travels with
+  a clone, so a mount written there is only a request: it reaches the
+  compose overlay only after it is saved from the pane on this machine,
+  which records the resolved source, target and mode in
+  `<root>/site-mounts.json`, a file no repository can write. A source must
+  be an existing directory inside the projects folder after symlinks, and
+  cannot be that folder or the project itself; a target must be absolute
+  and outside `/var/www/html` and the image's system directories.
+
 - **The project's own check names what the build would trip over, and
   each line carries its repair.** "Check my setup" held the machine to the
   repository — services, lock, domain, image — and said nothing about the

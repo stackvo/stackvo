@@ -31,6 +31,36 @@
 //! A value with a newline in it. The overlay is YAML and the directive block is
 //! nginx configuration, and in both a newline in a value is not an escaping
 //! problem to solve — it is a second directive somebody else wrote.
+//!
+//! ## Host directories, and the gate in front of them
+//!
+//! A project sometimes needs a directory that is not inside it: a shared
+//! library checked out beside it, which the application loads by a relative
+//! path such as `../cbglib`. The container only sees `/var/www/html`, so
+//! without a mount that path does not exist in there.
+//!
+//! **This is not in the manifest, and it is not trusted from this file
+//! either.** `project.schema.json` refuses host paths on purpose: a repository
+//! that could name one could mount the directory above itself. `site.json`
+//! travels with a clone just as the manifest does, so a mount written into it
+//! is a request rather than a decision. A mount reaches the overlay only when
+//! two things agree:
+//!
+//! * it is in `.stackvo/site.json`, and
+//! * the same resolved source, target and mode were saved **from this app** on
+//!   this machine, which records it in `<root>/site-mounts.json` — a file no
+//!   repository can write.
+//!
+//! A cloned `site.json` therefore shows its mounts as waiting for approval and
+//! renders nothing until somebody saves them in the pane. Editing the source
+//! by hand after approval changes what it resolves to, and the old approval no
+//! longer matches.
+//!
+//! What a source may be is narrow: an existing directory **inside the projects
+//! root**, after symlinks are resolved, that is neither the root itself nor the
+//! project's own directory. `/`, the home directory, `~/.ssh` and the Docker
+//! socket are all outside the projects root, so they are refused by the same
+//! rule rather than by a list somebody has to keep complete.
 
 use crate::error::{Code, Error, Result};
 use serde::{Deserialize, Serialize};
@@ -66,7 +96,37 @@ pub struct Config {
     /// Serve a directory index where there is no index file.
     #[serde(default)]
     pub directory_listing: bool,
+    /// Host directories this project asks to have mounted.
+    ///
+    /// A request, not a decision — see the module documentation. Skipped when
+    /// empty so a `site.json` that never used this is written byte for byte as
+    /// it was before the field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mounts: Vec<Mount>,
 }
+
+/// One host directory, as the project asks for it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Mount {
+    /// Relative to the project's directory (`../cbglib`) or absolute.
+    pub source: String,
+    /// Where it appears inside the container (`/var/www/cbglib`).
+    pub target: String,
+    /// Read-only unless the project says otherwise: a shared library is read
+    /// by the application, and a container that can write into a sibling's
+    /// checkout can break a project that is not the one running.
+    #[serde(default = "read_only_by_default")]
+    pub read_only: bool,
+}
+
+fn read_only_by_default() -> bool {
+    true
+}
+
+/// The most mounts one project may ask for. A handful is the real use; a
+/// limit keeps a hostile file from turning one overlay into thousands of lines.
+pub const MAX_MOUNTS: usize = 16;
 
 pub fn config_path(root: &Path, name: &str) -> PathBuf {
     crate::workspace::projects_root(root)
@@ -89,6 +149,12 @@ pub fn read(root: &Path, name: &str) -> Config {
             config
                 .env
                 .retain(|key, value| checked_key(key).is_ok() && checked_value(value).is_ok());
+            // Only the shape is checked here. Whether the source exists, and
+            // whether it was approved, is decided when the overlay is rendered
+            // — a mount whose directory is missing today is still the
+            // project's request and is shown, not silently forgotten.
+            config.mounts.retain(|m| checked_mount_text(m).is_ok());
+            config.mounts.truncate(MAX_MOUNTS);
             config
         })
         .unwrap_or_default()
@@ -98,6 +164,15 @@ pub fn write(root: &Path, name: &str, config: &Config) -> Result<()> {
     for (key, value) in &config.env {
         checked_key(key)?;
         checked_value(value)?;
+    }
+    if config.mounts.len() > MAX_MOUNTS {
+        return Err(Error::new(
+            Code::InvalidInput,
+            format!("a project can mount at most {MAX_MOUNTS} host directories"),
+        ));
+    }
+    for mount in &config.mounts {
+        checked_mount_text(mount)?;
     }
 
     let path = config_path(root, name);
@@ -152,6 +227,275 @@ pub fn checked_value(value: &str) -> Result<()> {
     Ok(())
 }
 
+// --------------------------------------------------------- host directories
+
+/// Container paths a mount may not land on or under.
+///
+/// `/var/www/html` is the project's own bind mount: a mount beneath it makes
+/// Docker create the mount point *in the host checkout*, and one on it replaces
+/// the project. The rest are the image's own system directories, where a
+/// directory from the host is not a library — it is a different container.
+const RESERVED_TARGETS: &[&str] = &[
+    "/var/www/html",
+    "/bin",
+    "/boot",
+    "/dev",
+    "/etc",
+    "/lib",
+    "/lib64",
+    "/proc",
+    "/run",
+    "/sbin",
+    "/sys",
+    "/usr",
+    "/var/lib",
+    "/var/log",
+    "/var/run",
+];
+
+fn invalid(message: String) -> Error {
+    Error::new(Code::InvalidInput, message)
+}
+
+/// Is the target a container path compose will read as one path?
+///
+/// Absolute, made of plain segments, and drawn from a character set with no
+/// colon in it — compose splits a mount on `:`, so a colon in the target is a
+/// second field rather than part of a name.
+pub fn checked_target(target: &str) -> Result<()> {
+    let plain = target.len() <= 256
+        && target.starts_with('/')
+        && target
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/-_.@+".contains(c));
+    let segments_ok = plain
+        && target[1..]
+            .split('/')
+            .all(|s| !s.is_empty() && s != "." && s != "..");
+
+    if !segments_ok {
+        return Err(invalid(format!(
+            "\"{target}\" is not a usable container path — it must be absolute, like /var/www/cbglib"
+        )));
+    }
+    if let Some(reserved) = RESERVED_TARGETS
+        .iter()
+        .find(|r| target == **r || target.starts_with(&format!("{r}/")))
+    {
+        return Err(invalid(format!(
+            "\"{target}\" is inside {reserved}, which the container needs for itself"
+        )));
+    }
+    Ok(())
+}
+
+/// The checks that need nothing but the text: what `read` and `write` apply.
+fn checked_mount_text(mount: &Mount) -> Result<()> {
+    let source = &mount.source;
+    if source.trim().is_empty() || source.len() > 1024 {
+        return Err(invalid("a mount needs a source directory".to_string()));
+    }
+    // Same reason as `checked_value`: the source ends up inside a quoted YAML
+    // scalar, and a line break or a quote there is structure, not a path.
+    if source.contains(['\n', '\r', '\0', '"']) {
+        return Err(invalid(format!(
+            "\"{}\" cannot be used as a source directory",
+            source.escape_debug()
+        )));
+    }
+    checked_target(&mount.target)
+}
+
+/// Resolve a mount's source on this machine, or say why it cannot be used.
+///
+/// Returns the canonical host path. The rule is containment, not a list of
+/// forbidden places: inside the projects root, after symlinks, and neither the
+/// root nor the project itself.
+pub fn resolve_source(root: &Path, name: &str, mount: &Mount) -> Result<PathBuf> {
+    checked_mount_text(mount)?;
+
+    let projects = crate::workspace::projects_root(root)
+        .ok_or_else(|| invalid("no projects directory is set".to_string()))?;
+    let projects = std::fs::canonicalize(&projects)
+        .map_err(|e| Error::io(format!("resolving {}", projects.display()), e))?;
+    let project = projects.join(name);
+
+    let asked = Path::new(&mount.source);
+    let candidate = if asked.is_absolute() {
+        asked.to_path_buf()
+    } else {
+        project.join(asked)
+    };
+    let resolved = std::fs::canonicalize(&candidate).map_err(|_| {
+        invalid(format!(
+            "\"{}\" does not exist on this machine",
+            mount.source
+        ))
+    })?;
+
+    if !resolved.is_dir() {
+        return Err(invalid(format!("\"{}\" is not a directory", mount.source)));
+    }
+    let project = std::fs::canonicalize(&project).unwrap_or(project);
+    if !resolved.starts_with(&projects) || resolved == projects {
+        return Err(invalid(format!(
+            "\"{}\" is outside the projects directory ({}) — only a directory beside your projects can be mounted",
+            mount.source,
+            projects.display()
+        )));
+    }
+    if resolved == project || resolved.starts_with(&project) {
+        return Err(invalid(format!(
+            "\"{}\" is part of this project, which is already mounted at /var/www/html",
+            mount.source
+        )));
+    }
+
+    // Compose splits on `:`. A drive letter is rewritten away by
+    // `to_docker_mount`; a colon anywhere else in the path cannot be written
+    // in the short syntax at all.
+    if spec_source(&resolved).contains(':') {
+        return Err(invalid(format!(
+            "\"{}\" has a colon in its path, which compose cannot mount",
+            resolved.display()
+        )));
+    }
+    Ok(resolved)
+}
+
+fn spec_source(resolved: &Path) -> String {
+    crate::paths::to_docker_mount(&resolved.display().to_string())
+}
+
+/// The compose short-syntax line for a resolved mount, unquoted.
+///
+/// This exact string is also what an approval records, so changing the source,
+/// the target or the mode is a different mount that has to be approved again.
+fn spec(resolved: &Path, mount: &Mount) -> String {
+    format!(
+        "{}:{}{}",
+        spec_source(resolved),
+        mount.target,
+        if mount.read_only { ":ro" } else { "" }
+    )
+}
+
+pub fn approvals_path(root: &Path) -> PathBuf {
+    root.join("site-mounts.json")
+}
+
+/// What this machine has agreed to mount, per project.
+fn load_approvals(root: &Path) -> BTreeMap<String, Vec<String>> {
+    std::fs::read_to_string(approvals_path(root))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn store_approvals(root: &Path, approvals: &BTreeMap<String, Vec<String>>) -> Result<()> {
+    let path = approvals_path(root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| Error::io(format!("creating {}", parent.display()), e))?;
+    }
+    let text = serde_json::to_string_pretty(approvals)
+        .map_err(|e| Error::new(Code::IoError, format!("serialising the approvals: {e}")))?;
+    crate::atomic::write(&path, &format!("{text}\n"))
+}
+
+/// One mount as the pane shows it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MountRow {
+    pub source: String,
+    pub target: String,
+    pub read_only: bool,
+    /// The host directory it resolves to here, when it resolves.
+    pub resolved: Option<String>,
+    /// Saved from this app on this machine, for exactly this source, target
+    /// and mode — which is what puts it in the overlay.
+    pub approved: bool,
+    /// Why it cannot be mounted here, when it cannot.
+    pub error: Option<String>,
+}
+
+/// Every mount this project asks for, with whether it will be applied.
+pub fn mount_rows(root: &Path, name: &str) -> Vec<MountRow> {
+    let approved = load_approvals(root).remove(name).unwrap_or_default();
+    read(root, name)
+        .mounts
+        .into_iter()
+        .map(|mount| match resolve_source(root, name, &mount) {
+            Ok(resolved) => MountRow {
+                approved: approved.contains(&spec(&resolved, &mount)),
+                resolved: Some(resolved.display().to_string()),
+                error: None,
+                source: mount.source,
+                target: mount.target,
+                read_only: mount.read_only,
+            },
+            Err(e) => MountRow {
+                approved: false,
+                resolved: None,
+                error: Some(e.message.clone()),
+                source: mount.source,
+                target: mount.target,
+                read_only: mount.read_only,
+            },
+        })
+        .collect()
+}
+
+/// Replace a project's mounts and approve every one of them on this machine.
+///
+/// This is the gate: it is only reachable from the pane, and it refuses the
+/// whole list if any one entry does not resolve, so what is approved is always
+/// exactly what was shown.
+pub fn save_mounts(root: &Path, name: &str, mounts: Vec<Mount>) -> Result<()> {
+    if mounts.len() > MAX_MOUNTS {
+        return Err(invalid(format!(
+            "a project can mount at most {MAX_MOUNTS} host directories"
+        )));
+    }
+
+    let mut specs = Vec::with_capacity(mounts.len());
+    let mut targets = std::collections::BTreeSet::new();
+    for mount in &mounts {
+        let resolved = resolve_source(root, name, mount)?;
+        if !targets.insert(mount.target.clone()) {
+            return Err(invalid(format!(
+                "{} is the target of two mounts",
+                mount.target
+            )));
+        }
+        specs.push(spec(&resolved, mount));
+    }
+
+    let mut config = read(root, name);
+    config.mounts = mounts;
+    write(root, name, &config)?;
+
+    let mut approvals = load_approvals(root);
+    if specs.is_empty() {
+        approvals.remove(name);
+    } else {
+        approvals.insert(name.to_string(), specs);
+    }
+    store_approvals(root, &approvals)
+}
+
+/// The mounts that go into the overlay: requested, resolvable and approved.
+fn approved_specs(root: &Path, name: &str, mounts: &[Mount], approved: &[String]) -> Vec<String> {
+    mounts
+        .iter()
+        .filter_map(|mount| {
+            let resolved = resolve_source(root, name, mount).ok()?;
+            let line = spec(&resolved, mount);
+            approved.contains(&line).then_some(line)
+        })
+        .collect()
+}
+
 /// The server directives that turn a directory index on.
 ///
 /// Returned per server rather than written once, because the two that have a
@@ -177,6 +521,8 @@ pub struct Entry {
     pub env: BTreeMap<String, String>,
     /// Whether this project asked for the agent.
     pub ssh_agent: bool,
+    /// Approved host directories, as compose short-syntax lines.
+    pub mounts: Vec<String>,
 }
 
 /// Where the host's agent socket is, as the container has to reach it.
@@ -225,7 +571,7 @@ pub fn overlay_yaml(entries: &[Entry]) -> Option<String> {
     let agent = agent_socket();
     let entries: Vec<&Entry> = entries
         .iter()
-        .filter(|e| !e.env.is_empty() || (e.ssh_agent && agent.is_some()))
+        .filter(|e| !e.env.is_empty() || (e.ssh_agent && agent.is_some()) || !e.mounts.is_empty())
         .collect();
     if entries.is_empty() {
         return None;
@@ -259,11 +605,21 @@ pub fn overlay_yaml(entries: &[Entry]) -> Option<String> {
             // quoting problem rather than the start of one.
             out.push_str(&format!("      {key}: \"{}\"\n", escape(value)));
         }
-        if let Some((source, target)) = forwarding {
+        if let Some((_, target)) = forwarding {
             out.push_str(&format!("      SSH_AUTH_SOCK: \"{target}\"\n"));
+        }
+        if forwarding.is_some() || !entry.mounts.is_empty() {
+            out.push_str("    volumes:\n");
+        }
+        if let Some((source, target)) = forwarding {
             // Quoted because a Windows host path holds a colon, which is what
             // compose splits a mount on — the same rule `phpini` follows.
-            out.push_str(&format!("    volumes:\n      - \"{source}:{target}\"\n"));
+            out.push_str(&format!("      - \"{source}:{target}\"\n"));
+        }
+        for line in &entry.mounts {
+            // Already a resolved, approved short-syntax line; `resolve_source`
+            // refused anything with a quote or a stray colon in it.
+            out.push_str(&format!("      - \"{line}\"\n"));
         }
     }
 
@@ -302,6 +658,7 @@ fn entries(root: &Path) -> Vec<Entry> {
     // Once, not per project: a workspace with forty projects and two worktrees
     // would otherwise read and parse the same file forty times.
     let worktrees = crate::worktree::Table::load(root).unwrap_or_default();
+    let mut approvals = load_approvals(root);
 
     let mut out = Vec::new();
     for item in dir.flatten() {
@@ -320,13 +677,16 @@ fn entries(root: &Path) -> Vec<Entry> {
         if let Some(record) = worktrees.get(&name) {
             env.extend(crate::worktree::env_for(root, record));
         }
-        if env.is_empty() && !config.ssh_agent {
+        let approved = approvals.remove(&name).unwrap_or_default();
+        let mounts = approved_specs(root, &name, &config.mounts, &approved);
+        if env.is_empty() && !config.ssh_agent && mounts.is_empty() {
             continue;
         }
         out.push(Entry {
             service: name,
             env,
             ssh_agent: config.ssh_agent,
+            mounts,
         });
     }
 
@@ -365,6 +725,7 @@ mod tests {
                 .collect(),
             directory_listing: listing,
             ssh_agent: false,
+            mounts: Vec::new(),
         }
     }
 
@@ -378,6 +739,7 @@ mod tests {
             service: "shop".into(),
             env: BTreeMap::new(),
             ssh_agent: true,
+            mounts: Vec::new(),
         };
 
         match agent_socket() {
@@ -433,6 +795,7 @@ mod tests {
         let yaml = overlay_yaml(&[Entry {
             service: "shop".into(),
             ssh_agent: false,
+            mounts: Vec::new(),
             env: config(
                 &[
                     ("APP_ENV", "local"),
@@ -461,6 +824,7 @@ mod tests {
             service: "shop".into(),
             env: BTreeMap::new(),
             ssh_agent: false,
+            mounts: Vec::new(),
         }])
         .is_none());
     }
@@ -517,5 +881,223 @@ mod tests {
         assert_eq!(read(&dir, "shop"), written, "the good file survived");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ----------------------------------------------------- host directories
+
+    /// A workspace with a project `shop`, a sibling library `lib`, and a
+    /// directory outside the projects root. Returned as (root, projects, outside).
+    fn mount_workspace(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("stackvo-site-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let projects = dir.join("projects");
+        std::fs::create_dir_all(projects.join("shop").join("src")).unwrap();
+        std::fs::create_dir_all(projects.join("lib")).unwrap();
+        let outside = dir.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(dir.join("projects.path"), projects.display().to_string()).unwrap();
+        (dir, projects, outside)
+    }
+
+    fn mount(source: &str, target: &str) -> Mount {
+        Mount {
+            source: source.into(),
+            target: target.into(),
+            read_only: true,
+        }
+    }
+
+    /// The default is the safe one: a mount nobody marked writable is read-only.
+    #[test]
+    fn a_mount_is_read_only_unless_it_says_otherwise() {
+        let parsed: Mount =
+            serde_json::from_str(r#"{"source":"../lib","target":"/var/www/lib"}"#).unwrap();
+        assert!(parsed.read_only);
+    }
+
+    /// A `site.json` that never used mounts is written exactly as before.
+    #[test]
+    fn no_mounts_writes_no_mounts_key() {
+        let text = serde_json::to_string(&config(&[], false)).unwrap();
+        assert!(!text.contains("mounts"), "{text}");
+    }
+
+    #[test]
+    fn a_target_must_be_a_plain_absolute_path_outside_the_reserved_ones() {
+        for good in [
+            "/var/www/cbglib",
+            "/opt/lib",
+            "/srv/shared-lib_2",
+            "/home/app/.lib",
+        ] {
+            assert!(checked_target(good).is_ok(), "{good}");
+        }
+        for bad in [
+            "",
+            "relative/path",
+            "/",
+            "/var/www/html",
+            "/var/www/html/vendor",
+            "/etc",
+            "/etc/nginx",
+            "/usr/local/lib",
+            "/proc/self",
+            "/var/run/docker.sock",
+            "/opt/../etc",
+            "/opt/./lib",
+            "/opt//lib",
+            "/opt/lib/",
+            "/opt/a:b",
+            "/opt/with space",
+            "/opt/\"quoted\"",
+            "/opt/line\nbreak",
+        ] {
+            assert!(checked_target(bad).is_err(), "{bad:?} was accepted");
+        }
+    }
+
+    /// The containment rule: a sibling is fine, everything that is not inside
+    /// the projects root — or is the root, or is the project — is refused.
+    #[test]
+    fn only_a_directory_beside_the_project_resolves() {
+        let (dir, projects, outside) = mount_workspace("resolve");
+        let lib = std::fs::canonicalize(projects.join("lib")).unwrap();
+
+        let resolved = resolve_source(&dir, "shop", &mount("../lib", "/var/www/lib")).unwrap();
+        assert_eq!(resolved, lib);
+        // An absolute path to the same place is the same mount.
+        let absolute = mount(&projects.join("lib").display().to_string(), "/var/www/lib");
+        assert_eq!(resolve_source(&dir, "shop", &absolute).unwrap(), lib);
+
+        for (source, why) in [
+            ("../../outside", "outside the projects root"),
+            ("..", "the projects root itself"),
+            (".", "the project itself"),
+            ("src", "inside the project"),
+            ("../missing", "does not exist"),
+            ("/", "the filesystem root"),
+        ] {
+            assert!(
+                resolve_source(&dir, "shop", &mount(source, "/var/www/lib")).is_err(),
+                "{source} ({why}) was accepted"
+            );
+        }
+        assert!(resolve_source(
+            &dir,
+            "shop",
+            &mount(&outside.display().to_string(), "/var/www/lib")
+        )
+        .is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A symlink inside the project that points out of the projects root is
+    /// judged by where it points, not by where it sits.
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_cannot_carry_a_mount_out_of_the_projects_root() {
+        let (dir, projects, outside) = mount_workspace("symlink");
+        std::os::unix::fs::symlink(&outside, projects.join("escape")).unwrap();
+        assert!(resolve_source(&dir, "shop", &mount("../escape", "/var/www/lib")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The gate itself: a mount that arrived in `site.json` — by a clone, or a
+    /// hand edit — is shown but not rendered until it is saved from the app.
+    #[test]
+    fn a_mount_is_rendered_only_after_it_is_approved_here() {
+        let (dir, projects, _) = mount_workspace("gate");
+        let lib = std::fs::canonicalize(projects.join("lib")).unwrap();
+
+        // Written as a clone would bring it: straight into the file.
+        let mut requested = config(&[], false);
+        requested.mounts = vec![mount("../lib", "/var/www/lib")];
+        write(&dir, "shop", &requested).unwrap();
+
+        let rows = mount_rows(&dir, "shop");
+        assert_eq!(rows.len(), 1);
+        assert!(!rows[0].approved, "a cloned mount is not approved");
+        assert_eq!(
+            rows[0].resolved.as_deref(),
+            Some(lib.display().to_string().as_str())
+        );
+        let approvals = load_approvals(&dir).remove("shop").unwrap_or_default();
+        assert!(approved_specs(&dir, "shop", &requested.mounts, &approvals).is_empty());
+
+        // Saved from the pane: approved, and rendered.
+        save_mounts(&dir, "shop", requested.mounts.clone()).unwrap();
+        let rows = mount_rows(&dir, "shop");
+        assert!(rows[0].approved);
+        let approvals = load_approvals(&dir).remove("shop").unwrap_or_default();
+        let lines = approved_specs(&dir, "shop", &requested.mounts, &approvals);
+        // In Docker's shape, not the host's: on Windows the canonical path is
+        // `\\?\C:\…` and the overlay carries `/c/…`.
+        assert_eq!(
+            lines,
+            vec![format!("{}:/var/www/lib:ro", spec_source(&lib))]
+        );
+
+        // A hand edit to the mode is a different mount and needs approving again.
+        let mut edited = read(&dir, "shop");
+        edited.mounts[0].read_only = false;
+        write(&dir, "shop", &edited).unwrap();
+        assert!(!mount_rows(&dir, "shop")[0].approved);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// One bad entry refuses the whole save, so nothing half-approved exists.
+    #[test]
+    fn saving_mounts_is_all_or_nothing() {
+        let (dir, _, _) = mount_workspace("atomic");
+        let result = save_mounts(
+            &dir,
+            "shop",
+            vec![
+                mount("../lib", "/var/www/lib"),
+                mount("../../outside", "/opt/x"),
+            ],
+        );
+        assert!(result.is_err());
+        assert!(read(&dir, "shop").mounts.is_empty());
+        assert!(load_approvals(&dir).is_empty());
+
+        // Two mounts on one target are refused too.
+        assert!(save_mounts(
+            &dir,
+            "shop",
+            vec![
+                mount("../lib", "/var/www/lib"),
+                mount("../lib", "/var/www/lib")
+            ],
+        )
+        .is_err());
+
+        // And an empty list clears the approval.
+        save_mounts(&dir, "shop", vec![mount("../lib", "/var/www/lib")]).unwrap();
+        save_mounts(&dir, "shop", Vec::new()).unwrap();
+        assert!(!load_approvals(&dir).contains_key("shop"));
+        assert!(read(&dir, "shop").mounts.is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The overlay shape: one `volumes:` key, the agent and the mounts under it.
+    #[test]
+    fn approved_mounts_land_under_the_service_volumes() {
+        let yaml = overlay_yaml(&[Entry {
+            service: "shop".into(),
+            env: BTreeMap::new(),
+            ssh_agent: false,
+            mounts: vec!["/w/projects/lib:/var/www/lib:ro".into()],
+        }])
+        .expect("an overlay");
+        assert!(
+            yaml.contains("  shop:\n    volumes:\n      - \"/w/projects/lib:/var/www/lib:ro\"\n"),
+            "{yaml}"
+        );
+        assert!(!yaml.contains("environment:"), "{yaml}");
+        assert_eq!(yaml.matches("volumes:").count(), 1, "{yaml}");
     }
 }
