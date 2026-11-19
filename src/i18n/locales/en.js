@@ -268,6 +268,22 @@ export default {
     sshAgentHint:
       'Lets composer install and git pull reach private repositories from inside the container, without a key ever being copied into the image. Anything running in that container can sign with your keys while it is up.',
     sshAgentNone: 'No SSH agent is running on this machine, so there is nothing to forward.',
+    mountsTitle: 'Host directories',
+    mountsExplain:
+      'A directory beside this project — a shared library loaded by a path such as ../cbglib — made visible inside the container. Only directories inside your projects folder can be mounted.',
+    mountSource: 'Source (on this machine)',
+    mountTarget: 'Path in the container',
+    mountReadOnly: 'Read-only',
+    addMount: 'Add a directory',
+    removeMount: 'Remove this directory',
+    saveMounts: 'Save and approve',
+    mountApproved: 'Mounted from {path}',
+    mountNotApproved:
+      'Resolves to {path}, but has not been approved on this machine — it is not mounted.',
+    mountsPending:
+      'This project asks for host directories that were not approved on this machine — they probably came with the repository. Check them, then save to mount them.',
+    mountsConsent:
+      'Saving approves every directory in the list on this machine. Applied when the container is recreated.',
   },
   worktree: {
     auth: {

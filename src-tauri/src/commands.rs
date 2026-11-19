@@ -5498,6 +5498,10 @@ pub async fn site_save(
             env,
             directory_listing,
             ssh_agent,
+            // Carried over untouched. Mounts are saved — and approved — only by
+            // `site_mounts_save`, so saving a variable can never approve a
+            // mount that arrived in a clone.
+            mounts: crate::site::read(&root, &name).mounts,
         },
     )?;
 
@@ -5511,6 +5515,39 @@ pub async fn site_save(
 
     events::emit(&app, "site:changed", serde_json::json!({ "project": name }));
     site_settings(state, name)
+}
+
+/// The host directories this project asks for, and whether each is applied.
+#[tauri::command]
+pub fn site_mounts(state: State<'_, AppState>, name: String) -> Result<Vec<crate::site::MountRow>> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    Ok(crate::site::mount_rows(&root, &name))
+}
+
+/// Replace them, and approve every one on this machine.
+///
+/// A separate command from `site_save` on purpose: approving a mount is a
+/// decision about this machine's files, and it must not ride along with a
+/// variable somebody changed in the same pane.
+#[tauri::command]
+pub async fn site_mounts_save(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    mounts: Vec<crate::site::Mount>,
+) -> Result<Vec<crate::site::MountRow>> {
+    let root = state.root()?;
+    workspace::project_dir(&root, &name)?;
+    let _busy = state.inflight.acquire("site")?;
+
+    crate::site::save_mounts(&root, &name, mounts)?;
+    // A compose overlay only: nothing generated depends on it, and every
+    // compose command re-renders the overlay before it runs anyway.
+    crate::site::sync(&root);
+
+    events::emit(&app, "site:changed", serde_json::json!({ "project": name }));
+    Ok(crate::site::mount_rows(&root, &name))
 }
 
 // ---------------------------------------------------------- quick commands

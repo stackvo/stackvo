@@ -169,7 +169,7 @@
     "tidy":        { "install": "core", "packages": ["libtidy-dev"], "inCatalog": false },
     "tokenizer":   { "install": "builtin", "packages": [] },
     "uv":          { "install": "pecl", "packages": ["libuv1-dev"], "minPhp": "7.0", "peclVersions": { "default": "0.3.0" } },
-    "xdebug":      { "install": "pecl", "packages": [], "peclVersions": { "8.0": "3.3.2", "8.1": "3.3.2", "8.2": "3.3.2", "8.3": "3.3.2", "8.4": "3.4.0", "8.5": "3.4.0", "9.0": "3.4.0", "default": "latest" } },
+    "xdebug":      { "install": "pecl", "packages": [], "peclVersions": { "8.0": "3.3.2", "8.1": "3.3.2", "8.2": "3.3.2", "8.3": "3.3.2", "8.4": "3.4.0", "8.5": "3.5.3", "9.0": "3.4.0", "default": "latest" }, "note": "3.4.0's package.xml caps PHP at 8.4.99, so pecl refuses it on 8.5 with \"No valid packages found\". 3.5.3 declares 8.0.0-8.5.99 and loads on PHP 8.5.12. 9.0 keeps 3.4.0 until a release declares 9.x." },
     "xml":         { "install": "builtin", "packages": ["libxml2-dev"] },
     "xmlreader":   { "install": "builtin", "packages": ["libxml2-dev"] },
     "xmlrpc": {

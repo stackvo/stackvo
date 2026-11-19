@@ -676,6 +676,8 @@ pub fn run() {
             commands::perf_forget,
             commands::site_settings,
             commands::site_save,
+            commands::site_mounts,
+            commands::site_mounts_save,
             commands::quick_commands,
             commands::machine_commands,
             commands::crash_reports,

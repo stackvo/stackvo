@@ -3736,6 +3736,11 @@ mod tests {
         assert_eq!(on_85.pecl[0].0, "igbinary");
         assert_eq!(on_85.pecl[0].1.as_deref(), Some("3.2.17RC1"));
         assert_eq!(on_84.pecl[0].1.as_deref(), Some("3.2.16"));
+
+        // xdebug 3.4.0 refuses 8.5 at `pecl install`; 8.5 needs 3.5.x.
+        let xdebug_85 = resolve("8.5", &exts(&["xdebug"]), false).unwrap();
+        let pin = xdebug_85.pecl.iter().find(|(e, _)| e == "xdebug").unwrap();
+        assert_eq!(pin.1.as_deref(), Some("3.5.3"));
     }
 
     #[test]

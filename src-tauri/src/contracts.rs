@@ -229,6 +229,15 @@ mod tests {
     }
 
     #[test]
+    fn xdebug_pins_a_release_that_declares_php_85() {
+        // xdebug 3.4.0's package.xml caps PHP at 8.4.99, so pecl answered
+        // "No valid packages found" on 8.5 and the project never got an image.
+        let xdebug = &php_extensions().extensions["xdebug"];
+        assert_eq!(xdebug.pecl_versions["8.5"], "3.5.3");
+        assert_eq!(xdebug.pecl_versions["8.4"], "3.4.0");
+    }
+
+    #[test]
     fn the_service_catalog_has_thirty_three_entries() {
         // Was 25, and the number is a record rather than a rule: it counted the
         // template directories that shipped inside the binary. (The original

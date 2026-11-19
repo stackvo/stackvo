@@ -401,6 +401,10 @@ export const api = {
   siteSettings: (name) => call('site_settings', { name }),
   siteSave: (name, env, directoryListing, sshAgent) =>
     call('site_save', { name, env, directoryListing, sshAgent }),
+  // Host directories beside the project. Saving approves them on this machine,
+  // which is why it is its own call rather than part of siteSave.
+  siteMounts: (name) => call('site_mounts', { name }),
+  siteMountsSave: (name, mounts) => call('site_mounts_save', { name, mounts }),
 
   perfStatus: (name) => call('perf_status', { name }),
   perfSet: (name, path, enabled) => call('perf_set', { name, path, enabled }),

@@ -7,6 +7,12 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A PHP 8.5 project with Xdebug gets an image.** The extension contract
+  pinned xdebug 3.4.0 on 8.5, and 3.4.0's `package.xml` caps PHP at 8.4.99,
+  so `pecl install` answered "No valid packages found" three times and the
+  build failed with "docker exited with code 1". 8.5 now pins 3.5.3, which
+  declares 8.0.0–8.5.99 and loads on PHP 8.5.12. 9.0 keeps its old pin
+  until a release declares 9.x.
 - **A PHP 8.5 project that asks for `redis` or `igbinary` gets an image.**
   PHP 8.5 removed `ext/standard/php_smart_string.h`, and igbinary 3.2.16 —
   the one pin the extension contract carried — still includes it, so the
@@ -39,6 +45,19 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
   asks the API, as before.
 
 ### Added
+
+- **A project can mount a directory that sits beside it.** A project that
+  loads a shared library by a relative path such as `../cbglib` found
+  nothing there, because the container only sees `/var/www/html`. The Site
+  pane now lists host directories from `.stackvo/site.json` and mounts
+  them next to the project, read-only by default. `site.json` travels with
+  a clone, so a mount written there is only a request: it reaches the
+  compose overlay only after it is saved from the pane on this machine,
+  which records the resolved source, target and mode in
+  `<root>/site-mounts.json`, a file no repository can write. A source must
+  be an existing directory inside the projects folder after symlinks, and
+  cannot be that folder or the project itself; a target must be absolute
+  and outside `/var/www/html` and the image's system directories.
 
 - **The project's own check names what the build would trip over, and
   each line carries its repair.** "Check my setup" held the machine to the
