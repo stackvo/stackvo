@@ -44,6 +44,10 @@ pub struct ExtensionSpec {
     pub min_php: Option<String>,
     #[serde(default, rename = "removedIn")]
     pub removed_in: Option<String>,
+    /// First PHP `major.minor` whose base image compiles the extension in, so
+    /// from there on it is treated like `install: builtin` (opcache on 8.5).
+    #[serde(default, rename = "builtinFrom")]
+    pub builtin_from: Option<String>,
     #[serde(default)]
     pub note: Option<String>,
     /// Absent means "in the .env catalog"; `false` marks matrix-only entries.

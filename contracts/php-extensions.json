@@ -104,7 +104,7 @@
     "mbstring":    { "install": "core", "packages": ["libonig-dev"] },
     "mcrypt":      { "install": "pecl", "packages": ["libmcrypt-dev"] },
     "memcache":    { "install": "pecl", "packages": ["zlib1g-dev"] },
-    "memcached":   { "install": "pecl", "packages": ["libmemcached-dev", "zlib1g-dev"], "peclVersions": { "default": "3.3.0" } },
+    "memcached":   { "install": "pecl", "packages": ["libmemcached-dev", "zlib1g-dev"], "peclVersions": { "8.5": "3.4.0", "9.0": "3.4.0", "default": "3.3.0" }, "note": "PHP 8.5 removed ext/standard/php_smart_string.h; 3.3.0 still includes it and fails to compile there. 3.4.0 builds and loads on PHP 8.5.13." },
     "mongodb": {
       "install": "pecl",
       "packages": ["libssl-dev", "libcurl4-openssl-dev"],
@@ -120,7 +120,7 @@
     "mysqli":      { "install": "core", "packages": [] },
     "mysqlnd":     { "install": "core", "packages": [] },
     "odbc":        { "install": "core", "packages": ["unixodbc-dev"] },
-    "opcache":     { "install": "core", "packages": [] },
+    "opcache":     { "install": "core", "packages": [], "builtinFrom": "8.5", "note": "PHP 8.5 compiles OPcache into the binary (php -m lists Zend OPcache in php:8.5-fpm). docker-php-ext-install opcache then builds no module and fails at install-modules with \"cp: cannot stat 'modules/*'\", taking the whole batch down with it, so 8.5+ emits no install line." },
     "openssl":     { "install": "builtin", "packages": ["libssl-dev"] },
     "openswoole": {
       "install": "pecl",
@@ -161,7 +161,8 @@
       "install": "pecl",
       "packages": ["libssl-dev", "libcurl4-openssl-dev"],
       "minPhp": "8.0",
-      "peclVersions": { "8.0": "5.1.5", "8.1": "5.1.5", "8.2": "5.1.5", "8.3": "5.1.5", "8.4": "6.1.6", "8.5": "6.1.6", "9.0": "6.1.6", "default": "latest" }
+      "peclVersions": { "8.0": "5.1.5", "8.1": "5.1.5", "8.2": "5.1.5", "8.3": "5.1.5", "8.4": "6.1.6", "8.5": "6.2.6", "9.0": "6.1.6", "default": "latest" },
+      "note": "6.1.6's package.xml caps PHP at 8.4.99, so pecl refuses it on 8.5. 6.2.6 builds on PHP 8.5.13. 9.0 keeps 6.1.6 until a release declares 9.x."
     },
     "sysvmsg":     { "install": "core", "packages": [] },
     "sysvsem":     { "install": "core", "packages": [] },
@@ -197,6 +198,7 @@
       "4. Move install=composer entries to a separate composerPackages list; they never enter the Dockerfile.",
       "5. Reject any extension whose `removedIn` is <= phpVersion (semver-ish major.minor compare).",
       "6. Reject any extension whose `minPhp` is > phpVersion.",
+      "6b. Drop any extension whose `builtinFrom` is <= phpVersion the same way as install=builtin: the base image already ships it compiled in, and asking docker-php-ext-install for it fails the build.",
       "7. Drop install=builtin entries ENTIRELY — no install line AND no apt packages. Verified against the Bash generator: `project.sh` hits `continue` before it reaches `get_extension_packages`, so a project requesting `dom` gets no libxml2-dev. Adding the packages anyway would be defensible but would change every generated image, so v1 matches the existing behaviour and leaves the question to v2.",
       "8. Expand peclDependencies transitively and prepend them (redis pulls igbinary before itself).",
       "9. aptPackages = union of `packages` over all surviving extensions, sorted, de-duplicated.",

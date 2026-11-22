@@ -7,6 +7,16 @@ versioning is [semver](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A PHP 8.5 project with the default extensions gets an image.** Three
+  more entries in the extension contract broke the build on 8.5. `opcache`
+  is compiled into PHP 8.5, so `docker-php-ext-install opcache` built no
+  module, failed at `install-modules` and took the whole
+  `docker-php-ext-install` batch down with it; a new `builtinFrom` field
+  marks it built-in from 8.5 on, and the generator emits no install line
+  there. memcached 3.3.0 still includes the header 8.5 removed, and swoole
+  6.1.6's `package.xml` caps PHP at 8.4.99; 8.5 now pins memcached 3.4.0
+  and swoole 6.2.6, both built in `php:8.5-fpm`. Every other PHP version
+  keeps its pins.
 - **A PHP 8.5 project with Xdebug gets an image.** The extension contract
   pinned xdebug 3.4.0 on 8.5, and 3.4.0's `package.xml` caps PHP at 8.4.99,
   so `pecl install` answered "No valid packages found" three times and the
