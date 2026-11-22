@@ -128,6 +128,15 @@ pub fn resolve(php_version: &str, extensions: &[String], strict: bool) -> Result
             continue;
         }
 
+        // Compiled into the base image from this release on: asking
+        // docker-php-ext-install for it builds no module and fails the batch.
+        if let Some(from) = &spec.builtin_from {
+            if cmp_php_version(php_version, from) != Ordering::Less {
+                skip(&format!("built-in since PHP {from}"), &mut skipped);
+                continue;
+            }
+        }
+
         if let Some(removed) = &spec.removed_in {
             if cmp_php_version(php_version, removed) != Ordering::Less {
                 if strict {
@@ -3741,6 +3750,33 @@ mod tests {
         let xdebug_85 = resolve("8.5", &exts(&["xdebug"]), false).unwrap();
         let pin = xdebug_85.pecl.iter().find(|(e, _)| e == "xdebug").unwrap();
         assert_eq!(pin.1.as_deref(), Some("3.5.3"));
+
+        // memcached 3.3.0 includes the header 8.5 removed; swoole 6.1.6
+        // caps PHP at 8.4.99. Both need a newer release on 8.5 only.
+        let on_85 = resolve("8.5", &exts(&["memcached", "swoole"]), false).unwrap();
+        let on_84 = resolve("8.4", &exts(&["memcached", "swoole"]), false).unwrap();
+        let pin =
+            |plan: &Plan, ext: &str| plan.pecl.iter().find(|(e, _)| e == ext).unwrap().1.clone();
+        assert_eq!(pin(&on_85, "memcached").as_deref(), Some("3.4.0"));
+        assert_eq!(pin(&on_84, "memcached").as_deref(), Some("3.3.0"));
+        assert_eq!(pin(&on_85, "swoole").as_deref(), Some("6.2.6"));
+        assert_eq!(pin(&on_84, "swoole").as_deref(), Some("6.1.6"));
+    }
+
+    #[test]
+    fn opcache_is_built_in_from_php_85_and_installed_before_it() {
+        // php:8.5-fpm already lists Zend OPcache; docker-php-ext-install
+        // opcache there fails at install-modules and takes the batch with it.
+        let on_85 = resolve("8.5", &exts(&["opcache", "intl"]), true).unwrap();
+        assert!(on_85.docker_ext.iter().all(|e| e != "opcache"));
+        assert!(on_85.docker_ext.iter().any(|e| e == "intl"));
+        assert!(on_85
+            .skipped
+            .iter()
+            .any(|(e, why)| e == "opcache" && why == "built-in since PHP 8.5"));
+
+        let on_84 = resolve("8.4", &exts(&["opcache"]), true).unwrap();
+        assert!(on_84.docker_ext.iter().any(|e| e == "opcache"));
     }
 
     #[test]
