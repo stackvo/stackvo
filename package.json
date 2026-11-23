@@ -77,10 +77,10 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "pinia": "^4.1.0",
-    "vue": "^3.5.45",
-    "vue-i18n": "^11.4.19",
+    "vue": "^3.5.46",
+    "vue-i18n": "^11.4.23",
     "vue-router": "^5.5.1",
-    "vuetify": "^3.13.7"
+    "vuetify": "^3.13.8"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
