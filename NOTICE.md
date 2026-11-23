@@ -687,10 +687,10 @@ Counted from 607 Rust crates and 90 npm packages.
 | @babel/parser | 8.0.7 | MIT |
 | @babel/types | 7.29.14 | MIT |
 | @babel/types | 8.0.6 | MIT |
-| @intlify/core-base | 11.4.19 | MIT |
-| @intlify/devtools-types | 11.4.19 | MIT |
-| @intlify/message-compiler | 11.4.19 | MIT |
-| @intlify/shared | 11.4.19 | MIT |
+| @intlify/core-base | 11.4.23 | MIT |
+| @intlify/devtools-types | 11.4.23 | MIT |
+| @intlify/message-compiler | 11.4.23 | MIT |
+| @intlify/shared | 11.4.23 | MIT |
 | @jridgewell/gen-mapping | 0.3.13 | MIT |
 | @jridgewell/remapping | 2.3.5 | MIT |
 | @jridgewell/resolve-uri | 3.1.2 | MIT |
@@ -708,19 +708,19 @@ Counted from 607 Rust crates and 90 npm packages.
 | @tauri-apps/plugin-updater | 2.11.0 | MIT OR Apache-2.0 |
 | @types/estree | 1.0.9 | MIT |
 | @vue-macros/common | 3.1.4 | MIT |
-| @vue/compiler-core | 3.5.45 | MIT |
-| @vue/compiler-dom | 3.5.45 | MIT |
-| @vue/compiler-sfc | 3.5.45 | MIT |
-| @vue/compiler-ssr | 3.5.45 | MIT |
+| @vue/compiler-core | 3.5.46 | MIT |
+| @vue/compiler-dom | 3.5.46 | MIT |
+| @vue/compiler-sfc | 3.5.46 | MIT |
+| @vue/compiler-ssr | 3.5.46 | MIT |
 | @vue/devtools-api | 6.6.4 | MIT |
 | @vue/devtools-api | 8.2.1 | MIT |
 | @vue/devtools-kit | 8.2.1 | MIT |
 | @vue/devtools-shared | 8.2.1 | MIT |
-| @vue/reactivity | 3.5.45 | MIT |
-| @vue/runtime-core | 3.5.45 | MIT |
-| @vue/runtime-dom | 3.5.45 | MIT |
-| @vue/server-renderer | 3.5.45 | MIT |
-| @vue/shared | 3.5.45 | MIT |
+| @vue/reactivity | 3.5.46 | MIT |
+| @vue/runtime-core | 3.5.46 | MIT |
+| @vue/runtime-dom | 3.5.46 | MIT |
+| @vue/server-renderer | 3.5.46 | MIT |
+| @vue/shared | 3.5.46 | MIT |
 | @xterm/addon-fit | 0.11.0 | MIT |
 | @xterm/xterm | 6.0.0 | MIT |
 | acorn | 8.17.0 | MIT |
@@ -731,7 +731,7 @@ Counted from 607 Rust crates and 90 npm packages.
 | chokidar | 6.0.0 | MIT |
 | confbox | 0.1.8 | MIT |
 | confbox | 0.3.2 | MIT |
-| csstype | 3.2.3 | MIT |
+| csstype | 3.2.4 | MIT |
 | entities | 7.0.1 | BSD-2-Clause |
 | estree-walker | 2.0.2 | MIT |
 | estree-walker | 3.0.3 | MIT |
@@ -759,15 +759,15 @@ Counted from 607 Rust crates and 90 npm packages.
 | quansync | 1.0.0 | MIT |
 | readdirp | 5.1.1 | MIT |
 | scule | 1.3.0 | MIT |
-| source-map-js | 1.2.2 | BSD-3-Clause |
+| source-map-js | 1.2.4 | BSD-3-Clause |
 | tinyglobby | 0.2.17 | MIT |
 | ufo | 1.6.4 | MIT |
 | unplugin | 3.7.0 | MIT |
 | unplugin-utils | 0.3.2 | MIT |
-| vue | 3.5.45 | MIT |
-| vue-i18n | 11.4.19 | MIT |
+| vue | 3.5.46 | MIT |
+| vue-i18n | 11.4.23 | MIT |
 | vue-router | 5.5.1 | MIT |
-| vuetify | 3.13.7 | MIT |
+| vuetify | 3.13.8 | MIT |
 | webpack-virtual-modules | 0.6.2 | MIT |
 
 ## Copyright holders
