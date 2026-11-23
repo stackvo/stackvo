@@ -17,7 +17,7 @@ notice that is a superset beats four that differ and cannot be told apart.
 Build-time and test-only dependencies are excluded: their code is not in
 the binary.
 
-Counted from 607 Rust crates and 90 npm packages.
+Counted from 608 Rust crates and 90 npm packages.
 
 ## Summary
 
@@ -43,7 +43,7 @@ Counted from 607 Rust crates and 90 npm packages.
 | BSD-3-Clause OR MIT OR Apache-2.0 | 2 |  |
 | BSD-3-Clause/MIT | 1 |  |
 | CC0-1.0 | 1 |  |
-| CC0-1.0 OR MIT-0 OR Apache-2.0 | 1 |  |
+| CC0-1.0 OR MIT-0 OR Apache-2.0 | 2 |  |
 | CDLA-Permissive-2.0 | 1 |  |
 | ISC | 5 | 1 |
 | ISC AND (Apache-2.0 OR ISC) | 1 |  |
@@ -61,9 +61,9 @@ Counted from 607 Rust crates and 90 npm packages.
 | Unlicense/MIT | 2 |  |
 | Zlib | 2 |  |
 | Zlib OR Apache-2.0 OR MIT | 21 |  |
-| **Total** | **607** | **90** |
+| **Total** | **608** | **90** |
 
-## Rust crates (607)
+## Rust crates (608)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -129,6 +129,7 @@ Counted from 607 Rust crates and 90 npm packages.
 | cipher | 0.4.4 | MIT OR Apache-2.0 |
 | combine | 4.6.7 | MIT |
 | concurrent-queue | 2.5.0 | Apache-2.0 OR MIT |
+| constant_time_eq | 0.6.1 | CC0-1.0 OR MIT-0 OR Apache-2.0 |
 | cookie | 0.18.1 | MIT OR Apache-2.0 |
 | core-foundation | 0.10.1 | MIT OR Apache-2.0 |
 | core-foundation | 0.9.4 | MIT OR Apache-2.0 |
@@ -317,7 +318,7 @@ Counted from 607 Rust crates and 90 npm packages.
 | nix | 0.29.0 | MIT |
 | nix | 0.31.3 | MIT |
 | nom | 7.1.3 | MIT |
-| notify | 8.2.1 | CC0-1.0 |
+| notify | 8.2.2 | CC0-1.0 |
 | notify-rust | 4.18.0 | MIT OR Apache-2.0 |
 | notify-types | 2.1.0 | MIT OR Apache-2.0 |
 | ntapi | 0.4.3 | Apache-2.0 OR MIT |
@@ -486,7 +487,7 @@ Counted from 607 Rust crates and 90 npm packages.
 | sysinfo | 0.39.6 | MIT |
 | system-configuration | 0.7.0 | MIT OR Apache-2.0 |
 | system-configuration-sys | 0.6.0 | MIT OR Apache-2.0 |
-| systemstat | 0.2.7 | Unlicense |
+| systemstat | 0.2.8 | Unlicense |
 | tao | 0.35.3 | Apache-2.0 |
 | tao-macros | 0.1.3 | MIT OR Apache-2.0 |
 | tar | 0.4.46 | MIT OR Apache-2.0 |
@@ -665,7 +666,7 @@ Counted from 607 Rust crates and 90 npm packages.
 | zerovec | 0.11.6 | Unicode-3.0 |
 | zerovec-derive | 0.11.3 | Unicode-3.0 |
 | zip | 4.6.1 | MIT |
-| zip | 9.4.1 | MIT |
+| zip | 9.8.1 | MIT |
 | zlib-rs | 0.6.8 | Zlib |
 | zmij | 1.0.23 | MIT |
 | zvariant | 4.2.0 | MIT |
@@ -1346,7 +1347,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### CC0-1.0
 
-_As distributed by dunce@1.0.5 (LICENSE)._
+_As distributed by constant_time_eq@0.6.1 (LICENSE-CC0)._
 
 ```
 Creative Commons Legal Code
@@ -1999,5 +2000,5 @@ not find is a notice nobody can check.
 
 **No licence file found in 56 packages**, usually because the source has not been downloaded for this platform. Their declared licences are in the tables above:
 
-`alloc-stdlib@0.2.4`, `asn1-rs-impl@0.2.0`, `block2@0.6.2`, `bollard-stubs@1.53.1-rc.29.3.1`, `cesu8@1.1.0`, `dispatch2@0.3.1`, `dlopen2@0.8.2`, `dlopen2_derive@0.4.3`, `include_dir@0.7.4`, `include_dir_macros@0.7.4`, `jni@0.22.4`, `jni-macros@0.22.4`, `jni-sys-macros@0.4.1`, `libappindicator-sys@0.9.0`, `mac-notification-sys@0.6.15`, `ndk@0.9.0`, `ndk-sys@0.6.0+11769913`, `objc2@0.6.4`, `objc2-app-kit@0.3.2`, `objc2-cloud-kit@0.3.2`, `objc2-core-data@0.3.2`, `objc2-core-foundation@0.3.2`, `objc2-core-graphics@0.3.2`, `objc2-core-image@0.3.2`, `objc2-core-location@0.3.2`, `objc2-core-services@0.3.2`, `objc2-core-text@0.3.2`, `objc2-encode@4.1.0`, `objc2-exception-helper@0.1.1`, `objc2-foundation@0.3.2`, `objc2-io-kit@0.3.2`, `objc2-io-surface@0.3.2`, `objc2-open-directory@0.3.2`, `objc2-osa-kit@0.3.2`, `objc2-quartz-core@0.3.2`, `objc2-ui-kit@0.3.2`, `objc2-user-notifications@0.3.2`, `objc2-web-kit@0.3.2`, `r-efi@5.3.0`, `r-efi@6.0.0`, `rustls-platform-verifier-android@0.1.1`, `selectors@0.36.1`, `systemstat@0.2.7`, `tao-macros@0.1.3`, `unic-char-property@0.9.0`, `unic-char-range@0.9.0`, `unic-common@0.9.0`, `unic-ucd-ident@0.9.0`, `unic-ucd-version@0.9.0`, `valuable@0.1.1`, `webview2-com@0.38.2`, `webview2-com-macros@0.8.1`, `webview2-com-sys@0.38.2`, `winapi-i686-pc-windows-gnu@0.4.0`, `winapi-x86_64-pc-windows-gnu@0.4.0`, `@vue/devtools-api@6.6.4`
+`alloc-stdlib@0.2.4`, `asn1-rs-impl@0.2.0`, `block2@0.6.2`, `bollard-stubs@1.53.1-rc.29.3.1`, `cesu8@1.1.0`, `dispatch2@0.3.1`, `dlopen2@0.8.2`, `dlopen2_derive@0.4.3`, `include_dir@0.7.4`, `include_dir_macros@0.7.4`, `jni@0.22.4`, `jni-macros@0.22.4`, `jni-sys-macros@0.4.1`, `libappindicator-sys@0.9.0`, `mac-notification-sys@0.6.15`, `ndk@0.9.0`, `ndk-sys@0.6.0+11769913`, `objc2@0.6.4`, `objc2-app-kit@0.3.2`, `objc2-cloud-kit@0.3.2`, `objc2-core-data@0.3.2`, `objc2-core-foundation@0.3.2`, `objc2-core-graphics@0.3.2`, `objc2-core-image@0.3.2`, `objc2-core-location@0.3.2`, `objc2-core-services@0.3.2`, `objc2-core-text@0.3.2`, `objc2-encode@4.1.0`, `objc2-exception-helper@0.1.1`, `objc2-foundation@0.3.2`, `objc2-io-kit@0.3.2`, `objc2-io-surface@0.3.2`, `objc2-open-directory@0.3.2`, `objc2-osa-kit@0.3.2`, `objc2-quartz-core@0.3.2`, `objc2-ui-kit@0.3.2`, `objc2-user-notifications@0.3.2`, `objc2-web-kit@0.3.2`, `r-efi@5.3.0`, `r-efi@6.0.0`, `rustls-platform-verifier-android@0.1.1`, `selectors@0.36.1`, `systemstat@0.2.8`, `tao-macros@0.1.3`, `unic-char-property@0.9.0`, `unic-char-range@0.9.0`, `unic-common@0.9.0`, `unic-ucd-ident@0.9.0`, `unic-ucd-version@0.9.0`, `valuable@0.1.1`, `webview2-com@0.38.2`, `webview2-com-macros@0.8.1`, `webview2-com-sys@0.38.2`, `winapi-i686-pc-windows-gnu@0.4.0`, `winapi-x86_64-pc-windows-gnu@0.4.0`, `@vue/devtools-api@6.6.4`
 
